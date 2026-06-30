@@ -1,0 +1,29 @@
+{
+  "fortran.linter.compiler": "gfortran",
+  "fortran.linter.compilerPath": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\gfortran.exe",
+  "fortran.linter.includePaths": [
+    "${workspaceFolder}/misc",
+    "${workspaceFolder}/Bellhop"
+  ],
+  "fortran.linter.extraArgs": [
+    "-std=gnu",
+    "-Wno-tabs"
+  ],
+
+  "[fortran]": {
+    "editor.formatOnSave": false,
+    "editor.tabSize": 3,
+    "editor.insertSpaces": true
+  },
+
+  "files.exclude": {
+    "**/*.o": true,
+    "**/*.mod": true
+  },
+  "search.exclude": {
+    "**/*.o": true,
+    "**/*.mod": true,
+    "**/*.exe": true,
+    "**/*.shd": true
+  }
+}

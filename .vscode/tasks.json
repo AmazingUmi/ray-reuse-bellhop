@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Bellhop",
+      "type": "process",
+      "command": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\mingw32-make.exe",
+      "args": [
+        "bellhop"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "C:\\Users\\beatr\\Documents\\mingw64\\bin;${env:PATH}"
+        }
+      },
+      "problemMatcher": "$gcc",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ]
+}
