@@ -2,8 +2,8 @@
   "fortran.linter.compiler": "gfortran",
   "fortran.linter.compilerPath": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\gfortran.exe",
   "fortran.linter.includePaths": [
-    "${workspaceFolder}/misc",
-    "${workspaceFolder}/Bellhop"
+    "${workspaceFolder}/Bellhop_origin/misc",
+    "${workspaceFolder}/Bellhop_origin/Bellhop"
   ],
   "fortran.linter.extraArgs": [
     "-std=gnu",
@@ -25,5 +25,8 @@
     "**/*.mod": true,
     "**/*.exe": true,
     "**/*.shd": true
+  },
+   "workbench.editorAssociations": {
+       "*.md": "vscode.markdown.preview.editor"
   }
 }

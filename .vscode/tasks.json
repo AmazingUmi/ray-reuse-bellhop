@@ -9,7 +9,7 @@
         "bellhop"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
+        "cwd": "${workspaceFolder}\\Bellhop_origin",
         "env": {
           "PATH": "C:\\Users\\beatr\\Documents\\mingw64\\bin;${env:PATH}"
         }

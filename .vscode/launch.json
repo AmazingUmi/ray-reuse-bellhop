@@ -5,12 +5,12 @@
       "name": "Run Bellhop example",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}\\bin\\bellhop.exe",
+      "program": "${workspaceFolder}\\Bellhop_origin\\bin\\bellhop.exe",
       "args": [
         "MunkB_Coh_CervenyC"
       ],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}\\test_origin_bellhop",
+      "cwd": "${workspaceFolder}\\test\\test_origin_bellhop",
       "environment": [
         {
           "name": "PATH",

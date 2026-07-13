@@ -1,0 +1,180 @@
+ BELLHOP/BELLHOP3D
+
+ BELLHOP- Munk profile, Paraxial Cartesian beams, Broadband (50-250Hz)           
+ frequency =   100.0     Hz
+
+ Dummy parameter NMedia =            1
+
+     C-linear approximation to SSP
+     Attenuation units: dB/wavelength
+     Broadband calculation enabled
+     VACUUM
+
+ Depth =    5000.00 m
+
+ Sound speed profile:
+      z         alphaR      betaR     rho        alphaI     betaI
+     (m)         (m/s)      (m/s)   (g/cm^3)                     
+
+      0.00      1548.52      0.00     1.00       0.0000    0.0000
+    200.00      1530.29      0.00     1.00       0.0000    0.0000
+    250.00      1526.69      0.00     1.00       0.0000    0.0000
+    400.00      1517.78      0.00     1.00       0.0000    0.0000
+    600.00      1509.49      0.00     1.00       0.0000    0.0000
+    800.00      1504.30      0.00     1.00       0.0000    0.0000
+   1000.00      1501.38      0.00     1.00       0.0000    0.0000
+   1200.00      1500.14      0.00     1.00       0.0000    0.0000
+   1400.00      1500.12      0.00     1.00       0.0000    0.0000
+   1600.00      1501.02      0.00     1.00       0.0000    0.0000
+   1800.00      1502.57      0.00     1.00       0.0000    0.0000
+   2000.00      1504.62      0.00     1.00       0.0000    0.0000
+   2200.00      1507.02      0.00     1.00       0.0000    0.0000
+   2400.00      1509.69      0.00     1.00       0.0000    0.0000
+   2600.00      1512.55      0.00     1.00       0.0000    0.0000
+   2800.00      1515.56      0.00     1.00       0.0000    0.0000
+   3000.00      1518.67      0.00     1.00       0.0000    0.0000
+   3200.00      1521.85      0.00     1.00       0.0000    0.0000
+   3400.00      1525.10      0.00     1.00       0.0000    0.0000
+   3600.00      1528.38      0.00     1.00       0.0000    0.0000
+   3800.00      1531.70      0.00     1.00       0.0000    0.0000
+   4000.00      1535.04      0.00     1.00       0.0000    0.0000
+   4200.00      1538.39      0.00     1.00       0.0000    0.0000
+   4400.00      1541.76      0.00     1.00       0.0000    0.0000
+   4600.00      1545.14      0.00     1.00       0.0000    0.0000
+   4800.00      1548.52      0.00     1.00       0.0000    0.0000
+   5000.00      1551.91      0.00     1.00       0.0000    0.0000
+
+                                 ( RMS roughness =   0.00     )
+     ACOUSTO-ELASTIC half-space
+   5000.00      1600.00      0.00     1.80       0.8000    0.0000
+
+ __________________________________________________________________________
+
+    Number of Source   z-coordinates, Sz =            1
+    Source   z-coordinates, Sz (m)
+                 1000.00    
+
+ __________________________________________________________________________
+
+    Number of Receiver z-coordinates, Rz =          201
+    Receiver z-coordinates, Rz (m)
+                 0.00000       25.0000       50.0000       75.0000    
+   100.000       125.000       150.000       175.000       200.000    
+   225.000    
+          ... 
+   5000.00    
+
+
+    Number of Receiver r-coordinates, Rr =          501
+    Receiver r-coordinates, Rr (km)
+                 0.00000      0.200000      0.400000      0.600000    
+  0.800000       1.00000       1.20000       1.40000       1.60000    
+   1.80000    
+          ... 
+   100.000    
+
+ __________________________________________________________________________
+
+
+    Number of frequencies =          64
+    Frequencies (Hz)
+   100.000       114.286       128.571       142.857       157.143    
+   171.429       185.714       200.000       214.286       228.571    
+          ... 
+   1000.00    
+
+ Coherent TL calculation
+ Cartesian beams
+ Point source (cylindrical coordinates)
+ Rectilinear receiver grid: Receivers at Rr( : ) x Rz( : )
+ __________________________________________________________________________
+
+    Number of beams in elevation   =        20000
+    Beam take-off angles (degrees)
+  -20.3000      -20.2980      -20.2959      -20.2939      -20.2919    
+  -20.2898      -20.2878      -20.2858      -20.2838      -20.2817    
+          ... 
+   20.3000    
+
+ __________________________________________________________________________
+
+
+ Step length,       deltas =   0.000     m
+
+ Maximum ray depth-range: 
+   Box%z  =   5500.     m
+   Box%r  =   101.0    km
+
+ No beam shift in effect
+
+
+ Type of beam = C
+ Standard curvature condition
+ Epsilon multiplier   1.0000000000000000     
+ Range for choosing beam width   25.000000000000000     
+
+ Number of images, Nimage  =            3
+ Beam windowing parameter  =            5
+ Component                 = P
+
+
+ Step length,       deltas =   500.0     m (automatically selected)
+
+Tracing beam       1    -20.30
+
+ Minimum width beams                     
+ HalfWidth  =    123.31277082042486     
+ epsilonOpt =                (0.0000000000000000,37534500.000000000)
+ EpsMult    =    1.0000000000000000     
+
+Tracing beam     401    -19.49
+Tracing beam     801    -18.68
+Tracing beam    1201    -17.86
+Tracing beam    1601    -17.05
+Tracing beam    2001    -16.24
+Tracing beam    2401    -15.43
+Tracing beam    2801    -14.62
+Tracing beam    3201    -13.80
+Tracing beam    3601    -12.99
+Tracing beam    4001    -12.18
+Tracing beam    4401    -11.37
+Tracing beam    4801    -10.56
+Tracing beam    5201     -9.74
+Tracing beam    5601     -8.93
+Tracing beam    6001     -8.12
+Tracing beam    6401     -7.31
+Tracing beam    6801     -6.50
+Tracing beam    7201     -5.68
+Tracing beam    7601     -4.87
+Tracing beam    8001     -4.06
+Tracing beam    8401     -3.25
+Tracing beam    8801     -2.44
+Tracing beam    9201     -1.62
+Tracing beam    9601     -0.81
+Tracing beam   10001      0.00
+Tracing beam   10401      0.81
+Tracing beam   10801      1.63
+Tracing beam   11201      2.44
+Tracing beam   11601      3.25
+Tracing beam   12001      4.06
+Tracing beam   12401      4.87
+Tracing beam   12801      5.69
+Tracing beam   13201      6.50
+Tracing beam   13601      7.31
+Tracing beam   14001      8.12
+Tracing beam   14401      8.93
+Tracing beam   14801      9.75
+Tracing beam   15201     10.56
+Tracing beam   15601     11.37
+Tracing beam   16001     12.18
+Tracing beam   16401     12.99
+Tracing beam   16801     13.81
+Tracing beam   17201     14.62
+Tracing beam   17601     15.43
+Tracing beam   18001     16.24
+Tracing beam   18401     17.05
+Tracing beam   18801     17.87
+Tracing beam   19201     18.68
+Tracing beam   19601     19.49
+
+ CPU Time =       0.119E+05s
