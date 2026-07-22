@@ -1,5 +1,7 @@
 # 01 Bellhop 源码分析与宽带 Ray-Reuse 设计
 
+> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [05 基础变量、单位与数值规范](./05-基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
+
 ## 1. 文档目标与分析范围
 
 本文从功能职责和实际调用链两个角度，对仓库中的 Bellhop 源码进行模块化分类，重点回答以下问题：
@@ -872,22 +874,33 @@ influence.accumulate(
 
 这样可以把“宽带循环/输出错误”和“轨迹复用错误”分开定位。
 
-### 19.5 逐射线流式复用
+### 19.5 先缓存射线扇，再逐频投影
 
-串行正确性版本推荐：
+当前目标场景中，发射角数量和单条轨迹点数预期可控，宽带计算的目标点也通常不多。因此正式的 ray-reuse 数据流确定为：先追踪并缓存全部几何射线，冻结为只读 `RayPathCache`，再对不同频率逐个或有界并行计算复压力。
 
 ```cpp
-BroadbandField field(grid, frequencies);
+RayPathCache paths;
+paths.reserve(launchAngles.size());
 for (double launchAngle : launchAngles) {
-    RayPath path = tracer.trace(source, launchAngle);
-    for (std::size_t fi = 0; fi < frequencies.size(); ++fi) {
-        auto state = projector.project(path, frequencies[fi], sourceAmplitude);
-        influence.accumulate(field[fi], path, state, frequencies[fi]);
-    }
+    paths.push_back(tracer.trace(source, launchAngle));
 }
-field.scale();
-shdWriter.write(field);
+paths.freeze();
+
+for (std::size_t fi = 0; fi < frequencies.size(); ++fi) {
+    FrequencyWorkspace workspace(receiverGrid);
+    for (const RayPath& path : paths) {
+        auto state = projector.project(path, frequencies[fi], sourceAmplitude);
+        influence.accumulate(
+            workspace.pressure, path, state, frequencies[fi]);
+    }
+    scalePressure(workspace.pressure);
+    outputWriter.writeFrequency(fi, workspace.pressure);
+}
 ```
+
+`RayPathCache` 不能只保存 `(r,z)` 折线。每条轨迹必须同时保存 `position/slowness/p/q/realTravelTime`、每步 `StepQuadrature`、`ReflectionEvent` 和几何终止原因，否则无法在不重新积分几何轨迹的前提下严格重建逐频复走时、反射幅相和 Influence。
+
+这一选择用轨迹缓存换取更简单的频率所有权和更低的压力场内存。运行前必须估算实际轨迹点总数；如果未来长距离、超小步长或极大发射角集合使缓存超出预算，再增加磁盘轨迹缓存，而不在首版中预先复杂化。
 
 ### 19.6 由最高频率确定发射角数目
 
@@ -946,15 +959,30 @@ Nalpha_final = max(Nalpha_auto(f_design), Nalpha_check(f_design))
 
 ### 20.1 压力场布局
 
-推荐 frequency-major：
+逻辑结果布局仍是 frequency-major：
 
 ```text
 field[frequency][receiverDepth][receiverRange]
 ```
 
-其中 range 连续，以匹配 Influence 对接收距离的遍历。内部使用 `double/std::complex<double>`，写 SHD 时再按格式转换。
+其中 range 连续，以匹配 Influence 对接收距离的遍历。但这是文件和逻辑维度，不表示必须在内存中同时保留全部频率。实际工作区使用：
 
-示例 `201 × 501 × 64` 的单精度复数场约占 51.6 MB。若场过大，可使用频率分块，但每个分块需要重新追踪射线扇，是内存与复用率的折中。
+```text
+pressure[activeFrequency][receiverDepth][receiverRange]
+```
+
+首版串行模式中 `activeFrequencyCount=1`；并行时只为当前正在计算的有界频率任务分配独立压力切片。某频率累加完全部 `RayPath`、缩放并写出后，立即清空并复用该 `FrequencyWorkspace`。
+
+内部使用 `std::complex<double>`，单频压力缓冲区内存为：
+
+```text
+M_frequency = Nsd * Nrd * Nrr * sizeof(complex<double>)
+M_pressure  ≈ (N_active + N_output_queue) * M_frequency
+```
+
+其中 `N_active` 不大于实际频率工作线程数，`N_output_queue` 是有界输出队列容量，建议初值为 1–2。内存不再随总频率数 `Nfreq` 线性增长。
+
+例如 `Nsd=1`、`Nrd=500`、`Nrr=10000` 时，一个双精度复数频率切片约为 80 MB；8 个并行频率约需 640 MB 活动压力工作区，再加有界输出队列的 80–160 MB，而不是为全部上千个频率分配数十 GB。目标点较少时，这部分通常可控。
 
 ### 20.2 SHD 记录号
 
@@ -969,25 +997,54 @@ IRec = 10 + Irz1 + NRz_per_range * &
 
 ### 20.3 无竞争 CPU 并行
 
-正确性版本稳定后，采用“角度批次 + 频率切片独占”：
+正确性版本稳定后，采用“全射线扇只读缓存 + 有界频率所有权”：
 
 ```cpp
-for (AngleBatch batch : launchAngleBatches) {
-    parallel_for(batch.angles, [&](double angle) {
-        paths[angle] = tracer.trace(source, angle);
-    });
+parallel_for(launchAngles, [&](std::size_t ai) {
+    paths[ai] = tracer.trace(source, launchAngles[ai]);
+});
+paths.freeze();
 
-    parallel_for(frequencyIndices, [&](std::size_t fi) {
-        auto fieldSlice = field[fi];
-        for (const RayPath& path : paths) {
+bounded_parallel_for(frequencyIndices, activeFrequencyLimit,
+    [&](std::size_t fi) {
+        FrequencyWorkspace workspace(receiverGrid);
+        for (const RayPath& path : paths) { // 固定角度顺序
             auto state = projector.project(path, frequencies[fi]);
-            influence.accumulate(fieldSlice, path, state, frequencies[fi]);
+            influence.accumulate(
+                workspace.pressure, path, state, frequencies[fi]);
         }
+        scalePressure(workspace.pressure);
+        outputQueue.push(fi, std::move(workspace.pressure));
     });
-}
 ```
 
-每个任务独占一个频率场切片，无需复数原子加法；同一频率保持固定角度累加顺序，结果也更易复现。频率数不足时，再考虑 receiver tile 或线程私有小块归约。
+每个任务独占一个单频压力缓冲区，所有任务只读 `RayPathCache`，无需复数原子加法，也不需要“线程数 × 全宽带压力场”的私有副本。同一频率保持固定角度累加顺序，结果更易复现。
+
+`activeFrequencyLimit` 应取下列三者最小值：
+
+```text
+min(workerCount, frequencyCount, memoryLimitedFrequencyCount)
+```
+
+给定用户内存预算 `M_budget`、轨迹缓存 `M_paths`、其他固定工作区 `M_fixed` 和输出队列容量 `N_output_queue` 时，可按下式估算：
+
+```text
+memoryLimitedFrequencyCount = floor(
+    (M_budget - M_paths - M_fixed
+              - N_output_queue * M_frequency) / M_frequency)
+```
+
+若括号内结果小于一个 `M_frequency`，程序不应强行运行，而应降低输出队列、启用 receiver tile 或报告内存预算不足。
+
+输出队列必须有容量上限；写盘落后计算线程会被反压，不能无限积压已完成的压力切片。如果单频切片本身仍超出内存预算，再引入 receiver tile；该模式需对同一只读轨迹缓存重复遍历，但不重新追踪射线。
+
+### 20.4 宽带输入输出格式策略
+
+`.env` 输入体积很小，多频计算时不会成为性能瓶颈，但其位置字段、字符选项和多个关联文件不适合渗透到新求解器内部。首版保留 `.env` 作为 Bellhop 兼容输入，由 `EnvReader` 一次转换为不可变 `SimulationCase`；核心计算不读取文件位置，也不保留 Fortran 全局输入状态。后续可增加 TOML/JSON 配置，但不与数值重构同时强制切换。
+
+SHD 在语义上能表达多频复压力，且是与现有 MATLAB 工具和 Fortran 基线对比的必要格式，因此首版继续支持。但它不适合让多个计算线程直接随机写入。建议由单一 `OutputWriter` 按频率序号写入已完成切片，并使用有界队列隔离计算与磁盘 I/O。
+
+对大规模正式计算，后续可将 HDF5 作为内部主结果格式，使用维度 `[frequency][sourceDepth][receiverDepth][range]`、坐标数据集、计算元数据、分块和频率完成标记；SHD 则保留为兼容导出。该扩展属于算法正确性闭环之后的工程任务，不阻塞首个 SHD 里程碑。
 
 ## 21. C++ 重构与性能决策
 
@@ -1044,6 +1101,8 @@ Bellhop_RayReuse/
 | 只缓存轨迹端点 | 逐频复走时与单跑不一致 | 保存 `StepQuadrature` |
 | 幅度终止影响路径长度 | 不同频率有效轨迹不同 | 几何追踪到空间终止，逐频 active mask |
 | 过早按射线并行 | 场累加需要原子或巨量私有内存 | 先串行，再用频率切片独占 |
+| 完整轨迹缓存超预算 | 长距离/小步长时 `RayPathCache` 增大 | 运行前估算轨迹点和字节数；超限时改用顺序磁盘缓存 |
+| 输出速度低于计算 | 已完成单频场在内存积压 | 单 writer + 容量 1–2 的有界队列和反压 |
 | 历史 3D/copy 文件混入 | 构建链和行为不明确 | 以 Makefile 为二维基线，历史副本不参与首版 |
 
 ### 21.5 验证金字塔
@@ -1082,7 +1141,7 @@ Bellhop_RayReuse/
 - 当前代码基线应视为原始、单频 Bellhop 模型；
 - `freqVec`、部分多频 SHD 头处理和测试目录中的宽带结果，是此前尝试多频计算时直接拷入的实验文件，不代表原始模型已经具备或验证了宽带基础设施；
 - 后续实现可以参考这些实验文件，但正确性必须以可重现的原始单频 Bellhop 和新建立的宽带非复用基线为准；
-- 当前真正的下一步是建立小型单频基线、导出中间状态并分阶段计时，而不是直接移植完整 Influence。
+- 小型单频标准算例已建立；当前下一步是冻结指定点复压力/TL 容差、验证 MATLAB SHD 读取、导出中间状态并分阶段计时，而不是直接移植完整 Influence。
 
 最终架构决策如下：
 
@@ -1095,5 +1154,7 @@ Bellhop_RayReuse/
 - 先实现唯一的二维 Cartesian Cerveny coherent pressure 路径；
 - 先建立宽带非复用基线，再启用轨迹复用；
 - 本次修改完全不考虑 beam shift；
-- 先完成串行正确性，再进行角度批次/频率切片并行；
+- 先完成串行正确性；复用版先缓存完整只读 `RayPathCache`，再进行有界频率切片独占并行；
+- 压力缓冲区只为活动频率分配，通过单 writer 和有界队列写出；
+- `.env/.shd` 是首版兼容边界，不是数值核心的内部状态模型；
 - 所有不支持选项明确报错，不做静默近似。
