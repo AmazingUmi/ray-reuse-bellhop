@@ -3,3 +3,5 @@
 /Bellhop_origin/build/
 /Bellhop_origin/bin/
 
+# Generated outputs from the reproducible standard-case runner
+/test/standard_cases/output/
