@@ -1,79 +1,95 @@
 # 04 VS Code 与 Bellhop/gfortran 编译学习笔记
 
-> 适用环境：Windows、VS Code、MinGW-w64、GNU Fortran、GNU Make、Bellhop 2-D。
+> 当前主环境：Apple Silicon Mac、macOS 26、Homebrew GCC/gfortran、GNU Make、LLDB、VS Code。
 >
-> 核心目标：用尽量简单的方式完成代码编辑、编译、运行和基础调试，并生成不依赖 MinGW 运行库 DLL 的 `bellhop.exe`。
+> 目标：保持日常操作简单，用一条 `make` 完成 Bellhop 编译，并能在 VS Code 中一键构建和运行原始算例。
 
 ---
 
-## 1. 最终工作流
+## 1. 当前环境
 
-日常使用只需要记住两件事：
+本机已确认的工具：
 
-- 在 VS Code 中按 `Ctrl + Shift + B`：编译 Bellhop。
-- 按 `F5`：先编译，再用默认算例运行 Bellhop。
+| 项目 | 当前值 |
+|---|---|
+| CPU 架构 | Apple Silicon `arm64` |
+| Fortran 编译器 | `/opt/homebrew/bin/gfortran` |
+| gfortran 版本 | Homebrew GCC 14.2.0 |
+| Make | `/usr/bin/make` |
+| 调试器 | LLDB / CodeLLDB |
+| Bellhop 源码目录 | `Bellhop_origin/` |
+| 可执行文件 | `Bellhop_origin/bin/bellhop` |
 
-也可以在项目根目录使用命令行。本文后续 PowerShell 构建命令均假定当前目录是项目根目录，因此统一使用 `-C Bellhop_origin`：
+检查环境：
 
-```powershell
-# 增量编译：只重新编译发生变化的源码
-mingw32-make -C Bellhop_origin
+```bash
+uname -m
+which gfortran
+gfortran --version
+which make
+make --version
+which lldb
+lldb --version
+```
 
-# 查看当前构建配置
-mingw32-make -C Bellhop_origin info
+Apple Silicon 上 Homebrew 的默认安装前缀是：
 
-# 检查可执行文件导入的 DLL
-mingw32-make -C Bellhop_origin runtime-deps
+```text
+/opt/homebrew
+```
 
-# 启用边界等运行时检查和调试回溯
-mingw32-make -C Bellhop_origin BUILD=debug
+Intel Mac 通常使用 `/usr/local`。因此，换到另一台 Mac 时应先运行 `which gfortran`，再检查 VS Code 中的编译器路径。
 
-# 清理所有目标文件、模块文件和可执行文件
-mingw32-make -C Bellhop_origin clean
+---
+
+## 2. 最简单的日常工作流
+
+在项目根目录执行：
+
+```bash
+# 编译 Bellhop
+make -C Bellhop_origin
+
+# 查看当前编译器、参数和输出位置
+make -C Bellhop_origin info
+
+# 查看程序依赖的动态库
+make -C Bellhop_origin runtime-deps
+
+# 清理中间文件和可执行文件
+make -C Bellhop_origin clean
 
 # 完整重新编译
-mingw32-make -C Bellhop_origin clean
-mingw32-make -C Bellhop_origin
+make -C Bellhop_origin clean
+make -C Bellhop_origin
 ```
 
-最终输出（相对 `Bellhop_origin/`）：
+也可以进入源码目录后执行：
 
-```text
-Bellhop_origin/bin/bellhop.exe
+```bash
+cd Bellhop_origin
+make
 ```
 
-默认 release/static 构建的中间文件也放在 `Bellhop_origin/` 内：
+VS Code 中：
 
-```text
-Bellhop_origin/build/release-static/obj    # .o 目标文件
-Bellhop_origin/build/release-static/mod    # .mod Fortran 模块文件
-```
+- `Command + Shift + B`：编译 Bellhop；
+- `F5`：先编译，再用默认算例运行；
+- 默认算例：`test/test_origin_bellhop/MunkB_Coh_CervenyC.env`。
 
-不同 `BUILD/LINK` 组合使用独立的中间目录，因此切换变体时不会误用另一组 `.o/.mod`。
-
-> 一般不需要每次都执行 `clean`。只有修改了编译参数、链接参数，或者怀疑旧的 `.o/.mod` 文件造成异常时，才进行完整重建。
-
-> `-C Bellhop_origin` 的含义是让 Make 先切换到 `Bellhop_origin/` 再读取 Makefile。如果手动执行了 `Set-Location .\Bellhop_origin`，则可以省略 `-C Bellhop_origin`；两种写法不要混用。
+> 日常增量编译只需 `make`。只有修改编译参数、链接参数，或者怀疑旧 `.o/.mod` 文件干扰结果时才需要 `make clean`。
 
 ---
 
-## 2. 为什么 Windows 使用 `mingw32-make`
+## 3. 使用 GNU Make
 
-`make` 和 `mingw32-make` 本质上都是 GNU Make。
-
-| 环境 | 常见命令名 |
-|---|---|
-| Linux/macOS | `make` |
-| MSYS2/Cygwin | `make` |
-| 独立 MinGW-w64 工具链 | `mingw32-make` |
-
-本机 MinGW 工具链提供的是：
+本机使用系统自带的 GNU Make：
 
 ```text
-C:\Users\beatr\Documents\mingw64\bin\mingw32-make.exe
+/usr/bin/make
 ```
 
-因此原版 Acoustic Toolbox 文档中的：
+原版 Acoustic Toolbox 文档通常写：
 
 ```bash
 make
@@ -81,160 +97,170 @@ make clean
 make -j4
 ```
 
-在当前 Windows 环境中分别写成：
+这些命令在当前 Mac 上可以直接使用。
 
-```powershell
-mingw32-make -C Bellhop_origin
-mingw32-make -C Bellhop_origin clean
-mingw32-make -C Bellhop_origin -j4
+`-j4` 表示最多并行执行 4 个编译任务：
+
+```bash
+make -C Bellhop_origin -j4
 ```
 
-`-j4` 表示最多同时执行 4 个编译任务，只影响速度，不改变计算结果。Fortran 模块之间存在先后依赖；当前 Makefile 已显式描述依赖关系，因此可以并行，但项目规模不大，日常直接使用 `mingw32-make -C Bellhop_origin` 更简单。
+当前 Makefile 已显式描述 Fortran 模块依赖，可以安全并行。不过项目规模不大，默认 `make` 已足够简单。
 
 ---
 
-## 3. 推荐的 VS Code 插件
+## 4. VS Code 插件
 
-### 必要插件
+项目推荐插件记录在 `.vscode/extensions.json`。
 
-1. **Modern Fortran**（`fortran-lang.linter-gfortran`）
-   - Fortran 语法高亮；
-   - 代码补全和符号跳转；
-   - 调用 `gfortran` 进行静态检查；
-   - 可配合 `fortls` 提供语言服务。
+### 4.1 Modern Fortran
 
-2. **C/C++**（`ms-vscode.cpptools`）
-   - 这里主要用于调用 GDB；
-   - 可以为 Fortran 程序提供断点、单步执行、变量查看和调用栈。
+扩展 ID：
 
-3. **Markdown All in One**（`yzhang.markdown-all-in-one`）
-   - 便于维护项目学习笔记和技术文档。
+```text
+fortran-lang.linter-gfortran
+```
 
-### 暂时不需要的插件
+用途：
 
-- Code Runner：容易绕过 Makefile、模块依赖和正确的运行目录。
-- 多个 Fortran 插件：可能产生重复诊断或语言服务冲突。
-- CMake Tools：当前项目使用 Makefile，不必增加额外构建系统。
-- Makefile Tools：当前只需要一个固定构建任务，VS Code 内置 Task 已足够。
+- Fortran 语法高亮；
+- 调用 gfortran 检查语法；
+- 配合 `fortls` 提供补全、跳转和符号查询；
+- 识别 `.f90` 和 Fortran 模块。
 
-> 原则：插件不是越多越好。科研代码环境最重要的是构建可重复、工作目录正确、输入文件明确。
+### 4.2 CodeLLDB
+
+扩展 ID：
+
+```text
+vadimcn.vscode-lldb
+```
+
+用途：
+
+- 在 Apple Silicon Mac 上运行和调试原生程序；
+- 断点、单步运行、调用栈和变量查看；
+- 可调试带 DWARF 符号的 gfortran 程序。
+
+CodeLLDB 与本机 Apple Silicon 和 LLDB 工具链匹配，适合运行和调试 gfortran 生成的 Mach-O 程序。
+
+### 4.3 Markdown All in One
+
+扩展 ID：
+
+```text
+yzhang.markdown-all-in-one
+```
+
+用于维护项目文档和学习笔记。
+
+### 4.4 暂时不需要
+
+- Code Runner：容易绕开 Makefile、模块依赖和正确运行目录；
+- 多个 Fortran 语言插件：可能重复诊断；
+- CMake Tools：当前项目使用 Makefile；
+- Makefile Tools：单一构建任务用 VS Code 内置 Task 已足够。
 
 ---
 
-## 4. VS Code 项目配置
+## 5. VS Code 配置说明
 
-项目配置保存在 `.vscode` 目录中，可以随 Git 仓库一起保存。
+### 5.1 `settings.json`
 
-### 4.1 `settings.json`：Fortran 编辑设置
-
-关键配置：
+核心配置：
 
 ```json
 {
   "fortran.linter.compiler": "gfortran",
-  "fortran.linter.compilerPath": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\gfortran.exe",
+  "fortran.linter.compilerPath": "/opt/homebrew/bin/gfortran",
   "fortran.linter.includePaths": [
     "${workspaceFolder}/Bellhop_origin/misc",
-    "${workspaceFolder}/Bellhop_origin/Bellhop"
+    "${workspaceFolder}/Bellhop_origin/Bellhop",
+    "${workspaceFolder}/Bellhop_origin/build/mod"
   ],
   "fortran.linter.extraArgs": [
     "-std=gnu",
     "-Wno-tabs"
-  ],
-  "[fortran]": {
-    "editor.formatOnSave": false,
-    "editor.tabSize": 3,
-    "editor.insertSpaces": true
-  }
+  ]
 }
 ```
 
-设计考虑：
+说明：
 
-- 显式指定 `gfortran.exe`，避免 VS Code 找错编译器。
-- 将 `misc` 和 `Bellhop` 加入模块搜索路径。
-- 不启用保存时自动格式化，避免旧 Fortran 文件产生大面积无意义改动。
-- 在资源管理器和搜索中隐藏 `.o`、`.mod`、`.exe`、`.shd` 等生成文件。
+- 显式使用 Homebrew `gfortran`，避免误用 Apple `/usr/bin/gcc`；
+- Apple 的 `/usr/bin/gcc` 实际上是 Clang，不包含 gfortran；
+- `build/mod` 用于存放和查找 `.mod` 文件；
+- 不启用保存时自动格式化，避免旧 Fortran 文件产生巨大 diff。
 
-### 4.2 `tasks.json`：一键编译
+### 5.2 `tasks.json`
 
-默认构建任务的命令参数是 `bellhop`，同时由 `options.cwd` 把工作目录设为 `Bellhop_origin/`。对应的项目根目录命令是：
+VS Code 默认构建任务等价于：
 
-```powershell
-mingw32-make -C Bellhop_origin bellhop
+```bash
+cd Bellhop_origin
+/usr/bin/make bellhop
 ```
+
+任务中额外设置：
+
+```json
+"PATH": "/opt/homebrew/bin:${env:PATH}"
+```
+
+原因是从 Finder 启动的 VS Code 不一定继承终端的完整 PATH。显式加入 `/opt/homebrew/bin` 可以确保 Makefile 找到正确的 gfortran。
+
+### 5.3 `launch.json`
 
 关键配置：
 
 ```json
 {
-  "label": "Build Bellhop",
-  "type": "process",
-  "command": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\mingw32-make.exe",
-  "args": ["bellhop"],
-  "options": {
-    "cwd": "${workspaceFolder}\\Bellhop_origin",
-    "env": {
-      "PATH": "C:\\Users\\beatr\\Documents\\mingw64\\bin;${env:PATH}"
-    }
-  },
-  "problemMatcher": "$gcc"
-}
-```
-
-这里使用 `process` 而不是拼接一长串 PowerShell 命令，使路径和参数更稳定。
-
-### 4.3 `launch.json`：运行和调试
-
-默认运行配置：
-
-```json
-{
-  "name": "Run Bellhop example",
-  "type": "cppdbg",
-  "request": "launch",
-  "program": "${workspaceFolder}\\Bellhop_origin\\bin\\bellhop.exe",
+  "type": "lldb",
+  "program": "${workspaceFolder}/Bellhop_origin/bin/bellhop",
   "args": ["MunkB_Coh_CervenyC"],
-  "cwd": "${workspaceFolder}\\test\\test_origin_bellhop",
-  "MIMode": "gdb",
-  "miDebuggerPath": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\gdb.exe",
+  "cwd": "${workspaceFolder}/test/test_origin_bellhop",
   "preLaunchTask": "Build Bellhop"
 }
 ```
 
-需要特别区分：
+含义：
 
-- `program`：要运行的可执行文件。
-- `args`：传给 Bellhop 的输入文件根名，不带 `.env` 后缀。
-- `cwd`：程序运行目录；Bellhop 会在这里寻找 `.env`，并在这里产生 `.prt/.shd` 等结果。
-- `preLaunchTask`：按 `F5` 前自动完成编译。
+- `program`：Bellhop 可执行文件；
+- `args`：输入文件根名，不带 `.env`；
+- `cwd`：算例目录，Bellhop 会从这里读取 `.env` 并写出 `.prt/.shd`；
+- `preLaunchTask`：F5 前自动执行编译。
 
-> Bellhop 的运行目录非常重要。即使 EXE 路径正确，如果 `cwd` 不包含对应的 `.env` 文件，程序仍然无法正确运行。
-
-当前 `Build Bellhop` 任务以 `Bellhop_origin/` 为工作目录，`F5` 配置指向默认的 release/static `Bellhop_origin/bin/bellhop.exe`，并在 `test/test_origin_bellhop/` 中运行算例。若要进行可靠的源码单步调试，应另建一个传入 `BUILD=debug` 的 VS Code 任务，并让 `launch.json` 指向 `Bellhop_origin/bin/bellhop-debug.exe`。
+> Bellhop 对当前工作目录敏感。程序路径正确但 `cwd` 错误时，仍会找不到环境文件。
 
 ---
 
-## 5. 当前 Makefile 的结构
+## 6. 当前 Makefile 结构
 
-`Bellhop_origin/Makefile` 只构建原始 2-D Bellhop 所需的源码，不再尝试构建缺失的 Kraken、Scooter、tslib 等完整 Acoustic Toolbox 组件。Makefile 中的 `Bellhop/`、`misc/`、`build/` 和 `bin/` 都相对于 `Bellhop_origin/`。
+Makefile 位于：
 
-主要变量：
+```text
+Bellhop_origin/Makefile
+```
+
+它只构建原始 2-D Bellhop 所需源码，不构建完整 Acoustic Toolbox 的 Kraken、Scooter、tslib 等组件。
+
+主要目录：
 
 ```makefile
 FC = gfortran
 
-BUILD ?= release
-LINK  ?= static
-
-BUILD_DIR = build/$(BUILD)-$(LINK)
+BUILD_DIR = build
 OBJ_DIR   = $(BUILD_DIR)/obj
 MOD_DIR   = $(BUILD_DIR)/mod
 BIN_DIR   = bin
+```
 
-COMMON_FFLAGS  = -std=gnu -ffree-line-length-none
-RELEASE_FFLAGS = -O2
-DEBUG_FFLAGS   = -O0 -g -Wall -Wextra -Wno-tabs -fcheck=all -fbacktrace
+输出结构：
+
+```text
+Bellhop_origin/build/obj    # .o 目标文件
+Bellhop_origin/build/mod    # .mod 模块文件
+Bellhop_origin/bin/bellhop  # 最终程序
 ```
 
 默认目标：
@@ -245,300 +271,211 @@ all: bellhop
 bellhop: $(TARGET)
 ```
 
-因此下面两条项目根目录命令的效果基本相同：
+因此下面两条命令等价：
 
-```powershell
-mingw32-make -C Bellhop_origin
-mingw32-make -C Bellhop_origin bellhop
+```bash
+make -C Bellhop_origin
+make -C Bellhop_origin bellhop
 ```
 
-Makefile 显式列出 Fortran 模块依赖顺序，避免在模块对应的 `.mod` 文件尚未生成时提前编译下游源码。
-
-用户日常只需使用默认值。四种组合及输出为：
-
-| 命令 | 用途 | 输出 |
-|---|---|---|
-| `mingw32-make -C Bellhop_origin` | 发布/性能基线，默认静态链接 | `Bellhop_origin/bin/bellhop.exe` |
-| `mingw32-make -C Bellhop_origin BUILD=debug` | 调试和运行时检查 | `Bellhop_origin/bin/bellhop-debug.exe` |
-| `mingw32-make -C Bellhop_origin LINK=dynamic` | 验证动态运行库模式 | `Bellhop_origin/bin/bellhop-dynamic.exe` |
-| `mingw32-make -C Bellhop_origin BUILD=debug LINK=dynamic` | 动态链接调试 | `Bellhop_origin/bin/bellhop-debug-dynamic.exe` |
-
-`mingw32-make -C Bellhop_origin clean` 会清理全部变体的 `Bellhop_origin/build/` 中间目录和上述四个可执行文件。
+Makefile 显式列出了 Fortran 模块依赖顺序，避免下游源码在所需 `.mod` 文件生成前被编译。
 
 ---
 
-## 6. 编译参数说明
+## 7. 编译参数
 
-当前参数按用途分层：
+当前参数：
 
 ```makefile
-COMMON_FFLAGS  = -std=gnu -ffree-line-length-none
-RELEASE_FFLAGS = -O2
-DEBUG_FFLAGS   = -O0 -g -Wall -Wextra -Wno-tabs -fcheck=all -fbacktrace
+FFLAGS  = -O2 -g -std=gnu -ffree-line-length-none
 MODFLAGS = -J$(MOD_DIR) -I$(MOD_DIR)
 ```
 
-### 6.1 `FFLAGS`：Fortran 源码编译参数
+### 7.1 Fortran 参数
 
-| 参数 | 含义 | 当前选择理由 |
+| 参数 | 含义 | 选择原因 |
 |---|---|---|
-| `-O2` | 启用较稳健的性能优化 | 兼顾运行速度、编译时间和数值可控性 |
-| `-std=gnu` | 接受 GNU Fortran 方言 | 兼容 Bellhop 中的旧式代码和 GNU 扩展 |
-| `-ffree-line-length-none` | 取消自由格式源码的默认行长限制 | Bellhop 中存在较长公式和调用语句 |
-| `-O0 -g` | 关闭优化并保留调试信息 | 仅用于 `BUILD=debug` |
-| `-Wall -Wextra -Wno-tabs` | 开启警告并屏蔽旧代码 Tab 噪声 | 仅用于 debug，使日常 release 输出简洁 |
-| `-fcheck=all -fbacktrace` | 运行时边界/状态检查和错误回溯 | 用于发现越界、非法状态等问题 |
+| `-O2` | 稳健的性能优化 | 兼顾速度、编译时间和数值可控性 |
+| `-g` | 写入 DWARF 调试符号 | 便于 LLDB 定位源码和调用栈 |
+| `-std=gnu` | 接受 GNU Fortran 方言 | 兼容 Bellhop 中的旧代码和 GNU 扩展 |
+| `-ffree-line-length-none` | 取消自由格式行长限制 | 避免长公式和调用语句被截断 |
+| `-Jbuild/mod` | 指定 `.mod` 输出目录 | 避免模块文件散落在源码目录 |
+| `-Ibuild/mod` | 指定模块搜索目录 | 让后续源文件找到已编译模块 |
 
-### 6.2 `MODFLAGS`：Fortran 模块参数
+`-g` 与 `-O2` 可以同时使用。程序仍进行优化，但调试时部分变量可能被优化掉、执行顺序也可能与源码略有差异。日常运行没有影响。
 
-| 参数 | 含义 |
-|---|---|
-| `-Jbuild/<variant>/mod` | 将编译生成的 `.mod` 文件放入当前变体目录 |
-| `-Ibuild/<variant>/mod` | 编译其他源码时从当前变体目录查找模块 |
+### 7.2 为什么不默认使用 `-O3`
 
-### 6.3 编译命令中的常见参数
+`-O3` 会启用更积极的循环和向量化优化，但不保证 Bellhop 一定更快。应在建立数值基线后再通过计时决定。
+
+### 7.3 为什么不使用 `-ffast-math`
+
+`-ffast-math` 允许编译器放宽 IEEE 浮点规则，可能改变：
+
+- NaN 和无穷处理；
+- 运算重排；
+- 舍入行为；
+- 极小数处理。
+
+科研基线构建优先保持数值语义，因此不默认启用。
+
+### 7.4 为什么不使用 `-mcpu=native`
+
+`-mcpu=native` 会针对当前 Apple Silicon 型号生成指令，可能降低程序在其他 Mac 上的可移植性。只有确认程序始终在同一台机器运行并完成数值对比后才考虑使用。
+
+### 7.5 常见编译命令参数
 
 ```text
--c source.f90     只编译，不链接
--o output.o       指定输出文件
+-c source.f90    只编译，不链接
+-o output.o      指定输出文件
 ```
 
-典型编译过程：
+构建过程：
 
 ```text
-Fortran 源码 (.f90)
-        ↓  gfortran -c
-目标文件 (.o) + 模块文件 (.mod)
-        ↓  gfortran 链接
-可执行文件 (bellhop.exe)
+.f90 源码
+   ↓ gfortran -c
+.o 目标文件 + .mod 模块文件
+   ↓ gfortran 链接
+bin/bellhop
 ```
-
-### 6.4 为什么没有使用 `-O3` 和 `-ffast-math`
-
-- `-O3` 会启用更激进的循环和向量化优化，未必总能带来明显收益。
-- `-ffast-math` 允许编译器放宽 IEEE 浮点规则，可能改变 NaN、无穷、舍入和运算重排行为。
-- 对数值基准尚未完全建立的科研程序，`-O2` 是更稳妥的默认选择。
-
-后续若需要性能优化，应先固定回归算例和误差容限，再比较不同参数下的运行时间和输出误差。
 
 ---
 
-## 7. 静态链接与程序分发
+## 8. macOS 动态链接
 
-默认的 MinGW/gfortran 程序通常依赖：
+### 8.1 当前链接方式
 
-```text
-libgfortran-5.dll
-libgcc_s_seh-1.dll
-libquadmath-0.dll
-libwinpthread-1.dll
-```
-
-如果目标电脑没有对应 MinGW 环境，程序会因为找不到 DLL 而无法启动。
-
-当前 Makefile 默认 `LINK=static`，对应：
+macOS 使用动态链接，不构建完全静态程序。当前链接参数为空：
 
 ```makefile
-ifeq ($(LINK),static)
-LDFLAGS = -static
-else
 LDFLAGS =
-endif
 ```
 
-最终链接命令类似：
-
-```powershell
-gfortran -static -o bin/bellhop.exe <所有目标文件>
-```
-
-这不是简单地把 DLL 复制进 EXE，而是将 GNU/MinGW 运行库的静态版本链接进程序。
-
-验证后的 `bellhop.exe`：
-
-- 文件大小约 28 MB；
-- 不再依赖 `libgfortran`、`libgcc`、`libquadmath` 或 `libwinpthread` DLL；
-- 仍依赖 `KERNEL32.dll` 和 `api-ms-win-crt-*`。
-
-后两类属于现代 Windows 的系统组件，正常情况下无需随程序分发。
-
-项目已在 2026-07-13 对默认输出进行实际检查。最简单的重复检查方式是：
-
-```powershell
-mingw32-make -C Bellhop_origin runtime-deps
-```
-
-> “完全静态”在 Windows 上通常是指第三方编译器运行库被静态链接；Windows 自身的系统 DLL 仍然动态加载，这是正常设计。
-
-因此默认 `Bellhop_origin/bin/bellhop.exe` 可以脱离 gfortran、MinGW 目录和 VS Code 运行。“独立使用”不等于只复制一个 EXE：计算时仍必须提供算例 `.env`，以及它引用的 `.bty`、`.ati`、`.brc` 等可选环境文件。如果显式使用 `LINK=dynamic`，则发布前必须依据 `runtime-deps` 输出配套对应 MinGW DLL，不应把该变体当作单文件发布版。
-
-### 7.1 本次构建验证记录
-
-| 项目 | 2026-07-13 验证值 |
-|---|---|
-| 编译器 | GNU Fortran 16.1.0 |
-| 构建命令 | `mingw32-make -C Bellhop_origin -j4 bellhop` |
-| 构建结果 | 成功，`Bellhop_origin/bin/bellhop.exe` |
-| 文件大小 | 28,090,750 bytes |
-| SHA-256 | `2FE28EBF18EBD72686EA70747504B4AA5B118661B7BDFE423C1A0CEF511730FA` |
-| 非系统运行库 DLL | 未发现 `libgfortran/libquadmath/libgcc/libwinpthread` |
-
-此哈希只用于标识本次构建；编译器、源码、参数或链接顺序变化后，应重新记录。
-
----
-
-## 8. Windows 下载标记与应用控制问题
-
-### 8.1 最初的现象
-
-虽然以下命令能够显示版本：
-
-```powershell
-gfortran --version
-```
-
-但真正编译 Fortran 时失败：
+Homebrew gfortran 会动态链接其运行库，例如：
 
 ```text
-cannot execute .../f951.exe
-An Application Control policy has blocked this file
+libgfortran.dylib
+libquadmath.dylib
+libgcc_s.dylib
 ```
 
-原因是：
+### 8.2 检查依赖
 
-- `gfortran.exe` 是编译驱动程序；
-- 真正编译 Fortran 源码的是后端 `f951.exe`；
-- 只验证 `gfortran --version` 不足以证明完整编译链可用。
-
-### 8.2 `Zone.Identifier`
-
-从互联网下载的压缩包可能带有 `Zone.Identifier=3`。解压工具可能把这一标记传播给压缩包内的每一个文件。
-
-检查方法：
-
-```powershell
-Get-Item "完整文件路径" -Stream *
+```bash
+make -C Bellhop_origin runtime-deps
 ```
 
-确认下载来源和哈希可信后，可以解除：
+该目标在 macOS 上执行：
 
-```powershell
-$root = "C:\Users\beatr\Documents\mingw64"
-
-Get-ChildItem -LiteralPath $root -Recurse -File |
-    Unblock-File
+```bash
+otool -L Bellhop_origin/bin/bellhop
 ```
 
-更稳妥的做法是在解压前：
+### 8.3 在本机运行
 
-1. 右键原始压缩包；
-2. 打开“属性”；
-3. 勾选“解除锁定”；
-4. 再解压到新目录。
+只要当前 Homebrew GCC/gfortran 安装保持有效，`bin/bellhop` 可以直接运行。
 
-### 8.3 Smart App Control / WDAC
+### 8.4 分发到其他 Mac
 
-即使下载标记已经清除，未签名的 `f951.exe` 仍可能被 Smart App Control 或 WDAC 阻止。
+不能假设另一台 Mac 已安装相同路径和版本的 Homebrew GCC。分发前可选择：
 
-相关事件位置：
+1. 要求目标机器安装 Homebrew GCC；
+2. 在目标机器重新执行 `make`；
+3. 将依赖的 `.dylib` 一起打包，并使用 `install_name_tool` 修改加载路径；
+4. 进一步制作签名和公证后的 macOS 应用包。
+
+当前科研阶段推荐前两种：简单、透明、容易复现。若以后需要向非开发用户发布，再单独设计 dylib 打包、代码签名和公证流程。
+
+> macOS 上“程序可以在本机运行”与“可复制到任意 Mac 单文件运行”是两个不同目标。
+
+---
+
+## 9. Apple Silicon 注意事项
+
+### 9.1 确认程序架构
+
+```bash
+file Bellhop_origin/bin/bellhop
+```
+
+正常应包含：
 
 ```text
-事件查看器
-→ 应用程序和服务日志
-→ Microsoft
-→ Windows
-→ CodeIntegrity
-→ Operational
+arm64
 ```
 
-事件 ID `3077` 表示 App Control 在强制模式下阻止了文件。
+### 9.2 避免混用 Intel 与 ARM Homebrew
 
-需要注意：
+Apple Silicon 原生 Homebrew：
 
-- 把 MinGW 移到 `Program Files` 不会自动解决签名/信誉问题；
-- Smart App Control 通常不能只为某一个 EXE 添加例外；
-- 企业管理电脑应联系管理员配置允许策略；
-- 不应在未确认下载来源和哈希的情况下直接解除整棵目录的锁定。
-
-最终应使用一次真实编译验证工具链：
-
-```powershell
-mingw32-make -C Bellhop_origin clean
-mingw32-make -C Bellhop_origin
+```text
+/opt/homebrew
 ```
 
-而不是只依赖：
+Rosetta/Intel Homebrew 常见路径：
 
-```powershell
-gfortran --version
+```text
+/usr/local
 ```
 
----
+如果编译器和动态库分别来自两套架构，可能出现：
 
-## 9. 如何理解当前编译警告
-
-当前源码可以成功编译。默认 release 不开启全量警告；使用 `mingw32-make -C Bellhop_origin BUILD=debug` 时，`-Wall -Wextra` 会报告一些原始代码问题，主要包括：
-
-1. 浮点数直接使用 `==` 或 `/=` 比较；
-2. 编译器认为某些数组下标可能为 0；
-3. 某些变量可能未初始化；
-4. 未使用的变量或参数；
-5. 较大局部数组被移到静态存储区；
-6. 字符串实参与形参长度不同。
-
-这些警告不等于程序一定有错误，也不会阻止生成 EXE，但不能全部简单忽略。
-
-建议按以下顺序处理：
-
-1. 先建立已知算例的输出基线；
-2. 优先检查“可能未初始化”和“可能越界”；
-3. 修改后比较 `.prt/.shd` 输出；
-4. 对浮点结果使用容差比较，而不是要求逐字节完全相同；
-5. 最后再清理未使用变量、Tab 和代码风格类警告。
-
-> 科研代码的优先级应当是：结果可复现与数值正确性 > 警告数量为零 > 代码形式整齐。
-
----
-
-## 10. 常见问题速查
-
-### 在项目根目录提示 `No rule to make target 'bellhop'`
-
-以下命令会失败：
-
-```powershell
-mingw32-make bellhop
+```text
+bad CPU type in executable
+mach-o file, but is an incompatible architecture
 ```
-
-原因是项目根目录不再放置 Makefile；原版构建规则已移到 `Bellhop_origin/Makefile`。在项目根目录应执行：
-
-```powershell
-mingw32-make -C Bellhop_origin bellhop
-```
-
-或者先切换目录，再执行不带 `-C` 的命令：
-
-```powershell
-Set-Location .\Bellhop_origin
-mingw32-make bellhop
-```
-
-不要在已经进入 `Bellhop_origin/` 后继续使用 `-C Bellhop_origin`，否则 Make 会尝试进入不存在的 `Bellhop_origin/Bellhop_origin/`。
-
-### VS Code 能打开代码，但提示找不到模块
 
 检查：
 
-- `fortran.linter.compilerPath` 是否正确；
-- `Bellhop_origin/misc` 和 `Bellhop_origin/Bellhop` 是否在 `fortran.linter.includePaths` 中；
-- 是否至少成功编译过一次，从而生成 `Bellhop_origin/build/release-static/mod/*.mod`。
+```bash
+file /opt/homebrew/bin/gfortran
+file Bellhop_origin/bin/bellhop
+```
 
-### 按 `F5` 后找不到 `.env`
+二者都应为 `arm64` 或通用二进制中包含 `arm64`。
 
-检查 `launch.json` 的：
+### 9.3 Finder 启动 VS Code 的 PATH
+
+从终端启动的 VS Code 通常继承 Shell PATH；从 Finder/Dock 启动时不一定如此。因此 `.vscode/tasks.json` 显式添加：
+
+```text
+/opt/homebrew/bin
+```
+
+---
+
+## 10. 常见问题
+
+### `gfortran: command not found`
+
+检查：
+
+```bash
+which gfortran
+brew list gcc
+```
+
+若未安装：
+
+```bash
+brew install gcc
+```
+
+### VS Code 可以编辑，但提示找不到模块
+
+检查：
+
+- `fortran.linter.compilerPath` 是否为 `/opt/homebrew/bin/gfortran`；
+- `Bellhop_origin/build/mod` 是否在 include paths 中；
+- 是否至少成功执行过一次 `make`。
+
+### F5 找不到 `.env`
+
+检查：
 
 ```json
-"cwd": "${workspaceFolder}\\test\\test_origin_bellhop"
+"cwd": "${workspaceFolder}/test/test_origin_bellhop"
 ```
 
 以及：
@@ -547,85 +484,92 @@ mingw32-make bellhop
 "args": ["MunkB_Coh_CervenyC"]
 ```
 
-文件应为：
+对应文件应为：
 
 ```text
 test/test_origin_bellhop/MunkB_Coh_CervenyC.env
 ```
 
-### 修改源码后需要先清理吗
+### 修改 Makefile 参数后程序似乎没有变化
 
-通常不需要：
+执行完整重建：
 
-```powershell
-mingw32-make -C Bellhop_origin
+```bash
+make -C Bellhop_origin clean
+make -C Bellhop_origin
 ```
 
-Make 会根据修改时间只重新编译必要文件。
+### 其他 Mac 提示找不到 `libgfortran.dylib`
 
-### 修改了编译参数，但程序好像没有变化
+运行：
 
-Make 默认不会自动识别变量字符串发生变化。执行：
-
-```powershell
-mingw32-make -C Bellhop_origin clean
-mingw32-make -C Bellhop_origin
+```bash
+make -C Bellhop_origin runtime-deps
 ```
 
-### EXE 在其他电脑提示缺少 `libgfortran-5.dll`
+确认依赖路径。科研协作阶段最简单的解决办法是在目标 Mac 安装 Homebrew GCC 后重新编译。
 
-确认链接命令中包含：
+### 编译出现 Warning
+
+Warning 不等于构建失败。判断是否成功应看：
+
+- Make 返回码是否为 0；
+- 是否出现 `Error` 或 `make: ***`；
+- `Bellhop_origin/bin/bellhop` 是否生成；
+- 基准算例是否产生合理结果。
+
+### 出现 `overriding deployment version from '16.0' to '26.0'`
+
+本机 Homebrew GCC 14 是按较早的 macOS SDK 构建的，而当前 Command Line Tools 提供 macOS 26 SDK。汇编阶段可能输出：
 
 ```text
--static
+clang: warning: overriding deployment version from '16.0' to '26.0'
 ```
 
-然后完整重新编译，并用 `mingw32-make -C Bellhop_origin runtime-deps` 检查依赖。
+这次实测中该警告没有阻止编译，生成文件仍是有效的 arm64 Mach-O 程序。它属于编译器工具链与新版 SDK 的版本提示，不是 Bellhop 源码错误。
 
-### 编译输出很多 Warning，是否代表失败
+建议：
 
-不是。判断构建是否成功应看：
-
-- 命令返回码是否为 0；
-- 是否出现 `Error` 或 `make: ***`；
-- `Bellhop_origin/bin/bellhop.exe` 是否生成；
-- 基准算例是否能够运行并产生合理结果。
+1. 不要为了隐藏提示随意添加放宽数值语义的编译参数；
+2. 保持 Xcode Command Line Tools 与 Homebrew GCC 为兼容版本；
+3. 后续通过 `brew update`、`brew upgrade gcc` 更新工具链后重新完整编译；
+4. 更新前先记录基准结果，更新后做数值回归比较。
 
 ---
 
-## 11. 推荐的科研使用习惯
+## 11. 科研计算建议
 
-1. 保留一个未经修改的原版 Bellhop 算例和输出作为基线。
-2. 每次修改算法后，先运行小算例，再运行大规模多频算例。
-3. 对声压、传播损失等浮点结果采用明确的绝对/相对误差容限。
-4. 将源码、Makefile、`.vscode` 配置和小型输入文件纳入 Git。
-5. 不把 `.o`、`.mod`、大型 `.shd` 和临时输出当作源码管理。
-6. 不在没有数值基线的情况下启用 `-ffast-math` 等激进优化。
-7. 发布 EXE 时记录编译器版本、Makefile 参数、Git 提交和 SHA256。
+1. 保留原始 Bellhop 算例和输出作为数值基线。
+2. 修改算法后先运行小算例，再运行多频或大规模算例。
+3. 浮点结果采用绝对/相对容差比较，不要求 `.shd` 逐字节一致。
+4. 记录 gfortran 版本、Makefile 参数、Git 提交和可执行文件哈希。
+5. 不在缺少基线时启用 `-ffast-math` 或 CPU 专用优化。
+6. 跨机器对比时记录 CPU 架构和动态库版本。
 
-记录当前编译器版本：
+记录版本：
 
-```powershell
+```bash
+uname -m
 gfortran --version
-mingw32-make --version
-gdb --version
+make --version
+otool -L Bellhop_origin/bin/bellhop
 ```
 
-记录可执行文件哈希：
+记录哈希：
 
-```powershell
-Get-FileHash .\Bellhop_origin\bin\bellhop.exe -Algorithm SHA256
+```bash
+shasum -a 256 Bellhop_origin/bin/bellhop
 ```
 
 ---
 
 ## 12. 最终结论
 
-- VS Code 只负责编辑、任务启动和调试；真正的构建规则由 Makefile 决定。
-- Windows 下的 `mingw32-make` 与原版文档中的 `make` 是同一类工具。
-- 日常性能和分发使用默认 release/static；数值异常或越界问题使用 `mingw32-make -C Bellhop_origin BUILD=debug`。
-- `-O2` 是当前兼顾性能和数值稳健性的默认优化级别。
-- 默认 `-static` 已将 GNU/MinGW 运行库静态链接进 `bellhop.exe`，程序不再依赖 MinGW DLL。
-- Windows 系统 DLL 仍然保留，这是正常且必要的。
-- 工具链是否可用应通过完整编译验证，不能只看 `gfortran --version`。
-- 编译警告应结合数值回归逐步处理，而不是为了“零警告”盲目修改科研代码。
+- 当前主编译器是 `/opt/homebrew/bin/gfortran`。
+- 日常构建命令是 `make -C Bellhop_origin`。
+- VS Code 使用系统 `make`，并显式把 `/opt/homebrew/bin` 加入 PATH。
+- 调试器使用 CodeLLDB。
+- 输出程序为 `Bellhop_origin/bin/bellhop`。
+- 默认参数为 `-O2 -g -std=gnu -ffree-line-length-none`。
+- macOS 不使用完整 `-static`；通过 `otool -L` 检查 Homebrew 动态库依赖。
+- 科研阶段优先保证数值基线、可复现性和构建透明性，而不是追求复杂的多配置工程体系。

@@ -1,62 +1,29 @@
-# Build the original 2-D BELLHOP only.
+# Build the original 2-D BELLHOP on this Apple Silicon Mac.
 #
-# Normal Windows build (standalone executable):
-#   mingw32-make
+# Normal build:
+#   make
 #
-# Optional variants:
-#   mingw32-make BUILD=debug
-#   mingw32-make LINK=dynamic
-#   mingw32-make info
-#   mingw32-make runtime-deps
+# Useful targets:
+#   make info
+#   make runtime-deps
+#   make clean
 
-FC = gfortran
+FC = /opt/homebrew/bin/gfortran
 
-# User-facing configuration. Command-line values override these defaults.
-BUILD ?= release
-LINK  ?= static
-
-VALID_BUILDS = release debug
-VALID_LINKS  = static dynamic
-
-ifeq ($(filter $(BUILD),$(VALID_BUILDS)),)
-$(error BUILD must be one of: $(VALID_BUILDS))
-endif
-ifeq ($(filter $(LINK),$(VALID_LINKS)),)
-$(error LINK must be one of: $(VALID_LINKS))
-endif
-
-BUILD_DIR = build/$(BUILD)-$(LINK)
+BUILD_DIR = build
 OBJ_DIR   = $(BUILD_DIR)/obj
 MOD_DIR   = $(BUILD_DIR)/mod
 BIN_DIR   = bin
 
-# Keep deployment builds CPU-portable and numerically conservative.
-# In particular, do not use -march=native or -ffast-math for the baseline.
-COMMON_FFLAGS  = -std=gnu -ffree-line-length-none
-RELEASE_FFLAGS = -O2
-DEBUG_FFLAGS   = -O0 -g -Wall -Wextra -Wno-tabs -fcheck=all -fbacktrace
-
-ifeq ($(BUILD),debug)
-FFLAGS    = $(COMMON_FFLAGS) $(DEBUG_FFLAGS)
-BUILD_TAG = -debug
-else
-FFLAGS    = $(COMMON_FFLAGS) $(RELEASE_FFLAGS)
-BUILD_TAG =
-endif
-
+# -O2 is the numerical-performance baseline; -g keeps useful symbols for LLDB.
+# Avoid -mcpu=native and -ffast-math so results and binaries stay conservative.
+FFLAGS  = -O2 -g -std=gnu -ffree-line-length-none
 MODFLAGS = -J$(MOD_DIR) -I$(MOD_DIR)
 
-# Static is the distribution default. It embeds the GNU/MinGW Fortran,
-# quadmath, GCC and pthread runtimes. Windows system DLLs remain dynamic.
-ifeq ($(LINK),static)
-LDFLAGS  = -static
-LINK_TAG =
-else
-LDFLAGS  =
-LINK_TAG = -dynamic
-endif
+# Homebrew gfortran links its runtime dylibs dynamically on macOS.
+LDFLAGS =
 
-TARGET = $(BIN_DIR)/bellhop$(BUILD_TAG)$(LINK_TAG).exe
+TARGET = $(BIN_DIR)/bellhop
 
 MISC_OBJECTS = \
 	$(OBJ_DIR)/misc_FatalError.o \
@@ -95,15 +62,12 @@ all: bellhop
 bellhop: $(TARGET)
 
 help:
-	@echo "mingw32-make [BUILD=release|debug] [LINK=static|dynamic]"
+	@echo "$(MAKE) [bellhop|info|runtime-deps|clean]"
 	@echo ""
-	@echo "Default: BUILD=release LINK=static -> bin/bellhop.exe"
-	@echo "Targets: bellhop, info, runtime-deps, clean"
+	@echo "Default target: $(TARGET)"
 
 info:
 	@echo "Compiler : $(FC)"
-	@echo "Build    : $(BUILD)"
-	@echo "Link     : $(LINK)"
 	@echo "Flags    : $(FFLAGS)"
 	@echo "LinkFlags: $(LDFLAGS)"
 	@echo "Target   : $(TARGET)"
@@ -113,15 +77,9 @@ $(TARGET): $(OBJECTS) | $(BIN_DIR)
 	@echo ""
 	@echo "BELLHOP built: $@"
 
-# Show the DLL import table. A standalone MinGW build must not list
-# libgfortran, libquadmath, libgcc or libwinpthread.
-ifeq ($(OS),Windows_NT)
+# Show linked macOS system and Homebrew runtime libraries.
 runtime-deps: $(TARGET)
-	@objdump -p $(TARGET) | findstr /C:"DLL Name"
-else
-runtime-deps: $(TARGET)
-	@ldd $(TARGET) || true
-endif
+	@otool -L $(TARGET)
 
 # Compile recipes are shared; explicit dependency declarations below preserve
 # the Fortran module order and make parallel builds safe.
@@ -229,22 +187,13 @@ $(OBJ_DIR)/bellhop_bellhop.o: \
 	$(OBJ_DIR)/bellhop_Step.o \
 	$(OBJ_DIR)/bellhop_WriteRay.o
 
-ifeq ($(OS),Windows_NT)
-make_dir = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
-remove_dir = if exist "$(subst /,\,$1)" rmdir /S /Q "$(subst /,\,$1)"
-remove_file = if exist "$(subst /,\,$1)" del /Q "$(subst /,\,$1)"
-else
 make_dir = mkdir -p "$1"
 remove_dir = rm -rf "$1"
 remove_file = rm -f "$1"
-endif
 
 $(OBJ_DIR) $(MOD_DIR) $(BIN_DIR):
 	$(call make_dir,$@)
 
 clean:
 	$(call remove_dir,build)
-	$(call remove_file,$(BIN_DIR)/bellhop.exe)
-	$(call remove_file,$(BIN_DIR)/bellhop-debug.exe)
-	$(call remove_file,$(BIN_DIR)/bellhop-dynamic.exe)
-	$(call remove_file,$(BIN_DIR)/bellhop-debug-dynamic.exe)
+	$(call remove_file,$(BIN_DIR)/bellhop)

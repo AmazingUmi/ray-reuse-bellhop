@@ -3,31 +3,18 @@
   "configurations": [
     {
       "name": "Run Bellhop example",
-      "type": "cppdbg",
+      "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}\\Bellhop_origin\\bin\\bellhop.exe",
+      "program": "${workspaceFolder}/Bellhop_origin/bin/bellhop",
       "args": [
         "MunkB_Coh_CervenyC"
       ],
-      "stopAtEntry": false,
-      "cwd": "${workspaceFolder}\\test\\test_origin_bellhop",
-      "environment": [
-        {
-          "name": "PATH",
-          "value": "C:\\Users\\beatr\\Documents\\mingw64\\bin;${env:PATH}"
-        }
-      ],
-      "externalConsole": false,
-      "MIMode": "gdb",
-      "miDebuggerPath": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\gdb.exe",
-      "preLaunchTask": "Build Bellhop",
-      "setupCommands": [
-        {
-          "description": "Enable GDB pretty printing",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
-        }
-      ]
+      "cwd": "${workspaceFolder}/test/test_origin_bellhop",
+      "env": {
+        "PATH": "/opt/homebrew/bin:${env:PATH}"
+      },
+      "terminal": "integrated",
+      "preLaunchTask": "Build Bellhop"
     }
   ]
 }

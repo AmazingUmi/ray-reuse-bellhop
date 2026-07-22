@@ -1,9 +1,10 @@
 {
   "fortran.linter.compiler": "gfortran",
-  "fortran.linter.compilerPath": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\gfortran.exe",
+  "fortran.linter.compilerPath": "/opt/homebrew/bin/gfortran",
   "fortran.linter.includePaths": [
     "${workspaceFolder}/Bellhop_origin/misc",
-    "${workspaceFolder}/Bellhop_origin/Bellhop"
+    "${workspaceFolder}/Bellhop_origin/Bellhop",
+    "${workspaceFolder}/Bellhop_origin/build/mod"
   ],
   "fortran.linter.extraArgs": [
     "-std=gnu",
@@ -23,10 +24,9 @@
   "search.exclude": {
     "**/*.o": true,
     "**/*.mod": true,
-    "**/*.exe": true,
     "**/*.shd": true
   },
-   "workbench.editorAssociations": {
-       "*.md": "vscode.markdown.preview.editor"
+  "workbench.editorAssociations": {
+    "*.md": "vscode.markdown.preview.editor"
   }
 }

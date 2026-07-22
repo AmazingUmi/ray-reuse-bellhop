@@ -4,14 +4,14 @@
     {
       "label": "Build Bellhop",
       "type": "process",
-      "command": "C:\\Users\\beatr\\Documents\\mingw64\\bin\\mingw32-make.exe",
+      "command": "/usr/bin/make",
       "args": [
         "bellhop"
       ],
       "options": {
-        "cwd": "${workspaceFolder}\\Bellhop_origin",
+        "cwd": "${workspaceFolder}/Bellhop_origin",
         "env": {
-          "PATH": "C:\\Users\\beatr\\Documents\\mingw64\\bin;${env:PATH}"
+          "PATH": "/opt/homebrew/bin:${env:PATH}"
         }
       },
       "problemMatcher": "$gcc",

@@ -1,7 +1,7 @@
 {
   "recommendations": [
     "fortran-lang.linter-gfortran",
-    "ms-vscode.cpptools",
+    "vadimcn.vscode-lldb",
     "yzhang.markdown-all-in-one"
   ]
 }
