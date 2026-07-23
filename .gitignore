@@ -5,3 +5,8 @@
 
 # Generated outputs from the reproducible standard-case runner
 /test/standard_cases/output/
+
+# Python caches and local editable-install metadata
+__pycache__/
+*.py[cod]
+*.egg-info/

@@ -2,7 +2,7 @@ function [ title, PlotType, freqVec, freq0, atten, Pos, pressure ] = read_shd_bi
 
 % Read a binary shade file
 %
-% Useage:
+% Usage:
 % ... = read_shd_bin( filename, xs, ys )
 % where (xs, ys) is the source coordinate in km
 % (xs, ys) are optional
@@ -19,21 +19,14 @@ narginchk( 1, 3 )
 filename = varargin{1};
 
 % optional frequency
-ifreq = NaN;
 if nargin == 2
     freq = varargin{ 2 };
 end
 
-% optional source (x,y) coordinate or 'ifreq'
+% optional source (x,y) coordinate
 if nargin >= 3
-    if ischar(varargin{2}) && strcmpi(varargin{2}, 'ifreq')
-        ifreq = varargin{3};
-        xs = NaN;
-        ys = NaN;
-    else
-        xs = varargin{ 2 };
-        ys = varargin{ 3 };
-    end
+    xs = varargin{ 2 };
+    ys = varargin{ 3 };
 else
     xs = NaN;
     ys = NaN;
@@ -116,12 +109,10 @@ end
 
 if isnan( xs )    % Just read the first xs, ys, but all theta, sz, and rz
     % get the index of the frequency if one was selected
-    if isnan(ifreq)
-        ifreq = 1;
-        if exist( 'freq', 'var' )
-           freqdiff = abs( freqVec - freq );
-           [ ~, ifreq ] = min( freqdiff );
-        end
+    ifreq = 1;
+    if exist( 'freq', 'var' )
+       freqdiff = abs( freqVec - freq );
+       [ ~, ifreq ] = min( freqdiff );
     end
 
     for itheta = 1 : Ntheta

@@ -1,6 +1,6 @@
 # 01 Bellhop 源码分析与宽带 Ray-Reuse 设计
 
-> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [05 基础变量、单位与数值规范](./05-基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
+> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [04 基础变量、单位与数值规范](./04-基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
 
 ## 1. 文档目标与分析范围
 
@@ -12,7 +12,7 @@
 4. 当前真正参与构建的二维代码与仓库中的三维扩展代码有何区别；
 5. 后续进行 ray-reuse 重构时，应如何划分模块边界。
 
-分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_RayReuse/` 目录目前为空，尚无可分析的重构实现。
+分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 已建立职责 README、尚无 C++ 实现；`Bellhop_RayReuse/` 目前只有职责说明。工程演进关系为：先完成 F2CPP 优化单频实现，再复制/派生其已验证代码形成 RayReuse 并进行宽带轨迹复用改造；派生后两者独立构建和运行。
 
 ## 2. 总体功能分层
 
@@ -580,7 +580,7 @@ ReadEnvironment
 |---|---|---|
 | `x=(r,z)` | 二维位置 | `position` |
 | `s` | 中心射线弧长 | `arcLength` |
-| `tau` | 程函/传播时间 | `travelTime` |
+| `tau` | 实几何传播时间 | `realTravelTime` |
 | `c(r,z)` | 实声速 | `soundSpeed` |
 | `u=grad(tau)=(xi,zeta)` | 慢度向量 | `slowness` |
 | `e_s=c*u` | 单位切向 | `tangent` |
@@ -732,6 +732,8 @@ Nray * TraceCost
 
 ## 18. 首版范围与数据模型
 
+本章的数据模型不是 RayReuse 阶段才追加的设计，而是 `Bellhop_F2CPP` 的强制基础设计。F2CPP 虽然只计算一个频率，也必须生成并消费完整、可冻结的 `RayPathCache`，严格分离频率无关轨迹与逐频声学状态。若 M1/M2 仍依赖追踪器局部数组、边追踪边累加且不保留求积/反射信息，则不能视为 F2CPP 验收通过，也不能据此派生 RayReuse。
+
 ### 18.1 首版支持矩阵
 
 | 能力 | 首版选择 |
@@ -766,24 +768,24 @@ struct SimulationCase {
 ### 18.3 几何轨迹与求积信息
 
 ```cpp
-struct RayGeometryPoint {
+struct RayState {
     Vec2 position;
     Vec2 slowness;
-    std::array<double, 2> p;
-    std::array<double, 2> q;
+    std::array<double, 2> dynamicP;
+    std::array<double, 2> dynamicQ;
     double soundSpeed;
-    double travelTime;
+    double realTravelTime;
 };
 
 struct StepQuadrature {
-    double h;
-    double hw0;
-    double hw1;
+    double stepLength;
+    double startWeight;
+    double midpointWeight;
     Vec2 midpoint;
 };
 ```
 
-只保存端点可能不足以重建原 `Step2D` 的复走时积分，因此 `RayPath` 还应保存每步等价求积数据和明确的终止原因。
+只保存端点可能不足以重建原 `Step2D` 的复走时积分，因此 `RayPath` 还应保存每步等价求积数据和明确的终止原因。该结构及其完整填充逻辑必须在 F2CPP 中实现和测试，不能推迟到 RayReuse。
 
 ### 18.4 反射事件
 
@@ -813,10 +815,15 @@ struct ReflectionEvent {
 
 ```cpp
 struct RayFrequencyPoint {
-    std::complex<double> travelTime;
+    std::complex<double> complexTravelTime;
     double amplitude;
-    double phase;
+    double reflectionPhase;
     bool active;
+};
+
+struct RayFrequencyState {
+    double frequency;
+    std::vector<RayFrequencyPoint> points;
 };
 ```
 
@@ -863,16 +870,26 @@ influence.accumulate(
 
 显式传入几何轨迹和逐频状态，可以在类型和所有权层面防止不同频率互相污染。
 
-### 19.4 宽带非复用基线优先
+### 19.4 先复刻 C++ 单频核心，再扩展宽带
 
-该顺序确定为正式实施约束：
+正式实施顺序确定为：
 
-1. 先接通多频输入、三维压力数组和多频 SHD；
-2. 每个频率仍完整追踪，建立宽带非复用基线；
-3. 再引入轨迹缓存和频率投影；
-4. 最后优化数据布局和并行结构。
+1. **`Bellhop_F2CPP` 单频复刻**：只实现目标范围内的 2D Cartesian Cerveny coherent pressure 路径，逐组件和端到端对照可重现 Fortran 单频 oracle；
+2. **派生 `Bellhop_RayReuse` 单频/宽带非复用基线**：复制 F2CPP 已验收的必要代码形成独立工程，先确认派生后的单频结果未发生漂移，再让每个频率完整追踪一次，验证频率循环、多频记录号和输出；
+3. **串行 Ray-Reuse**：启用既有 `RayPathCache` 的全频共享遍历和重复 `FrequencyProjector` 调用，比较复用结果与宽带非复用结果；
+4. **有界频率并行**：在串行结果稳定后加入频率所有权、内存预算和单 writer 输出；
+5. **性能与大规模 I/O 优化**：最后评估 receiver tile、磁盘轨迹缓存和 HDF5。
 
-这样可以把“宽带循环/输出错误”和“轨迹复用错误”分开定位。
+F2CPP 虽然只运行一个频率，仍必须直接采用 RayReuse 所需的数据模型，而不是等派生后再扩展：`SimulationCase` 保留 `frequencies` 集合并要求 `frequencies.size()==1`；追踪器完整生成 `RayPathCache`；频率通过接口显式传入；`RayPath` 不保存逐频幅相；单频投影状态和压力使用独立 `RayFrequencyState/FrequencyWorkspace`。F2CPP 的端到端主循环也应遵循“完整追踪并冻结缓存 → 对唯一频率投影 → Influence 累加”的边界。RayReuse 派生后只扩展频率调度、共享缓存遍历和并行所有权，不再重做基础变量与轨迹保存设计。
+
+不得从 Fortran 全模式逐行翻译，也不得在 C++ 单频轨迹、反射和 Influence 尚未通过回归前直接实现 Ray-Reuse。该顺序可以依次隔离：
+
+```text
+语言/离散误差
+    → 宽带循环与 I/O 错误
+    → 轨迹复用误差
+    → 并行与归约误差
+```
 
 ### 19.5 先缓存射线扇，再逐频投影
 
@@ -898,7 +915,7 @@ for (std::size_t fi = 0; fi < frequencies.size(); ++fi) {
 }
 ```
 
-`RayPathCache` 不能只保存 `(r,z)` 折线。每条轨迹必须同时保存 `position/slowness/p/q/realTravelTime`、每步 `StepQuadrature`、`ReflectionEvent` 和几何终止原因，否则无法在不重新积分几何轨迹的前提下严格重建逐频复走时、反射幅相和 Influence。
+`RayPathCache` 不能只保存 `(r,z)` 折线。每条轨迹必须同时保存 `position/slowness/dynamicP/dynamicQ/realTravelTime`、每步 `StepQuadrature`、`ReflectionEvent` 和几何终止原因，否则无法在不重新积分几何轨迹的前提下严格重建逐频复走时、反射幅相和 Influence。
 
 这一选择用轨迹缓存换取更简单的频率所有权和更低的压力场内存。运行前必须估算实际轨迹点总数；如果未来长距离、超小步长或极大发射角集合使缓存超出预算，再增加磁盘轨迹缓存，而不在首版中预先复杂化。
 
@@ -993,7 +1010,7 @@ IRec = 10 + Irz1 + NRz_per_range * &
        ( ( is - 1 ) + Pos%NSz * ( ifreq - 1 ) )
 ```
 
-建议封装为独立 `SHDRecord2D(ifreq, isz, irz)` 并对维度边界进行单元测试；写出顺序必须用现有 `read_shd.m` 验证。
+建议封装为独立 `SHDRecord2D(ifreq, isz, irz)` 并对维度边界进行单元测试；写出顺序必须用 `test/PlotRead/bellhop_io_py/` 独立验证。
 
 ### 20.3 无竞争 CPU 并行
 
@@ -1042,7 +1059,7 @@ memoryLimitedFrequencyCount = floor(
 
 `.env` 输入体积很小，多频计算时不会成为性能瓶颈，但其位置字段、字符选项和多个关联文件不适合渗透到新求解器内部。首版保留 `.env` 作为 Bellhop 兼容输入，由 `EnvReader` 一次转换为不可变 `SimulationCase`；核心计算不读取文件位置，也不保留 Fortran 全局输入状态。后续可增加 TOML/JSON 配置，但不与数值重构同时强制切换。
 
-SHD 在语义上能表达多频复压力，且是与现有 MATLAB 工具和 Fortran 基线对比的必要格式，因此首版继续支持。但它不适合让多个计算线程直接随机写入。建议由单一 `OutputWriter` 按频率序号写入已完成切片，并使用有界队列隔离计算与磁盘 I/O。
+SHD 在语义上能表达多频复压力，且是与 Acoustic Toolbox 格式和 Fortran 基线对比的必要格式，因此首版继续支持。读取、绘图和数值导出统一由 `test/PlotRead/bellhop_io_py/` 完成。但它不适合让多个计算线程直接随机写入。建议由单一 `OutputWriter` 按频率序号写入已完成切片，并使用有界队列隔离计算与磁盘 I/O。
 
 对大规模正式计算，后续可将 HDF5 作为内部主结果格式，使用维度 `[frequency][sourceDepth][receiverDepth][range]`、坐标数据集、计算元数据、分块和频率完成标记；SHD 则保留为兼容导出。该扩展属于算法正确性闭环之后的工程任务，不阻塞首个 SHD 里程碑。
 
@@ -1063,24 +1080,44 @@ C++ 不会仅因语言选择就天然快于 Fortran。项目的主要性能收�
 ### 21.2 推荐工程结构
 
 ```text
+Bellhop_F2CPP/
+  CMakeLists.txt
+  include/bellhop/
+    model/          Environment, SSP, Boundary, Grid
+    numerics/       Vec2, interpolation, intersection
+    ray/            GeometryTracer, RayPath, ReflectionEvent
+    cache/          RayPathCache
+    acoustics/      Attenuation, ReflectionAcoustics
+    field/          FrequencyProjector, CervenyInfluence, FrequencyWorkspace
+    io/             EnvReader, ShdWriter
+  src/
+  app/              bellhop_f2cpp 单频程序
+  tests/
+    unit/
+    regression/
+    golden/
+
 Bellhop_RayReuse/
   CMakeLists.txt
   include/rayreuse/
     model/          Environment, SSP, Boundary, Grid
     numerics/       Vec2, interpolation, intersection
     ray/            GeometryTracer, RayPath, ReflectionEvent
-    broadband/      FrequencyProjector, Attenuation
-    field/          CervenyInfluence, BroadbandField
-    io/             EnvReader, ShdWriter
+    acoustics/      Attenuation, ReflectionAcoustics
+    influence/      CartesianCerveny
+    broadband/      FrequencyScheduler, FrequencyProjector
+    cache/          RayPathCache, optional disk cache
+    field/          FrequencyWorkspace, broadband orchestration
+    io/             MultiFrequencyWriter
   src/
-  app/
+  app/              bellhop_rayreuse 宽带程序
   tests/
-    unit/
-    regression/
-    golden/
+    broadband/
+    reuse/
+    performance/
 ```
 
-首版只有一个明确计算模式，不设计庞大的运行模式继承树。
+`Bellhop_RayReuse` 初始代码由已验收的 `Bellhop_F2CPP` 复制/派生，这是有意保留的源码演进关系。派生后，两者各自产出独立可执行程序并维护自己的源码副本；不通过 `add_subdirectory`、静态/动态库或跨目录头文件/源码包含建立持续依赖。共同变量规范、相同标准算例、中间状态导出和复压力/TL 对比用于防止后续改造产生数值漂移。两者首版都只有一个明确计算模式，不设计庞大的运行模式继承树。
 
 ### 21.3 性能 go/no-go 门槛
 
@@ -1124,24 +1161,28 @@ Bellhop_RayReuse/
   reuse vs 非复用复压力
 ```
 
-### 21.6 首个里程碑
+### 21.6 分阶段验收里程碑
 
-首个可验收里程碑为：
+| 里程碑 | 验收内容 | 主要对照 |
+|---|---|---|
+| **M1：F2CPP 组件级单频** | C++ SSP、中心射线、动态 `p/q`、反射；完整构造 `RayPath/StepQuadrature/ReflectionEvent` | Fortran 中间状态与解析解 |
+| **M2：F2CPP 端到端单频** | 冻结 `RayPathCache` 后通过单频投影和 Influence 生成 coherent complex pressure/SHD；逐频量不回写轨迹 | 可重现 Fortran 单频结果 |
+| **M3：RayReuse 单频/宽带非复用** | 从 M2 代码派生独立工程；派生后单频结果保持一致，一次运行逐频完整追踪等于多个独立单频运行 | Fortran 与 M2 参照结果 |
+| **M4：串行 Ray-Reuse** | 射线扇只追踪一次，复压力等于 M3 | 宽带非复用基线 |
+| **M5：并行 Ray-Reuse** | 有界频率并行结果满足确定性容差和内存预算 | M4 串行结果 |
 
-> 在等声速、真空海面、刚性平底环境中，对一个源、规则接收网格和 2–3 个频率，只追踪一次射线扇，并得到与独立单频计算一致的 coherent complex pressure。
-
-该里程碑暂不加入真实海底损失和复杂 SSP，但必须同时打通中心射线、动态射线、Cartesian Cerveny Influence、多频 SHD 和 ray-reuse 数据流。
+首个必须完成的里程碑是 **M1/M2 单频复刻**，不是直接得到多频 Ray-Reuse。最小环境仍采用等声速、真空海面、刚性平底、一个源和小型规则接收网格；复杂 SSP、真实海底损失和大规模 I/O 在单频链路稳定后逐步加入。
 
 ## 22. 当前基线事实与最终决策摘要
 
 当前仓库状态为：
 
 - `Bellhop_origin/Makefile` 已能可重现构建二维 release/static `Bellhop_origin/bin/bellhop.exe`；
-- `Bellhop_RayReuse/` 仍为空，C++ 实现尚未开始；
+- `Bellhop_F2CPP/` 已建立职责 README，`Bellhop_RayReuse/` 已建立空目录，C++ 实现尚未开始；
 - 当前代码基线应视为原始、单频 Bellhop 模型；
 - `freqVec`、部分多频 SHD 头处理和测试目录中的宽带结果，是此前尝试多频计算时直接拷入的实验文件，不代表原始模型已经具备或验证了宽带基础设施；
-- 后续实现可以参考这些实验文件，但正确性必须以可重现的原始单频 Bellhop 和新建立的宽带非复用基线为准；
-- 小型单频标准算例已建立；当前下一步是冻结指定点复压力/TL 容差、验证 MATLAB SHD 读取、导出中间状态并分阶段计时，而不是直接移植完整 Influence。
+- 后续实现可以参考这些实验文件，但验证链必须依次使用可重现的原始单频 Bellhop、C++ 单频复刻和宽带非复用基线；
+- 小型单频标准算例和独立 Python SHD 读取回归已建立；当前下一步是冻结指定点复压力/TL 容差、导出中间状态并分阶段计时，而不是直接移植完整 Influence。
 
 最终架构决策如下：
 
@@ -1150,9 +1191,10 @@ Bellhop_RayReuse/
 - 首版复现原 modified Heun/box 积分器；
 - `RayPath` 显式保存反射事件和求积信息；
 - `ReflectionEvent::boundary` 显式区分海面和海底；
+- 上述 RayReuse 数据模型和“追踪缓存 → 单频投影 → 声场累加”边界必须在 F2CPP 阶段完成，不得推迟到宽带工程；
 - 最终发射角数目 `Nalpha_final` 由输入最高频率、原 Bellhop 自动估算经验式和数量充分性检查共同确定；
 - 先实现唯一的二维 Cartesian Cerveny coherent pressure 路径；
-- 先建立宽带非复用基线，再启用轨迹复用；
+- 先在 `Bellhop_F2CPP/` 完成优化版 C++ 单频实现并通过验收，再复制/派生代码形成 `Bellhop_RayReuse/`，在独立副本中实现宽带非复用和轨迹复用；两工程互不链接；
 - 本次修改完全不考虑 beam shift；
 - 先完成串行正确性；复用版先缓存完整只读 `RayPathCache`，再进行有界频率切片独占并行；
 - 压力缓冲区只为活动频率分配，通过单 writer 和有界队列写出；

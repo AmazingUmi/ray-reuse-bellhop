@@ -45,7 +45,7 @@ SHD 复压力不做逐字节哈希比较。不同编译器或平台可能只在�
 以下内容仍属于 P1 的必要缺口，按优先级排列：
 
 1. **数值期望值与容差**：保存指定接收点的复压力实部/虚部和 TL；冻结最大绝对误差、相对误差及 TL 误差阈值。
-2. **MATLAB 读取验收**：用 `test/test_origin_bellhop/plotshd_origin/read_shd.m` 实际读取两份输出，确认频率轴、源深、接收深度、距离轴和压力维度；当前环境未安装 MATLAB/Octave，尚未执行。
+2. **结果读取验收**：已由 `test/PlotRead/bellhop_io_py/` 和 `test/PlotRead/tests/` 覆盖频率轴、源深、接收深度、距离轴、压力维度与原始复数记录；后续新增标准算例时需同步增加数值采样点。
 3. **轨迹 oracle**：增加可选导出并记录每步 `position/slowness/dynamicP/dynamicQ/soundSpeed/travelTime`。
 4. **边界 oracle**：新增至少一个平海面/平海底多次反射算例，并导出反射前后状态和 `SeaSurface/Seabed` 事件属性。
 5. **Influence oracle**：导出单条指定发射角对指定接收点的复压力贡献，覆盖普通传播和焦散附近。
