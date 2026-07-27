@@ -9,49 +9,61 @@ import numpy as np
 
 from bellhop_io_py.shd import ShdFormatError, ShdReader
 from support import (
-    MULTI_FREQUENCY_SHD,
-    SINGLE_FREQUENCY_SHD,
     write_big_endian_tl_file,
+    write_little_endian_rectilinear_file,
 )
 
 
 class BinaryShdTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        directory = Path(self.temporary_directory.name)
+        self.single_frequency_shd = directory / "single.shd"
+        self.multi_frequency_shd = directory / "multi.shd"
+        write_little_endian_rectilinear_file(
+            self.single_frequency_shd, (50.0,)
+        )
+        write_little_endian_rectilinear_file(
+            self.multi_frequency_shd, (100.0, 200.0, 300.0)
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
     def test_header_matches_reference_case(self) -> None:
-        header = ShdReader(SINGLE_FREQUENCY_SHD).header
+        header = ShdReader(self.single_frequency_shd).header
 
         self.assertEqual(header.plot_type, "rectilin")
-        self.assertEqual(header.dimensions, (1, 1, 1, 1, 1, 201, 501))
+        self.assertEqual(header.dimensions, (1, 1, 1, 1, 1, 2, 3))
         np.testing.assert_array_equal(header.frequencies_hz, [50.0])
-        np.testing.assert_allclose(header.source_depths_m, [1000.0])
+        np.testing.assert_allclose(header.source_depths_m, [10.0])
+        np.testing.assert_allclose(header.receiver_depths_m, [20.0, 30.0])
         np.testing.assert_allclose(
-            header.receiver_depths_m[[0, -1]], [0.0, 5000.0]
-        )
-        np.testing.assert_allclose(
-            header.receiver_ranges_m[[0, -1]], [0.0, 100000.0]
+            header.receiver_ranges_m, [1000.0, 2000.0, 3000.0]
         )
 
     def test_first_pressure_value_matches_raw_record(self) -> None:
-        reader = ShdReader(SINGLE_FREQUENCY_SHD)
+        reader = ShdReader(self.single_frequency_shd)
         field = reader.read()
-        with SINGLE_FREQUENCY_SHD.open("rb") as stream:
+        with self.single_frequency_shd.open("rb") as stream:
             stream.seek(10 * reader.header.record_bytes)
             real, imaginary = struct.unpack("<ff", stream.read(8))
 
-        self.assertEqual(field.pressure.shape, (1, 1, 201, 501))
+        self.assertEqual(field.pressure.shape, (1, 1, 2, 3))
         self.assertEqual(field.pressure.dtype, np.complex64)
         self.assertEqual(field.pressure[0, 0, 0, 0], complex(real, imaginary))
 
     def test_frequency_value_and_index_select_the_same_records(self) -> None:
-        reader = ShdReader(MULTI_FREQUENCY_SHD)
-        by_index = reader.read(frequency_index=7)
+        reader = ShdReader(self.multi_frequency_shd)
+        by_index = reader.read(frequency_index=1)
         by_value = reader.read(frequency_hz=201.0)
 
         self.assertEqual(by_index.frequency_hz, 200.0)
-        self.assertEqual(by_value.frequency_index, 7)
+        self.assertEqual(by_value.frequency_index, 1)
         np.testing.assert_array_equal(by_index.pressure, by_value.pressure)
 
     def test_invalid_selector_is_rejected(self) -> None:
-        reader = ShdReader(SINGLE_FREQUENCY_SHD)
+        reader = ShdReader(self.single_frequency_shd)
         with self.assertRaises(IndexError):
             reader.read(frequency_index=1)
         with self.assertRaises(ValueError):
@@ -71,7 +83,7 @@ class BinaryShdTests(unittest.TestCase):
         np.testing.assert_array_equal(field.pressure[0, 0, 0], [3 - 3j, 3.5 - 3.5j])
 
     def test_truncated_file_is_rejected(self) -> None:
-        data = SINGLE_FREQUENCY_SHD.read_bytes()
+        data = self.single_frequency_shd.read_bytes()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "truncated.shd"
             path.write_bytes(data[:-4])

@@ -1,0 +1,36 @@
+id = "constant_speed_direct"
+description = "1500 m/s constant-speed direct field without boundary contact"
+origin_template = "origin.env.in"
+source_references = [
+  "Acoustic Toolbox tests/free/freePoint_ParaxialB.env",
+  "Acoustic Toolbox tests/calib/calibB_Cerveny.env",
+]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 1000.0
+maximum_range_m = 5000.0
+minimum_angle_deg = -5.0
+maximum_angle_deg = 5.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 21, 51]
+prt_markers = ["VACUUM", "ACOUSTO-ELASTIC half-space"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [50.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [50.0, 250.0]
+
+[profiles.broadband_regression]
+start_hz = 50.0
+stop_hz = 500.0
+count = 16
+
+[profiles.broadband_stress]
+start_hz = 50.0
+stop_hz = 1000.0
+count = 64

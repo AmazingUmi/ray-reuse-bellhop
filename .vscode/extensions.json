@@ -1,5 +1,6 @@
 {
   "recommendations": [
+    "ms-python.python",
     "fortran-lang.linter-gfortran",
     "vadimcn.vscode-lldb",
     "yzhang.markdown-all-in-one"

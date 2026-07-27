@@ -24,6 +24,35 @@
         "panel": "dedicated",
         "clear": true
       }
+    },
+    {
+      "label": "Prepare Munk Standard Case",
+      "type": "process",
+      "command": "/Users/luyiyang/miniconda3/condabin/conda",
+      "args": [
+        "run",
+        "-n",
+        "py",
+        "python",
+        "${workspaceFolder}/test/standard_cases/codes/standard_cases.py",
+        "generate",
+        "--version",
+        "origin",
+        "--case",
+        "munk_cerveny_cc",
+        "--profile",
+        "single"
+      ],
+      "dependsOn": [
+        "Build Bellhop"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }

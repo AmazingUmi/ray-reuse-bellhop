@@ -1,10 +1,11 @@
-PYTHON ?= python
+PYTHON ?= conda run -n py python
 
 .PHONY: help setup-python test test-plotread
 
 help:
 	@echo "PlotRead commands"
-	@echo "  make setup-python  Install bellhop-shd into the active Python environment"
+	@echo "  Python default: conda environment 'py' (override with PYTHON=...)"
+	@echo "  make setup-python  Install bellhop-shd into the configured Python environment"
 	@echo "  make test          Run SHD reader and plotting tests"
 	@echo "  make test-plotread Alias for make test"
 

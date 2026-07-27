@@ -7,14 +7,14 @@
       "request": "launch",
       "program": "${workspaceFolder}/Bellhop_origin/bin/bellhop",
       "args": [
-        "MunkB_Coh_CervenyC"
+        "munk_cerveny_cc_f000_50Hz"
       ],
-      "cwd": "${workspaceFolder}/test/test_origin_bellhop",
+      "cwd": "${workspaceFolder}/test/standard_cases/results/origin/munk_cerveny_cc/single/f000_50Hz",
       "env": {
         "PATH": "/opt/homebrew/bin:${env:PATH}"
       },
       "terminal": "integrated",
-      "preLaunchTask": "Build Bellhop"
+      "preLaunchTask": "Prepare Munk Standard Case"
     }
   ]
 }

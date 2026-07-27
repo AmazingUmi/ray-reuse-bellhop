@@ -1,56 +1,150 @@
-# Bellhop 单频标准算例
+# Bellhop 共享标准算例
 
-本目录把项目文档中 P1 阶段要求的单频 Fortran oracle 整理为可重复运行的标准算例。
-输入文件进入版本控制，生成的 `.prt/.shd` 写入 `output/`，不会覆盖已有参考文件。
+这里是原版 Bellhop、Bellhop_F2CPP 和 Bellhop_RayReuse 共用的标准测试入口。
+物理环境只定义一次；单频与多频是同一环境的不同 frequency profile。
 
-## 当前算例
+## 目录
 
-| 算例 | 目的 | 主要特征 | 当前验收层级 |
-|---|---|---|---|
-| `constant_speed_direct` | 最小解析/冒烟基线 | 1500 m/s 等声速；窄角度；5 km 内不触碰边界 | 运行成功、PRT 配置、SHD 头 |
-| `munk_cerveny_cc` | 现有工程基线标准化 | 50 Hz Munk SSP；Cartesian Cerveny；100 km 接收网格 | 运行成功、PRT 配置、SHD 头 |
-
-`munk_cerveny_cc.env` 保留现有
-`test/test_origin_bellhop/MunkB_Coh_CervenyC.env` 的数值设置，只统一了文件根名和注释。
-`test/test_ray_reuse/` 中的多频文件是历史实验材料，不是原版 Bellhop 的可信 oracle，不能作为这两个算例的期望输出。
-
-## 运行
-
-先在项目根目录构建原版二维 Bellhop：
-
-```bash
-make -C Bellhop_origin
-test/standard_cases/run_cases.sh
+```text
+standard_cases/
+├── cases/                 不随求解器重复的基础环境
+│   └── <case_id>/
+│       ├── case.toml      元数据、频率 profiles、验收项
+│       └── origin.env.in  原版 Bellhop 输入模板
+├── codes/                 生成、运行、校验、比较及单元测试代码
+│   ├── standard_cases.py  唯一命令行入口
+│   ├── case_model.py
+│   ├── compare_fields.py
+│   ├── tolerances.toml
+│   └── tests/
+└── results/               生成输入、求解输出和运行清单
 ```
 
-也可以显式指定可执行文件和算例：
+根目录只保留说明和 Makefile；业务内容严格归入 `cases/`、`codes/`、
+`results/`。`results/` 中除说明文件外均可重新生成，不进入 Git。
+
+## 算例与 profiles
+
+| 算例 | 主要覆盖 |
+|---|---|
+| `constant_speed_direct` | 等声速直达场、无边界碰撞 |
+| `constant_speed_vacuum_rigid` | 真空海面、刚性平底、多次反射 |
+| `constant_speed_acoustic_bottom` | 有损声学半空间反射 |
+| `constant_speed_no_attenuation_5khz` | 无体吸收参考 |
+| `constant_speed_thorp` | 水体频率相关 Thorp 吸收 |
+| `munk_cerveny_cc` | Munk SSP、折射、焦散区域和远程传播 |
+
+算例参考自 `/Volumes/LYY/user_projects/Acoustics Toolbox to read/at/tests`，
+但这里保存的是面向本项目回归目标的裁剪 fixture，不是逐字节副本。
+
+各算例至少提供：
+
+- `single`：单频组件和端到端回归；
+- `broadband_smoke`：两频快速验证宽带数据流。
+
+部分算例还提供 16 频 `broadband_regression` 和 64 频
+`broadband_stress`。多频 profile 统一以最高频率计算发射角数目，然后
+让原版 Bellhop 使用同一角度网格逐频运行，作为 RayReuse 的独立 oracle。
+
+## 统一用法
+
+默认 Python 为 `conda` 的 `py` 环境。先查看版本、算例与 profiles：
 
 ```bash
-test/standard_cases/run_cases.sh /path/to/bellhop constant_speed_direct
-test/standard_cases/run_cases.sh /path/to/bellhop munk_cerveny_cc
+make -C test/standard_cases list
 ```
 
-脚本会：
+针对一个版本、一个算例和一个 profile，可独立执行任意环节：
 
-1. 将输入复制到 `test/standard_cases/output/<case>/`；
-2. 在隔离目录中运行 Bellhop；
-3. 检查 `.prt`、`.shd` 是否生成；
-4. 检查 PRT 中的模式、波束类型、接收网格和运行错误；
-5. 读取 SHD 固定记录头，检查频率数、维度和中心频率。
+```bash
+# 只生成输入
+make -C test/standard_cases generate \
+  VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
-SHD 复压力不做逐字节哈希比较。不同编译器或平台可能只在单精度末位产生差异，正式回归应按复压力和 TL 容差比较。
+# 只运行已经生成的输入
+make -C test/standard_cases run \
+  VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
-## 尚需补充（进入 C++ 移植前）
+# 只校验已有 PRT/SHD
+make -C test/standard_cases validate \
+  VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
-以下内容仍属于 P1 的必要缺口，按优先级排列：
+# 从生成到校验的一体化测试
+make -C test/standard_cases test \
+  VERSION=origin CASE=munk_cerveny_cc PROFILE=single
+```
 
-1. **数值期望值与容差**：保存指定接收点的复压力实部/虚部和 TL；冻结最大绝对误差、相对误差及 TL 误差阈值。
-2. **结果读取验收**：已由 `test/PlotRead/bellhop_io_py/` 和 `test/PlotRead/tests/` 覆盖频率轴、源深、接收深度、距离轴、压力维度与原始复数记录；后续新增标准算例时需同步增加数值采样点。
-3. **轨迹 oracle**：增加可选导出并记录每步 `position/slowness/dynamicP/dynamicQ/soundSpeed/travelTime`。
-4. **边界 oracle**：新增至少一个平海面/平海底多次反射算例，并导出反射前后状态和 `SeaSurface/Seabed` 事件属性。
-5. **Influence oracle**：导出单条指定发射角对指定接收点的复压力贡献，覆盖普通传播和焦散附近。
-6. **衰减与海底类型**：增加水体频率相关吸收、刚性海底、声学半空间海底三个独立算例，避免把多种机制混在一个回归中。
-7. **可追溯元数据**：记录 git commit、编译器版本/选项、平台、CPU、线程数、运行时间和峰值内存；`.prt` 的 CPU Time 不宜作为稳定期望值。
-8. **实验材料隔离**：为 `test/test_ray_reuse/` 增加来源说明和非基线标记，后续宽带非复用基线应使用独立目录和独立期望数据。
+`CASE=all` 可对指定版本/profile 运行全部适用算例。只有 `run` 和 `test`
+需要求解器；若可执行文件不在默认位置，可增加
+`EXECUTABLE=/absolute/path/to/bellhop`。
 
-只有第 1～5 项完成后，单频 Fortran 结果才足以作为 C++ 轨迹、动态射线和 Influence 三层误差定位的 oracle。
+整体批量测试会先检查算例定义，再测试所有已有可执行程序支持的版本，并
+默认覆盖单频和两频 smoke：
+
+```bash
+make -C test/standard_cases batch
+```
+
+也可缩小或扩大批量范围：
+
+```bash
+make -C test/standard_cases batch \
+  VERSIONS=origin PROFILES=single,broadband_smoke
+```
+
+Makefile 只是轻量入口；脚本也可直接调用：
+
+```bash
+conda run -n py python test/standard_cases/codes/standard_cases.py \
+  test --version origin --case munk_cerveny_cc --profile single
+```
+
+## 结果和比较
+
+输出固定写入：
+
+```text
+results/<version>/<case>/<profile>/
+├── run_manifest.json
+└── fNNN_<frequency>Hz/
+    ├── <root>.env
+    ├── <root>.prt
+    └── <root>.shd
+```
+
+运行清单记录频率向量、最高设计频率、共享发射角数、来源和各频率状态。
+校验环节检查 PRT 运行模式、SHD 维度和频率、复压力有限性及非全零场。
+
+比较两个 SHD 频率切片：
+
+```bash
+make -C test/standard_cases compare \
+  REFERENCE=/path/reference.shd CANDIDATE=/path/candidate.shd
+```
+
+默认容差在 `codes/tolerances.toml`，程序会报告复压力绝对/相对误差与最大
+TL 差异。
+
+## 版本职责
+
+| 版本 | 单频 profile | 多频 profile |
+|---|---|---|
+| `origin` | 一次原版 Bellhop | 共享 `fmax` 角度网格后逐频运行 |
+| `f2cpp` | 与原版逐场比较 | 逐频运行，形成非复用参考 |
+| `rayreuse` | 单元素频率向量 | 一次运行完整频率向量 |
+
+当前只有 `origin` 的执行和输入适配已启用。F2CPP 与 RayReuse 的命令行及
+输入契约完成后，只需在 `codes/standard_cases.py` 中启用对应适配器，
+无需改变 `cases/` 或调用方式。
+
+迁移前的 `test_origin_bellhop` 和 `test_ray_reuse` 位于 `test/legacy/`，
+仅作历史材料，不参与测试。PlotRead 使用独立生成的小型 fixture，不依赖
+本目录结果。
+
+## 后续补充
+
+1. 冻结六个算例的复压力、TL、相位容差与紧凑参考采样。
+2. 导出每步 `x/t/p/q/c/tau`、求积状态和终止原因。
+3. 导出反射事件及单条射线 Influence 贡献。
+4. 冻结 F2CPP/RayReuse CLI 后启用对应版本适配。
+5. 为运行清单补充提交、编译器、编译选项、平台、线程和峰值内存。

@@ -1,4 +1,7 @@
 {
+  "python.defaultInterpreterPath": "/Users/luyiyang/miniconda3/envs/py/bin/python",
+  "python.terminal.activateEnvironment": true,
+
   "fortran.linter.compiler": "gfortran",
   "fortran.linter.compilerPath": "/opt/homebrew/bin/gfortran",
   "fortran.linter.includePaths": [

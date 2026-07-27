@@ -3,8 +3,9 @@
 /Bellhop_origin/build/
 /Bellhop_origin/bin/
 
-# Generated outputs from the reproducible standard-case runner
-/test/standard_cases/output/
+# Generated inputs and outputs from the standard-case runner
+/test/standard_cases/results/*
+!/test/standard_cases/results/README.md
 
 # Python caches and local editable-install metadata
 __pycache__/

@@ -6,4 +6,4 @@
 - `MunkB_Coh_CervenyC_16Freq_experimental.shd` 是原 `plotshd/` 子目录中同名文件，实际只有 16 个频率，现已改名以避免与 64 频结果混淆；
 - 结果读取和绘图统一使用 `test/PlotRead/bellhop_io_py/`。
 
-可信单频基线位于 `test/standard_cases/`。
+可信单频和宽带逐频 oracle 位于 `test/standard_cases/`。本目录已经退出活动测试路径。

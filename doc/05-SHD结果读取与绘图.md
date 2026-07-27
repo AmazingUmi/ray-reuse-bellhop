@@ -27,6 +27,8 @@ test/PlotRead/
 
 原始 MATLAB 函数只作为格式来源，不再作为运行依赖。
 
+PlotRead 回归在临时目录中生成最小单频、多频和不同字节序 SHD fixture，不读取 `standard_cases` 或历史求解器结果。求解器数值正确性由 `test/standard_cases/` 独立负责。
+
 ## Python API
 
 ```python
@@ -52,14 +54,21 @@ field = read_shd("result.shd", frequency_index=7)
 
 ## 命令行
 
-首次使用时，在项目根目录执行：
+项目中的 VS Code Python 解释器和 PlotRead Makefile 默认使用 Conda 的 `py` 环境。首次使用时，在项目根目录执行：
 
 ```bash
-conda activate py
 make -C test/PlotRead setup-python
 ```
 
-这是可编辑安装：源码仍位于 `test/PlotRead/bellhop_io_py/`，修改后不需要重新安装。之后可在项目内直接使用：
+Makefile 默认通过 `conda run -n py python` 执行；如有需要，可以用 `PYTHON=...` 覆盖。安装采用 editable 模式，源码仍位于 `test/PlotRead/bellhop_io_py/`，修改后不需要重新安装。
+
+在终端直接使用命令前激活环境：
+
+```bash
+conda activate py
+```
+
+之后可在项目内直接使用：
 
 ```bash
 # 校验文件并查看元数据
