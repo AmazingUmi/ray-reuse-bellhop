@@ -83,12 +83,10 @@ def default_adapters(executable_override: Path | None) -> dict[str, VersionAdapt
                 PROJECT_ROOT
                 / "Bellhop_F2CPP"
                 / "build"
+                / "release"
                 / "bellhop_f2cpp"
             ),
-            enabled=False,
-            unavailable_reason=(
-                "solver executable and CLI contract are not implemented"
-            ),
+            enabled=True,
         ),
         "rayreuse": VersionAdapter(
             name="rayreuse",
@@ -166,7 +164,7 @@ def process_case(
     stage: str,
     results_root: Path,
 ) -> Path:
-    if adapter.name != "origin":
+    if adapter.name not in ("origin", "f2cpp"):
         adapter.require_available()
         raise NotImplementedError(
             f"{adapter.name} input adapter is not implemented"
@@ -295,7 +293,13 @@ def run_selection(
 ) -> int:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
     selected, explicit = select_cases(definitions, requested_cases)
-    adapter = default_adapters(executable)[version]
+    adapter = default_adapters(None)[version]
+    if executable is not None:
+        adapter = VersionAdapter(
+            name=adapter.name,
+            executable=executable.resolve(),
+            enabled=True,
+        )
     if stage in ("run", "test"):
         adapter.require_available()
 

@@ -28,6 +28,8 @@ PROGRAM BELLHOP
   USE sspMod
   USE influence
   USE FatalError
+  USE OracleDiagnostics
+  USE InfluenceOracleDiagnostics
 
   IMPLICIT NONE
   
@@ -162,6 +164,8 @@ SUBROUTINE BellhopCore
                           c, cimag, gradc( 2 ), crr, crz, czz, rho
   COMPLEX, ALLOCATABLE :: U( :, : )
   COMPLEX     (KIND=8) :: epsilon
+  TYPE ( InfluenceOracleRequest ) :: InfluenceRequest
+  TYPE ( InfluenceOracleResult ) :: InfluenceResult
 
   CALL CPU_TIME( Tstart )
 
@@ -177,6 +181,8 @@ SUBROUTINE BellhopCore
   Angles%Dalpha = 0.0
   IF ( Angles%Nalpha /= 1 ) &
        Angles%Dalpha = ( Angles%alpha( Angles%Nalpha ) - Angles%alpha( 1 ) ) / ( Angles%Nalpha - 1 )  ! angular spacing between beams
+
+  CALL OracleInitialize( FileRoot, Angles%Nalpha, Pos%NSz )
 
   ! convert range-dependent geoacoustic parameters from user to program units
   ! attenuation converted from user units to internal units
@@ -205,6 +211,7 @@ SUBROUTINE BellhopCore
   CASE DEFAULT
      NRz_per_range = Pos%NRz   ! rectilinear grid
   END SELECT
+  CALL InfluenceOracleInitialize( FileRoot, Pos%NSz, Angles%Nalpha, Pos%NRr, NRz_per_range )
 
   ! for a TL calculation, allocate space for the pressure matrix
   SELECT CASE ( Beam%RunType( 1 : 1 ) )
@@ -285,6 +292,8 @@ SUBROUTINE BellhopCore
               FLUSH( PRTFile )
            END IF
 
+           CALL OraclePrepareRay( is, ialpha, Angles%alpha( ialpha ) )
+           CALL InfluenceOraclePrepareRay( is, ialpha, Angles%alpha( ialpha ) )
            CALL TraceRay2D( xs, Angles%alpha( ialpha ), Amp0 )   ! Trace a ray
 
            IF ( Beam%RunType( 1 : 1 ) == 'R' ) THEN   ! Write the ray trajectory to RAYFile
@@ -302,14 +311,23 @@ SUBROUTINE BellhopCore
               CASE ( 'C' )
                  iBeamWindow2 = Beam%iBeamWindow **2
                  RadiusMax       = 30 * c / freq  ! 30 wavelength max radius
-                 CALL InfluenceCervenyCart(     U, epsilon, Angles%alpha( ialpha ), iBeamWindow2, RadiusMax )
+                 IF ( InfluenceOracleIsPending() ) THEN
+                    CALL InfluenceOracleBuildRequest( InfluenceRequest )
+                    CALL InfluenceCervenyCart( U, epsilon, Angles%alpha( ialpha ), iBeamWindow2, RadiusMax, &
+                         InfluenceRequest, InfluenceResult )
+                    CALL InfluenceOracleRecordResult( InfluenceResult, epsilon, Angles%Dalpha, Beam%rLoop, &
+                         Beam%epsMultiplier, RadiusMax, iBeamWindow2, Beam%Nimage, Beam%RunType, Beam%Type, &
+                         freq, c, Bdry%Top%HS%Depth, Bdry%Bot%HS%Depth )
+                 ELSE
+                    CALL InfluenceCervenyCart( U, epsilon, Angles%alpha( ialpha ), iBeamWindow2, RadiusMax )
+                 END IF
               CASE ( 'g' )
                  CALL InfluenceGeoHatRayCen(    U, Angles%alpha( ialpha ), Angles%Dalpha )
               CASE ( 'S' )
                  CALL InfluenceSGB(             U, Angles%alpha( ialpha ), Angles%Dalpha )
               CASE ( 'B' )
                  CALL InfluenceGeoGaussianCart( U, Angles%alpha( ialpha ), Angles%Dalpha )
-             CASE DEFAULT
+              CASE DEFAULT
                  CALL InfluenceGeoHatCart(      U, Angles%alpha( ialpha ), Angles%Dalpha )
               END SELECT
 
@@ -334,6 +352,9 @@ SUBROUTINE BellhopCore
      END SELECT
 
   END DO SourceDepth
+
+  CALL InfluenceOracleFinalize()
+  CALL OracleFinalize()
 
   ! Display run time
   CALL CPU_TIME( Tstop )
@@ -439,6 +460,9 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
   REAL     (KIND=8), INTENT( IN ) :: xs( 2 )      ! x-y coordinate of the source
   REAL     (KIND=8), INTENT( IN ) :: alpha, Amp0  ! initial angle, amplitude
   INTEGER           :: is, is1                    ! index for a step along the ray
+  LOGICAL           :: OracleActive, CoefficientSuppressed, BeamShiftApplied
+  COMPLEX  (KIND=8) :: ReflectionCoefficient
+  TYPE( StepQuadrature2D ) :: StepInfo
   REAL     (KIND=8) :: c, cimag, gradc( 2 ), crr, crz, czz, rho
   REAL     (KIND=8) :: dEndTop( 2 ), dEndBot( 2 ), TopnInt( 2 ), BotnInt( 2 ), ToptInt( 2 ), BottInt( 2 )
   REAL     (KIND=8) :: DistBegTop, DistEndTop, DistBegBot, DistEndBot ! Distances from ray beginning, end to top and bottom
@@ -466,6 +490,9 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
   ! set I.C. to 0 in hopes of saving run time
   IF ( Beam%RunType( 2 : 2 ) == 'G' ) ray2D( 1 )%q = [ 0.0, 0.0 ]
 
+  CALL OracleBeginRay( ray2D( 1 ) )
+  OracleActive = OracleRayIsActive()
+
   CALL GetTopSeg( xs( 1 ) )   ! identify the top    segment above the source
   CALL GetBotSeg( xs( 1 ) )   ! identify the bottom segment below the source
 
@@ -491,6 +518,7 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
   IF ( DistBegTop <= 0 .OR. DistBegBot <= 0 ) THEN
      Beam%Nsteps = 1
      WRITE( PRTFile, * ) 'Terminating the ray trace because the source is on or outside the boundaries'
+     IF ( OracleActive ) CALL OracleFinishRay( 'source_on_or_outside_boundaries', Beam%Nsteps )
      RETURN       ! source must be within the medium
   END IF
 
@@ -498,9 +526,16 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
      is  = is + 1
      is1 = is + 1
 
-     CALL Step2D( ray2D( is ), ray2D( is1 ),  &
-          Top( IsegTop )%x, Top( IsegTop )%n, &
-          Bot( IsegBot )%x, Bot( IsegBot )%n )
+     IF ( OracleActive ) THEN
+        CALL Step2D( ray2D( is ), ray2D( is1 ),  &
+             Top( IsegTop )%x, Top( IsegTop )%n, &
+             Bot( IsegBot )%x, Bot( IsegBot )%n, StepInfo )
+        CALL OracleWriteIntegratedPoint( is1, ray2D( is1 ), StepInfo )
+     ELSE
+        CALL Step2D( ray2D( is ), ray2D( is1 ),  &
+             Top( IsegTop )%x, Top( IsegTop )%n, &
+             Bot( IsegBot )%x, Bot( IsegBot )%n )
+     END IF
 
      ! New altimetry segment?
      IF ( ray2D( is1 )%x( 1 ) < rTopSeg( 1 ) .OR. &
@@ -544,8 +579,15 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
            ToptInt = Top( IsegTop )%t
         END IF
 
-        CALL Reflect2D( is, Bdry%Top%HS, 'TOP', ToptInt, TopnInt, Top( IsegTop )%kappa, RTop, NTopPTS )
+        CALL Reflect2D( is, Bdry%Top%HS, 'TOP', ToptInt, TopnInt, Top( IsegTop )%kappa, RTop, NTopPTS, &
+             ReflectionCoefficient, CoefficientSuppressed, BeamShiftApplied )
         ray2D( is + 1 )%NumTopBnc = ray2D( is )%NumTopBnc + 1
+        IF ( OracleActive ) THEN
+           CALL OracleWriteReflectionEvent( is, is + 1, ray2D( is ), ray2D( is + 1 ), &
+                'sea_surface', Bdry%Top%HS%BC, IsegTop, ToptInt, TopnInt, Top( IsegTop )%kappa, &
+                ReflectionCoefficient, CoefficientSuppressed, BeamShiftApplied )
+           CALL OracleWriteDerivedPoint( is + 1, ray2D( is + 1 ), 'top_reflection' )
+        END IF
 
         CALL Distances2D( ray2D( is + 1 )%x, Top( IsegTop )%x, Bot( IsegBot )%x, dEndTop,    dEndBot,  &
              Top( IsegTop )%n, Bot( IsegBot )%n, DistEndTop, DistEndBot )
@@ -561,8 +603,15 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
            BottInt = Bot( IsegBot )%t
         END IF
 
-        CALL Reflect2D( is, Bdry%Bot%HS, 'BOT', BottInt, BotnInt, Bot( IsegBot )%kappa, RBot, NBotPTS )
+        CALL Reflect2D( is, Bdry%Bot%HS, 'BOT', BottInt, BotnInt, Bot( IsegBot )%kappa, RBot, NBotPTS, &
+             ReflectionCoefficient, CoefficientSuppressed, BeamShiftApplied )
         ray2D( is + 1 )%NumBotBnc = ray2D( is )%NumBotBnc + 1
+        IF ( OracleActive ) THEN
+           CALL OracleWriteReflectionEvent( is, is + 1, ray2D( is ), ray2D( is + 1 ), &
+                'seabed', Bdry%Bot%HS%BC, IsegBot, BottInt, BotnInt, Bot( IsegBot )%kappa, &
+                ReflectionCoefficient, CoefficientSuppressed, BeamShiftApplied )
+           CALL OracleWriteDerivedPoint( is + 1, ray2D( is + 1 ), 'bottom_reflection' )
+        END IF
         CALL Distances2D( ray2D( is + 1 )%x, Top( IsegTop )%x, Bot( IsegBot )%x, dEndTop,    dEndBot, &
              Top( IsegTop )%n, Bot( IsegBot )%n, DistEndTop, DistEndBot )
 
@@ -578,10 +627,26 @@ SUBROUTINE TraceRay2D( xs, alpha, Amp0 )
           ABS( ray2D( is + 1 )%q( 1 ) ) > 1D100 ) THEN   ! q grows without bound for zero-degree beam launched along a cusp of the SSP
           ! ray2D( is + 1 )%t( 1 ) < 0 ) THEN ! this last test kills off a backward traveling ray
         Beam%Nsteps = is + 1
+        IF ( OracleActive ) THEN
+           IF ( ABS( ray2D( is + 1 )%x( 1 ) ) > Beam%Box%r ) THEN
+              CALL OracleFinishRay( 'spatial_box_range', Beam%Nsteps )
+           ELSE IF ( ABS( ray2D( is + 1 )%x( 2 ) ) > Beam%Box%z ) THEN
+              CALL OracleFinishRay( 'spatial_box_depth', Beam%Nsteps )
+           ELSE IF ( ray2D( is + 1 )%Amp < 0.005 ) THEN
+              CALL OracleFinishRay( 'amplitude_below_legacy_threshold', Beam%Nsteps )
+           ELSE IF ( DistBegTop < 0.0 .AND. DistEndTop < 0.0 ) THEN
+              CALL OracleFinishRay( 'two_points_outside_top', Beam%Nsteps )
+           ELSE IF ( DistBegBot < 0.0 .AND. DistEndBot < 0.0 ) THEN
+              CALL OracleFinishRay( 'two_points_outside_bottom', Beam%Nsteps )
+           ELSE
+              CALL OracleFinishRay( 'dynamic_q_overflow', Beam%Nsteps )
+           END IF
+        END IF
         EXIT Stepping
      ELSE IF ( is >= MaxN - 3 ) THEN
         WRITE( PRTFile, * ) 'Warning in TraceRay2D : Insufficient storage for ray trajectory'
         Beam%Nsteps = is
+        IF ( OracleActive ) CALL OracleFinishRay( 'trajectory_storage_limit', Beam%Nsteps )
         EXIT Stepping
      END IF
 

@@ -3,9 +3,20 @@ MODULE Step
   USE bellhopMod
   USE sspMod
   IMPLICIT NONE
+
+  ! Diagnostic-only description of the actual modified-box quadrature used by
+  ! Step2D.  The solver does not retain this state unless the optional StepInfo
+  ! argument is present.
+  TYPE StepQuadrature2D
+     REAL ( KIND=8 ) :: h, halfh, hw0, hw1
+     REAL ( KIND=8 ) :: c0, cimag0, c1, cimag1
+     REAL ( KIND=8 ) :: midpoint_x( 2 ), midpoint_t( 2 )
+     REAL ( KIND=8 ) :: midpoint_p( 2 ), midpoint_q( 2 )
+  END TYPE StepQuadrature2D
+
 CONTAINS
 
-  SUBROUTINE Step2D( ray0, ray2, Topx, Topn, Botx, Botn )
+  SUBROUTINE Step2D( ray0, ray2, Topx, Topn, Botx, Botn, StepInfo )
 
     ! Does a single step along the ray
     ! x denotes the ray coordinate, ( r, z )
@@ -15,6 +26,7 @@ CONTAINS
     TYPE( ray2DPt ), INTENT( IN  ) :: ray0
     TYPE( ray2DPt )                :: ray1
     TYPE( ray2DPt ), INTENT( OUT ) :: ray2
+    TYPE( StepQuadrature2D ), OPTIONAL, INTENT( OUT ) :: StepInfo
     REAL ( KIND=8 ), INTENT( IN  ) :: Topx( 2 ), Topn( 2 ), Botx( 2 ), Botn( 2 )
     INTEGER         :: iSegz0, iSegr0
     REAL ( KIND=8 ) :: gradc0( 2 ), gradc1( 2 ), gradc2( 2 ), rho, &
@@ -79,6 +91,21 @@ CONTAINS
     ray2%tau = ray0%tau + hw0 / CMPLX( c0, cimag0, KIND=8 ) + hw1 / CMPLX( c1, cimag1, KIND=8 )
     ray2%p   = ray0%p   - hw0 * cnn0_csq0 * ray0%q          - hw1 * cnn1_csq1 * ray1%q
     ray2%q   = ray0%q   + hw0 * c0        * ray0%p          + hw1 * c1        * ray1%p
+
+    IF ( PRESENT( StepInfo ) ) THEN
+       StepInfo%h          = h
+       StepInfo%halfh      = halfh
+       StepInfo%hw0        = hw0
+       StepInfo%hw1        = hw1
+       StepInfo%c0         = c0
+       StepInfo%cimag0     = cimag0
+       StepInfo%c1         = c1
+       StepInfo%cimag1     = cimag1
+       StepInfo%midpoint_x = ray1%x
+       StepInfo%midpoint_t = ray1%t
+       StepInfo%midpoint_p = ray1%p
+       StepInfo%midpoint_q = ray1%q
+    END IF
 
     ray2%Amp       = ray0%Amp
     ray2%Phase     = ray0%Phase

@@ -15,6 +15,61 @@ MODULE Influence
   REAL    (KIND=8), PRIVATE :: W, s, n, Amp, phase, const, phaseInt, q0, q, qold, RcvrDeclAngle, rA, rB
   COMPLEX (KIND=8), PRIVATE :: delay
 
+  INTEGER, PARAMETER :: MaxInfluenceOracleImages = 3
+
+  TYPE InfluenceOracleRequest
+     LOGICAL :: Enabled = .FALSE.
+     INTEGER :: ReceiverRangeIndex = 0
+     INTEGER :: ReceiverDepthIndex = 0
+  END TYPE InfluenceOracleRequest
+
+  TYPE InfluenceOracleImageResult
+     CHARACTER (LEN=7) :: Kind = ''
+     REAL (KIND=8) :: DeltaZ = 0.0D0
+     REAL (KIND=8) :: Polarity = 0.0D0
+     REAL (KIND=8) :: WindowMetric = 0.0D0
+     LOGICAL :: WindowPassed = .FALSE.
+     REAL (KIND=8) :: HermiteTaper = 0.0D0
+     COMPLEX (KIND=8) :: Exponential = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: Contribution = ( 0.0D0, 0.0D0 )
+  END TYPE InfluenceOracleImageResult
+
+  TYPE InfluenceOracleResult
+     LOGICAL :: Evaluated = .FALSE.
+     INTEGER :: EvaluationCount = 0
+     INTEGER :: ReceiverRangeIndex = 0
+     INTEGER :: ReceiverDepthIndex = 0
+     INTEGER :: LeftPointIndex = 0
+     INTEGER :: RightPointIndex = 0
+     INTEGER :: KMAHLeft = 0
+     INTEGER :: KMAHFinal = 0
+     INTEGER :: ImageCount = 0
+     REAL (KIND=8) :: ReceiverRange = 0.0D0
+     REAL (KIND=8) :: ReceiverDepth = 0.0D0
+     REAL (KIND=8) :: InterpolationWeight = 0.0D0
+     REAL (KIND=8) :: InterpolatedPosition( 2 ) = 0.0D0
+     REAL (KIND=8) :: InterpolatedSlowness( 2 ) = 0.0D0
+     REAL (KIND=8) :: InterpolatedSoundSpeed = 0.0D0
+     REAL (KIND=8) :: RightAmplitude = 0.0D0
+     REAL (KIND=8) :: RightPhase = 0.0D0
+     COMPLEX (KIND=8) :: EpsilonLeft = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: PVBLeft = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: PVBRight = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: QVBLeft = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: QVBRight = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: QInterpolated = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: TauInterpolated = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: GammaLeft = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: GammaRight = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: GammaInterpolated = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: ConstantPrincipal = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: ConstantCorrected = ( 0.0D0, 0.0D0 )
+     TYPE ( InfluenceOracleImageResult ) :: Images( MaxInfluenceOracleImages )
+     COMPLEX (KIND=8) :: RawImageSum = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=8) :: FinalContribution = ( 0.0D0, 0.0D0 )
+     COMPLEX (KIND=4) :: QuantizedIncrement = ( 0.0, 0.0 )
+  END TYPE InfluenceOracleResult
+
 CONTAINS
   SUBROUTINE InfluenceCervenyRayCen( U, eps, alpha, iBeamWindow2, RadiusMax )
 
@@ -154,7 +209,7 @@ CONTAINS
 
   ! **********************************************************************!
 
-  SUBROUTINE InfluenceCervenyCart( U, eps, alpha, iBeamWindow2, RadiusMax )
+  SUBROUTINE InfluenceCervenyCart( U, eps, alpha, iBeamWindow2, RadiusMax, OracleRequest, OracleResult )
 
     ! Paraxial (Cerveny-style) beams in Cartesian coordinates
 
@@ -162,11 +217,21 @@ CONTAINS
     REAL    (KIND=8), INTENT( IN    ) :: alpha, RadiusMax             ! take-off angle
     COMPLEX,          INTENT( INOUT ) :: U( NRz_per_range, Pos%NRr )  ! complex pressure field
     COMPLEX (KIND=8), INTENT( IN    ) :: eps
+    TYPE ( InfluenceOracleRequest ), OPTIONAL, INTENT( IN ) :: OracleRequest
+    TYPE ( InfluenceOracleResult ), OPTIONAL, INTENT( OUT ) :: OracleResult
     INTEGER          :: KMAHV( MaxN ), KMAH, irA, irB, Image
     REAL    (KIND=8) :: x( 2 ), rayt( 2 ), rayn( 2 ), Tr, Tz, zr, Polarity = 1, &
-         c, cimag, cs, cn, csq, gradc( 2 ), crr, crz, czz, rho, deltaz
-    COMPLEX (KIND=8) :: pVB( MaxN ), qVB( MaxN ), q, epsV( MaxN ), contri, gammaV( MaxN ), gamma, const
+         c, cimag, cs, cn, csq, gradc( 2 ), crr, crz, czz, rho, deltaz, &
+         OracleWindowMetric, OracleHermiteTaper
+    COMPLEX (KIND=8) :: pVB( MaxN ), qVB( MaxN ), q, epsV( MaxN ), contri, gammaV( MaxN ), gamma, const, &
+         OracleConstantPrincipal, OracleExponential, OracleImageContribution, OracleRawImageSum
     COMPLEX (KIND=8) :: tau
+    COMPLEX (KIND=4) :: QuantizedContribution
+    LOGICAL :: OracleEnabled, OracleCapture
+
+    OracleEnabled = .FALSE.
+    IF ( PRESENT( OracleRequest ) .AND. PRESENT( OracleResult ) ) OracleEnabled = OracleRequest%Enabled
+    IF ( PRESENT( OracleResult ) ) OracleResult = InfluenceOracleResult()
 
     ! need to add logic related to NRz_per_range
 
@@ -243,6 +308,7 @@ CONTAINS
           END IF
 
           const = Ratio1 * SQRT( c * ABS( epsV( iS - 1 ) ) / q )
+          OracleConstantPrincipal = const
 
           ! Get correct branch of SQRT
           KMAH = KMAHV( iS - 1 )
@@ -251,6 +317,43 @@ CONTAINS
 
           RcvrDepths: DO iz = 1, NRz_per_range
              zR = Pos%Rz( iz )
+             OracleCapture = .FALSE.
+             IF ( OracleEnabled ) OracleCapture = &
+                  ir == OracleRequest%ReceiverRangeIndex .AND. iz == OracleRequest%ReceiverDepthIndex
+
+             IF ( OracleCapture ) THEN
+                OracleResult%EvaluationCount = OracleResult%EvaluationCount + 1
+                IF ( OracleResult%EvaluationCount == 1 ) THEN
+                   OracleResult%Evaluated = .TRUE.
+                   OracleResult%ReceiverRangeIndex = ir
+                   OracleResult%ReceiverDepthIndex = iz
+                   OracleResult%LeftPointIndex = iS - 1
+                   OracleResult%RightPointIndex = iS
+                   OracleResult%KMAHLeft = KMAHV( iS - 1 )
+                   OracleResult%KMAHFinal = KMAH
+                   OracleResult%ImageCount = Beam%Nimage
+                   OracleResult%ReceiverRange = Pos%Rr( ir )
+                   OracleResult%ReceiverDepth = zR
+                   OracleResult%InterpolationWeight = W
+                   OracleResult%InterpolatedPosition = x
+                   OracleResult%InterpolatedSlowness = rayt
+                   OracleResult%InterpolatedSoundSpeed = c
+                   OracleResult%RightAmplitude = ray2D( iS )%Amp
+                   OracleResult%RightPhase = ray2D( iS )%Phase
+                   OracleResult%EpsilonLeft = epsV( iS - 1 )
+                   OracleResult%PVBLeft = pVB( iS - 1 )
+                   OracleResult%PVBRight = pVB( iS )
+                   OracleResult%QVBLeft = qVB( iS - 1 )
+                   OracleResult%QVBRight = qVB( iS )
+                   OracleResult%QInterpolated = q
+                   OracleResult%TauInterpolated = tau
+                   OracleResult%GammaLeft = gammaV( iS - 1 )
+                   OracleResult%GammaRight = gammaV( iS )
+                   OracleResult%GammaInterpolated = gamma
+                   OracleResult%ConstantPrincipal = OracleConstantPrincipal
+                   OracleResult%ConstantCorrected = const
+                END IF
+             END IF
 
              contri = 0.0
              ImageLoop: DO Image = 1, Beam%Nimage
@@ -268,11 +371,40 @@ CONTAINS
 
                 !!! this window differs by 0.5 from that used in the ray-centered version above
                 ! iBeamWindow2 is important for efficiency; beam evaluation is expensive
-                IF ( -omega * AIMAG( gamma ) * deltaz ** 2 < iBeamWindow2 ) &
+                OracleWindowMetric = -omega * AIMAG( gamma ) * deltaz ** 2
+                IF ( OracleWindowMetric < iBeamWindow2 ) &
                      contri =  contri + Polarity * ray2D( iS )%Amp * Hermite( deltaz, RadiusMax, 2.0 * RadiusMax ) * &
                      EXP( -i * ( omega * ( tau + rayt( 2 ) * deltaz + gamma * deltaz**2 ) - ray2D( iS )%Phase ) )
+
+                IF ( OracleCapture .AND. OracleResult%EvaluationCount == 1 ) THEN
+                   OracleHermiteTaper = Hermite( deltaz, RadiusMax, 2.0D0 * RadiusMax )
+                   OracleExponential = ( 0.0D0, 0.0D0 )
+                   OracleImageContribution = ( 0.0D0, 0.0D0 )
+                   IF ( OracleWindowMetric < iBeamWindow2 ) THEN
+                      OracleExponential = EXP( -i * ( omega * &
+                           ( tau + rayt( 2 ) * deltaz + gamma * deltaz**2 ) - ray2D( iS )%Phase ) )
+                      OracleImageContribution = Polarity * ray2D( iS )%Amp * &
+                           OracleHermiteTaper * OracleExponential
+                   END IF
+                   SELECT CASE ( Image )
+                   CASE ( 1 )
+                      OracleResult%Images( Image )%Kind = 'true'
+                   CASE ( 2 )
+                      OracleResult%Images( Image )%Kind = 'surface'
+                   CASE ( 3 )
+                      OracleResult%Images( Image )%Kind = 'bottom'
+                   END SELECT
+                   OracleResult%Images( Image )%DeltaZ = deltaz
+                   OracleResult%Images( Image )%Polarity = Polarity
+                   OracleResult%Images( Image )%WindowMetric = OracleWindowMetric
+                   OracleResult%Images( Image )%WindowPassed = OracleWindowMetric < iBeamWindow2
+                   OracleResult%Images( Image )%HermiteTaper = OracleHermiteTaper
+                   OracleResult%Images( Image )%Exponential = OracleExponential
+                   OracleResult%Images( Image )%Contribution = OracleImageContribution
+                END IF
              END DO ImageLoop
 
+             OracleRawImageSum = contri
              ! contribution to field
              SELECT CASE( Beam%RunType( 1 : 1 ) )
              CASE ( 'C' )        ! coherent
@@ -280,7 +412,13 @@ CONTAINS
              CASE ( 'I', 'S' )   ! incoherent or semi-coherent
                 contri = ABS( const * contri ) ** 2
              END SELECT
-             U( iz, ir ) = U( iz, ir ) + CMPLX( contri )
+             QuantizedContribution = CMPLX( contri )
+             IF ( OracleCapture .AND. OracleResult%EvaluationCount == 1 ) THEN
+                OracleResult%RawImageSum = OracleRawImageSum
+                OracleResult%FinalContribution = contri
+                OracleResult%QuantizedIncrement = QuantizedContribution
+             END IF
+             U( iz, ir ) = U( iz, ir ) + QuantizedContribution
           END DO RcvrDepths
        END DO RcvrRanges
     END DO Stepping

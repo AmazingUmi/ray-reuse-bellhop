@@ -6,7 +6,8 @@ MODULE ReflectMod
   IMPLICIT NONE
 CONTAINS
 
-  SUBROUTINE Reflect2D( is, HS, BotTop, tBdry, nBdry, kappa, RefC, Npts )
+  SUBROUTINE Reflect2D( is, HS, BotTop, tBdry, nBdry, kappa, RefC, Npts, &
+       ReflectionCoefficient, CoefficientSuppressed, BeamShiftApplied )
 
     USE RefCoef
     USE sspMod
@@ -19,6 +20,9 @@ CONTAINS
     TYPE( HSInfo ),         INTENT( INOUT ) :: HS                      ! Halfspace properties
     TYPE( ReflectionCoef ), INTENT( IN    ) :: RefC( NPts )            ! reflection coefficient
     INTEGER,                INTENT( INOUT ) :: is                      ! index of the ray step
+    COMPLEX  (KIND=8),      INTENT( OUT   ) :: ReflectionCoefficient  ! coefficient applied at this reflection
+    LOGICAL,                INTENT( OUT   ) :: CoefficientSuppressed  ! legacy small-coefficient amplitude kill
+    LOGICAL,                INTENT( OUT   ) :: BeamShiftApplied       ! optional displacement/width correction
     INTEGER           :: is1
     REAL     (KIND=8) :: c, cimag, gradc( 2 ), crr, crz, czz, rho                  ! derivatives of sound speed
     REAL     (KIND=8) :: Tg, Th                                                    ! components of ray tangent
@@ -46,17 +50,23 @@ CONTAINS
 
     ! amplitude and phase change
 
+    Refl = ( 0.0D0, 0.0D0 )
+    CoefficientSuppressed = .FALSE.
+    BeamShiftApplied = .FALSE.
     SELECT CASE ( HS%BC )
     CASE ( 'R' )                 ! rigid
+       Refl = ( 1.0D0, 0.0D0 )
        ray2D( is1 )%Amp   = ray2D( is )%Amp
        ray2D( is1 )%Phase = ray2D( is )%Phase
     CASE ( 'V' )                 ! vacuum
+       Refl = ( -1.0D0, 0.0D0 )
        ray2D( is1 )%Amp   = ray2D( is )%Amp
        ray2D( is1 )%Phase = ray2D( is )%Phase + pi
     CASE ( 'F' )                 ! file
        RInt%theta = RadDeg * ABS( ATAN2( Th, Tg ) )           ! angle of incidence (relative to normal to bathymetry)
        IF ( RInt%theta > 90 ) RInt%theta = 180. - RInt%theta  ! reflection coefficient is symmetric about 90 degrees
        CALL InterpolateReflectionCoefficient( RInt, RefC, Npts, PRTFile )
+       Refl = CMPLX( RInt%R * COS( RInt%phi ), RInt%R * SIN( RInt%phi ), KIND=8 )
        ray2D( is1 )%Amp   = ray2D( is )%Amp   * RInt%R
        ray2D( is1 )%Phase = ray2D( is )%Phase + RInt%phi
     CASE ( 'A', 'G' )            ! half-space
@@ -101,6 +111,7 @@ CONTAINS
        Refl =  - ( rho * f - i * kz * g ) / ( rho * f + i * kz * g )   ! complex reflection coef.
 
        IF ( ABS( Refl ) < 1.0E-5 ) THEN   ! kill a ray that has lost its energy in reflection
+          CoefficientSuppressed = .TRUE.
           ray2D( is1 )%Amp   = 0.0
           ray2D( is1 )%Phase = ray2D( is )%Phase
        ELSE
@@ -120,6 +131,7 @@ CONTAINS
           !  END IF
 
           if ( Beam%Type( 4 : 4 ) == 'S' ) then   ! beam displacement & width change (Seongil's version)
+             BeamShiftApplied = .TRUE.
              ch = ray2D( is )%c / conjg( HS%cP )
              co = ray2D( is )%t( 1 ) * ray2D( is )%c
              si = ray2D( is )%t( 2 ) * ray2D( is )%c
@@ -160,6 +172,7 @@ CONTAINS
        WRITE( PRTFile, * ) 'HS%BC = ', HS%BC
        CALL ERROUT( 'Reflect2D', 'Unknown boundary condition type' )
     END SELECT
+    ReflectionCoefficient = Refl
 
   CONTAINS
 

@@ -2,6 +2,7 @@
 /build/
 /Bellhop_origin/build/
 /Bellhop_origin/bin/
+/Bellhop_F2CPP/build/
 
 # Generated inputs and outputs from the standard-case runner
 /test/standard_cases/results/*

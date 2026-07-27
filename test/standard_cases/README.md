@@ -130,12 +130,12 @@ TL 差异。
 | 版本 | 单频 profile | 多频 profile |
 |---|---|---|
 | `origin` | 一次原版 Bellhop | 共享 `fmax` 角度网格后逐频运行 |
-| `f2cpp` | 与原版逐场比较 | 逐频运行，形成非复用参考 |
+| `f2cpp` | 已启用；生成兼容 PRT/SHD 并与原版逐场比较 | 可按共享 `fmax` 角度网格逐频运行，形成非复用参考 |
 | `rayreuse` | 单元素频率向量 | 一次运行完整频率向量 |
 
-当前只有 `origin` 的执行和输入适配已启用。F2CPP 与 RayReuse 的命令行及
-输入契约完成后，只需在 `codes/standard_cases.py` 中启用对应适配器，
-无需改变 `cases/` 或调用方式。
+`origin` 和 `f2cpp` 的执行/输入适配均已启用；`f2cpp` 默认可执行文件为
+`Bellhop_F2CPP/build/release/bellhop_f2cpp`。RayReuse 的多频 CLI 契约完成后
+再启用其适配器，无需改变 `cases/` 或调用方式。
 
 迁移前的 `test_origin_bellhop` 和 `test_ray_reuse` 位于 `test/legacy/`，
 仅作历史材料，不参与测试。PlotRead 使用独立生成的小型 fixture，不依赖
@@ -146,5 +146,5 @@ TL 差异。
 1. 冻结六个算例的复压力、TL、相位容差与紧凑参考采样。
 2. 导出每步 `x/t/p/q/c/tau`、求积状态和终止原因。
 3. 导出反射事件及单条射线 Influence 贡献。
-4. 冻结 F2CPP/RayReuse CLI 后启用对应版本适配。
+4. 冻结 RayReuse CLI 后启用对应版本适配。
 5. 为运行清单补充提交、编译器、编译选项、平台、线程和峰值内存。
