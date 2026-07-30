@@ -7,12 +7,16 @@
 conda run -n py python --version
 ```
 
-阶段必须按 A → B → C → D → E 推进。每一阶段只有在出口条件关闭后，才进入
-下一阶段。命令块是对应阶段的验收入口，不等同于已经通过；实际结果统一记录
-在 [`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md)。
+阶段必须按 A → B → C → D → E 推进；阶段 F 在这些正确性和并行契约冻结后
+按小步性能提交推进。每一阶段只有在出口条件关闭后，才进入下一阶段。命令块
+是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
+[`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
 
-截至 2026-07-30，A～E 均已按顺序实施并关闭出口；本文保留各阶段门和复现
-命令，不以完成状态替代验收细节。
+截至 2026-07-30，A～E 均已按顺序实施并关闭出口；F1 的计数、细分计时和
+solver 预验证快路径已由提交 `96f23f8` 完成，消除重复全工作区扫描后 Munk
+2频 reuse 墙钟中位数下降 `6.77%`，SHD 逐字节一致。F1 尚余连续压力访问/
+重复边界检查优化和 16频确认，不能标记为整体关闭。详见
+[`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
 
 里程碑后的统一质量门为：
 
@@ -288,6 +292,24 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 F1 不改变射线、频率、segment、range、depth、image 或复数贡献的累加顺序。
 Debug/诊断路径继续保留有限性检查，Release 快路径在每频完成后统一验证压力
 工作区。
+
+#### F1 当前状态（2026-07-30）
+
+- [x] 默认关闭的 Influence 工作计数与 validation/precompute/hot-loop 计时；
+- [x] 公共 `accumulate` 保留完整防御性校验；
+- [x] solver 对冻结缓存和已校验逐频投影使用私有预验证入口；
+- [x] 单频、nonreuse、reuse、parallel 的统计聚合与
+  `--profile-influence` 诊断输出；
+- [x] Release/Debug、49 个 Python 测试、独立性扫描和隔离构建质量门；
+- [x] Munk 2频 smoke：`20.1310 s → 18.7690 s`，SHD 哈希不变；
+- [ ] 将已验证 `(depth, range)` 映射为一次线性索引，消除同一贡献的两次
+  `workspace.at()` 边界检查；
+- [ ] Munk 16频 reuse、parallel-8、parallel-10 三轮以上确认。
+
+`--profile-influence` 的一次 2频诊断记录了 10,000 次射线累积、约
+9.996 亿次 receiver-depth 评估和约 29.987 亿次 image 评估；热循环
+`18.438 s`，预计算 `0.143 s`，轻量校验 `0.0002 s`。因此下一项工作仍应
+保持累加顺序，只优化压力访问和循环常量，不先扩大并行 worker 搜索。
 
 ### F2：布局和局部性实验
 

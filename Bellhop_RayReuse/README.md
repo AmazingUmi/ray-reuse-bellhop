@@ -87,6 +87,18 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 都无法容纳时直接拒绝运行。预算覆盖射线缓存及有界频率工作区，不等同于
 进程全部 RSS。三个模式均保留为数值与性能对照入口。
 
+Influence 诊断默认关闭。需要记录射线/segment/range/depth/image 工作量及
+validation、precompute、hot-loop 细分计时时，可显式添加：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+  --frequencies-hz 50,250 \
+  --execution-mode reuse \
+  --profile-influence
+```
+
+该选项会增加计数与计时开销，只用于热点定位，不用于正式性能比较。
+
 ## 性能基准
 
 可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
@@ -96,14 +108,17 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 
 首轮正式 Munk 16频五轮结果为 parallel-8 `4.424×`、parallel-10
 `4.643×`，已经达到项目 `≥4×` 门槛；但 Influence 占 nonreuse wall 的
-`97.42%`，串行 reuse 只有 `1.023×`。当前后续工作是阶段 F Influence
-热路径计数、重复校验移出和数据局部性优化，而不是直接扩大 64频全矩阵。
+`97.42%`，串行 reuse 只有 `1.023×`。阶段 F 的首个安全优化提交
+`96f23f8` 已将重复完整工作区校验移出逐射线入口，Munk 2频 reuse 墙钟
+中位数下降 `6.77%` 且 SHD 逐字节一致。下一步是消除热循环重复索引/边界
+检查，再做 16频确认；暂不扩大 64频全矩阵。
 
 ## 文档
 
 - [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～F 的入口、出口和验收命令；
 - [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)：可重复性能基准协议、命令和报告字段；
 - [`doc/BENCHMARK_RESULTS_C77FF60.md`](./doc/BENCHMARK_RESULTS_C77FF60.md)：首轮 16 频 direct/Munk 正式基准；
+- [`doc/BENCHMARK_RESULTS_96F23F8.md`](./doc/BENCHMARK_RESULTS_96F23F8.md)：F1 重复校验移出及 Munk 2频对照；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；

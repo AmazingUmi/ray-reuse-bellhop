@@ -88,3 +88,5 @@ median/min/max；存在 `nonreuse` 时，按外部 wall 中位数计算
 产物，不进入 Git。需要归档时应将 JSON 连同对应提交或发布附件一起保存。
 提交 `c77ff60` 的首轮正式结果与结论见
 [`BENCHMARK_RESULTS_C77FF60.md`](./BENCHMARK_RESULTS_C77FF60.md)。
+阶段 F1 提交 `96f23f8` 的 Munk 2频前后对照和诊断计数见
+[`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
