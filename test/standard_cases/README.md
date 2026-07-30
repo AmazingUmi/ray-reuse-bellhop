@@ -98,11 +98,20 @@ Makefile 只是轻量入口；脚本也可直接调用：
 ```bash
 conda run -n py python test/standard_cases/codes/standard_cases.py \
   test --version origin --case munk_cerveny_cc --profile single
+
+conda run -n py python test/standard_cases/codes/standard_cases.py \
+  test --version rayreuse --case munk_cerveny_cc \
+  --profile broadband_smoke --rayreuse-execution-mode nonreuse
+
+# 验证一次追踪、多频投影的复用路径
+conda run -n py python test/standard_cases/codes/standard_cases.py \
+  test --version rayreuse --case munk_cerveny_cc \
+  --profile broadband_smoke --rayreuse-execution-mode reuse
 ```
 
 ## 结果和比较
 
-输出固定写入：
+`origin`、`f2cpp` 以及 RayReuse 的 `single` profile 保持逐频目录：
 
 ```text
 results/<version>/<case>/<profile>/
@@ -113,8 +122,31 @@ results/<version>/<case>/<profile>/
     └── <root>.shd
 ```
 
+RayReuse 多频 profile 由一次求解产生完整频率轴，因此使用单一宽带目录：
+
+```text
+results/rayreuse/<case>/<profile>/
+├── run_manifest.json
+└── broadband/
+    ├── <case>_<profile>_broadband.env
+    ├── <case>_<profile>_broadband.prt
+    └── <case>_<profile>_broadband.shd
+```
+
+宽带 `.env` 的频率字段使用 profile 首频，发射角数仍按 profile 的最高频率
+统一计算。运行时适配器只调用一次 `bellhop_rayreuse`，并传入 `<root>`、
+`--frequencies-hz <严格升序逗号列表>` 以及
+`--execution-mode <nonreuse|reuse|parallel>`。标准 runner 的
+`--rayreuse-execution-mode` 默认是 `nonreuse`，只对 RayReuse 多频运行生效；
+`origin`、`f2cpp` 和 RayReuse 单频调用不传此参数。清单中的每个频率记录都
+映射到同一个 PRT/SHD，并通过 `execution_model`、`execution_mode` 和
+`broadband_run.expected_solver_invocations` 明确运行方式。
+
 运行清单记录频率向量、最高设计频率、共享发射角数、来源和各频率状态。
-校验环节检查 PRT 运行模式、SHD 维度和频率、复压力有限性及非全零场。
+宽带校验要求 SHD 第一维等于频率数、完整频率轴与 profile 一致、其余维度
+与算例定义一致，并逐频检查复压力有限且非全零。PRT 必须报告所选 execution
+mode；`nonreuse` 的 `Trace passes` 必须等于频率数，`reuse` 和
+`parallel` 则必须等于 1。
 
 比较两个 SHD 频率切片：
 
@@ -135,8 +167,12 @@ TL 差异。
 | `rayreuse` | 单元素频率向量 | 一次运行完整频率向量 |
 
 `origin` 和 `f2cpp` 的执行/输入适配均已启用；`f2cpp` 默认可执行文件为
-`Bellhop_F2CPP/build/release/bellhop_f2cpp`。RayReuse 的多频 CLI 契约完成后
-再启用其适配器，无需改变 `cases/` 或调用方式。
+`Bellhop_F2CPP/build/release/bellhop_f2cpp`。RayReuse 适配器已启用，默认
+可执行文件为 `Bellhop_RayReuse/build/release/bellhop_rayreuse`；single
+profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调用。
+多频调用同时显式传递 `--execution-mode`；可由 runner 的
+`--rayreuse-execution-mode nonreuse|reuse|parallel` 选择，默认
+`nonreuse`。
 
 迁移前的 `test_origin_bellhop` 和 `test_ray_reuse` 位于 `test/legacy/`，
 仅作历史材料，不参与测试。PlotRead 使用独立生成的小型 fixture，不依赖
@@ -147,5 +183,4 @@ TL 差异。
 1. 冻结六个算例的复压力、TL、相位容差与紧凑参考采样。
 2. 导出每步 `x/t/p/q/c/tau`、求积状态和终止原因。
 3. 导出反射事件及单条射线 Influence 贡献。
-4. 冻结 RayReuse CLI 后启用对应版本适配。
-5. 为运行清单补充提交、编译器、编译选项、平台、线程和峰值内存。
+4. 为运行清单补充提交、编译器、编译选项、平台、线程和峰值内存。

@@ -26,6 +26,7 @@ from compare_fields import compare_files
 
 VERSIONS = ("origin", "f2cpp", "rayreuse")
 STAGES = ("generate", "run", "validate", "test")
+RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse", "parallel")
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,28 @@ class VersionAdapter:
         self.require_available()
         subprocess.run(
             [str(self.executable), file_root],
+            cwd=working_directory,
+            check=True,
+        )
+
+    def run_broadband(
+        self,
+        working_directory: Path,
+        file_root: str,
+        frequencies_hz: Sequence[float],
+        execution_mode: str,
+    ) -> None:
+        self.require_available()
+        require_rayreuse_execution_mode(execution_mode)
+        subprocess.run(
+            [
+                str(self.executable),
+                file_root,
+                "--frequencies-hz",
+                format_frequency_csv(frequencies_hz),
+                "--execution-mode",
+                execution_mode,
+            ],
             cwd=working_directory,
             check=True,
         )
@@ -94,12 +117,10 @@ def default_adapters(executable_override: Path | None) -> dict[str, VersionAdapt
                 PROJECT_ROOT
                 / "Bellhop_RayReuse"
                 / "build"
+                / "release"
                 / "bellhop_rayreuse"
             ),
-            enabled=False,
-            unavailable_reason=(
-                "multi-frequency input and CLI contract are not implemented"
-            ),
+            enabled=True,
         ),
     }
 
@@ -109,16 +130,33 @@ def frequency_label(index: int, frequency_hz: float) -> str:
     return f"f{index:03d}_{value}Hz"
 
 
-def validate_output(
+def format_frequency_csv(frequencies_hz: Sequence[float]) -> str:
+    frequencies = tuple(float(value) for value in frequencies_hz)
+    if not frequencies:
+        raise ValueError("broadband frequency list must not be empty")
+    if any(
+        current >= following
+        for current, following in zip(frequencies, frequencies[1:])
+    ):
+        raise ValueError(
+            "broadband frequencies must be strictly increasing"
+        )
+    return ",".join(format(value, ".17g") for value in frequencies)
+
+
+def require_rayreuse_execution_mode(execution_mode: str) -> None:
+    if execution_mode not in RAYREUSE_EXECUTION_MODES:
+        raise ValueError(
+            f"unknown RayReuse execution mode: {execution_mode}"
+        )
+
+
+def validate_print_output(
     definition: CaseDefinition,
-    frequency_hz: float,
     print_path: Path,
-    shade_path: Path,
 ) -> None:
     if not print_path.is_file() or print_path.stat().st_size == 0:
         raise RuntimeError(f"missing print output: {print_path}")
-    if not shade_path.is_file() or shade_path.stat().st_size == 0:
-        raise RuntimeError(f"missing shade output: {shade_path}")
 
     print_contents = print_path.read_text(errors="replace")
     common_markers = (
@@ -139,6 +177,35 @@ def validate_output(
     if "FATAL ERROR" in print_contents:
         raise RuntimeError(f"{definition.case_id}: solver reported FATAL ERROR")
 
+
+def validate_pressure_slice(
+    definition: CaseDefinition,
+    reader: ShdReader,
+    frequency_index: int,
+) -> None:
+    pressure = reader.read(frequency_index=frequency_index).pressure
+    if not np.isfinite(pressure).all():
+        raise RuntimeError(
+            f"{definition.case_id}: non-finite pressure at frequency index "
+            f"{frequency_index}"
+        )
+    if not np.any(pressure):
+        raise RuntimeError(
+            f"{definition.case_id}: pressure is entirely zero at frequency "
+            f"index {frequency_index}"
+        )
+
+
+def validate_output(
+    definition: CaseDefinition,
+    frequency_hz: float,
+    print_path: Path,
+    shade_path: Path,
+) -> None:
+    validate_print_output(definition, print_path)
+    if not shade_path.is_file() or shade_path.stat().st_size == 0:
+        raise RuntimeError(f"missing shade output: {shade_path}")
+
     reader = ShdReader(shade_path)
     if reader.header.dimensions != definition.expected_dimensions:
         raise RuntimeError(
@@ -150,11 +217,194 @@ def validate_output(
             f"{definition.case_id}: SHD frequency "
             f"{reader.header.frequencies_hz[0]} != {frequency_hz}"
         )
-    pressure = reader.read().pressure
-    if not np.isfinite(pressure).all():
-        raise RuntimeError(f"{definition.case_id}: non-finite pressure")
-    if not np.any(pressure):
-        raise RuntimeError(f"{definition.case_id}: pressure is entirely zero")
+    validate_pressure_slice(definition, reader, 0)
+
+
+def validate_broadband_output(
+    definition: CaseDefinition,
+    frequencies_hz: Sequence[float],
+    execution_mode: str,
+    print_path: Path,
+    shade_path: Path,
+) -> None:
+    frequencies = tuple(float(value) for value in frequencies_hz)
+    require_rayreuse_execution_mode(execution_mode)
+    validate_print_output(definition, print_path)
+    print_contents = print_path.read_text(errors="replace")
+    print_lines = {
+        line.strip() for line in print_contents.splitlines()
+    }
+    expected_mode_marker = {
+        "nonreuse": "execution mode = broadband non-reuse",
+        "reuse": "execution mode = broadband reuse",
+        "parallel": "execution mode = broadband parallel reuse",
+    }[execution_mode]
+    expected_trace_passes = (
+        len(frequencies) if execution_mode == "nonreuse" else 1
+    )
+    for marker in (
+        expected_mode_marker,
+        f"Trace passes = {expected_trace_passes}",
+    ):
+        if marker not in print_lines:
+            raise RuntimeError(
+                f"{definition.case_id}: broadband {execution_mode} PRT "
+                f"marker missing: {marker!r}"
+            )
+    if not shade_path.is_file() or shade_path.stat().st_size == 0:
+        raise RuntimeError(f"missing shade output: {shade_path}")
+
+    reader = ShdReader(shade_path)
+    expected_dimensions = (
+        len(frequencies),
+        *definition.expected_dimensions[1:],
+    )
+    if reader.header.dimensions != expected_dimensions:
+        raise RuntimeError(
+            f"{definition.case_id}: broadband SHD dimensions "
+            f"{reader.header.dimensions} != {expected_dimensions}"
+        )
+    actual_frequencies = tuple(
+        float(value) for value in reader.header.frequencies_hz
+    )
+    if actual_frequencies != frequencies:
+        raise RuntimeError(
+            f"{definition.case_id}: broadband SHD frequency axis "
+            f"{actual_frequencies} != {frequencies}"
+        )
+    for frequency_index in range(len(frequencies)):
+        validate_pressure_slice(definition, reader, frequency_index)
+
+
+def process_rayreuse_broadband(
+    definition: CaseDefinition,
+    profile_name: str,
+    adapter: VersionAdapter,
+    stage: str,
+    results_root: Path,
+    frequencies: tuple[float, ...],
+    launch_angle_counts: dict[str, int],
+    execution_mode: str,
+) -> Path:
+    require_rayreuse_execution_mode(execution_mode)
+    if len(frequencies) < 2:
+        raise ValueError(
+            f"{definition.case_id}/{profile_name}: broadband profile must "
+            "contain at least two frequencies"
+        )
+    frequency_csv = format_frequency_csv(frequencies)
+    launch_angle_count = launch_angle_counts["final"]
+    case_result_root = (
+        results_root / adapter.name / definition.case_id / profile_name
+    )
+    run_directory = case_result_root / "broadband"
+    file_root = f"{definition.case_id}_{profile_name}_broadband"
+    environment_path = run_directory / f"{file_root}.env"
+    print_path = run_directory / f"{file_root}.prt"
+    shade_path = run_directory / f"{file_root}.shd"
+
+    if stage in ("generate", "test"):
+        if run_directory.exists():
+            shutil.rmtree(run_directory)
+        run_directory.mkdir(parents=True)
+        environment_path.write_text(
+            definition.render_origin_environment(
+                frequencies[0], launch_angle_count
+            ),
+            encoding="utf-8",
+        )
+        status = "generated"
+    else:
+        if not environment_path.is_file():
+            raise RuntimeError(
+                f"{environment_path} does not exist; run generate first"
+            )
+        status = "existing"
+
+    if stage in ("run", "test"):
+        adapter.run_broadband(
+            run_directory,
+            file_root,
+            frequencies,
+            execution_mode,
+        )
+        status = "completed"
+
+    if stage in ("validate", "test"):
+        validate_broadband_output(
+            definition,
+            frequencies,
+            execution_mode,
+            print_path,
+            shade_path,
+        )
+        status = "passed"
+
+    relative_environment = str(
+        environment_path.relative_to(case_result_root)
+    )
+    relative_print = (
+        str(print_path.relative_to(case_result_root))
+        if print_path.exists()
+        else None
+    )
+    relative_shade = (
+        str(shade_path.relative_to(case_result_root))
+        if shade_path.exists()
+        else None
+    )
+    records = [
+        RunRecord(
+            frequency_index=index,
+            frequency_hz=frequency_hz,
+            file_root=file_root,
+            environment_file=relative_environment,
+            print_file=relative_print,
+            shade_file=relative_shade,
+            status=status,
+        )
+        for index, frequency_hz in enumerate(frequencies)
+    ]
+    print(
+        f"{adapter.name}/{definition.case_id}/{profile_name}/broadband/"
+        f"{stage}: {status.upper()}"
+    )
+
+    manifest = {
+        "schema_version": 1,
+        "version": adapter.name,
+        "executable": str(adapter.executable),
+        "case_id": definition.case_id,
+        "profile": profile_name,
+        "last_stage": stage,
+        "description": definition.description,
+        "source_references": definition.source_references,
+        "frequencies_hz": frequencies,
+        "design_frequency_hz": max(frequencies),
+        "shared_launch_angle_count": launch_angle_count,
+        "launch_angle_counts": launch_angle_counts,
+        "launch_angle_range_deg": [
+            definition.minimum_angle_deg,
+            definition.maximum_angle_deg,
+        ],
+        "execution_model": "single_broadband_invocation",
+        "execution_mode": execution_mode,
+        "broadband_run": {
+            "working_directory": "broadband",
+            "file_root": file_root,
+            "frequencies_argument": frequency_csv,
+            "execution_mode_argument": execution_mode,
+            "expected_solver_invocations": 1,
+            "frequency_slices_share_output": True,
+        },
+        "runs": [asdict(record) for record in records],
+    }
+    manifest_path = case_result_root / "run_manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path
 
 
 def process_case(
@@ -163,15 +413,26 @@ def process_case(
     adapter: VersionAdapter,
     stage: str,
     results_root: Path,
+    rayreuse_execution_mode: str = "nonreuse",
 ) -> Path:
-    if adapter.name not in ("origin", "f2cpp"):
+    if adapter.name not in VERSIONS:
         adapter.require_available()
-        raise NotImplementedError(
-            f"{adapter.name} input adapter is not implemented"
-        )
+        raise ValueError(f"unknown version adapter: {adapter.name}")
 
     frequencies = definition.frequencies(profile_name)
     launch_angle_counts = definition.launch_angle_counts(frequencies)
+    if adapter.name == "rayreuse" and profile_name != "single":
+        return process_rayreuse_broadband(
+            definition,
+            profile_name,
+            adapter,
+            stage,
+            results_root,
+            frequencies,
+            launch_angle_counts,
+            rayreuse_execution_mode,
+        )
+
     launch_angle_count = launch_angle_counts["final"]
     case_result_root = (
         results_root / adapter.name / definition.case_id / profile_name
@@ -290,6 +551,7 @@ def run_selection(
     requested_cases: list[str] | None,
     executable: Path | None,
     results_root: Path,
+    rayreuse_execution_mode: str = "nonreuse",
 ) -> int:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
     selected, explicit = select_cases(definitions, requested_cases)
@@ -321,6 +583,7 @@ def run_selection(
             adapter,
             stage,
             results_root,
+            rayreuse_execution_mode,
         )
         completed += 1
     if completed == 0:
@@ -342,6 +605,15 @@ def add_selection_arguments(parser: argparse.ArgumentParser) -> None:
         "--results-root",
         type=Path,
         default=STANDARD_CASES_ROOT / "results",
+    )
+    parser.add_argument(
+        "--rayreuse-execution-mode",
+        choices=RAYREUSE_EXECUTION_MODES,
+        default="nonreuse",
+        help=(
+            "execution mode passed only to RayReuse multi-frequency runs "
+            "(default: nonreuse)"
+        ),
     )
 
 
@@ -383,6 +655,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--results-root",
         type=Path,
         default=STANDARD_CASES_ROOT / "results",
+    )
+    batch_parser.add_argument(
+        "--rayreuse-execution-mode",
+        choices=RAYREUSE_EXECUTION_MODES,
+        default="nonreuse",
+        help=(
+            "execution mode passed only to RayReuse multi-frequency runs "
+            "(default: nonreuse)"
+        ),
     )
 
     subparsers.add_parser("list", help="list versions, cases and profiles")
@@ -437,6 +718,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 requested_cases=args.cases,
                 executable=args.executable,
                 results_root=args.results_root.resolve(),
+                rayreuse_execution_mode=args.rayreuse_execution_mode,
             )
             return 0
 
@@ -476,6 +758,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         requested_cases=None,
                         executable=args.executable,
                         results_root=args.results_root.resolve(),
+                        rayreuse_execution_mode=args.rayreuse_execution_mode,
                     )
             print(
                 f"BATCH PASSED: {completed} version/case/profile combinations"

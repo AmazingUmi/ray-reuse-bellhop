@@ -16,4 +16,70 @@
 - 两个工程只通过共同变量规范、标准算例、中间状态、SHD、复压力和 TL 结果互相参照；
 - RayReuse 的单频模式属于本工程自身的校验路径；派生完成后，即使移除 F2CPP 目录也应能独立编译和运行。
 
-计划工程结构见 [`doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md) 第 21.2 节，实施任务见 [`doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)。
+## 构建入口
+
+命令默认从仓库根目录运行：
+
+```bash
+cmake --preset debug -S Bellhop_RayReuse
+cmake --build Bellhop_RayReuse/build/debug --parallel
+ctest --test-dir Bellhop_RayReuse/build/debug --output-on-failure
+
+cmake --preset release -S Bellhop_RayReuse
+cmake --build Bellhop_RayReuse/build/release --parallel
+ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
+```
+
+Python 工具统一使用 Conda 的 `py` 环境。例如：
+
+```bash
+conda run -n py python -m unittest discover \
+  -s test/standard_cases/codes/tests -p 'test_*.py'
+
+conda run -n py python test/standard_cases/codes/standard_cases.py test \
+  --version rayreuse \
+  --case all \
+  --profile single \
+  --executable Bellhop_RayReuse/build/release/bellhop_rayreuse
+```
+
+## 运行入口
+
+单频兼容调用继续使用 `.env` 中的频率：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root>
+```
+
+宽带调用保留同一 `.env`，由严格升序逗号列表覆盖频率：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+  --frequencies-hz 50,100,250 \
+  --execution-mode nonreuse
+```
+
+`nonreuse` 是阶段 C 的默认模式，每个频率完整追踪一次。阶段 D 的
+`reuse` 模式用于一次追踪后逐频流式投影。阶段 E 的有界频率并行可使用：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+  --frequencies-hz 50,100,250 \
+  --execution-mode parallel \
+  --workers 8 \
+  --output-queue-capacity 2 \
+  --memory-budget-mib 4096
+```
+
+`--workers` 未给出时采用硬件并发数；完成队列容量只能为 1 或 2，默认 2。
+内存预算未给出时不施加显式预算，给出后会限制活动频率数，连一个活动频率
+都无法容纳时直接拒绝运行。预算覆盖射线缓存及有界频率工作区，不等同于
+进程全部 RSS。三个模式均保留为数值与性能对照入口。
+
+## 文档
+
+- [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～E 的入口、出口和验收命令；
+- [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
+- [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
+- [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
+- [`../test/standard_cases/README.md`](../test/standard_cases/README.md)：共享标准算例入口。
