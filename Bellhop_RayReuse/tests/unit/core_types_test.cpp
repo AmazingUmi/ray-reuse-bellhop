@@ -366,6 +366,13 @@ void testFrequencyWorkspace(Context& context) {
   workspace.at(1U, 2U) = std::complex<double>{3.0, -4.0};
   context.check(workspace.at(1U, 2U) == std::complex<double>{3.0, -4.0},
                 "workspace range is contiguous inside each depth");
+  context.check(
+      workspace.pressure()[5U] == std::complex<double>{3.0, -4.0},
+      "workspace pressure span exposes depth-major linear storage");
+  workspace.pressure()[3U] = std::complex<double>{-2.0, 1.0};
+  context.check(
+      workspace.at(1U, 0U) == std::complex<double>{-2.0, 1.0},
+      "workspace checked and linear access share the same storage");
   workspace.clear();
   context.check(workspace.at(1U, 2U) == std::complex<double>{},
                 "workspace clear resets pressure");

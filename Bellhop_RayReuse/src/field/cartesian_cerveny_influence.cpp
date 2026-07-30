@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <limits>
 #include <numbers>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -567,6 +568,10 @@ CartesianCervenyInfluence::accumulateImpl(
       receivers_.ranges();
   const std::vector<double>& receiverDepths =
       receivers_.depths();
+  std::span<std::complex<double>> pressure =
+      workspace.pressure();
+  const std::size_t receiverRangeCount =
+      receiverRanges.size();
   Clock::time_point hotLoopBegin{};
   if constexpr (CollectStatistics) {
     hotLoopBegin = Clock::now();
@@ -731,12 +736,14 @@ CartesianCervenyInfluence::accumulateImpl(
             corrected * imageSum;
         requireFiniteComplex(
             contribution, "Cartesian Cerveny final contribution");
+        std::complex<double>& pressureValue =
+            pressure[depthIndex * receiverRangeCount + rangeIndex];
         const std::complex<double> updatedPressure =
-            workspace.at(depthIndex, rangeIndex) + contribution;
+            pressureValue + contribution;
         requireFiniteComplex(
             updatedPressure,
             "Cartesian Cerveny accumulated workspace pressure");
-        workspace.at(depthIndex, rangeIndex) = updatedPressure;
+        pressureValue = updatedPressure;
 
         if (captureDiagnostic) {
           ++diagnostic->evaluationCount;
