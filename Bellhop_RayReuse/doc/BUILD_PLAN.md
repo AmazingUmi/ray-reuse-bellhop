@@ -249,6 +249,10 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 计时和峰值 RSS，不能只记录加速比。需要固定 worker/预算时，直接执行
 `bellhop_rayreuse` 并传入 `--workers`、`--output-queue-capacity` 和
 `--memory-budget-mib`；标准算例 runner 负责固定输入和输出校验。
+正式性能记录使用
+`test/standard_cases/codes/benchmark_rayreuse.py`，由其固定并记录配置、
+轮换多轮样本、测量外部 wall/隔离 max RSS，并执行 ENV/SHD 哈希门；完整协议
+见 [`BENCHMARKING.md`](./BENCHMARKING.md)。
 
 ### 出口
 

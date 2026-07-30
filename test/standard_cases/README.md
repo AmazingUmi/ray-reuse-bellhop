@@ -14,6 +14,7 @@ standard_cases/
 │       └── origin.env.in  原版 Bellhop 输入模板
 ├── codes/                 生成、运行、校验、比较及单元测试代码
 │   ├── standard_cases.py  唯一命令行入口
+│   ├── benchmark_rayreuse.py
 │   ├── case_model.py
 │   ├── compare_fields.py
 │   ├── tolerances.toml
@@ -158,6 +159,14 @@ make -C test/standard_cases compare \
 默认容差在 `codes/tolerances.toml`，程序会报告复压力绝对/相对误差与最大
 TL 差异。
 
+## RayReuse 性能基准
+
+`codes/benchmark_rayreuse.py` 复用相同 case/profile 和输出校验，直接比较
+`nonreuse`、`reuse`、`parallel`。它支持固定 workers、队列和内存预算，按
+轮次旋转配置顺序，并将外部 wall、隔离 max RSS、PRT 阶段计时、输入/SHD
+哈希及运行元数据写入 JSON。正式基准默认拒绝脏工作区；协议和推荐命令见
+[`../../Bellhop_RayReuse/doc/BENCHMARKING.md`](../../Bellhop_RayReuse/doc/BENCHMARKING.md)。
+
 ## 版本职责
 
 | 版本 | 单频 profile | 多频 profile |
@@ -183,4 +192,5 @@ profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调�
 1. 冻结六个算例的复压力、TL、相位容差与紧凑参考采样。
 2. 导出每步 `x/t/p/q/c/tau`、求积状态和终止原因。
 3. 导出反射事件及单条射线 Influence 贡献。
-4. 为运行清单补充提交、编译器、编译选项、平台、线程和峰值内存。
+4. 将 benchmark 元数据中已具备的提交、工具链、平台、线程和峰值内存按需
+   回填到通用运行清单。

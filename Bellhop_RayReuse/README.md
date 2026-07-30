@@ -87,9 +87,17 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 都无法容纳时直接拒绝运行。预算覆盖射线缓存及有界频率工作区，不等同于
 进程全部 RSS。三个模式均保留为数值与性能对照入口。
 
+## 性能基准
+
+可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
+max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提交、可执行文件
+哈希、机器、工具链、workers、频率、预算及原始样本统一写入 JSON。完整协议
+和命令见 [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)。
+
 ## 文档
 
 - [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～E 的入口、出口和验收命令；
+- [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)：可重复性能基准协议、命令和报告字段；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
