@@ -633,6 +633,7 @@ def runtime_metadata() -> dict[str, Any]:
             "release": platform.release(),
             "machine": platform.machine(),
             "description": platform.platform(),
+            "processor": platform.processor() or None,
             "logical_cpu_count": os.cpu_count(),
             "physical_memory_bytes": _physical_memory_bytes(),
         },
@@ -939,6 +940,12 @@ def benchmark_case(
             for configuration_index in order:
                 configuration = configurations[configuration_index]
                 result = configuration_results[configuration_index]
+                print(
+                    f"[{definition.case_id}/{profile_name}] "
+                    f"{sample_kind} {sample_index + 1}/{sample_count}: "
+                    f"{configuration.identifier}",
+                    flush=True,
+                )
                 current_sample = _run_isolated_sample(
                     executable=executable,
                     definition=definition,
@@ -1051,6 +1058,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_EXECUTABLE,
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--machine-label",
+        help=(
+            "human-readable hardware label, for example "
+            "'Apple M4 MacBook Air, 10 cores, 16 GiB'"
+        ),
+    )
     parser.add_argument(
         "--allow-dirty",
         action="store_true",
@@ -1167,6 +1181,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "isolated helper resource.RUSAGE_CHILDREN.ru_maxrss"
                 ),
                 "allow_dirty": args.allow_dirty,
+                "machine_label": args.machine_label,
                 "cross_mode_shd_identity_required": (
                     not args.no_cross_mode_shd_check
                 ),

@@ -29,6 +29,7 @@ conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
   --parallel-workers 8,10 \
   --queue 2 \
   --memory-budget-mib 2048 \
+  --machine-label "Apple M4 MacBook Air, 10 cores, 16 GiB" \
   --warmups 1 \
   --repeats 5 \
   --executable Bellhop_RayReuse/build/release/bellhop_rayreuse \
@@ -54,9 +55,13 @@ conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
 
 JSON 记录 Git commit/tree/dirty 状态、可执行文件 SHA-256、平台、CPU/内存、
 Python、NumPy、Conda 环境、CMake/C++ 工具版本、完整配置和轮换顺序。
+在 macOS 等无法可靠查询具体芯片型号的平台，应通过 `--machine-label` 补充
+可读硬件身份；系统探测字段仍会独立保留。
 每个配置保留预热与原始计量样本，并汇总 wall、RSS 和 PRT 阶段时间的
 median/min/max；存在 `nonreuse` 时，按外部 wall 中位数计算
 `speedup_vs_nonreuse`。
 
 报告默认写入 `Bellhop_RayReuse/build/benchmarks/`，该目录属于可再生成构建
 产物，不进入 Git。需要归档时应将 JSON 连同对应提交或发布附件一起保存。
+提交 `c77ff60` 的首轮正式结果与结论见
+[`BENCHMARK_RESULTS_C77FF60.md`](./BENCHMARK_RESULTS_C77FF60.md)。

@@ -330,6 +330,8 @@ class CliValidationTests(unittest.TestCase):
                 "/tmp/bellhop_rayreuse",
                 "--output",
                 "/tmp/benchmark.json",
+                "--machine-label",
+                "benchmark-host",
                 "--no-cross-mode-shd-check",
                 "--allow-dirty",
             ]
@@ -342,6 +344,7 @@ class CliValidationTests(unittest.TestCase):
         self.assertEqual(args.warmups, 2)
         self.assertEqual(args.output_queue_capacity, 1)
         self.assertEqual(args.memory_budget_mib, 447)
+        self.assertEqual(args.machine_label, "benchmark-host")
         self.assertTrue(args.no_cross_mode_shd_check)
         self.assertTrue(args.allow_dirty)
 
