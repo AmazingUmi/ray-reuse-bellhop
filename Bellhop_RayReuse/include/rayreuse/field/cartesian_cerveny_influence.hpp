@@ -21,7 +21,30 @@ enum class CervenyImageKind {
 struct CartesianCervenySettings {
   std::size_t imageCount{3U};
   int beamWindow{5};
+  bool collectStatistics{false};
 };
+
+struct CartesianCervenyStatistics {
+  std::size_t rayAccumulations{};
+  std::size_t validatedRayPoints{};
+  std::size_t validatedWorkspaceValues{};
+  std::size_t activeRayPoints{};
+  std::size_t segmentCandidates{};
+  std::size_t eligibleSegments{};
+  std::size_t receiverRangeEvaluations{};
+  std::size_t receiverDepthEvaluations{};
+  std::size_t imageEvaluations{};
+  std::size_t windowRejections{};
+  std::size_t taperRejections{};
+  std::size_t nonzeroImageContributions{};
+  double validationSeconds{};
+  double precomputeSeconds{};
+  double hotLoopSeconds{};
+};
+
+void accumulateCartesianCervenyStatistics(
+    CartesianCervenyStatistics& total,
+    const CartesianCervenyStatistics& value) noexcept;
 
 struct CartesianCervenyDiagnosticRequest {
   std::size_t receiverRangeIndex{};
@@ -90,9 +113,28 @@ class CartesianCervenyInfluence {
       const RayFrequencyState& frequencyState,
       std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest>
-          diagnosticRequest = std::nullopt) const;
+          diagnosticRequest = std::nullopt,
+      CartesianCervenyStatistics* statistics = nullptr) const;
 
  private:
+  friend class SingleFrequencySolver;
+
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
+  accumulatePrevalidated(
+      FrequencyWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      std::complex<double> epsilon,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  template <bool CollectStatistics>
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
+  accumulateImpl(
+      FrequencyWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
+      CartesianCervenyStatistics* statistics) const;
+
   Environment environment_;
   ReceiverGrid receivers_;
   CartesianCervenySettings settings_;

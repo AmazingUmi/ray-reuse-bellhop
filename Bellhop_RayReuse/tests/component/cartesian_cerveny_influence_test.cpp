@@ -27,6 +27,7 @@ using rayreuse::CartesianCervenyDiagnostic;
 using rayreuse::CartesianCervenyDiagnosticRequest;
 using rayreuse::CartesianCervenyInfluence;
 using rayreuse::CartesianCervenySettings;
+using rayreuse::CartesianCervenyStatistics;
 using rayreuse::CervenyImageKind;
 using rayreuse::Environment;
 using rayreuse::FrequencyProjector;
@@ -525,6 +526,76 @@ void testTerminalInactivePointIsRetained(Context& context) {
                 "suffix starting from inactive point is suppressed");
 }
 
+void testStatisticsAreOptInAndCountHotPathWork(Context& context) {
+  const Environment environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0},
+           {.depth = 100.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0}}),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
+  const ReceiverGrid receivers({50.0}, {0.0, 10.0});
+  const CartesianCervenyInfluence influence(
+      environment, receivers,
+      CartesianCervenySettings{.imageCount = 1U, .beamWindow = 5});
+  RayPath path;
+  path.launchAngle = 0.0;
+  path.points = {makeSyntheticState(0.0), makeSyntheticState(5.0),
+                 makeSyntheticState(10.0)};
+  const RayFrequencyState state{
+      .frequency = 50.0,
+      .points = {
+          RayFrequencyPoint{
+              .complexTravelTime = {0.0, 0.0},
+              .amplitude = 1.0,
+              .reflectionPhase = 0.0,
+              .active = true},
+          RayFrequencyPoint{
+              .complexTravelTime = {5.0 / 1500.0, 0.0},
+              .amplitude = 1.0,
+              .reflectionPhase = 0.0,
+              .active = true},
+          RayFrequencyPoint{
+              .complexTravelTime = {10.0 / 1500.0, 0.0},
+              .amplitude = 1.0,
+              .reflectionPhase = 0.0,
+              .active = true}}};
+  FrequencyWorkspace workspace(50.0, receivers);
+  CartesianCervenyStatistics statistics;
+
+  static_cast<void>(influence.accumulate(
+      workspace, path, state, {0.0, 100.0}, std::nullopt,
+      &statistics));
+
+  context.check(
+      statistics.rayAccumulations == 1U &&
+          statistics.validatedRayPoints == path.points.size() &&
+          statistics.validatedWorkspaceValues ==
+              workspace.pressure().size(),
+      "opt-in statistics count defensive validation work");
+  context.check(
+      statistics.activeRayPoints == path.points.size() &&
+          statistics.segmentCandidates == 1U &&
+          statistics.eligibleSegments == 1U &&
+          statistics.receiverRangeEvaluations == 1U &&
+          statistics.receiverDepthEvaluations == 1U &&
+          statistics.imageEvaluations == 1U,
+      "opt-in statistics count precompute and hot-loop work");
+  context.check(
+      statistics.windowRejections +
+              statistics.taperRejections +
+              statistics.nonzeroImageContributions ==
+          statistics.imageEvaluations,
+      "each image evaluation records one terminal outcome");
+  context.check(
+      statistics.validationSeconds >= 0.0 &&
+          statistics.precomputeSeconds >= 0.0 &&
+          statistics.hotLoopSeconds >= 0.0,
+      "opt-in statistics expose non-negative phase timings");
+}
+
 void testBranchCutAndHermitePrimitives(Context& context) {
   context.check(
       updateCervenyKmah(
@@ -724,6 +795,7 @@ int main() {
   testMunkOracles(context);
   testRigidReflectionOracle(context);
   testTerminalInactivePointIsRetained(context);
+  testStatisticsAreOptInAndCountHotPathWork(context);
   testValidationContracts(context);
 
   if (context.failureCount() != 0) {

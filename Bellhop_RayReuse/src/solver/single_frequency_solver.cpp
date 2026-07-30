@@ -119,6 +119,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   double projectSeconds = 0.0;
   double influenceSeconds = 0.0;
   std::size_t totalRayPointCount = 0U;
+  CartesianCervenyStatistics influenceStatistics;
   for (const RayPath& path : rayCache.paths()) {
     totalRayPointCount += path.points.size();
     const Clock::time_point projectBegin = Clock::now();
@@ -126,8 +127,11 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
         projector.project(
             path, frequency, simulation.source().amplitude);
     const Clock::time_point projectEnd = Clock::now();
-    static_cast<void>(influence.accumulate(
-        workspace, path, frequencyState, epsilon.value));
+    static_cast<void>(influence.accumulatePrevalidated(
+        workspace, path, frequencyState, epsilon.value,
+        influenceSettings.collectStatistics
+            ? &influenceStatistics
+            : nullptr));
     const Clock::time_point influenceEnd = Clock::now();
     projectSeconds += elapsedSeconds(projectBegin, projectEnd);
     influenceSeconds +=
@@ -151,7 +155,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
               .projectSeconds = projectSeconds,
               .influenceSeconds = influenceSeconds,
               .scaleSeconds =
-                  elapsedSeconds(scaleBegin, scaleEnd)}};
+                  elapsedSeconds(scaleBegin, scaleEnd),
+              .influenceStatistics = influenceStatistics}};
 }
 
 SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(

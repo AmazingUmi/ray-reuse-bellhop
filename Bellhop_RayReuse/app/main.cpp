@@ -29,7 +29,8 @@ void printUsage(std::ostream& stream) {
   stream << "Usage: bellhop_rayreuse <file-root> "
             "[--frequencies-hz <f0,f1,...>] "
             "[--execution-mode <nonreuse|reuse|parallel>] "
-            "[--verify-cache] [--workers <count>] "
+            "[--verify-cache] [--profile-influence] "
+            "[--workers <count>] "
             "[--output-queue-capacity <count>] "
             "[--memory-budget-mib <MiB>]\n"
          << "\n"
@@ -44,6 +45,8 @@ void printUsage(std::ostream& stream) {
             "for bounded frequency concurrency.\n"
          << "--verify-cache hashes the complete frozen ray cache before "
             "and after projection and is intended for validation.\n"
+         << "--profile-influence records detailed Influence work counts "
+            "and sub-phase timings; it is disabled by default.\n"
          << "Parallel tuning options require --execution-mode parallel; "
             "worker count defaults to hardware concurrency, the output "
             "queue defaults to 2, and a zero/unset memory budget means "
@@ -139,6 +142,42 @@ void writeSingleFrequencySummary(
       << result.timings.scaleSeconds << '\n';
 }
 
+void writeInfluenceStatistics(
+    std::ostream& stream,
+    const rayreuse::CartesianCervenyStatistics& statistics) {
+  stream
+      << "Influence ray accumulations = "
+      << statistics.rayAccumulations << '\n'
+      << "Influence validated ray points = "
+      << statistics.validatedRayPoints << '\n'
+      << "Influence validated workspace values = "
+      << statistics.validatedWorkspaceValues << '\n'
+      << "Influence active ray points = "
+      << statistics.activeRayPoints << '\n'
+      << "Influence segment candidates = "
+      << statistics.segmentCandidates << '\n'
+      << "Influence eligible segments = "
+      << statistics.eligibleSegments << '\n'
+      << "Influence receiver range evaluations = "
+      << statistics.receiverRangeEvaluations << '\n'
+      << "Influence receiver depth evaluations = "
+      << statistics.receiverDepthEvaluations << '\n'
+      << "Influence image evaluations = "
+      << statistics.imageEvaluations << '\n'
+      << "Influence window rejections = "
+      << statistics.windowRejections << '\n'
+      << "Influence taper rejections = "
+      << statistics.taperRejections << '\n'
+      << "Influence nonzero image contributions = "
+      << statistics.nonzeroImageContributions << '\n'
+      << "Influence validation seconds = "
+      << statistics.validationSeconds << '\n'
+      << "Influence precompute seconds = "
+      << statistics.precomputeSeconds << '\n'
+      << "Influence hot loop seconds = "
+      << statistics.hotLoopSeconds << '\n';
+}
+
 [[nodiscard]] std::size_t resolvedWorkerCount(
     std::size_t requestedWorkerCount) {
   if (requestedWorkerCount != 0U) {
@@ -210,6 +249,10 @@ int main(int argumentCount, char* arguments[]) {
             environmentPath,
             std::move(options.frequencyOverrideHz));
     writeConfigurationSummary(printLog, parsed);
+    rayreuse::CartesianCervenySettings influenceSettings =
+        parsed.beam.influence;
+    influenceSettings.collectStatistics =
+        options.profileInfluence;
 
     const Clock::time_point solveBegin = Clock::now();
     if (parsed.simulationCase.frequencies().size() == 1U) {
@@ -218,7 +261,7 @@ int main(int argumentCount, char* arguments[]) {
               parsed.simulationCase,
               parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange,
-              parsed.beam.influence);
+              influenceSettings);
 
       const Clock::time_point writeBegin = Clock::now();
       rayreuse::ShdWriter::writeSingleFrequency(
@@ -232,6 +275,10 @@ int main(int argumentCount, char* arguments[]) {
       printLog << "execution mode = single-frequency\n"
                << "Trace passes = 1\n";
       writeSingleFrequencySummary(printLog, result);
+      if (options.profileInfluence) {
+        writeInfluenceStatistics(
+            printLog, result.timings.influenceStatistics);
+      }
       printLog << "SHD seconds = " << writeSeconds << '\n';
     } else if (
         options.executionMode ==
@@ -241,7 +288,7 @@ int main(int argumentCount, char* arguments[]) {
               parsed.simulationCase,
               parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange,
-              parsed.beam.influence);
+              influenceSettings);
 
       std::vector<rayreuse::FrequencyWorkspace> workspaces;
       workspaces.reserve(result.frequencyResults.size());
@@ -283,6 +330,11 @@ int main(int argumentCount, char* arguments[]) {
           << "non-reuse wall seconds = "
           << result.statistics.wallSeconds << '\n'
           << "SHD seconds = " << writeSeconds << '\n';
+      if (options.profileInfluence) {
+        writeInfluenceStatistics(
+            printLog,
+            result.statistics.phaseTotals.influenceStatistics);
+      }
     } else if (
         options.executionMode ==
         rayreuse::BroadbandExecutionMode::Reuse) {
@@ -311,7 +363,7 @@ int main(int argumentCount, char* arguments[]) {
               parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange,
               consumer,
-              parsed.beam.influence,
+              influenceSettings,
               options.verifyCache);
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
@@ -352,6 +404,10 @@ int main(int argumentCount, char* arguments[]) {
         printLog
             << "cache fingerprint verification = disabled\n";
       }
+      if (options.profileInfluence) {
+        writeInfluenceStatistics(
+            printLog, statistics.phaseTotals.influenceStatistics);
+      }
     } else {
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
@@ -387,7 +443,7 @@ int main(int argumentCount, char* arguments[]) {
               parsed.beam.loopRange,
               consumer,
               settings,
-              parsed.beam.influence,
+              influenceSettings,
               options.verifyCache);
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
@@ -441,6 +497,10 @@ int main(int argumentCount, char* arguments[]) {
       } else {
         printLog
             << "cache fingerprint verification = disabled\n";
+      }
+      if (options.profileInfluence) {
+        writeInfluenceStatistics(
+            printLog, statistics.phaseTotals.influenceStatistics);
       }
     }
 

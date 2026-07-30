@@ -14,6 +14,7 @@ struct SingleFrequencyTimings {
   double projectSeconds{};
   double influenceSeconds{};
   double scaleSeconds{};
+  CartesianCervenyStatistics influenceStatistics;
 };
 
 struct SingleFrequencyResult {

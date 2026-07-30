@@ -100,6 +100,7 @@ CommandLineOptions parseCommandLine(
   CommandLineOptions options;
   bool executionModeSpecified = false;
   bool verifyCacheSpecified = false;
+  bool profileInfluenceSpecified = false;
   bool workerCountSpecified = false;
   bool outputQueueCapacitySpecified = false;
   bool memoryBudgetSpecified = false;
@@ -153,6 +154,15 @@ CommandLineOptions parseCommandLine(
       }
       options.verifyCache = true;
       verifyCacheSpecified = true;
+      continue;
+    }
+    if (argument == "--profile-influence") {
+      if (profileInfluenceSpecified) {
+        throw ValidationError(
+            "--profile-influence may be specified only once");
+      }
+      options.profileInfluence = true;
+      profileInfluenceSpecified = true;
       continue;
     }
     if (argument == "--workers") {

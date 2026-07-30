@@ -35,19 +35,26 @@ void testSingleFrequencyCompatibility(Context& context) {
   context.check(
       !options.verifyCache,
       "cache fingerprint verification is disabled by default");
+  context.check(
+      !options.profileInfluence,
+      "Influence profiling is disabled by default");
 }
 
 void testExecutionMode(Context& context) {
   const CommandLineOptions options =
       parse(
           {"case/root", "--frequencies-hz", "50,250",
-           "--execution-mode", "reuse", "--verify-cache"});
+           "--execution-mode", "reuse", "--verify-cache",
+           "--profile-influence"});
   context.check(
       options.executionMode == BroadbandExecutionMode::Reuse,
       "reuse execution mode is selected explicitly");
   context.check(
       options.verifyCache,
       "cache fingerprint verification is selected explicitly");
+  context.check(
+      options.profileInfluence,
+      "Influence profiling is selected explicitly");
 
   const CommandLineOptions parallel =
       parse(
@@ -145,6 +152,14 @@ void testInvalidArguments(Context& context) {
             parse({"root", "--workers", "4"}));
       },
       "parallel tuning requires parallel mode");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(
+            parse(
+                {"root", "--profile-influence",
+                 "--profile-influence"}));
+      },
+      "duplicate Influence profiling option is rejected");
 }
 
 void testHelp(Context& context) {

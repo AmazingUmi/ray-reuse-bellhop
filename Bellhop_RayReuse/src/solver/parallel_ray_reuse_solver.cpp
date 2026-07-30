@@ -49,6 +49,8 @@ void accumulateProjectionTimings(
   total.projectSeconds += value.projectSeconds;
   total.influenceSeconds += value.influenceSeconds;
   total.scaleSeconds += value.scaleSeconds;
+  accumulateCartesianCervenyStatistics(
+      total.influenceStatistics, value.influenceStatistics);
 }
 
 [[nodiscard]] std::size_t checkedMultiply(

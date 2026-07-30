@@ -20,6 +20,8 @@ void accumulateTimings(SingleFrequencyTimings& total,
   total.projectSeconds += value.projectSeconds;
   total.influenceSeconds += value.influenceSeconds;
   total.scaleSeconds += value.scaleSeconds;
+  accumulateCartesianCervenyStatistics(
+      total.influenceStatistics, value.influenceStatistics);
 }
 
 }  // namespace

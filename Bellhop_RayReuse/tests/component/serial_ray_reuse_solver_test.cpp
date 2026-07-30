@@ -89,7 +89,10 @@ void testTwoFrequencySerialReuse(Context& context) {
           simulation, 1.0, 50.0);
   const SerialRayReuseResult reuse =
       SerialRayReuseSolver::solve(
-          simulation, 1.0, 50.0, {}, true);
+          simulation, 1.0, 50.0,
+          rayreuse::CartesianCervenySettings{
+              .collectStatistics = true},
+          true);
 
   context.check(
       reuse.frequencyResults.size() == 2U &&
@@ -140,6 +143,20 @@ void testTwoFrequencySerialReuse(Context& context) {
           reuse.statistics.phaseTotals.traceSeconds >= 0.0 &&
           reuse.statistics.wallSeconds >= 0.0,
       "serial reuse exposes one trace timing and per-frequency timings");
+  context.check(
+      firstTimings.influenceStatistics.rayAccumulations ==
+              reuse.statistics.rayCount &&
+          secondTimings.influenceStatistics.rayAccumulations ==
+              reuse.statistics.rayCount &&
+          reuse.statistics.phaseTotals.influenceStatistics
+                  .rayAccumulations ==
+              2U * reuse.statistics.rayCount &&
+          reuse.statistics.phaseTotals.influenceStatistics
+                  .validatedRayPoints == 0U &&
+          reuse.statistics.phaseTotals.influenceStatistics
+                  .validatedWorkspaceValues == 0U,
+      "serial reuse aggregates opt-in Influence statistics "
+      "without restoring full validation scans");
 }
 
 void testStreamingSerialReuse(Context& context) {

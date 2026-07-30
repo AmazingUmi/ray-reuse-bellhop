@@ -18,6 +18,7 @@ namespace {
 
 using rayreuse::AcousticMaterial;
 using rayreuse::BoundaryModel;
+using rayreuse::CartesianCervenySettings;
 using rayreuse::Environment;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
@@ -95,7 +96,9 @@ void testEndToEndSolve(Context& context) {
   const SimulationCase simulation = makeSimulation(1000U);
   const SingleFrequencyResult result =
       SingleFrequencySolver::solve(
-          simulation, 1.0, 500.0);
+          simulation, 1.0, 500.0,
+          CartesianCervenySettings{
+              .collectStatistics = true});
 
   context.check(
       result.rayCount ==
@@ -104,6 +107,20 @@ void testEndToEndSolve(Context& context) {
   context.check(
       result.rayCount == 300U,
       "small direct case retains the D-02 minimum fan");
+  context.check(
+      result.timings.influenceStatistics.rayAccumulations ==
+          result.rayCount &&
+          result.timings.influenceStatistics.validatedRayPoints == 0U &&
+          result.timings.influenceStatistics.validatedWorkspaceValues == 0U,
+      "solver statistics prove the frozen-cache prevalidated path "
+      "avoids repeated full validation");
+  context.check(
+      result.timings.influenceStatistics.activeRayPoints >=
+          result.rayCount &&
+          result.timings.influenceStatistics.segmentCandidates > 0U &&
+          result.timings.influenceStatistics.receiverDepthEvaluations > 0U &&
+          result.timings.influenceStatistics.imageEvaluations > 0U,
+      "solver opt-in statistics expose Influence hot-path work");
   context.check(
       result.totalRayPointCount > result.rayCount &&
           result.rayCacheBytes > 0U,
