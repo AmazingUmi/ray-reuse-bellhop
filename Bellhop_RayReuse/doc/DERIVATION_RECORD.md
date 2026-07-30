@@ -256,8 +256,15 @@ nonreuse Trace 只占 wall 的 `2.13%`，Influence 占 `97.42%`；串行 reuse
 9.996 亿次 depth 和 29.987 亿次 image 评估集中在热循环。完整记录见
 [`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
 
-F1 尚未关闭：下一项是以一次线性索引替代同一压力贡献的两次
-`workspace.at()`，随后进行 Munk 2频复测和 16频 reuse/parallel 确认。
+提交 `4af3f7f` 随后以一次 depth-major 线性索引取得压力单元引用，替代同一
+贡献的两次 `workspace.at()`。Munk 2频 reuse 相对 `96f23f8` 再下降
+`10.17%`，F1 累计下降 `16.25%`。16频 reuse、parallel-8、parallel-10
+相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`；三模式 SHD 与
+旧基线逐字节一致。完整记录见
+[`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。
+
+至此 F1 关闭，后续进入 F2 的 range-major 临时布局、receiver depth tile、
+SoA 和向量化独立实验。
 
 ## 11. 后续验收记录规则
 

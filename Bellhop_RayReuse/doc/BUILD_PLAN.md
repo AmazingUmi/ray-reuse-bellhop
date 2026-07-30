@@ -12,11 +12,11 @@ conda run -n py python --version
 是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
 [`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
 
-截至 2026-07-30，A～E 均已按顺序实施并关闭出口；F1 的计数、细分计时和
-solver 预验证快路径已由提交 `96f23f8` 完成，消除重复全工作区扫描后 Munk
-2频 reuse 墙钟中位数下降 `6.77%`，SHD 逐字节一致。F1 尚余连续压力访问/
-重复边界检查优化和 16频确认，不能标记为整体关闭。详见
-[`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
+截至 2026-07-30，A～E 均已按顺序实施并关闭出口；F1 已由提交 `96f23f8`
+和 `4af3f7f` 完成并关闭。两项安全优化使 Munk 2频 reuse 墙钟累计下降
+`16.25%`，16频 reuse 下降 `18.04%`，SHD 逐字节一致。当前进入 F2 的独立
+布局和局部性实验。详见
+[`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。
 
 里程碑后的统一质量门为：
 
@@ -293,7 +293,7 @@ F1 不改变射线、频率、segment、range、depth、image 或复数贡献的
 Debug/诊断路径继续保留有限性检查，Release 快路径在每频完成后统一验证压力
 工作区。
 
-#### F1 当前状态（2026-07-30）
+#### F1 完成状态（2026-07-30）
 
 - [x] 默认关闭的 Influence 工作计数与 validation/precompute/hot-loop 计时；
 - [x] 公共 `accumulate` 保留完整防御性校验；
@@ -302,14 +302,20 @@ Debug/诊断路径继续保留有限性检查，Release 快路径在每频完成
   `--profile-influence` 诊断输出；
 - [x] Release/Debug、49 个 Python 测试、独立性扫描和隔离构建质量门；
 - [x] Munk 2频 smoke：`20.1310 s → 18.7690 s`，SHD 哈希不变；
-- [ ] 将已验证 `(depth, range)` 映射为一次线性索引，消除同一贡献的两次
+- [x] 将已验证 `(depth, range)` 映射为一次线性索引，消除同一贡献的两次
   `workspace.at()` 边界检查；
-- [ ] Munk 16频 reuse、parallel-8、parallel-10 三轮以上确认。
+- [x] Munk 16频 reuse、parallel-8、parallel-10 三轮确认。
 
 `--profile-influence` 的一次 2频诊断记录了 10,000 次射线累积、约
 9.996 亿次 receiver-depth 评估和约 29.987 亿次 image 评估；热循环
-`18.438 s`，预计算 `0.143 s`，轻量校验 `0.0002 s`。因此下一项工作仍应
-保持累加顺序，只优化压力访问和循环常量，不先扩大并行 worker 搜索。
+`18.438 s`，预计算 `0.143 s`，轻量校验 `0.0002 s`。该证据用于选择
+后续线性压力访问优化，而没有先扩大并行 worker 搜索。
+
+线性压力访问提交 `4af3f7f` 使 Munk 2频 reuse 相对 `96f23f8` 再下降
+`10.17%`，相对 F1 前累计下降 `16.25%`；16频 reuse、parallel-8、
+parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
+三配置 SHD 与旧基线哈希一致。parallel-10 仅比 parallel-8 快约 `1.1%`
+且三轮范围更大，F1 不改变默认 worker。
 
 ### F2：布局和局部性实验
 

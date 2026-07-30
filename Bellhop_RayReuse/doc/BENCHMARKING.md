@@ -90,3 +90,5 @@ median/min/max；存在 `nonreuse` 时，按外部 wall 中位数计算
 [`BENCHMARK_RESULTS_C77FF60.md`](./BENCHMARK_RESULTS_C77FF60.md)。
 阶段 F1 提交 `96f23f8` 的 Munk 2频前后对照和诊断计数见
 [`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
+F1 关闭提交 `4af3f7f` 的线性压力访问及 2/16频确认见
+[`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。

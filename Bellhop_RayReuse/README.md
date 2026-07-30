@@ -108,10 +108,11 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 
 首轮正式 Munk 16频五轮结果为 parallel-8 `4.424×`、parallel-10
 `4.643×`，已经达到项目 `≥4×` 门槛；但 Influence 占 nonreuse wall 的
-`97.42%`，串行 reuse 只有 `1.023×`。阶段 F 的首个安全优化提交
-`96f23f8` 已将重复完整工作区校验移出逐射线入口，Munk 2频 reuse 墙钟
-中位数下降 `6.77%` 且 SHD 逐字节一致。下一步是消除热循环重复索引/边界
-检查，再做 16频确认；暂不扩大 64频全矩阵。
+`97.42%`，串行 reuse 只有 `1.023×`。阶段 F1 的 `96f23f8` 和 `4af3f7f`
+已移出重复完整工作区校验，并以一次线性索引替代热循环中的两次
+`workspace.at()`；Munk 2频 reuse 墙钟累计下降 `16.25%`，16频 reuse
+下降 `18.04%`，SHD 逐字节一致。F1 已关闭，下一步进入 F2 的 range-major
+临时布局和局部性实验；暂不扩大 64频全矩阵。
 
 ## 文档
 
@@ -119,6 +120,7 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 - [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)：可重复性能基准协议、命令和报告字段；
 - [`doc/BENCHMARK_RESULTS_C77FF60.md`](./doc/BENCHMARK_RESULTS_C77FF60.md)：首轮 16 频 direct/Munk 正式基准；
 - [`doc/BENCHMARK_RESULTS_96F23F8.md`](./doc/BENCHMARK_RESULTS_96F23F8.md)：F1 重复校验移出及 Munk 2频对照；
+- [`doc/BENCHMARK_RESULTS_4AF3F7F.md`](./doc/BENCHMARK_RESULTS_4AF3F7F.md)：F1 线性压力访问及 2/16频确认；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
