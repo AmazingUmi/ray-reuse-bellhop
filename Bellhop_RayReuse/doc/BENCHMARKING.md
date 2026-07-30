@@ -39,6 +39,29 @@ conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
 开发中的非正式烟测可显式增加 `--allow-dirty`。报告会保留
 `git.dirty = true`，此类结果不得作为发布性能记录。
 
+## 分级运行策略
+
+不要在每次修改后运行包含 nonreuse 的五轮 Munk 全矩阵。按用途分三级：
+
+| 等级 | 用途 | 推荐配置 | 重复 |
+|---|---|---|---:|
+| smoke | 验证 runner、PRT、RSS 和哈希门 | direct 2频，所改模式 | 0 预热 + 1 计量 |
+| tuning | 比较单项优化或 workers | Munk 2频；必要时16频 reuse/parallel | 1 预热 + 3 计量 |
+| formal | 冻结发布或算法基线 | 16频全矩阵；必要时精选64频配置 | 1 预热 + 5 计量 |
+
+正式 Munk 16频全矩阵包含 4 个配置时会执行
+`4 × (1 + 5) = 24` 次 solver。提交 `c77ff60` 上四配置中位数之和约为
+693.7 秒，因此整组预计约 69 分钟。运行前应先用最近中位数估算：
+
+```text
+预计总时长 =
+sum(各配置单次 wall) × (warmups + repeats)
+```
+
+算法与 nonreuse 基线未变化时，tuning 阶段不重复 nonreuse；使用已经冻结的
+正式报告作为历史参照，但新加速比只能表述为相对同轮 reuse。跨提交发布结论
+仍须重新运行同轮基线。
+
 ## 采样协议
 
 - 每个样本在独立目录和独立 Python helper 中运行，使用

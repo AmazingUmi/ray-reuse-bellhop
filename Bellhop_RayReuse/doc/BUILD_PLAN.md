@@ -262,3 +262,61 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 - 输出保持频率顺序且只有一个 writer；
 - 代表性 8 核宽带算例端到端加速达到项目目标 `≥ 4×`，或记录未达标的
   可复现实测证据与后续决策。
+
+## 阶段 F：Influence 热路径优化与规模确认
+
+### 入口
+
+- 阶段 A～E 已关闭，数值结果、单 writer 和有界内存契约已经冻结；
+- 提交 `c77ff60` 的正式 16 频基准确认 Munk nonreuse 中 Trace 只占
+  `2.13%`、Influence 占 `97.42%`；
+- Munk parallel-8/10 已达到 `4.424×/4.643×`，但 10 workers 五轮范围为
+  `27.3%`，不能直接设为默认。
+
+### F1：计数与安全热路径
+
+- 为 Influence 增加低开销计数：射线数、活动点/段数、跨越 receiver range
+  次数、depth/image 评估数、窗口拒绝数和实际非零贡献数；
+- 将计时细分为输入校验、逐射线预计算、range/depth/image 热循环和最终
+  工作区校验；计数/细分计时默认关闭，避免污染正式数据；
+- 冻结几何缓存和 receiver grid 的校验只执行一次；逐频状态在投影后校验
+  一次，不得在每条射线入口重新扫描完整压力工作区；
+- 保留公共防御性 API，为 solver 增加只接受已验证输入的内部快路径；
+- 在已验证索引范围内使用连续 span/reference，消除热循环中重复的
+  `workspace.at()` 索引和边界检查。
+
+F1 不改变射线、频率、segment、range、depth、image 或复数贡献的累加顺序。
+Debug/诊断路径继续保留有限性检查，Release 快路径在每频完成后统一验证压力
+工作区。
+
+### F2：布局和局部性实验
+
+按“一次只改一个变量”的顺序比较：
+
+1. 与 Influence depth 内循环匹配的 range-major 临时工作区或等价连续视图；
+2. receiver depth tile，保证同一接收点收到贡献的先后顺序不变；
+3. 射线预计算数组的 AoS/SoA；
+4. 编译器向量化报告和可安全向量化的窗口拒绝/实数预计算；
+5. 只有前述措施仍不足时才评估更大范围的 receiver/ray 调度重构。
+
+任何改变浮点累加顺序的方案必须独立评审，并从“逐字节一致”转入明确误差
+预算；在此之前不得作为默认实现。
+
+### 验证阶梯
+
+1. 单元/组件测试和 Debug ASan/UBSan；
+2. Munk 2频 smoke：功能、计数器和单项性能回归；
+3. Munk 16频：reuse、parallel-8、parallel-10，1 次预热 + 3 次计量；
+4. 六例 2/16频 SHD 与 `c77ff60` 基线逐字节一致；
+5. 候选稳定后再运行 Munk 64频 reuse/parallel 精选矩阵，不重复 64频
+   nonreuse 全矩阵；
+6. direct/acoustic-bottom 紧预算梯度校准固定进程、线程栈和分配器余量。
+
+### 出口
+
+- Munk 16频 reuse 的 Influence wall 出现可重复下降，且不是由关闭必要校验
+  或改变数值语义换取；
+- 每个优化提交都有原始 benchmark JSON、提交/二进制哈希和回滚判断；
+- 16频所有模式 SHD 继续逐字节一致，完整质量门通过；
+- 8/10 workers 的选择在三轮以上复测中稳定，或明确保留显式配置而不设默认；
+- 64频精选矩阵完成后，再决定 `parallel` 默认值和后续 receiver tile 范围。

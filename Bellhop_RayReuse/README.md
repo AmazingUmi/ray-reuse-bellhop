@@ -94,9 +94,14 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 哈希、机器、工具链、workers、频率、预算及原始样本统一写入 JSON。完整协议
 和命令见 [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)。
 
+首轮正式 Munk 16频五轮结果为 parallel-8 `4.424×`、parallel-10
+`4.643×`，已经达到项目 `≥4×` 门槛；但 Influence 占 nonreuse wall 的
+`97.42%`，串行 reuse 只有 `1.023×`。当前后续工作是阶段 F Influence
+热路径计数、重复校验移出和数据局部性优化，而不是直接扩大 64频全矩阵。
+
 ## 文档
 
-- [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～E 的入口、出口和验收命令；
+- [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～F 的入口、出口和验收命令；
 - [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)：可重复性能基准协议、命令和报告字段；
 - [`doc/BENCHMARK_RESULTS_C77FF60.md`](./doc/BENCHMARK_RESULTS_C77FF60.md)：首轮 16 频 direct/Munk 正式基准；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
