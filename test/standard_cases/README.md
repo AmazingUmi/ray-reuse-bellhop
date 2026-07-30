@@ -1,7 +1,8 @@
 # Bellhop 共享标准算例
 
 这里是原版 Bellhop、Bellhop_F2CPP 和 Bellhop_RayReuse 共用的标准测试入口。
-物理环境只定义一次；单频与多频是同一环境的不同 frequency profile。
+物理环境只定义一次；单频与多频是同一环境的不同 frequency profile。SHD
+格式读取和人工绘图入口见 [`../PlotRead/README.md`](../PlotRead/README.md)。
 
 ## 目录
 

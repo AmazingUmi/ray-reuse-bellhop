@@ -41,7 +41,7 @@ bellhop-shd plot \
   -o /tmp/munk.png
 ```
 
-Python 的 `--frequency-index` 从 **0** 开始；`--frequency` 按最接近的 Hz 值选择。详细格式和 API 见 [SHD 读取与绘图说明](doc/05-SHD结果读取与绘图.md)。
+Python 的 `--frequency-index` 从 **0** 开始；`--frequency` 按最接近的 Hz 值选择。完整安装、CLI、API、测试和项目边界见 [PlotRead 使用说明](test/PlotRead/README.md)。
 
 ## 回归测试
 

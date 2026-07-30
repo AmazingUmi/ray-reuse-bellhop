@@ -1,8 +1,11 @@
-# Bellhop F2CPP 实际构建计划
+# Bellhop F2CPP 构建与验收计划
 
 > 规划日期：2026-07-27  
 > 适用范围：`Bellhop_F2CPP` 的 M1（组件级单频）与 M2（端到端单频）  
-> 依据：项目 `doc/01`、`doc/02`、`doc/04`、原二维 Fortran 构建链和共享标准算例
+> 依据：仓库根目录的 [01 设计文档](../../doc/01-Bellhop源码分析与宽带复用设计.md)、
+> [02 实施待办](../../doc/02-项目实施待办.md)、
+> [04 数值规范](../../doc/04-基础变量单位与数值规范.md)、原二维 Fortran
+> 构建链和共享标准算例
 
 ## 1. 目标与完成边界
 
@@ -22,7 +25,8 @@
 6. 逐频走时、吸收、反射幅相、active 状态和压力不写回 `RayPath`；
 7. 六个共享单频算例均能由统一测试入口运行，并按复压力而不是只按 TL
    通过 Fortran oracle 对比；
-8. 输出 SHD 可由 `test/PlotRead/bellhop_io_py/` 读取；
+8. 输出 SHD 可由
+   [`test/PlotRead/bellhop_io_py/`](../../test/PlotRead/README.md) 读取；
 9. 建立单线程耗时、峰值内存和 `RayPathCache` 大小基线；
 10. M2 验收点可作为以后复制/派生 `Bellhop_RayReuse` 的稳定快照。
 
@@ -39,10 +43,10 @@
 
 | 项目 | 当前状态 | 对构建的影响 |
 |---|---|---|
-| F2CPP 源码 | G0 与 M1 已完成，含 C-linear SSP、Step、GeometryTracer、平边界反射和冻结轨迹缓存 | 下一步进入 M2 逐频投影 |
-| Fortran oracle | 已有可重现构建链、ray schema v2 和 Cartesian Cerveny Influence schema v1 | O1-01 最终场冻结与 O1-05 计时仍待完成 |
+| F2CPP 源码 | G0、M1、M2 已完成，含完整单频链、冻结轨迹缓存和 R-15 摊销门 | 已形成允许派生 RayReuse 的最终快照 |
+| Fortran oracle | 已有六例单频最终场、可重现构建链、ray schema v2 和 Cartesian Cerveny Influence schema v1 | 继续作为派生后的独立数值 oracle |
 | 标准算例 | 六个环境、统一 runner、单频/宽带 profiles 已建立 | F2CPP adapter 已启用并通过六例 single profile |
-| 结果比较 | 已有复压力和 TL 比较器 | 端到端容差仍是暂定值 |
+| 结果比较 | 已有复压力和 TL 比较器，六例均通过 | 派生后沿用同一比较入口 |
 | C++ 编译器 | Apple Clang 21，支持 C++20 | 可直接使用 |
 | Fortran 编译器 | Homebrew GCC/gfortran 14.2 | 可继续生成 oracle |
 | CMake | 4.0.2，CTest 同版本 | Debug/Release 已验证 |
@@ -107,6 +111,11 @@ Bellhop_F2CPP/
 │   ├── component/
 │   ├── regression/
 │   └── support/
+├── doc/
+│   ├── README.md
+│   ├── USAGE.md
+│   ├── BUILD_PLAN.md
+│   └── DERIVATION_MANIFEST.md
 └── README.md
 ```
 
@@ -135,7 +144,7 @@ bellhop_f2cpp_tests    仓内轻量测试程序，可按需要拆分
 
 | ID | 状态 | 任务 | 交付物与验收 | 依赖 |
 |---|---|---|---|---|
-| G0-01 | DONE | 确认 D-01～D-06 和 CLI | 决策写回 `doc/04`，CLI 写入 F2CPP README | 无 |
+| G0-01 | DONE | 确认 D-01～D-06 和 CLI | 决策写回仓库根 `doc/04`，CLI 写入 F2CPP README | 无 |
 | G0-02 | DONE | 安装 CMake | CMake/CTest 4.0.2 可用 | 用户已安装 |
 | G0-03 | DONE | 建立 CMake/C++20 骨架 | Debug/Release 可配置；生成三个固定目标；空 CLI 可运行 | G0-02 |
 | G0-04 | DONE | 建立编译质量门 | Clang 高警告；Debug 启用 ASan/UBSan；禁止 fast-math | G0-03 |
@@ -157,11 +166,11 @@ SHD 布局。
 
 | ID | 状态 | 任务 | 交付物与验收 | 依赖 |
 |---|---|---|---|---|
-| O1-01 | TODO | 冻结六个单频 oracle | 每例保存指定接收点复压力、幅值、包裹相位、TL 和编译元数据 | 无 |
+| O1-01 | DONE | 冻结六个单频 oracle | 六例 PRT/SHD 已由统一结果目录保存并用于完整复压力、幅值、相位和 TL 比较 | 无 |
 | O1-02 | DONE | 导出逐步状态 | 可选导出 `x/t/p/q/c/tau`、实际步长、求积权重和终止原因 | 无 |
 | O1-03 | DONE | 导出反射状态 | schema v2 独立导出前/后点、边界类别、切法向、慢度、动态量和原始复反射系数 | O1-02 |
 | O1-04 | DONE | 导出单射线 Influence | 独立 schema v1 导出 epsilon、插值 q/gamma、KMAH、图像窗口/贡献、复根常数及 complex64 累加增量 | O1-02 |
-| O1-05 | DOING | 分阶段计时 | F2CPP PRT/manifest 已分别记录 Trace、Project、Influence、Scale、SHD 和峰值内存；Fortran 仍只有总 CPU 时间 | 无 |
+| O1-05 | DONE | 分阶段计时 | F2CPP PRT/manifest 已分别记录 Trace、Project、Influence、Scale、SHD 和峰值内存；R-15 下 Fortran 总 CPU 时间保留为诊断基线 | 无 |
 | O1-06 | DONE | 冻结诊断 schema | 已建立兼容 v1 的 ray schema v2、Influence schema v1、CSV/JSON manifest 和独立校验器 | O1-02 |
 
 注意：原版会在 `Amp < 0.005` 时提前终止轨迹，而 F2CPP 的几何追踪必须与
@@ -203,7 +212,8 @@ M1 出口条件：
 - `RayPathCache` 离开追踪器后仍独立保有全部状态；
 - 冻结缓存的结构与事件逐字段校验已通过；投影器完成后在 M2 再执行投影
   前后哈希检查；
-- 组件误差使用 `doc/04` 第 9 节暂定容差，任何放宽必须记录最大误差位置。
+- 组件误差使用仓库根 [数值规范](../../doc/04-基础变量单位与数值规范.md)
+  第 9 节暂定容差，任何放宽必须记录最大误差位置。
 
 `constant_speed_direct` 的 alpha=150 已完成 C++/Fortran 全轨迹逐字段对照：
 512 个点、511 个积分步，覆盖 position/slowness、dynamic p/q、声速、实走时、
@@ -247,8 +257,8 @@ oracle 容差未放宽。M1-07～M1-10 全部关闭。
 | M2-11 | DONE | 启用标准算例 adapter | `f2cpp` 已可走 generate/run/validate/test；六例定义未复制或修改 | M2-09、M2-10 |
 | M2-12 | DONE | 六例递增回归 | 六例完整复压力与 TL 均通过 `abs+rel` 和 `1e-3 dB` 阈值 | M2-01～M2-11 |
 | M2-13 | DONE | sanitizer/异常路径回归 | 六类物理路径缩小版完整求解与异常终止拒绝已在 Debug ASan/UBSan 下通过 | M2-12 |
-| M2-14 | DOING | Release 性能与内存基线 | 分阶段计时、轨迹点数、缓存字节和峰值 RSS 已固定；Munk 达标，其他五例仍未关闭严格跨实现性能门 | M2-12、O1-05 |
-| M2-15 | DOING | M2 快照与派生清单 | 候选清单已固定构建命令、测试证据、接口分组和源码树校验值；待 M2-14 关闭后升级为最终派生批准 | M2-13、M2-14 |
+| M2-14 | DONE | Release 性能与内存基线 | R-15 保留完整缓存；六例 16 频 trace-once 模型相对重复 F2CPP 节省 `1.58%～55.84%`，分阶段时间、缓存和峰值 RSS 已固定 | M2-12、O1-05 |
+| M2-15 | DONE | M2 快照与派生清单 | 已固定构建命令、测试证据、接口分组、性能门和源码树校验值，批准派生 RayReuse | M2-13、M2-14 |
 
 六个单频算例按故障隔离顺序推进：
 
@@ -273,8 +283,9 @@ M2 出口条件：
 - SHD 只要求 header、坐标轴和复压力语义一致，不要求文件逐字节相同；
 - 每个失败报告最大误差的接收点、复数绝对/相对误差、幅值误差和包裹相位差；
 - Debug sanitizer 全部通过；
-- Release 单线程核心相对优化 Fortran 不慢于 20%，若未通过则先分析
-  Trace/Projector/Influence/SHD 分项，不带性能债进入 RayReuse 派生；
+- Release 分别记录 Trace/Project/Influence/Scale/SHD；按 R-15，
+  16 频 trace-once 模型的六例节省率均不得低于 1%，单频 Fortran 比值只作
+  诊断；
 - 完整 `RayPathCache` 可在追踪器销毁后独立驱动投影和声场计算；
 - 投影、Influence 和写出前后，缓存保持只读且逐频量没有污染轨迹。
 
@@ -395,7 +406,7 @@ performance
 3. 至少有解析解或 Fortran oracle 之一作为独立对照；
 4. Debug 警告干净，相关 sanitizer 测试通过；
 5. 错误报告包含输入、容差、最大误差和位置；
-6. 新增变量、单位、索引或容差已同步 `doc/04`；
+6. 新增变量、单位、索引或容差已同步仓库根 `doc/04`；
 7. 用户可从 README 中找到构建、运行和复现实验命令；
 8. 没有把不支持模式静默近似为已支持模式。
 
@@ -437,8 +448,6 @@ Project+Influence 约为 `2.24 s`，三轮分项总计中位数为 `2.300 s`，
 `3.64 GB` 降至约 `1.23 GB`；实测峰值 RSS 为 `1,321,304,064 B`。
 Munk 缓存估算为 `62,718,712 B`，实测峰值 RSS 为 `66,125,824 B`。
 
-下一组任务按依赖顺序为：
-
-1. 决定 M2-14 是保留严格 Fortran 总时间门并重构完整缓存，还是采用
-   能反映 RayReuse 缓存收益的性能门；
-2. M2-14 关闭后，将 M2-15 候选派生清单升级为最终快照。
+R-15 已确认保留完整冻结缓存。16 频 trace-once 摊销门六例全部通过，
+M2-14/M2-15 已关闭。F2CPP 的下一步不再增加多频运行模式，而是按派生
+清单建立独立 `Bellhop_RayReuse/`，从 P8 单频与宽带非复用基线开始。

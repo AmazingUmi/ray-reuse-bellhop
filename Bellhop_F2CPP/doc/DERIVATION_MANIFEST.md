@@ -1,15 +1,15 @@
-# Bellhop F2CPP 派生清单
+# Bellhop F2CPP 最终派生清单
 
-> 候选快照日期：2026-07-27  
-> 状态：M2-12/M2-13 已通过；M2-14 性能门尚未全部关闭，因此本清单可用于
-> 审计和准备 RayReuse 派生，但不是最终“允许派生”标记。
+> 最终快照日期：2026-07-29
+> 状态：M2-12～M2-15 已通过；R-15 性能门保留完整冻结缓存并按 16 频
+> trace-once 摊销收益验收。本清单是正式“允许派生 RayReuse”标记。
 
 ## 1. 可追溯身份
 
 | 项目 | 值 |
 |---|---|
 | Git 基线提交 | `ce2b8f7cb2f78cb8f703ce03fd121ad69b02375a` |
-| F2CPP 源码树 SHA-256 | `3dc22f1b1b17b1dede0cab0710d9af15f3cddce033bec8d692b0c729747e1f56` |
+| F2CPP 源码树 SHA-256 | `d0916a0b4dfe67d90b67e20f3ca47221de5a410b367960ada0d8c1d16c781c79` |
 | CMake | `4.0.2` |
 | C++ 编译器 | Apple Clang `21.0.0`，arm64 |
 | Fortran 编译器 | GNU Fortran `14.2.0_1` |
@@ -18,14 +18,15 @@
 | 数学模式 | 单线程、禁止 fast-math、内部 binary64/complex128 |
 
 当前 F2CPP 文件尚位于未提交工作区；因此 Git 提交只表示项目基线，源码树
-SHA-256 才表示本候选快照的精确 F2CPP 内容。校验和不含 `build/`、本文件、
-README 和 BUILD_PLAN，可用下列命令重算：
+SHA-256 才表示本最终快照的精确 F2CPP 内容。校验和不含 `build/`、`doc/`
+和根 `README.md`，可用下列命令重算：
 
 ```bash
 cd Bellhop_F2CPP
 {
   find CMakeLists.txt CMakePresets.json app cmake include src tests \
-    -type f -print | LC_ALL=C sort | xargs shasum -a 256
+    -type f ! -path '*/__pycache__/*' ! -name '*.pyc' -print |
+    LC_ALL=C sort | xargs shasum -a 256
 } | shasum -a 256
 ```
 
@@ -48,17 +49,25 @@ python3 -m unittest discover \
 python3 test/standard_cases/codes/standard_cases.py test \
   --version f2cpp --case all --profile single \
   --executable Bellhop_F2CPP/build/release/bellhop_f2cpp
+
+cd Bellhop_F2CPP
+python3 tests/tools/test_evaluate_amortized_performance.py
+python3 tests/tools/evaluate_amortized_performance.py \
+  --frequency-count 16 --minimum-savings-percent 1 \
+  ../test/standard_cases/results/f2cpp/*/single/f000_*/*.prt
 ```
 
 Python 标准算例工具要求 Python 3.11 或更高版本。
 
-本候选状态的结果为：
+本最终状态的结果为：
 
 - Debug ASan/UBSan：20/20 CTest；
 - Release：20/20 CTest；
 - 标准算例 Python：21/21；
 - 六例 F2CPP PRT/SHD 结构校验：6/6；
-- 六例相对 Fortran 的完整复压力/TL 比较：6/6。
+- 六例相对 Fortran 的完整复压力/TL 比较：6/6；
+- 摊销性能工具单元测试：3/3；
+- R-15 六例 16 频 trace-once 门：6/6。
 
 ## 3. 六例数值证据
 
@@ -133,9 +142,9 @@ tests/support/
 `tests/tools/geometry_oracle_probe.cpp` 和 `Bellhop_origin` 诊断仍由共同项目
 测试入口使用，不应成为 RayReuse 运行时依赖。
 
-## 6. 尚未关闭的派生门
+## 6. 已关闭的性能与派生门
 
-M2-14 当前数据：
+单频 Fortran 对比继续作为诊断数据：
 
 | 算例 | Fortran CPU / s | F2CPP 分项总计 / s | 比值 |
 |---|---:|---:|---:|
@@ -152,6 +161,29 @@ RSS `1,321,304,064 B`。Munk 报告缓存量 `62,718,712 B`，峰值 RSS
 
 表中 F2CPP 数值为同一 Release 二进制三轮运行的分项总计中位数。无损和
 空间均匀投影快路径、零 taper 复指数短路、独立 Project/Influence 计时均已
-纳入。Munk 已满足性能门；其他用例仍受完整轨迹缓存和通用 binary64 积分
-状态成本影响，尚未达到“相对 Fortran 不慢于 20%”。在明确接受新性能门或
-完成缓存布局/算法重构前，不应把本候选清单升级为最终 RayReuse 派生批准。
+纳入。除 Munk 外的单频比值包含完整轨迹缓存成本，按 R-15 不再作为
+M2 阻断门。
+
+R-15 使用：
+
+```text
+T_repeat(16) = 16 × (T_trace + T_freq)
+T_reuse(16)  = T_trace + 16 × T_freq
+T_freq       = T_project + T_influence + T_scale + T_shd
+```
+
+2026-07-29 串行专用运行的结果为：
+
+| 算例 | 重复 F2CPP / s | trace-once / s | 摊销 / s·频点⁻¹ | 节省率 |
+|---|---:|---:|---:|---:|
+| direct | `0.578` | `0.343` | `0.021` | `40.73%` |
+| vacuum/rigid | `17.908` | `13.569` | `0.848` | `24.23%` |
+| acoustic bottom | `9.578` | `4.882` | `0.305` | `49.03%` |
+| 5 kHz lossless | `29.425` | `12.993` | `0.812` | `55.84%` |
+| 5 kHz Thorp | `30.140` | `14.533` | `0.908` | `51.78%` |
+| Munk | `36.517` | `35.941` | `2.246` | `1.58%` |
+
+六例均超过 `1%` 门槛。该模型不声称 F2CPP 已实现多频运行；它关闭的是
+“完整冻结缓存是否具有可量化摊销价值”的派生门。实际宽带非复用、串行
+复用和并行性能必须在独立 RayReuse 工程继续实测。M2-14/M2-15 至此关闭，
+允许按第 4、5 节清单派生。

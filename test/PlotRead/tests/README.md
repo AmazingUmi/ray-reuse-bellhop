@@ -1,5 +1,8 @@
 # PlotRead 回归测试
 
+PlotRead 的安装、CLI、Python API 和仓库关系见
+[`../README.md`](../README.md)。
+
 测试按职责拆分：
 
 - `test_binary_reader.py`：二进制 SHD 头、坐标、复压力、多频选择、字节序和异常文件；
