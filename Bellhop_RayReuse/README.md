@@ -43,6 +43,17 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
   --executable Bellhop_RayReuse/build/release/bellhop_rayreuse
 ```
 
+提交前的完整质量门可从仓库根目录一次运行：
+
+```bash
+RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
+```
+
+该入口依次执行 Debug ASan/UBSan、Release、两套 CTest、Conda `py` 的标准
+算例工具测试、F2CPP 源码/生成构建元数据/动态链接独立性扫描，以及无 F2CPP
+目录的 Release 隔离构建。GitHub Actions 使用固定的 Python 3.12.9 和
+NumPy 2.2.6 调用同一脚本；本地默认仍严格使用名为 `py` 的 Conda 环境。
+
 ## 运行入口
 
 单频兼容调用继续使用 `.env` 中的频率：

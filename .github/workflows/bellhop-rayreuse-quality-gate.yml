@@ -1,0 +1,58 @@
+name: Bellhop RayReuse quality gate
+
+on:
+  push:
+    paths:
+      - ".github/workflows/bellhop-rayreuse-quality-gate.yml"
+      - "Bellhop_RayReuse/**"
+      - "test/PlotRead/bellhop_io_py/**"
+      - "test/standard_cases/cases/**"
+      - "test/standard_cases/codes/**"
+  pull_request:
+    paths:
+      - ".github/workflows/bellhop-rayreuse-quality-gate.yml"
+      - "Bellhop_RayReuse/**"
+      - "test/PlotRead/bellhop_io_py/**"
+      - "test/standard_cases/cases/**"
+      - "test/standard_cases/codes/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rayreuse-quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  quality-gate:
+    name: Debug, Release, Python and independence
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12.9
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.9"
+
+      # CI mirrors the pinned Python/NumPy versions used by the local conda `py`
+      # environment without assuming that user-managed conda environment exists.
+      - name: Install pinned Python dependency
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check "numpy==2.2.6"
+
+      - name: Run the shared Bellhop RayReuse quality gate
+        env:
+          RAYREUSE_PYTHON_MODE: system
+          RAYREUSE_BUILD_JOBS: "3"
+        run: |
+          set -euo pipefail
+          bash Bellhop_RayReuse/scripts/quality_gate.sh

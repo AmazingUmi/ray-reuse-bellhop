@@ -14,6 +14,17 @@ conda run -n py python --version
 截至 2026-07-30，A～E 均已按顺序实施并关闭出口；本文保留各阶段门和复现
 命令，不以完成状态替代验收细节。
 
+里程碑后的统一质量门为：
+
+```bash
+RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
+```
+
+脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
+Release、独立性扫描和无 F2CPP 隔离副本构建。CI 通过
+`RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
+门，避免本地与云端验收逻辑分叉。
+
 ## 阶段 A：独立派生工程
 
 ### 入口
