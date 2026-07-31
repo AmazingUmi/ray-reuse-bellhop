@@ -96,7 +96,10 @@ JSON 是本机构建产物，不进入 Git。
    tau、gamma 差值缓存：2频 wall 为 `7.6172 s`，相对本提交慢 `3.69%`，
    Influence 慢 `3.71%`；SHD 不变，已完整回滚。其本地 JSON SHA-256 为
    `6b32e3973b4b2283571ef02405e7a7aa8d5a59bf1941c89762ab8929c3023bb5`。
-3. 下一候选只审计 receiver-depth 循环边界和连续数据指针，不再增加
-   segment 复数差值局部量。
-4. 候选继续经过 2频 screen，不能稳定获益则立即回滚。
-5. 安全局部性候选收敛后运行 Munk 64频 reuse/p8/p10 精选矩阵。
+3. 已独立 screen receiver-depth 数量缓存、接收深度标量和压力连续数据
+   指针：2频 wall 为 `7.4455 s`，相对本提交慢 `1.35%`，Influence 慢
+   `1.20%`；SHD 不变，已完整回滚。其本地 JSON SHA-256 为
+   `767e820dea6852f9fe2dffdd92834f690b0092af3577f6afc67dc92f4d7f2828`。
+4. 下一候选独立 screen receiver depth tile，保持 depth 和压力累加顺序。
+5. 候选继续经过 2频 screen，不能稳定获益则立即回滚。
+6. 安全局部性候选收敛后运行 Munk 64频 reuse/p8/p10 精选矩阵。
