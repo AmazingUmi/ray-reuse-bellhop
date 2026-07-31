@@ -640,6 +640,10 @@ CartesianCervenyInfluence::accumulateImpl(
       receivers_.ranges();
   const std::vector<double>& receiverDepths =
       receivers_.depths();
+  const double seaSurfaceDepth =
+      environment_.seaSurface().depth();
+  const double seabedDepth =
+      environment_.seabed().depth();
   std::span<std::complex<double>> pressure =
       workspace.pressure();
   const std::size_t receiverRangeCount =
@@ -655,6 +659,10 @@ CartesianCervenyInfluence::accumulateImpl(
       ++statistics->segmentCandidates;
     }
     const std::size_t leftIndex = rightIndex - 1U;
+    const double rightAmplitude =
+        frequencyState.points[rightIndex].amplitude;
+    const double rightReflectionPhase =
+        frequencyState.points[rightIndex].reflectionPhase;
     const double leftRange =
         path.points[leftIndex].position.range;
     const double rightRange =
@@ -767,11 +775,9 @@ CartesianCervenyInfluence::accumulateImpl(
                            : CervenyImageKind::Bottom);
             images[imageIndex] = evaluateImage(
                 kind, receiverDepths[depthIndex], position.depth,
-                environment_.seaSurface().depth(),
-                environment_.seabed().depth(), angularFrequency,
+                seaSurfaceDepth, seabedDepth, angularFrequency,
                 beamWindowSquared, radiusMax, slowness, tau, gamma,
-                frequencyState.points[rightIndex].amplitude,
-                frequencyState.points[rightIndex].reflectionPhase);
+                rightAmplitude, rightReflectionPhase);
             if constexpr (CollectStatistics) {
               if (!images[imageIndex].windowPassed) {
                 ++statistics->windowRejections;
@@ -790,11 +796,9 @@ CartesianCervenyInfluence::accumulateImpl(
               evaluateImageContributions<
                   ImageCount, CollectStatistics>(
                   receiverDepths[depthIndex], position.depth,
-                  environment_.seaSurface().depth(),
-                  environment_.seabed().depth(), angularFrequency,
+                  seaSurfaceDepth, seabedDepth, angularFrequency,
                   beamWindowSquared, radiusMax, slowness, tau, gamma,
-                  frequencyState.points[rightIndex].amplitude,
-                  frequencyState.points[rightIndex].reflectionPhase,
+                  rightAmplitude, rightReflectionPhase,
                   statistics);
         }
         const std::complex<double> contribution =
@@ -826,10 +830,8 @@ CartesianCervenyInfluence::accumulateImpl(
             diagnostic->interpolatedPosition = position;
             diagnostic->interpolatedSlowness = slowness;
             diagnostic->interpolatedSoundSpeed = soundSpeed;
-            diagnostic->rightAmplitude =
-                frequencyState.points[rightIndex].amplitude;
-            diagnostic->rightPhase =
-                frequencyState.points[rightIndex].reflectionPhase;
+            diagnostic->rightAmplitude = rightAmplitude;
+            diagnostic->rightPhase = rightReflectionPhase;
             diagnostic->epsilonLeft = epsilon;
             diagnostic->pLeft = ray.p[leftIndex];
             diagnostic->pRight = ray.p[rightIndex];
