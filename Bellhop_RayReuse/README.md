@@ -115,9 +115,9 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 `7ce9c7d` 显式提升环境与 segment 只读标量。相对 F1 前，当前 2频 reuse
 累计下降 `63.51%`，16频 reuse/p8/p10 累计下降
 `68.75%/60.63%/61.61%`，SHD 逐字节一致。range-major、range-batch 和
-诊断模板专化、segment 端点差值缓存及 receiver-depth 数量/连续数据指针
-均因 2频回退而回滚。下一步独立 screen receiver depth tile；暂不扩大
-64频全矩阵。
+诊断模板专化、segment 端点差值缓存、receiver-depth 数量/连续数据指针
+及 64-depth receiver tile 均因 2频回退而回滚。安全局部性候选至此
+收敛，下一步运行 64频 reuse/p8/p10 精选矩阵，不运行未改变的 nonreuse。
 
 ## 文档
 

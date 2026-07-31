@@ -100,6 +100,8 @@ JSON 是本机构建产物，不进入 Git。
    指针：2频 wall 为 `7.4455 s`，相对本提交慢 `1.35%`，Influence 慢
    `1.20%`；SHD 不变，已完整回滚。其本地 JSON SHA-256 为
    `767e820dea6852f9fe2dffdd92834f690b0092af3577f6afc67dc92f4d7f2828`。
-4. 下一候选独立 screen receiver depth tile，保持 depth 和压力累加顺序。
-5. 候选继续经过 2频 screen，不能稳定获益则立即回滚。
-6. 安全局部性候选收敛后运行 Munk 64频 reuse/p8/p10 精选矩阵。
+4. 已独立 screen 64-depth receiver tile：2频 wall 为 `7.4892 s`，相对
+   本提交慢 `1.95%`，Influence 慢 `1.90%`；SHD 不变，已完整回滚。其本地
+   JSON SHA-256 为
+   `1198e96a59ddc02615f5dc0d8bf1373bd64f2f8ed68b0bc5c7dc54a2ffec4ac0`。
+5. 安全局部性候选至此收敛，下一步运行 Munk 64频 reuse/p8/p10 精选矩阵。
