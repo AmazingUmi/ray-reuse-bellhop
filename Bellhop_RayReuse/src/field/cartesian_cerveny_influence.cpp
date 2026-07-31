@@ -60,6 +60,25 @@ void requireFiniteComplex(std::complex<double> value,
       -magnitude * std::sin(phase.real())};
 }
 
+[[nodiscard]] double cervenyHermiteTaperUnchecked(
+    double offset, double fullValueRadius,
+    double zeroValueRadius) noexcept {
+  const double absoluteOffset = std::abs(offset);
+  if (absoluteOffset <= fullValueRadius) {
+    return 1.0;
+  }
+  if (absoluteOffset >= zeroValueRadius) {
+    return 0.0;
+  }
+  const double coordinate =
+      (absoluteOffset - fullValueRadius) /
+      (zeroValueRadius - fullValueRadius);
+  const double complement = 1.0 - coordinate;
+  const double complementSquared = complement * complement;
+  return (1.0 + 2.0 * coordinate) *
+         complementSquared;
+}
+
 [[nodiscard]] std::size_t fortranUpperRangeIndex(
     double range, const std::vector<double>& receivers,
     double rangeDelta) {
@@ -319,7 +338,7 @@ struct PrecomputedRayValues {
       -angularFrequency * gamma.imag() * deltaSquared;
   const bool windowPassed =
       windowMetric < beamWindowSquared;
-  const double taper = cervenyHermiteTaper(
+  const double taper = cervenyHermiteTaperUnchecked(
       deltaDepth, radiusMax, 2.0 * radiusMax);
   std::complex<double> exponential{};
   std::complex<double> contribution{};
@@ -391,7 +410,7 @@ template <bool CollectStatistics, CervenyImageKind Kind>
     return {};
   }
 
-  const double taper = cervenyHermiteTaper(
+  const double taper = cervenyHermiteTaperUnchecked(
       deltaDepth, radiusMax, 2.0 * radiusMax);
   if (taper == 0.0) {
     if constexpr (CollectStatistics) {
@@ -485,20 +504,8 @@ double cervenyHermiteTaper(double offset, double fullValueRadius,
         "Hermite radii must satisfy 0 <= full < zero");
   }
 
-  const double absoluteOffset = std::abs(offset);
-  if (absoluteOffset <= fullValueRadius) {
-    return 1.0;
-  }
-  if (absoluteOffset >= zeroValueRadius) {
-    return 0.0;
-  }
-  const double coordinate =
-      (absoluteOffset - fullValueRadius) /
-      (zeroValueRadius - fullValueRadius);
-  const double complement = 1.0 - coordinate;
-  const double complementSquared = complement * complement;
-  return (1.0 + 2.0 * coordinate) *
-         complementSquared;
+  return cervenyHermiteTaperUnchecked(
+      offset, fullValueRadius, zeroValueRadius);
 }
 
 void accumulateCartesianCervenyStatistics(
