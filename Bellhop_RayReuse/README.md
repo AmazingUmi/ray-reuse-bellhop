@@ -133,7 +133,9 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 及 64-depth receiver tile 均因 2频回退而回滚。安全局部性候选至此
 收敛。64频精选矩阵中 reuse/p8/p10 为
 `626.852/176.951/178.422 s`，p8/p10 相对 reuse 为 `3.543×/3.513×`，
-SHD 一致；当前保留 8 workers，下一步分离固定开销与调度负载分布。
+SHD 一致；64频保留 8 workers。紧预算与逐频诊断进一步确认固定开销不是
+主成本，升频 FIFO 已近似最长任务优先，加权队列没有收益依据；p10 的逐频
+总 CPU 时间比 p8 高约 `15%`，限制来自资源争用而非队列不均。
 
 ## 文档
 
@@ -148,6 +150,7 @@ SHD 一致；当前保留 8 workers，下一步分离固定开销与调度负载
 - [`doc/BENCHMARK_RESULTS_F1511B9.md`](./doc/BENCHMARK_RESULTS_F1511B9.md)：F2 末端有限性校验及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_7CE9C7D.md`](./doc/BENCHMARK_RESULTS_7CE9C7D.md)：F2 循环不变量提升及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_4F8B227.md`](./doc/BENCHMARK_RESULTS_4F8B227.md)：F2 紧预算算例的固定开销与 worker 梯度；
+- [`doc/BENCHMARK_RESULTS_23E36AA.md`](./doc/BENCHMARK_RESULTS_23E36AA.md)：F2 Munk 逐频任务分布与调度结论；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
