@@ -300,6 +300,13 @@ reuse/p8/p10 下降 `16.15%/14.98%/23.43%`，SHD 不变，完整质量门通过�
 reuse/p8/p10 下降 `15.99%/17.93%/9.15%`，SHD 不变。记录见
 [`BENCHMARK_RESULTS_F1511B9.md`](./BENCHMARK_RESULTS_F1511B9.md)。
 
+提交 `7ce9c7d` 将环境边界深度和当前 segment 右端幅度/相位显式提升出
+depth 热循环。AppleClang 21 在当前对象、span 与压力写入组合下未完成等价
+提升；局部标量使 2频相对 `f1511b9` 下降 `18.99%`，16频
+reuse/p8/p10 下降 `23.10%/14.05%/15.31%`。SHD 不变，完整质量门通过。
+记录见
+[`BENCHMARK_RESULTS_7CE9C7D.md`](./BENCHMARK_RESULTS_7CE9C7D.md)。
+
 ## 12. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：
