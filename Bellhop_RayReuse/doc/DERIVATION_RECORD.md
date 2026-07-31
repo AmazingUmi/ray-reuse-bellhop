@@ -307,6 +307,11 @@ reuse/p8/p10 下降 `23.10%/14.05%/15.31%`。SHD 不变，完整质量门通过�
 记录见
 [`BENCHMARK_RESULTS_7CE9C7D.md`](./BENCHMARK_RESULTS_7CE9C7D.md)。
 
+后续 segment 端点引用与 position/slowness/sound speed/q/tau/gamma 差值
+缓存使 2频 wall 回退 `3.69%`、Influence 回退 `3.71%`。这组额外局部对象
+和复数差值未降低有效加载成本，反而增加寄存器压力；SHD 不变，源码已回滚，
+未进入16频矩阵。
+
 ## 12. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：

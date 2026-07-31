@@ -92,7 +92,11 @@ JSON 是本机构建产物，不进入 Git。
 ## 下一步
 
 1. 以 `7ce9c7d` 作为新的 2/16频性能基线。
-2. 下一单变量候选显式缓存 segment 左右端状态，并预计算 position、slowness、
-   sound speed、q、tau、gamma 的端点差；不改变 range 插值公式的运算顺序。
-3. 候选继续经过 2频 screen，不能稳定获益则立即回滚。
-4. 安全局部性候选收敛后运行 Munk 64频 reuse/p8/p10 精选矩阵。
+2. 已 screen segment 左右端状态及 position、slowness、sound speed、q、
+   tau、gamma 差值缓存：2频 wall 为 `7.6172 s`，相对本提交慢 `3.69%`，
+   Influence 慢 `3.71%`；SHD 不变，已完整回滚。其本地 JSON SHA-256 为
+   `6b32e3973b4b2283571ef02405e7a7aa8d5a59bf1941c89762ab8929c3023bb5`。
+3. 下一候选只审计 receiver-depth 循环边界和连续数据指针，不再增加
+   segment 复数差值局部量。
+4. 候选继续经过 2频 screen，不能稳定获益则立即回滚。
+5. 安全局部性候选收敛后运行 Munk 64频 reuse/p8/p10 精选矩阵。

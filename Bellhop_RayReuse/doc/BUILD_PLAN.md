@@ -17,7 +17,8 @@ range-batch 换序因 2频回退而回滚；`eedc790` 的图像专化和 `fe6b33
 Hermite 内部快路径、Release 末端有限性校验和 `7ce9c7d` 的只读循环
 不变量提升均已保留。相对 F1 前，Munk 2频 reuse 累计下降 `63.51%`，
 16频 reuse/p8/p10 累计下降 `68.75%/60.63%/61.61%`，SHD 逐字节一致。
-当前继续 F2 的 segment 端点与插值差值缓存。详见
+segment 端点与插值差值缓存因 2频回退已回滚；当前继续 F2 的
+receiver-depth 循环边界与连续数据指针审计。详见
 [`BENCHMARK_RESULTS_7CE9C7D.md`](./BENCHMARK_RESULTS_7CE9C7D.md)。
 
 里程碑后的统一质量门为：
@@ -333,8 +334,9 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 7. [x] Release 有限性检查所有权：公共 API/Debug/诊断保留，solver 收敛到
    每频末端完整场扫描，提交 `f1511b9`；
 8. [x] 环境边界深度与右端频率状态显式提升，提交 `7ce9c7d`；
-9. [ ] screen segment 左右端状态与插值差值缓存；
-10. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
+9. [x] segment 左右端状态与插值差值缓存：2频慢 `3.69%`，已回滚；
+10. [ ] screen receiver-depth 循环边界与连续数据指针；
+11. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
    receiver/ray 调度重构。
 
 #### F2 当前状态（2026-07-31）
