@@ -101,6 +101,7 @@ CommandLineOptions parseCommandLine(
   bool executionModeSpecified = false;
   bool verifyCacheSpecified = false;
   bool profileInfluenceSpecified = false;
+  bool profileFrequencyTasksSpecified = false;
   bool workerCountSpecified = false;
   bool outputQueueCapacitySpecified = false;
   bool memoryBudgetSpecified = false;
@@ -163,6 +164,15 @@ CommandLineOptions parseCommandLine(
       }
       options.profileInfluence = true;
       profileInfluenceSpecified = true;
+      continue;
+    }
+    if (argument == "--profile-frequency-tasks") {
+      if (profileFrequencyTasksSpecified) {
+        throw ValidationError(
+            "--profile-frequency-tasks may be specified only once");
+      }
+      options.profileFrequencyTasks = true;
+      profileFrequencyTasksSpecified = true;
       continue;
     }
     if (argument == "--workers") {
@@ -234,6 +244,12 @@ CommandLineOptions parseCommandLine(
     throw ValidationError(
         "--workers, --output-queue-capacity, and "
         "--memory-budget-mib require --execution-mode parallel");
+  }
+  if (profileFrequencyTasksSpecified &&
+      options.executionMode != BroadbandExecutionMode::Parallel) {
+    throw ValidationError(
+        "--profile-frequency-tasks requires --execution-mode "
+        "parallel");
   }
   return options;
 }

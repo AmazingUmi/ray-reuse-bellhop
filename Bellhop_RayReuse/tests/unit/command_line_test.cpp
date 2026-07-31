@@ -38,6 +38,9 @@ void testSingleFrequencyCompatibility(Context& context) {
   context.check(
       !options.profileInfluence,
       "Influence profiling is disabled by default");
+  context.check(
+      !options.profileFrequencyTasks,
+      "frequency-task profiling is disabled by default");
 }
 
 void testExecutionMode(Context& context) {
@@ -55,12 +58,12 @@ void testExecutionMode(Context& context) {
   context.check(
       options.profileInfluence,
       "Influence profiling is selected explicitly");
-
   const CommandLineOptions parallel =
       parse(
           {"root", "--execution-mode", "parallel",
            "--workers", "8", "--output-queue-capacity", "2",
-           "--memory-budget-mib", "4096"});
+           "--memory-budget-mib", "4096",
+           "--profile-frequency-tasks"});
   context.check(
       parallel.executionMode == BroadbandExecutionMode::Parallel,
       "parallel execution mode is selected explicitly");
@@ -73,6 +76,9 @@ void testExecutionMode(Context& context) {
   context.check(
       parallel.memoryBudgetMiB == 4096U,
       "parallel memory budget is parsed");
+  context.check(
+      parallel.profileFrequencyTasks,
+      "frequency-task profiling is selected explicitly");
 }
 
 void testFrequencyOverride(Context& context) {
@@ -160,6 +166,21 @@ void testInvalidArguments(Context& context) {
                  "--profile-influence"}));
       },
       "duplicate Influence profiling option is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(
+            parse(
+                {"root", "--execution-mode", "parallel",
+                 "--profile-frequency-tasks",
+                 "--profile-frequency-tasks"}));
+      },
+      "duplicate frequency-task profiling option is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(
+            parse({"root", "--profile-frequency-tasks"}));
+      },
+      "frequency-task profiling requires parallel mode");
 }
 
 void testHelp(Context& context) {

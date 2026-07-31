@@ -23,6 +23,7 @@ struct CommandLineOptions {
       BroadbandExecutionMode::NonReuse};
   bool verifyCache{};
   bool profileInfluence{};
+  bool profileFrequencyTasks{};
   std::size_t workerCount{};
   std::size_t outputQueueCapacity{2U};
   std::size_t memoryBudgetMiB{};

@@ -327,6 +327,40 @@ def parse_prt_metrics(
             metrics[result_name] = _parse_nonnegative_integer(
                 fields[prt_name], prt_name
             )
+    if "frequency task count" in fields:
+        task_count = _parse_nonnegative_integer(
+            fields["frequency task count"], "frequency task count"
+        )
+        frequency_tasks = []
+        for index in range(task_count):
+            prefix = f"frequency task {index} "
+            task_fields = {
+                "frequency_hz": "frequency Hz",
+                "project_seconds": "Project seconds",
+                "influence_seconds": "Influence seconds",
+                "scale_seconds": "Scale seconds",
+                "total_seconds": "total seconds",
+            }
+            missing_task_fields = tuple(
+                prefix + prt_name
+                for prt_name in task_fields.values()
+                if prefix + prt_name not in fields
+            )
+            if missing_task_fields:
+                raise ValueError(
+                    "missing frequency-task PRT field(s): "
+                    + ", ".join(missing_task_fields)
+                )
+            frequency_tasks.append(
+                {
+                    result_name: _parse_nonnegative_float(
+                        fields[prefix + prt_name],
+                        prefix + prt_name,
+                    )
+                    for result_name, prt_name in task_fields.items()
+                }
+            )
+        metrics["frequency_tasks"] = frequency_tasks
     metrics["completed_successfully"] = (
         "Bellhop RayReuse completed successfully" in contents.splitlines()
     )
@@ -337,6 +371,7 @@ def validate_prt_metrics(
     metrics: dict[str, Any],
     configuration: BenchmarkConfiguration,
     frequency_count: int,
+    expect_frequency_tasks: bool = False,
 ) -> None:
     if frequency_count < 2:
         raise ValueError("broadband PRT validation requires two frequencies")
@@ -395,6 +430,22 @@ def validate_prt_metrics(
         raise ValueError(
             "PRT is missing mode-specific metric(s): "
             + ", ".join(missing)
+        )
+    frequency_tasks = metrics.get("frequency_tasks")
+    if expect_frequency_tasks:
+        if configuration.execution_mode != "parallel":
+            raise ValueError(
+                "frequency-task profiling requires parallel mode"
+            )
+        if frequency_tasks is None:
+            raise ValueError("PRT frequency-task timings are missing")
+        if len(frequency_tasks) != frequency_count:
+            raise ValueError(
+                "PRT frequency-task timing count does not match request"
+            )
+    elif frequency_tasks is not None:
+        raise ValueError(
+            "unexpected PRT frequency-task timings without profiling"
         )
 
     if configuration.execution_mode != "parallel":
@@ -690,6 +741,7 @@ def _sample_command(
     file_root: str,
     frequencies: Sequence[float],
     configuration: BenchmarkConfiguration,
+    profile_frequency_tasks: bool = False,
 ) -> list[str]:
     command = [
         str(executable),
@@ -716,6 +768,8 @@ def _sample_command(
                     str(configuration.memory_budget_mib),
                 )
             )
+        if profile_frequency_tasks:
+            command.append("--profile-frequency-tasks")
     return command
 
 
@@ -728,6 +782,7 @@ def run_internal_sample(request_path: Path) -> int:
         "shade_path",
         "configuration",
         "frequency_count",
+        "profile_frequency_tasks",
         "sample_output",
     }
     missing = required - set(request)
@@ -772,6 +827,7 @@ def run_internal_sample(request_path: Path) -> int:
         prt_metrics,
         configuration,
         int(request["frequency_count"]),
+        bool(request["profile_frequency_tasks"]),
     )
     rss_system = platform.system()
     sample = {
@@ -799,6 +855,7 @@ def _run_isolated_sample(
     run_directory: Path,
     sample_kind: str,
     sample_index: int,
+    profile_frequency_tasks: bool,
 ) -> dict[str, Any]:
     run_directory.mkdir(parents=True)
     file_root = "rayreuse_benchmark"
@@ -818,13 +875,15 @@ def _run_isolated_sample(
     sample_output = run_directory / "sample_result.json"
     request = {
         "command": _sample_command(
-            executable, file_root, frequencies, configuration
+            executable, file_root, frequencies, configuration,
+            profile_frequency_tasks,
         ),
         "working_directory": str(run_directory),
         "print_path": str(print_path),
         "shade_path": str(shade_path),
         "configuration": asdict(configuration),
         "frequency_count": len(frequencies),
+        "profile_frequency_tasks": profile_frequency_tasks,
         "sample_output": str(sample_output),
     }
     request_path.write_text(
@@ -880,6 +939,7 @@ def benchmark_case(
     executable: Path,
     temporary_root: Path,
     require_cross_mode_identity: bool,
+    profile_frequency_tasks: bool,
 ) -> dict[str, Any]:
     if profile_name not in definition.profiles:
         raise ValueError(
@@ -960,6 +1020,7 @@ def benchmark_case(
                     ),
                     sample_kind=sample_kind,
                     sample_index=sample_index,
+                    profile_frequency_tasks=profile_frequency_tasks,
                 )
                 target = (
                     result["warmups"]
@@ -1053,6 +1114,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=positive_integer,
     )
     parser.add_argument(
+        "--profile-frequency-tasks",
+        action="store_true",
+        help=(
+            "record per-frequency Project/Influence/Scale timings; "
+            "requires parallel-only modes"
+        ),
+    )
+    parser.add_argument(
         "--executable",
         type=Path,
         default=DEFAULT_EXECUTABLE,
@@ -1137,6 +1206,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.output_queue_capacity,
             args.memory_budget_mib,
         )
+        if args.profile_frequency_tasks and any(
+            configuration.execution_mode != "parallel"
+            for configuration in configurations
+        ):
+            raise ValueError(
+                "--profile-frequency-tasks requires --modes parallel"
+            )
 
         temporary_parent = Path(
             tempfile.mkdtemp(
@@ -1156,6 +1232,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     require_cross_mode_identity=(
                         not args.no_cross_mode_shd_check
                     ),
+                    profile_frequency_tasks=args.profile_frequency_tasks,
                 )
                 for definition in selected_cases
             ]
@@ -1185,6 +1262,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "cross_mode_shd_identity_required": (
                     not args.no_cross_mode_shd_check
                 ),
+                "profile_frequency_tasks": args.profile_frequency_tasks,
             },
             "cases": cases,
         }

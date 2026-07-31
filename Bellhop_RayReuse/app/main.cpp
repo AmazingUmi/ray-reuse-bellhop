@@ -30,6 +30,7 @@ void printUsage(std::ostream& stream) {
             "[--frequencies-hz <f0,f1,...>] "
             "[--execution-mode <nonreuse|reuse|parallel>] "
             "[--verify-cache] [--profile-influence] "
+            "[--profile-frequency-tasks] "
             "[--workers <count>] "
             "[--output-queue-capacity <count>] "
             "[--memory-budget-mib <MiB>]\n"
@@ -47,6 +48,9 @@ void printUsage(std::ostream& stream) {
             "and after projection and is intended for validation.\n"
          << "--profile-influence records detailed Influence work counts "
             "and sub-phase timings; it is disabled by default.\n"
+         << "--profile-frequency-tasks writes existing per-frequency "
+            "Project/Influence/Scale timings for parallel reuse; it is "
+            "disabled by default.\n"
          << "Parallel tuning options require --execution-mode parallel; "
             "worker count defaults to hardware concurrency, the output "
             "queue defaults to 2, and a zero/unset memory budget means "
@@ -176,6 +180,36 @@ void writeInfluenceStatistics(
       << statistics.precomputeSeconds << '\n'
       << "Influence hot loop seconds = "
       << statistics.hotLoopSeconds << '\n';
+}
+
+void writeFrequencyTaskTimings(
+    std::ostream& stream,
+    const rayreuse::FrequencyGrid& frequencies,
+    const std::vector<rayreuse::SingleFrequencyTimings>& timings) {
+  if (timings.size() != frequencies.size()) {
+    throw rayreuse::ValidationError(
+        "frequency-task timing count must match frequency count");
+  }
+  stream << "frequency task count = " << timings.size() << '\n';
+  for (std::size_t index = 0U; index < timings.size(); ++index) {
+    const rayreuse::SingleFrequencyTimings& timing =
+        timings[index];
+    const double totalSeconds =
+        timing.projectSeconds +
+        timing.influenceSeconds +
+        timing.scaleSeconds;
+    stream
+        << "frequency task " << index << " frequency Hz = "
+        << frequencies.values()[index] << '\n'
+        << "frequency task " << index << " Project seconds = "
+        << timing.projectSeconds << '\n'
+        << "frequency task " << index << " Influence seconds = "
+        << timing.influenceSeconds << '\n'
+        << "frequency task " << index << " Scale seconds = "
+        << timing.scaleSeconds << '\n'
+        << "frequency task " << index << " total seconds = "
+        << totalSeconds << '\n';
+  }
 }
 
 [[nodiscard]] std::size_t resolvedWorkerCount(
@@ -501,6 +535,11 @@ int main(int argumentCount, char* arguments[]) {
       if (options.profileInfluence) {
         writeInfluenceStatistics(
             printLog, statistics.phaseTotals.influenceStatistics);
+      }
+      if (options.profileFrequencyTasks) {
+        writeFrequencyTaskTimings(
+            printLog, parsed.simulationCase.frequencies(),
+            statistics.frequencyTimings);
       }
     }
 

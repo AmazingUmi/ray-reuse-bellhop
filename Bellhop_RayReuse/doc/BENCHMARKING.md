@@ -39,6 +39,25 @@ conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
 开发中的非正式烟测可显式增加 `--allow-dirty`。报告会保留
 `git.dirty = true`，此类结果不得作为发布性能记录。
 
+需要诊断 parallel 逐频任务分布时，将模式限制为 parallel 并增加
+`--profile-frequency-tasks`。runner 会把每个频率已有的
+Project/Influence/Scale/total 计时保存到样本 JSON；该开关默认关闭：
+
+```bash
+conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
+  --case munk_cerveny_cc \
+  --profile broadband_regression \
+  --modes parallel \
+  --parallel-workers 8,10 \
+  --queue 2 \
+  --memory-budget-mib 2048 \
+  --profile-frequency-tasks \
+  --warmups 1 \
+  --repeats 3 \
+  --executable Bellhop_RayReuse/build/release/bellhop_rayreuse \
+  --output Bellhop_RayReuse/build/benchmarks/frequency_tasks.json
+```
+
 ## 分级运行策略
 
 不要在每次修改后运行包含 nonreuse 的五轮 Munk 全矩阵。按用途分三级：

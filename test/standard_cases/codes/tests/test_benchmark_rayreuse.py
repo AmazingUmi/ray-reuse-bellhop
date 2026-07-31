@@ -116,6 +116,49 @@ class PrtParsingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "worker count"):
             validate_prt_metrics(invalid, configuration, 10)
 
+    def test_parses_and_validates_frequency_task_timings(self) -> None:
+        task_lines = "\n".join(
+            (
+                "frequency task count = 2",
+                "frequency task 0 frequency Hz = 50",
+                "frequency task 0 Project seconds = 0.1",
+                "frequency task 0 Influence seconds = 1.2",
+                "frequency task 0 Scale seconds = 0.03",
+                "frequency task 0 total seconds = 1.33",
+                "frequency task 1 frequency Hz = 250",
+                "frequency task 1 Project seconds = 0.2",
+                "frequency task 1 Influence seconds = 2.4",
+                "frequency task 1 Scale seconds = 0.04",
+                "frequency task 1 total seconds = 2.64",
+            )
+        )
+        metrics = parse_prt_metrics(
+            fixture_prt().replace(
+                "active frequency limit = 6",
+                "active frequency limit = 2",
+            )
+            + "\n"
+            + task_lines,
+            "parallel",
+        )
+        configuration = BenchmarkConfiguration(
+            execution_mode="parallel",
+            parallel_workers=8,
+            output_queue_capacity=2,
+            memory_budget_mib=None,
+        )
+
+        validate_prt_metrics(
+            metrics, configuration, 2, expect_frequency_tasks=True
+        )
+        self.assertEqual(len(metrics["frequency_tasks"]), 2)
+        self.assertEqual(
+            metrics["frequency_tasks"][1]["frequency_hz"], 250.0
+        )
+        self.assertEqual(
+            metrics["frequency_tasks"][1]["total_seconds"], 2.64
+        )
+
     def test_rejects_missing_completion_and_wrong_trace_count(self) -> None:
         configuration = BenchmarkConfiguration(
             execution_mode="parallel",
@@ -326,6 +369,7 @@ class CliValidationTests(unittest.TestCase):
                 "1",
                 "--memory-budget-mib",
                 "447",
+                "--profile-frequency-tasks",
                 "--executable",
                 "/tmp/bellhop_rayreuse",
                 "--output",
@@ -344,6 +388,7 @@ class CliValidationTests(unittest.TestCase):
         self.assertEqual(args.warmups, 2)
         self.assertEqual(args.output_queue_capacity, 1)
         self.assertEqual(args.memory_budget_mib, 447)
+        self.assertTrue(args.profile_frequency_tasks)
         self.assertEqual(args.machine_label, "benchmark-host")
         self.assertTrue(args.no_cross_mode_shd_check)
         self.assertTrue(args.allow_dirty)

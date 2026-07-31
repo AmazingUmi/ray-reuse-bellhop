@@ -99,6 +99,20 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 
 该选项会增加计数与计时开销，只用于热点定位，不用于正式性能比较。
 
+parallel solver 已保存逐频 Project/Influence/Scale 计时，但默认不写入 PRT。
+需要分析任务长尾和调度负载时，可显式添加：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+  --frequencies-hz 50,100,250 \
+  --execution-mode parallel \
+  --workers 8 \
+  --profile-frequency-tasks
+```
+
+该选项只输出已有计时，不给 solver 热路径增加时钟或同步；仅适用于 parallel
+模式。
+
 ## 性能基准
 
 可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
