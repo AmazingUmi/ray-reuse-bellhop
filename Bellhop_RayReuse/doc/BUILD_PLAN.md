@@ -12,11 +12,12 @@ conda run -n py python --version
 是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
 [`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
 
-截至 2026-07-30，A～E 均已按顺序实施并关闭出口；F1 已由提交 `96f23f8`
-和 `4af3f7f` 完成并关闭。两项安全优化使 Munk 2频 reuse 墙钟累计下降
-`16.25%`，16频 reuse 下降 `18.04%`，SHD 逐字节一致。当前进入 F2 的独立
-布局和局部性实验。详见
-[`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。
+截至 2026-07-31，A～E 和 F1 均已关闭。F2 的 range-major 临时布局和
+range-batch 换序因 2频回退而回滚；提交 `eedc790` 的编译期图像专化相对
+F1 将 Munk 2频 reuse 再降 `26.17%`，16频 reuse/p8/p10 分别再降
+`29.62%/23.71%/27.05%`，SHD 逐字节一致。当前继续 F2 的向量化报告和射线
+预计算字段审计。详见
+[`BENCHMARK_RESULTS_EEDC790.md`](./BENCHMARK_RESULTS_EEDC790.md)。
 
 里程碑后的统一质量门为：
 
@@ -321,11 +322,25 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 
 按“一次只改一个变量”的顺序比较：
 
-1. 与 Influence depth 内循环匹配的 range-major 临时工作区或等价连续视图；
-2. receiver depth tile，保证同一接收点收到贡献的先后顺序不变；
-3. 射线预计算数组的 AoS/SoA；
-4. 编译器向量化报告和可安全向量化的窗口拒绝/实数预计算；
-5. 只有前述措施仍不足时才评估更大范围的 receiver/ray 调度重构。
+1. [x] range-major 临时工作区：2频慢 `0.19%` 且增加内存，已回滚；
+2. [x] range-batch/depth-major 换序：2频慢 `5.31%`，已回滚；
+3. [x] 图像数量/类型编译期专化：2/16频稳定获益，提交 `eedc790`；
+4. [ ] 编译器向量化报告和可安全向量化的窗口拒绝/实数预计算；
+5. [ ] 审计已按字段分离的射线预计算数组，再决定 SoA 紧凑化；
+6. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
+   receiver/ray 调度重构。
+
+#### F2 当前状态（2026-07-31）
+
+图像专化在每条射线入口按 `imageCount=1/2/3` 选择模板实例，在 depth 热
+循环中以 `if constexpr` 保留 true → surface → bottom 的固定求和顺序。
+新增组件测试逐位比较专化热路径和详细诊断路径，并显式覆盖原先缺少的
+`imageCount=2`。完整质量门 Debug/Release 24/24、Python 49/49、独立构建
+24/24 通过。
+
+Munk 16频新中位数为 reuse `161.678 s`、parallel-8 `42.557 s`、
+parallel-10 `40.255 s`；相对当前 reuse 加速为 `3.799×/4.016×`。p10
+绝对 wall 更低但三轮范围仍大于 p8，因此暂不改变默认 worker。
 
 任何改变浮点累加顺序的方案必须独立评审，并从“逐字节一致”转入明确误差
 预算；在此之前不得作为默认实现。

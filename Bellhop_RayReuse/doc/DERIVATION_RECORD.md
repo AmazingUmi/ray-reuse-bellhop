@@ -266,7 +266,25 @@ nonreuse Trace 只占 wall 的 `2.13%`，Influence 占 `97.42%`；串行 reuse
 至此 F1 关闭，后续进入 F2 的 range-major 临时布局、receiver depth tile、
 SoA 和向量化独立实验。
 
-## 11. 后续验收记录规则
+## 11. F2 布局筛选与图像专化
+
+F2 首先完成两个保持接收点贡献顺序不变的 2频独立 screen。range-major
+临时压力累加器需在结束时转回 depth-major，wall 为 `16.8910 s`，相对 F1
+慢 `0.19%` 且增加约 1.6 MiB RSS；segment 内 range-batch 后按 depth →
+range 累加为 `17.7544 s`，慢 `5.31%`。两者 SHD 均不变，但因无收益而完整
+回滚，未运行16频矩阵。
+
+提交 `eedc790` 随后将 `imageCount=1/2/3` 和 true/surface/bottom 图像类型
+专化为模板实例，消除默认三图像热路径中的运行时循环、映射和分支，同时保持
+图像及射线贡献顺序。相对 F1，Munk 2频 reuse wall 下降 `26.17%`；16频
+reuse、parallel-8、parallel-10 分别下降 `29.62%`、`23.71%`、`27.05%`。
+三配置 SHD 逐字节一致，完整质量门通过。记录见
+[`BENCHMARK_RESULTS_EEDC790.md`](./BENCHMARK_RESULTS_EEDC790.md)。
+
+F2 下一步先取得编译器向量化报告并审计已按字段分离的
+`PrecomputedRayValues`，再选择不改变复压力累加顺序的独立候选。
+
+## 12. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：
 

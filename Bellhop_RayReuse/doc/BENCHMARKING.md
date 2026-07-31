@@ -92,3 +92,5 @@ median/min/max；存在 `nonreuse` 时，按外部 wall 中位数计算
 [`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
 F1 关闭提交 `4af3f7f` 的线性压力访问及 2/16频确认见
 [`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。
+F2 提交 `eedc790` 的两个布局回滚实验、图像专化及 2/16频确认见
+[`BENCHMARK_RESULTS_EEDC790.md`](./BENCHMARK_RESULTS_EEDC790.md)。
