@@ -14,10 +14,11 @@ conda run -n py python --version
 
 截至 2026-07-31，A～E 和 F1 均已关闭。F2 的 range-major 临时布局和
 range-batch 换序因 2频回退而回滚；`eedc790` 的图像专化和 `fe6b33f` 的
-Hermite 内部快路径均已保留。相对 F1 前，Munk 2频 reuse 累计下降
-`48.49%`，16频 reuse/p8/p10 累计下降 `51.63%/44.19%/50.11%`，SHD
-逐字节一致。当前继续 F2 的有限性检查所有权和循环不变量审计。详见
-[`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
+Hermite 内部快路径及 `f1511b9` 的 Release 末端有限性校验均已保留。相对
+F1 前，Munk 2频 reuse 累计下降 `54.95%`，16频 reuse/p8/p10 累计下降
+`59.37%/54.19%/54.67%`，SHD 逐字节一致。当前继续 F2 的 range/depth
+循环不变量审计。详见
+[`BENCHMARK_RESULTS_F1511B9.md`](./BENCHMARK_RESULTS_F1511B9.md)。
 
 里程碑后的统一质量门为：
 
@@ -329,8 +330,10 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
    depth 循环受调用、控制流和压力依赖阻止；
 5. [x] 诊断路径模板专化：2频慢 `46.34%`，因代码体积倍增而回滚；
 6. [x] Hermite taper 内部已验证快路径：2/16频稳定获益，提交 `fe6b33f`；
-7. [ ] 审计剩余有限性检查所有权和 range/depth 循环不变量；
-8. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
+7. [x] Release 有限性检查所有权：公共 API/Debug/诊断保留，solver 收敛到
+   每频末端完整场扫描，提交 `f1511b9`；
+8. [ ] screen range/depth 循环不变量显式提升；
+9. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
    receiver/ray 调度重构。
 
 #### F2 当前状态（2026-07-31）
@@ -341,10 +344,10 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 `imageCount=2`。完整质量门 Debug/Release 24/24、Python 49/49、独立构建
 24/24 通过。
 
-`fe6b33f` 后 Munk 16频中位数为 reuse `135.572 s`、parallel-8
-`36.184 s`、parallel-10 `30.823 s`；相对当前 reuse 加速为
-`3.747×/4.398×`。p10 绝对 wall 更低但三轮范围达到 `27.62%`，因此暂不
-改变默认 worker。
+`f1511b9` 后 Munk 16频中位数为 reuse `113.890 s`、parallel-8
+`29.697 s`、parallel-10 `28.001 s`；相对当前 reuse 加速为
+`3.835×/4.067×`。p10 三轮范围为 `7.08%`，中位数仅比 p8 低 `5.71%`，
+因此暂不改变默认 worker。
 
 任何改变浮点累加顺序的方案必须独立评审，并从“逐字节一致”转入明确误差
 预算；在此之前不得作为默认实现。

@@ -110,11 +110,12 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 `4.643×`，达到项目 `≥4×` 门槛；但 Influence 占 nonreuse wall 的
 `97.42%`。阶段 F1 的 `96f23f8` 和 `4af3f7f` 将 Munk 16频 reuse 降低
 `18.04%`。F2 提交 `eedc790` 将固定图像数和类型专化到编译期；提交
-`fe6b33f` 再移除内部 Hermite taper 的重复参数校验。相对 F1 前，当前
-2频 reuse 累计下降 `48.49%`，16频 reuse/p8/p10 累计下降
-`51.63%/44.19%/50.11%`，SHD 逐字节一致。range-major、range-batch 和
-诊断模板专化均因 2频回退而回滚。下一步审计剩余有限性检查所有权和
-range/depth 循环不变量；暂不扩大 64频全矩阵。
+`fe6b33f` 再移除内部 Hermite taper 的重复参数校验；`f1511b9` 将 Release
+逐贡献有限性检查收敛到公共 API 或 solver 每频末端的完整场扫描。相对 F1
+前，当前 2频 reuse 累计下降 `54.95%`，16频 reuse/p8/p10 累计下降
+`59.37%/54.19%/54.67%`，SHD 逐字节一致。range-major、range-batch 和
+诊断模板专化均因 2频回退而回滚。下一步 screen range/depth 循环不变量；
+暂不扩大 64频全矩阵。
 
 ## 文档
 
@@ -125,6 +126,7 @@ range/depth 循环不变量；暂不扩大 64频全矩阵。
 - [`doc/BENCHMARK_RESULTS_4AF3F7F.md`](./doc/BENCHMARK_RESULTS_4AF3F7F.md)：F1 线性压力访问及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_EEDC790.md`](./doc/BENCHMARK_RESULTS_EEDC790.md)：F2 布局 screen、图像专化及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_FE6B33F.md`](./doc/BENCHMARK_RESULTS_FE6B33F.md)：F2 向量化审计、Hermite 快路径及 2/16频确认；
+- [`doc/BENCHMARK_RESULTS_F1511B9.md`](./doc/BENCHMARK_RESULTS_F1511B9.md)：F2 末端有限性校验及 2/16频确认；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；

@@ -97,3 +97,5 @@ F2 提交 `eedc790` 的两个布局回滚实验、图像专化及 2/16频确认�
 F2 提交 `fe6b33f` 的向量化审计、诊断专化回滚、Hermite 快路径及
 2/16频确认见
 [`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
+F2 提交 `f1511b9` 的 Release 末端有限性校验边界及 2/16频确认见
+[`BENCHMARK_RESULTS_F1511B9.md`](./BENCHMARK_RESULTS_F1511B9.md)。

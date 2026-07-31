@@ -293,6 +293,13 @@ reuse/p8/p10 下降 `16.15%/14.98%/23.43%`，SHD 不变，完整质量门通过�
 记录见
 [`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
 
+提交 `f1511b9` 进一步明确有限性检查所有权：Release solver 热路径不再
+逐图像/逐贡献检查，而由每频缩放入口扫描完整未缩放场；公共 API 返回前
+另行扫描，Debug 和详细诊断保留即时检查。有限输入触发计算溢出的回归确认
+公共 API 仍拒绝非有限结果。相对 `fe6b33f`，2频下降 `12.56%`；16频
+reuse/p8/p10 下降 `15.99%/17.93%/9.15%`，SHD 不变。记录见
+[`BENCHMARK_RESULTS_F1511B9.md`](./BENCHMARK_RESULTS_F1511B9.md)。
+
 ## 12. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：
