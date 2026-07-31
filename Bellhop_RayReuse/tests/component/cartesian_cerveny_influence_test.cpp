@@ -650,7 +650,7 @@ void testStatisticsAreOptInAndCountHotPathWork(Context& context) {
       statistics.rayAccumulations == 1U &&
           statistics.validatedRayPoints == path.points.size() &&
           statistics.validatedWorkspaceValues ==
-              workspace.pressure().size(),
+              2U * workspace.pressure().size(),
       "opt-in statistics count defensive validation work");
   context.check(
       statistics.activeRayPoints == path.points.size() &&
@@ -861,6 +861,16 @@ void testValidationContracts(Context& context) {
             workspace, path, state, {0.0, 100.0}));
       },
       "non-finite existing workspace pressure is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        RayFrequencyState state = makeState();
+        state.points[2U].amplitude =
+            std::numeric_limits<double>::max();
+        FrequencyWorkspace workspace(50.0, receivers);
+        static_cast<void>(influence.accumulate(
+            workspace, path, state, {0.0, 100.0}));
+      },
+      "non-finite computed workspace pressure is rejected");
 }
 
 }  // namespace

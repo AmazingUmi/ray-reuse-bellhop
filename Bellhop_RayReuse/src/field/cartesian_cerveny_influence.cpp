@@ -46,6 +46,13 @@ void requireFiniteComplex(std::complex<double> value,
   }
 }
 
+void validateWorkspacePressure(
+    const FrequencyWorkspace& workspace, std::string_view name) {
+  for (const std::complex<double> pressure : workspace.pressure()) {
+    requireFiniteComplex(pressure, name);
+  }
+}
+
 [[nodiscard]] double floatingSpacing(double value) {
   const double next =
       std::nextafter(value, std::numeric_limits<double>::infinity());
@@ -158,10 +165,8 @@ void validateAccumulateInput(
     throw ValidationError(
         "Cartesian Cerveny workspace and receiver-grid sizes must match");
   }
-  for (const std::complex<double> pressure : workspace.pressure()) {
-    requireFiniteComplex(
-        pressure, "Cartesian Cerveny existing workspace pressure");
-  }
+  validateWorkspacePressure(
+      workspace, "Cartesian Cerveny existing workspace pressure");
   if (!std::isfinite(path.launchAngle)) {
     throw ValidationError(
         "Cartesian Cerveny launch angle must be finite");
@@ -401,8 +406,10 @@ template <bool CollectStatistics, CervenyImageKind Kind>
   const double deltaSquared = deltaDepth * deltaDepth;
   const double windowMetric =
       -angularFrequency * gamma.imag() * deltaSquared;
+#ifndef NDEBUG
   requireFinite(
       windowMetric, "Cartesian Cerveny window metric");
+#endif
   if (windowMetric >= beamWindowSquared) {
     if constexpr (CollectStatistics) {
       ++statistics->windowRejections;
@@ -426,8 +433,10 @@ template <bool CollectStatistics, CervenyImageKind Kind>
   const std::complex<double> contribution =
       polarity * amplitude * taper *
       negativeImaginaryExponential(phaseArgument);
+#ifndef NDEBUG
   requireFiniteComplex(
       contribution, "Cartesian Cerveny image contribution");
+#endif
   if constexpr (CollectStatistics) {
     if (contribution != std::complex<double>{}) {
       ++statistics->nonzeroImageContributions;
@@ -790,15 +799,19 @@ CartesianCervenyInfluence::accumulateImpl(
         }
         const std::complex<double> contribution =
             corrected * imageSum;
+#ifndef NDEBUG
         requireFiniteComplex(
             contribution, "Cartesian Cerveny final contribution");
+#endif
         std::complex<double>& pressureValue =
             pressure[depthIndex * receiverRangeCount + rangeIndex];
         const std::complex<double> updatedPressure =
             pressureValue + contribution;
+#ifndef NDEBUG
         requireFiniteComplex(
             updatedPressure,
             "Cartesian Cerveny accumulated workspace pressure");
+#endif
         pressureValue = updatedPressure;
 
         if (captureDiagnostic) {
@@ -862,17 +875,28 @@ CartesianCervenyInfluence::accumulate(
         workspace.pressure().size();
     statistics->validationSeconds +=
         elapsedSeconds(validationBegin, Clock::now());
-    return accumulateWithImageCount<true>(
+    const auto diagnostic = accumulateWithImageCount<true>(
         workspace, path, frequencyState, epsilon,
         diagnosticRequest, statistics);
+    const Clock::time_point outputValidationBegin = Clock::now();
+    validateWorkspacePressure(
+        workspace, "Cartesian Cerveny computed workspace pressure");
+    statistics->validatedWorkspaceValues +=
+        workspace.pressure().size();
+    statistics->validationSeconds +=
+        elapsedSeconds(outputValidationBegin, Clock::now());
+    return diagnostic;
   }
 
   validateAccumulateInput(
       workspace, path, frequencyState, epsilon, receivers_,
       diagnosticRequest);
-  return accumulateWithImageCount<false>(
+  const auto diagnostic = accumulateWithImageCount<false>(
       workspace, path, frequencyState, epsilon,
       diagnosticRequest, nullptr);
+  validateWorkspacePressure(
+      workspace, "Cartesian Cerveny computed workspace pressure");
+  return diagnostic;
 }
 
 std::optional<CartesianCervenyDiagnostic>
