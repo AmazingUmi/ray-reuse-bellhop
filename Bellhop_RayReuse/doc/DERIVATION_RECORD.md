@@ -284,6 +284,15 @@ reuse、parallel-8、parallel-10 分别下降 `29.62%`、`23.71%`、`27.05%`。
 F2 下一步先取得编译器向量化报告并审计已按字段分离的
 `PrecomputedRayValues`，再选择不改变复压力累加顺序的独立候选。
 
+AppleClang 21 向量化报告随后确认 `PrecomputedRayValues` 已是四个独立
+vector；depth 循环主要受诊断控制流、复指数/有限性检查调用和压力依赖约束。
+额外专化诊断路径使模板组合倍增，并令 2频 wall 回退 `46.34%`，已回滚。
+提交 `fe6b33f` 改为保留公共 Hermite API 校验，仅让内部已验证 Influence
+调用无重复参数校验。相对 `eedc790`，2频下降 `16.69%`；16频
+reuse/p8/p10 下降 `16.15%/14.98%/23.43%`，SHD 不变，完整质量门通过。
+记录见
+[`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
+
 ## 12. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：

@@ -13,11 +13,11 @@ conda run -n py python --version
 [`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
 
 截至 2026-07-31，A～E 和 F1 均已关闭。F2 的 range-major 临时布局和
-range-batch 换序因 2频回退而回滚；提交 `eedc790` 的编译期图像专化相对
-F1 将 Munk 2频 reuse 再降 `26.17%`，16频 reuse/p8/p10 分别再降
-`29.62%/23.71%/27.05%`，SHD 逐字节一致。当前继续 F2 的向量化报告和射线
-预计算字段审计。详见
-[`BENCHMARK_RESULTS_EEDC790.md`](./BENCHMARK_RESULTS_EEDC790.md)。
+range-batch 换序因 2频回退而回滚；`eedc790` 的图像专化和 `fe6b33f` 的
+Hermite 内部快路径均已保留。相对 F1 前，Munk 2频 reuse 累计下降
+`48.49%`，16频 reuse/p8/p10 累计下降 `51.63%/44.19%/50.11%`，SHD
+逐字节一致。当前继续 F2 的有限性检查所有权和循环不变量审计。详见
+[`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
 
 里程碑后的统一质量门为：
 
@@ -325,9 +325,12 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 1. [x] range-major 临时工作区：2频慢 `0.19%` 且增加内存，已回滚；
 2. [x] range-batch/depth-major 换序：2频慢 `5.31%`，已回滚；
 3. [x] 图像数量/类型编译期专化：2/16频稳定获益，提交 `eedc790`；
-4. [ ] 编译器向量化报告和可安全向量化的窗口拒绝/实数预计算；
-5. [ ] 审计已按字段分离的射线预计算数组，再决定 SoA 紧凑化；
-6. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
+4. [x] AppleClang 向量化报告与预计算布局审计：当前已是四 vector SoA，
+   depth 循环受调用、控制流和压力依赖阻止；
+5. [x] 诊断路径模板专化：2频慢 `46.34%`，因代码体积倍增而回滚；
+6. [x] Hermite taper 内部已验证快路径：2/16频稳定获益，提交 `fe6b33f`；
+7. [ ] 审计剩余有限性检查所有权和 range/depth 循环不变量；
+8. [ ] receiver depth tile；只有前述措施仍不足时才评估更大范围的
    receiver/ray 调度重构。
 
 #### F2 当前状态（2026-07-31）
@@ -338,9 +341,10 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 `imageCount=2`。完整质量门 Debug/Release 24/24、Python 49/49、独立构建
 24/24 通过。
 
-Munk 16频新中位数为 reuse `161.678 s`、parallel-8 `42.557 s`、
-parallel-10 `40.255 s`；相对当前 reuse 加速为 `3.799×/4.016×`。p10
-绝对 wall 更低但三轮范围仍大于 p8，因此暂不改变默认 worker。
+`fe6b33f` 后 Munk 16频中位数为 reuse `135.572 s`、parallel-8
+`36.184 s`、parallel-10 `30.823 s`；相对当前 reuse 加速为
+`3.747×/4.398×`。p10 绝对 wall 更低但三轮范围达到 `27.62%`，因此暂不
+改变默认 worker。
 
 任何改变浮点累加顺序的方案必须独立评审，并从“逐字节一致”转入明确误差
 预算；在此之前不得作为默认实现。

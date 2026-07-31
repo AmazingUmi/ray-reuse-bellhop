@@ -94,3 +94,6 @@ F1 关闭提交 `4af3f7f` 的线性压力访问及 2/16频确认见
 [`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。
 F2 提交 `eedc790` 的两个布局回滚实验、图像专化及 2/16频确认见
 [`BENCHMARK_RESULTS_EEDC790.md`](./BENCHMARK_RESULTS_EEDC790.md)。
+F2 提交 `fe6b33f` 的向量化审计、诊断专化回滚、Hermite 快路径及
+2/16频确认见
+[`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
