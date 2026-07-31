@@ -133,6 +133,7 @@ SHD 一致；当前保留 8 workers，下一步分离固定开销与调度负载
 - [`doc/BENCHMARK_RESULTS_FE6B33F.md`](./doc/BENCHMARK_RESULTS_FE6B33F.md)：F2 向量化审计、Hermite 快路径及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_F1511B9.md`](./doc/BENCHMARK_RESULTS_F1511B9.md)：F2 末端有限性校验及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_7CE9C7D.md`](./doc/BENCHMARK_RESULTS_7CE9C7D.md)：F2 循环不变量提升及 2/16频确认；
+- [`doc/BENCHMARK_RESULTS_4F8B227.md`](./doc/BENCHMARK_RESULTS_4F8B227.md)：F2 紧预算算例的固定开销与 worker 梯度；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
