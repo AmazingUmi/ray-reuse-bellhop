@@ -18,8 +18,9 @@ Hermite 内部快路径、Release 末端有限性校验和 `7ce9c7d` 的只读�
 不变量提升均已保留。相对 F1 前，Munk 2频 reuse 累计下降 `63.51%`，
 16频 reuse/p8/p10 累计下降 `68.75%/60.63%/61.61%`，SHD 逐字节一致。
 segment 端点与插值差值缓存、receiver-depth 数量与连续数据指针及
-64-depth tile 均因 2频回退已回滚；当前进入 Munk 64频精选矩阵。详见
-[`BENCHMARK_RESULTS_7CE9C7D.md`](./BENCHMARK_RESULTS_7CE9C7D.md)。
+64-depth tile 均因 2频回退已回滚。Munk 64频精选矩阵已完成，p8/p10
+相对 reuse 为 `3.543×/3.513×`，当前保留 8 workers。详见
+[`BENCHMARK_RESULTS_FDAAF56.md`](./BENCHMARK_RESULTS_FDAAF56.md)。
 
 里程碑后的统一质量门为：
 
@@ -338,8 +339,10 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 10. [x] receiver-depth 数量、深度标量与连续数据指针：2频慢 `1.35%`，
     已回滚；
 11. [x] 64-depth receiver tile：2频慢 `1.95%`，已回滚；
-12. [ ] Munk 64频 reuse/p8/p10 精选矩阵；根据结果决定是否评估更大范围
-    的 receiver/ray 调度重构。
+12. [x] Munk 64频 reuse/p8/p10 精选矩阵：`626.852/176.951/178.422 s`，
+    SHD 一致，8 workers 略优；
+13. [ ] 用紧预算算例分离固定开销，并取得 Munk 逐频任务负载分布；只有
+    证据显示负载不均才评估调度重构。
 
 #### F2 当前状态（2026-07-31）
 

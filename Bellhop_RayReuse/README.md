@@ -117,13 +117,16 @@ max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提�
 `68.75%/60.63%/61.61%`，SHD 逐字节一致。range-major、range-batch 和
 诊断模板专化、segment 端点差值缓存、receiver-depth 数量/连续数据指针
 及 64-depth receiver tile 均因 2频回退而回滚。安全局部性候选至此
-收敛，下一步运行 64频 reuse/p8/p10 精选矩阵，不运行未改变的 nonreuse。
+收敛。64频精选矩阵中 reuse/p8/p10 为
+`626.852/176.951/178.422 s`，p8/p10 相对 reuse 为 `3.543×/3.513×`，
+SHD 一致；当前保留 8 workers，下一步分离固定开销与调度负载分布。
 
 ## 文档
 
 - [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～F 的入口、出口和验收命令；
 - [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)：可重复性能基准协议、命令和报告字段；
 - [`doc/BENCHMARK_RESULTS_C77FF60.md`](./doc/BENCHMARK_RESULTS_C77FF60.md)：首轮 16 频 direct/Munk 正式基准；
+- [`doc/BENCHMARK_RESULTS_FDAAF56.md`](./doc/BENCHMARK_RESULTS_FDAAF56.md)：F2 收敛后的 Munk 64频精选矩阵；
 - [`doc/BENCHMARK_RESULTS_96F23F8.md`](./doc/BENCHMARK_RESULTS_96F23F8.md)：F1 重复校验移出及 Munk 2频对照；
 - [`doc/BENCHMARK_RESULTS_4AF3F7F.md`](./doc/BENCHMARK_RESULTS_4AF3F7F.md)：F1 线性压力访问及 2/16频确认；
 - [`doc/BENCHMARK_RESULTS_EEDC790.md`](./doc/BENCHMARK_RESULTS_EEDC790.md)：F2 布局 screen、图像专化及 2/16频确认；
