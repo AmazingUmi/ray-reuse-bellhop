@@ -476,6 +476,83 @@ RayState makeSyntheticState(double range) {
       .realTravelTime = range / 1500.0};
 }
 
+void testImageCountDispatch(Context& context) {
+  const Environment environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0},
+           {.depth = 100.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0}}),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
+  const ReceiverGrid receivers({50.0}, {0.0, 10.0});
+  RayPath path;
+  path.launchAngle = 0.0;
+  path.points = {makeSyntheticState(0.0), makeSyntheticState(5.0),
+                 makeSyntheticState(10.0)};
+  const RayFrequencyState state{
+      .frequency = 50.0,
+      .points = {
+          RayFrequencyPoint{
+              .complexTravelTime = {0.0, 0.0},
+              .amplitude = 1.0,
+              .reflectionPhase = 0.0,
+              .active = true},
+          RayFrequencyPoint{
+              .complexTravelTime = {5.0 / 1500.0, 0.0},
+              .amplitude = 1.0,
+              .reflectionPhase = 0.0,
+              .active = true},
+          RayFrequencyPoint{
+              .complexTravelTime = {10.0 / 1500.0, 0.0},
+              .amplitude = 1.0,
+              .reflectionPhase = 0.0,
+              .active = true}}};
+
+  for (std::size_t imageCount = 1U; imageCount <= 3U;
+       ++imageCount) {
+    const CartesianCervenyInfluence influence(
+        environment, receivers,
+        CartesianCervenySettings{
+            .imageCount = imageCount, .beamWindow = 5});
+    FrequencyWorkspace hotWorkspace(50.0, receivers);
+    static_cast<void>(influence.accumulate(
+        hotWorkspace, path, state, {0.0, 100.0}));
+
+    FrequencyWorkspace diagnosticWorkspace(50.0, receivers);
+    const auto diagnostic = influence.accumulate(
+        diagnosticWorkspace, path, state, {0.0, 100.0},
+        CartesianCervenyDiagnosticRequest{
+            .receiverRangeIndex = 1U,
+            .receiverDepthIndex = 0U});
+    const std::string label =
+        "image-count " + std::to_string(imageCount);
+    context.check(
+        diagnostic.has_value() && diagnostic->evaluated,
+        label + " diagnostic receiver is evaluated");
+    context.check(
+        std::equal(
+            hotWorkspace.pressure().begin(),
+            hotWorkspace.pressure().end(),
+            diagnosticWorkspace.pressure().begin(),
+            diagnosticWorkspace.pressure().end()),
+        label + " hot and diagnostic paths are bitwise identical");
+    if (!diagnostic.has_value() || !diagnostic->evaluated) {
+      continue;
+    }
+    std::complex<double> expectedImageSum{};
+    for (std::size_t imageIndex = 0U;
+         imageIndex < imageCount; ++imageIndex) {
+      expectedImageSum +=
+          diagnostic->images[imageIndex].contribution;
+    }
+    checkComplexNear(
+        context, diagnostic->rawImageSum, expectedImageSum, 0.0,
+        label + " evaluates the requested images");
+  }
+}
+
 void testTerminalInactivePointIsRetained(Context& context) {
   const Environment environment(
       SoundSpeedProfile(
@@ -794,6 +871,7 @@ int main() {
   testDirectOracle(context);
   testMunkOracles(context);
   testRigidReflectionOracle(context);
+  testImageCountDispatch(context);
   testTerminalInactivePointIsRetained(context);
   testStatisticsAreOptInAndCountHotPathWork(context);
   testValidationContracts(context);

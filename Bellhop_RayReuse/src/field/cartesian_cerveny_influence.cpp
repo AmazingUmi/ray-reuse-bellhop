@@ -350,10 +350,9 @@ struct PrecomputedRayValues {
       .contribution = contribution};
 }
 
-template <bool CollectStatistics>
+template <bool CollectStatistics, CervenyImageKind Kind>
 [[nodiscard]] std::complex<double> evaluateImageContribution(
-    CervenyImageKind kind, double receiverDepth,
-    double interpolatedDepth, double seaSurfaceDepth,
+    double receiverDepth, double interpolatedDepth, double seaSurfaceDepth,
     double seabedDepth, double angularFrequency,
     double beamWindowSquared, double radiusMax,
     Vec2 interpolatedSlowness,
@@ -366,21 +365,18 @@ template <bool CollectStatistics>
   }
   double deltaDepth = 0.0;
   double polarity = 1.0;
-  switch (kind) {
-    case CervenyImageKind::True:
-      deltaDepth = receiverDepth - interpolatedDepth;
-      break;
-    case CervenyImageKind::Surface:
-      deltaDepth =
-          -receiverDepth + 2.0 * seaSurfaceDepth -
-          interpolatedDepth;
-      polarity = -1.0;
-      break;
-    case CervenyImageKind::Bottom:
-      deltaDepth =
-          -receiverDepth + 2.0 * seabedDepth -
-          interpolatedDepth;
-      break;
+  if constexpr (Kind == CervenyImageKind::True) {
+    deltaDepth = receiverDepth - interpolatedDepth;
+  } else if constexpr (Kind == CervenyImageKind::Surface) {
+    deltaDepth =
+        -receiverDepth + 2.0 * seaSurfaceDepth -
+        interpolatedDepth;
+    polarity = -1.0;
+  } else {
+    static_assert(Kind == CervenyImageKind::Bottom);
+    deltaDepth =
+        -receiverDepth + 2.0 * seabedDepth -
+        interpolatedDepth;
   }
 
   const double deltaSquared = deltaDepth * deltaDepth;
@@ -419,6 +415,42 @@ template <bool CollectStatistics>
     }
   }
   return contribution;
+}
+
+template <std::size_t ImageCount, bool CollectStatistics>
+[[nodiscard]] std::complex<double> evaluateImageContributions(
+    double receiverDepth, double interpolatedDepth,
+    double seaSurfaceDepth, double seabedDepth,
+    double angularFrequency, double beamWindowSquared,
+    double radiusMax, Vec2 interpolatedSlowness,
+    std::complex<double> tau, std::complex<double> gamma,
+    double amplitude, double reflectionPhase,
+    CartesianCervenyStatistics* statistics) {
+  static_assert(ImageCount >= 1U && ImageCount <= 3U);
+  std::complex<double> imageSum{};
+  imageSum += evaluateImageContribution<
+      CollectStatistics, CervenyImageKind::True>(
+      receiverDepth, interpolatedDepth, seaSurfaceDepth,
+      seabedDepth, angularFrequency, beamWindowSquared,
+      radiusMax, interpolatedSlowness, tau, gamma,
+      amplitude, reflectionPhase, statistics);
+  if constexpr (ImageCount >= 2U) {
+    imageSum += evaluateImageContribution<
+        CollectStatistics, CervenyImageKind::Surface>(
+        receiverDepth, interpolatedDepth, seaSurfaceDepth,
+        seabedDepth, angularFrequency, beamWindowSquared,
+        radiusMax, interpolatedSlowness, tau, gamma,
+        amplitude, reflectionPhase, statistics);
+  }
+  if constexpr (ImageCount >= 3U) {
+    imageSum += evaluateImageContribution<
+        CollectStatistics, CervenyImageKind::Bottom>(
+        receiverDepth, interpolatedDepth, seaSurfaceDepth,
+        seabedDepth, angularFrequency, beamWindowSquared,
+        radiusMax, interpolatedSlowness, tau, gamma,
+        amplitude, reflectionPhase, statistics);
+  }
+  return imageSum;
 }
 
 }  // namespace
@@ -514,6 +546,30 @@ CartesianCervenyInfluence::CartesianCervenyInfluence(
 }
 
 template <bool CollectStatistics>
+std::optional<CartesianCervenyDiagnostic>
+CartesianCervenyInfluence::accumulateWithImageCount(
+    FrequencyWorkspace& workspace, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    std::complex<double> epsilon,
+    std::optional<CartesianCervenyDiagnosticRequest>
+        diagnosticRequest,
+    CartesianCervenyStatistics* statistics) const {
+  if (settings_.imageCount == 1U) {
+    return accumulateImpl<CollectStatistics, 1U>(
+        workspace, path, frequencyState, epsilon,
+        diagnosticRequest, statistics);
+  }
+  if (settings_.imageCount == 2U) {
+    return accumulateImpl<CollectStatistics, 2U>(
+        workspace, path, frequencyState, epsilon,
+        diagnosticRequest, statistics);
+  }
+  return accumulateImpl<CollectStatistics, 3U>(
+      workspace, path, frequencyState, epsilon,
+      diagnosticRequest, statistics);
+}
+
+template <bool CollectStatistics, std::size_t ImageCount>
 std::optional<CartesianCervenyDiagnostic>
 CartesianCervenyInfluence::accumulateImpl(
     FrequencyWorkspace& workspace, const RayPath& path,
@@ -683,7 +739,7 @@ CartesianCervenyInfluence::accumulateImpl(
         if (captureDiagnostic) {
           images = {};
           for (std::size_t imageIndex = 0U;
-               imageIndex < settings_.imageCount; ++imageIndex) {
+               imageIndex < ImageCount; ++imageIndex) {
             if constexpr (CollectStatistics) {
               ++statistics->imageEvaluations;
             }
@@ -714,23 +770,16 @@ CartesianCervenyInfluence::accumulateImpl(
             imageSum += images[imageIndex].contribution;
           }
         } else {
-          for (std::size_t imageIndex = 0U;
-               imageIndex < settings_.imageCount; ++imageIndex) {
-            const CervenyImageKind kind =
-                imageIndex == 0U
-                    ? CervenyImageKind::True
-                    : (imageIndex == 1U
-                           ? CervenyImageKind::Surface
-                           : CervenyImageKind::Bottom);
-            imageSum += evaluateImageContribution<CollectStatistics>(
-                kind, receiverDepths[depthIndex], position.depth,
-                environment_.seaSurface().depth(),
-                environment_.seabed().depth(), angularFrequency,
-                beamWindowSquared, radiusMax, slowness, tau, gamma,
-                frequencyState.points[rightIndex].amplitude,
-                frequencyState.points[rightIndex].reflectionPhase,
-                statistics);
-          }
+          imageSum =
+              evaluateImageContributions<
+                  ImageCount, CollectStatistics>(
+                  receiverDepths[depthIndex], position.depth,
+                  environment_.seaSurface().depth(),
+                  environment_.seabed().depth(), angularFrequency,
+                  beamWindowSquared, radiusMax, slowness, tau, gamma,
+                  frequencyState.points[rightIndex].amplitude,
+                  frequencyState.points[rightIndex].reflectionPhase,
+                  statistics);
         }
         const std::complex<double> contribution =
             corrected * imageSum;
@@ -806,7 +855,7 @@ CartesianCervenyInfluence::accumulate(
         workspace.pressure().size();
     statistics->validationSeconds +=
         elapsedSeconds(validationBegin, Clock::now());
-    return accumulateImpl<true>(
+    return accumulateWithImageCount<true>(
         workspace, path, frequencyState, epsilon,
         diagnosticRequest, statistics);
   }
@@ -814,7 +863,7 @@ CartesianCervenyInfluence::accumulate(
   validateAccumulateInput(
       workspace, path, frequencyState, epsilon, receivers_,
       diagnosticRequest);
-  return accumulateImpl<false>(
+  return accumulateWithImageCount<false>(
       workspace, path, frequencyState, epsilon,
       diagnosticRequest, nullptr);
 }
@@ -831,14 +880,14 @@ CartesianCervenyInfluence::accumulatePrevalidated(
         workspace, path, frequencyState, epsilon, receivers_);
     statistics->validationSeconds +=
         elapsedSeconds(validationBegin, Clock::now());
-    return accumulateImpl<true>(
+    return accumulateWithImageCount<true>(
         workspace, path, frequencyState, epsilon,
         std::nullopt, statistics);
   }
 
   validatePrevalidatedInput(
       workspace, path, frequencyState, epsilon, receivers_);
-  return accumulateImpl<false>(
+  return accumulateWithImageCount<false>(
       workspace, path, frequencyState, epsilon,
       std::nullopt, nullptr);
 }

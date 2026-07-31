@@ -128,6 +128,15 @@ class CartesianCervenyInfluence {
 
   template <bool CollectStatistics>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
+  accumulateWithImageCount(
+      FrequencyWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
+      CartesianCervenyStatistics* statistics) const;
+
+  template <bool CollectStatistics, std::size_t ImageCount>
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
   accumulateImpl(
       FrequencyWorkspace& workspace, const RayPath& path,
       const RayFrequencyState& frequencyState,
