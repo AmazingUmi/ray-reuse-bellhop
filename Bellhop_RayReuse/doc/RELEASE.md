@@ -31,6 +31,16 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 本地默认通过 Conda 环境 `py` 运行 Python 驱动；CI 使用
 `RAYREUSE_PYTHON_MODE=system`。
 
+## 已验证的内部产物
+
+2026-08-01 在 Apple M4 / Darwin arm64 上以源提交 `b04ccbc` 运行上述工程门
+并通过，生成：
+
+- `bellhop-rayreuse-0.1.0-Darwin-arm64.tar.gz`
+- SHA-256：`18da3737b67e6919fbb9dc8eebd97e1764d6a01f3fa16a83a374f8e16f24a70b`
+
+该哈希只标识上述本机内部验证产物，不代表签名、公证或跨平台发行认证。
+
 ## 对外发布前置条件
 
 - 冻结 LICENSE、版权归属和 NOTICE；
