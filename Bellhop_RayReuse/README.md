@@ -176,6 +176,7 @@ SHD 一致；64频保留 8 workers。紧预算与逐频诊断进一步确认固�
 - [`doc/BENCHMARK_RESULTS_4F8B227.md`](./doc/BENCHMARK_RESULTS_4F8B227.md)：F2 紧预算算例的固定开销与 worker 梯度；
 - [`doc/BENCHMARK_RESULTS_23E36AA.md`](./doc/BENCHMARK_RESULTS_23E36AA.md)：F2 Munk 逐频任务分布与调度结论；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
+- [`doc/MODEL_MATRIX_RESULTS_9F254BD.md`](./doc/MODEL_MATRIX_RESULTS_9F254BD.md)：原版/F2CPP/RayReuse 本地 single 与两频矩阵；
 - [`doc/RELEASE.md`](./doc/RELEASE.md)：`0.1.0` 内部包的构建、验证和公开发布前置条件；
 - [`doc/HDF5_SCHEMA_DECISION.md`](./doc/HDF5_SCHEMA_DECISION.md)：HDF5 候选 schema 与延后实现决策；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；

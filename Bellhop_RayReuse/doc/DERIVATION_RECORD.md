@@ -382,6 +382,8 @@ TL 差 `3.13e-4 dB`，紧凑点最大相位差 `1.11e-6 rad`。六例两频 smok
 `7.93e-4 dB`，三个模式每例均逐字节一致。F2CPP D-02 忽略 ENV 显式
 NAlpha 并按当前单频规划，因此 broadband 只在 `fmax` 门控；12 个低频失败
 比较作为诊断保留，不影响原版→RayReuse 主门。Fortran 分阶段计时属于 G4。
+干净提交 `9f254bd` 的最终身份、二进制哈希和误差汇总见
+[`MODEL_MATRIX_RESULTS_9F254BD.md`](./MODEL_MATRIX_RESULTS_9F254BD.md)。
 
 ## 14. 后续验收记录规则
 
