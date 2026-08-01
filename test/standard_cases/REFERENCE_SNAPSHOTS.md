@@ -60,9 +60,10 @@ conda run -n py python test/standard_cases/codes/reference_snapshots.py \
 ## 验收矩阵
 
 快速门使用已提交的紧凑快照和单元测试，不启动求解器。集成门运行六例
-single 和两频 broadband smoke：原版 Fortran 是主参考，F2CPP 与 RayReuse
-逐频比较；RayReuse 的三个多频模式再互相比较。16频与 Munk 性能矩阵只在
-里程碑时手动运行。
+single 和两频 broadband smoke：原版 Fortran 是主参考，F2CPP 在 single
+全频门控；由于 D-02 按当前单频重新规划发射扇，F2CPP 在 broadband 只对
+`fmax` 切片门控，低频保留为非门控诊断。RayReuse 逐频对照原版，三个多频
+模式再互相比较。16频与 Munk 性能矩阵只在里程碑时手动运行。
 
 复压力绝对/相对误差是主判据，TL 是幅值高于既定 pressure floor 后的辅助
 判据。相位只在参考与候选幅值均高于 `1.0e-4` 时比较，避免近零复压力的

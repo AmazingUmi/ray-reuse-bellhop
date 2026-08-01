@@ -50,7 +50,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 该入口依次执行 Debug ASan/UBSan、Release、两套 25 项 CTest、Conda `py`
-下 58 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
+下 62 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
 动态链接独立性扫描，以及无 F2CPP 目录的 Release 隔离构建。GitHub Actions
 使用固定的 Python 3.12.9 和 NumPy 2.2.6 调用同一脚本；本地默认仍严格使用
 名为 `py` 的 Conda 环境。
@@ -65,6 +65,18 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 analyzer，构建并安装 `0.1.0`，验证 `--version`，生成 CPack TGZ 并输出
 SHA-256。当前包只用于内部验证；许可证和目标平台契约冻结前不得作为公开
 发行包。具体限制见 [`doc/RELEASE.md`](./doc/RELEASE.md)。
+
+原版 Bellhop、F2CPP 和 RayReuse 的本地数值矩阵为：
+
+```bash
+Bellhop_RayReuse/scripts/model_matrix_gate.sh
+```
+
+该门运行六例 single 和两频 smoke。原版是 broadband 主 oracle；F2CPP 在
+single 全频门控，在 broadband 仅 `fmax` 门控，因为其 D-02 策略会按当前
+单频重新规划发射扇。RayReuse 的 nonreuse/reuse/parallel 均逐频对照原版，
+并要求三个模式的 SHD 逐字节一致。该长于普通质量门的矩阵不进入每次提交的
+默认快速门。
 
 ## 运行入口
 

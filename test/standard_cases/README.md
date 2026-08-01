@@ -172,7 +172,7 @@ TL 差异。
 | 版本 | 单频 profile | 多频 profile |
 |---|---|---|
 | `origin` | 一次原版 Bellhop | 共享 `fmax` 角度网格后逐频运行 |
-| `f2cpp` | 已启用；生成兼容 PRT/SHD 并与原版逐场比较 | 可按共享 `fmax` 角度网格逐频运行，形成非复用参考 |
+| `f2cpp` | 已启用；生成兼容 PRT/SHD 并与原版逐场比较 | D-02 会按当前单频重新规划，仅 `fmax` 切片与共享扇语义等价 |
 | `rayreuse` | 单元素频率向量 | 一次运行完整频率向量 |
 
 `origin` 和 `f2cpp` 的执行/输入适配均已启用；`f2cpp` 默认可执行文件为
@@ -182,6 +182,14 @@ profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调�
 多频调用同时显式传递 `--execution-mode`；可由 runner 的
 `--rayreuse-execution-mode nonreuse|reuse|parallel` 选择，默认
 `nonreuse`。
+
+三模型本地矩阵使用原版作为 broadband 主 oracle；F2CPP 在 `single` 全频
+门控，在 broadband 仅 `fmax` 切片门控，低频差异仍进入报告但不作为失败，
+因为 F2CPP 按设计忽略 ENV 显式 NAlpha。运行入口为：
+
+```bash
+conda run -n py python test/standard_cases/codes/model_matrix.py
+```
 
 迁移前的 `test_origin_bellhop` 和 `test_ray_reuse` 位于 `test/legacy/`，
 仅作历史材料，不参与测试。PlotRead 使用独立生成的小型 fixture，不依赖
