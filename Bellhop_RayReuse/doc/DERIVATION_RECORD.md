@@ -425,3 +425,21 @@ Output `0.000635 s`。该 RSS 是本机构建的单次进程基线，不外推�
 - 任何跳过项及原因。
 
 尚未执行或尚未实现的项目只能记为“待验证”或“未实现”，不能记为通过。
+
+## 15. H1～H3 单线程基线与中间状态
+
+提交 `c417095` 增加三模型 single 同工作量微基准。由于 Fortran 和 C++ 的
+阶段所有权不同，跨模型只比较统一 formula core；direct 的 F2CPP/RayReuse
+相对原版为 `2.088×/1.779×`，Munk 为 `0.854×/0.365×`。Munk RayReuse
+formula core 中位数 `0.964646 s`，约为原版的 `2.74×` 加速。
+
+F2CPP numerical contract test 冻结公开字段类型和关键返回类型；F2CPP 与
+RayReuse 独立实现 geometry probe schema v1。干净矩阵中 direct 512 点和
+vacuum/rigid 1,975 点相对 Fortran 公共字段零误差；Munk 366 点的最坏误差
+为 point 336 的 `h=3.5243e-12`，scaled error `6.9620e-5`。三例 F2CPP 与
+RayReuse CSV 均逐字节一致。完整结果见
+[`LOCAL_VALIDATION_RESULTS_C417095.md`](./LOCAL_VALIDATION_RESULTS_C417095.md)。
+
+H4 只计划本地跨编译器验证。当前先执行 AppleClang 21↔GCC 14 C++ 矩阵；
+第二 Fortran 编译器尚不可用，不能宣称已完成 Fortran 跨编译器支持。具体
+命令、容差和出口见 [`CROSS_COMPILER_PLAN.md`](./CROSS_COMPILER_PLAN.md)。

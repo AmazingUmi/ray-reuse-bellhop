@@ -35,7 +35,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
-Release、25 项 CTest、62 项标准工具测试、9 项 PlotRead 测试、独立性扫描
+Release、25 项 CTest、69 项标准工具测试、9 项 PlotRead 测试、独立性扫描
 和无 F2CPP 隔离副本构建。CI 通过
 `RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
 门，避免本地与云端验收逻辑分叉。
@@ -446,3 +446,21 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 [`MODEL_MATRIX_RESULTS_06E390F.md`](./MODEL_MATRIX_RESULTS_06E390F.md)。远端
 CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件，不属于 G 阶段本地
 数值加固出口。
+
+## 阶段 H：单线程基线与中间状态契约
+
+### H1～H3 完成状态（2026-08-01）
+
+1. [x] 建立三模型 single 同工作量微基准；显式固定单线程、预热、轮换顺序、
+   可执行文件哈希和阶段映射；
+2. [x] 以 compile-time contract test 冻结 F2CPP 公开数值类型、单位和关键
+   返回类型，定义 C++ geometry probe schema v1；
+3. [x] 建立 origin/F2CPP/RayReuse 中间几何状态门，覆盖 direct、
+   vacuum/rigid、Munk；
+4. [ ] 按 [`CROSS_COMPILER_PLAN.md`](./CROSS_COMPILER_PLAN.md) 执行本地
+   AppleClang↔GCC C++ 矩阵；第二 Fortran 编译器单独等待可用工具链。
+
+干净提交 `c417095` 的中位数和逐点比较结果见
+[`LOCAL_VALIDATION_RESULTS_C417095.md`](./LOCAL_VALIDATION_RESULTS_C417095.md)。
+geometry schema v1 明确不包含完整反射声学、逐频投影或 Influence image 表；
+这些扩展必须使用新 schema 版本，不能静默扩大 v1。
