@@ -6,6 +6,7 @@ on:
       - ".github/workflows/bellhop-rayreuse-quality-gate.yml"
       - "Bellhop_RayReuse/**"
       - "test/PlotRead/bellhop_io_py/**"
+      - "test/PlotRead/tests/**"
       - "test/standard_cases/cases/**"
       - "test/standard_cases/codes/**"
   pull_request:
@@ -13,6 +14,7 @@ on:
       - ".github/workflows/bellhop-rayreuse-quality-gate.yml"
       - "Bellhop_RayReuse/**"
       - "test/PlotRead/bellhop_io_py/**"
+      - "test/PlotRead/tests/**"
       - "test/standard_cases/cases/**"
       - "test/standard_cases/codes/**"
   workflow_dispatch:
@@ -56,3 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           bash Bellhop_RayReuse/scripts/quality_gate.sh
+
+      - name: Run formatting, static-analysis and package gates
+        env:
+          RAYREUSE_PYTHON_MODE: system
+          RAYREUSE_BUILD_JOBS: "3"
+        run: |
+          set -euo pipefail
+          bash Bellhop_RayReuse/scripts/engineering_gate.sh

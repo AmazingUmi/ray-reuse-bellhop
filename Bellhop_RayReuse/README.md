@@ -49,10 +49,22 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
-该入口依次执行 Debug ASan/UBSan、Release、两套 CTest、Conda `py` 的标准
-算例工具测试、F2CPP 源码/生成构建元数据/动态链接独立性扫描，以及无 F2CPP
-目录的 Release 隔离构建。GitHub Actions 使用固定的 Python 3.12.9 和
-NumPy 2.2.6 调用同一脚本；本地默认仍严格使用名为 `py` 的 Conda 环境。
+该入口依次执行 Debug ASan/UBSan、Release、两套 25 项 CTest、Conda `py`
+下 50 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
+动态链接独立性扫描，以及无 F2CPP 目录的 Release 隔离构建。GitHub Actions
+使用固定的 Python 3.12.9 和 NumPy 2.2.6 调用同一脚本；本地默认仍严格使用
+名为 `py` 的 Conda 环境。
+
+格式、静态分析和内部发布包的工程门为：
+
+```bash
+RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
+```
+
+该入口检查全量 C++ 格式，按 compilation database 运行 Clang static
+analyzer，构建并安装 `0.1.0`，验证 `--version`，生成 CPack TGZ 并输出
+SHA-256。当前包只用于内部验证；许可证和目标平台契约冻结前不得作为公开
+发行包。具体限制见 [`doc/RELEASE.md`](./doc/RELEASE.md)。
 
 ## 运行入口
 
@@ -152,6 +164,8 @@ SHD 一致；64频保留 8 workers。紧预算与逐频诊断进一步确认固�
 - [`doc/BENCHMARK_RESULTS_4F8B227.md`](./doc/BENCHMARK_RESULTS_4F8B227.md)：F2 紧预算算例的固定开销与 worker 梯度；
 - [`doc/BENCHMARK_RESULTS_23E36AA.md`](./doc/BENCHMARK_RESULTS_23E36AA.md)：F2 Munk 逐频任务分布与调度结论；
 - [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
+- [`doc/RELEASE.md`](./doc/RELEASE.md)：`0.1.0` 内部包的构建、验证和公开发布前置条件；
+- [`doc/HDF5_SCHEMA_DECISION.md`](./doc/HDF5_SCHEMA_DECISION.md)：HDF5 候选 schema 与延后实现决策；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
 - [`../test/standard_cases/README.md`](../test/standard_cases/README.md)：共享标准算例入口。

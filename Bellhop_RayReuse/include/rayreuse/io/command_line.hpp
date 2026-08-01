@@ -17,10 +17,10 @@ enum class BroadbandExecutionMode {
 
 struct CommandLineOptions {
   bool showHelp{};
+  bool showVersion{};
   std::string fileRoot;
   std::optional<std::vector<double>> frequencyOverrideHz;
-  BroadbandExecutionMode executionMode{
-      BroadbandExecutionMode::NonReuse};
+  BroadbandExecutionMode executionMode{BroadbandExecutionMode::NonReuse};
   bool verifyCache{};
   bool profileInfluence{};
   bool profileFrequencyTasks{};

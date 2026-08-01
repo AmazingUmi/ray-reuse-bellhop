@@ -46,6 +46,23 @@ done
       -p 'test_*.py'
 )
 
+(
+  plot_cache_root="$(
+    mktemp -d "${TMPDIR:-/tmp}/bellhop-plotread-cache.XXXXXX"
+  )"
+  cleanup_plot_cache() {
+    rm -rf -- "${plot_cache_root}"
+  }
+  trap cleanup_plot_cache EXIT
+  cd "${repository_root}"
+  MPLCONFIGDIR="${plot_cache_root}/matplotlib" \
+    XDG_CACHE_HOME="${plot_cache_root}/xdg" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    "${python_command[@]}" -m unittest discover \
+      -s test/PlotRead/tests \
+      -p 'test_*.py'
+)
+
 "${script_directory}/check_independence.sh"
 
 isolation_root="$(

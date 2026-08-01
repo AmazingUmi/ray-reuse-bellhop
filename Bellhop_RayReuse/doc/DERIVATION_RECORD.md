@@ -174,7 +174,7 @@ Munk 算例的 Influence 占绝对主导，串行 trace-once 因此没有形成�
 
 2026-07-30 的正确性矩阵如下：
 
-- Debug ASan/UBSan 与 Release 全量 CTest 均为 24/24；`parallel` 专项覆盖
+- Debug ASan/UBSan 与 Release 全量 CTest 均为 25/25；`parallel` 专项覆盖
   1、2、16 频、逐复数零差异、重复确定性、回调恰一次、异常传播及
   worker/队列/预算边界；
 - 六例 2 频 smoke 和六例 16 频 regression 的并行 SHD 均与阶段 C 非复用
@@ -342,7 +342,23 @@ direct 中约 `3–4 ms`、acoustic-bottom 中约 `7 ms`。2频 direct 仅约
 说明限制来自资源争用而非队列不均。因此不实施加权队列，不扩大
 receiver/ray 调度重构，F2 局部优化与调度诊断关闭。
 
-## 12. 后续验收记录规则
+## 12. 工程化与内部发布收口
+
+2026-08-01 完成本地工程化出口：全量 C++ 采用项目 `.clang-format` 并以
+`--dry-run --Werror` 验证；CMake compilation database 驱动 Clang static
+analyzer；`bellhop_rayreuse --version` 输出 `Bellhop RayReuse 0.1.0`；CPack
+生成只包含可执行程序和 README 的 TGZ，并在临时安装目录执行版本烟测。
+
+扩展质量门最终覆盖 Debug/Release 25/25 CTest、Conda `py` 标准工具
+50/50、PlotRead 9/9、独立性扫描和无 F2CPP 隔离构建 25/25。HDF5 只冻结
+候选 schema v1，SHD 继续作为默认结果格式；顺序磁盘轨迹缓存因 64频代表性
+RSS 未超过 2 GiB 触发预算而延后。
+
+当前 TGZ 是内部验证构建，不是公开发行包：仓库尚无 LICENSE/NOTICE，也未
+冻结最低 macOS 或跨平台矩阵；仓库无远端，因此 GitHub Actions 首次运行和
+主分支必需检查仍需外部仓库配置后完成。
+
+## 13. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：
 

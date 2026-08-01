@@ -8,6 +8,7 @@ project(
 )
 
 include(CTest)
+include(GNUInstallDirs)
 
 option(
   RAYREUSE_ENABLE_SANITIZERS
@@ -104,6 +105,11 @@ target_link_libraries(
 )
 
 add_executable(bellhop_rayreuse app/main.cpp)
+target_compile_definitions(
+  bellhop_rayreuse
+  PRIVATE
+    RAYREUSE_VERSION="${PROJECT_VERSION}"
+)
 target_link_libraries(
   bellhop_rayreuse
   PRIVATE
@@ -114,6 +120,15 @@ set_target_properties(
   bellhop_rayreuse
   PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
+install(
+  TARGETS bellhop_rayreuse
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+install(
+  FILES README.md
+  DESTINATION "${CMAKE_INSTALL_DOCDIR}"
 )
 
 if(BUILD_TESTING)
@@ -259,6 +274,14 @@ if(BUILD_TESTING)
   add_test(NAME rayreuse.cli.help COMMAND bellhop_rayreuse --help)
   set_tests_properties(rayreuse.cli.help PROPERTIES LABELS "unit")
 
+  add_test(NAME rayreuse.cli.version COMMAND bellhop_rayreuse --version)
+  set_tests_properties(
+    rayreuse.cli.version
+    PROPERTIES
+      LABELS "unit"
+      PASS_REGULAR_EXPRESSION "Bellhop RayReuse ${PROJECT_VERSION}"
+  )
+
   add_test(NAME rayreuse.cli.missing_root COMMAND bellhop_rayreuse)
   set_tests_properties(
     rayreuse.cli.missing_root
@@ -267,3 +290,14 @@ if(BUILD_TESTING)
       WILL_FAIL TRUE
   )
 endif()
+
+set(CPACK_GENERATOR "TGZ")
+set(CPACK_PACKAGE_NAME "bellhop-rayreuse")
+set(CPACK_PACKAGE_VENDOR "Bellhop RayReuse")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(
+  CPACK_PACKAGE_FILE_NAME
+  "bellhop-rayreuse-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+)
+include(CPack)

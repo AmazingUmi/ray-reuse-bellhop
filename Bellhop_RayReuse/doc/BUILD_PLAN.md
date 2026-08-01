@@ -12,7 +12,7 @@ conda run -n py python --version
 是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
 [`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
 
-截至 2026-07-31，A～E 和 F1 均已关闭。F2 的 range-major 临时布局和
+截至 2026-08-01，A～E、F1 和 F2 均已关闭。F2 的 range-major 临时布局和
 range-batch 换序因 2频回退而回滚；`eedc790` 的图像专化和 `fe6b33f` 的
 Hermite 内部快路径、Release 末端有限性校验和 `7ce9c7d` 的只读循环
 不变量提升均已保留。相对 F1 前，Munk 2频 reuse 累计下降 `63.51%`，
@@ -22,6 +22,12 @@ segment 端点与插值差值缓存、receiver-depth 数量与连续数据指针
 相对 reuse 为 `3.543×/3.513×`，当前保留 8 workers。详见
 [`BENCHMARK_RESULTS_FDAAF56.md`](./BENCHMARK_RESULTS_FDAAF56.md)。
 
+里程碑后的本地工程化也已关闭：全量 clang-format 门、compilation database
+驱动的 Clang static analyzer、版本 `0.1.0`、安装烟测和 CPack TGZ 已合并为
+`scripts/engineering_gate.sh`。HDF5 已完成 schema 评估并延后实现，SHD 继续
+作为默认兼容输出。仓库远端、云端 workflow 首次运行、分支保护、许可证和
+目标平台矩阵属于外部前置条件，不计作本地构建未完成项。
+
 里程碑后的统一质量门为：
 
 ```bash
@@ -29,9 +35,21 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
-Release、独立性扫描和无 F2CPP 隔离副本构建。CI 通过
+Release、25 项 CTest、50 项标准工具测试、9 项 PlotRead 测试、独立性扫描
+和无 F2CPP 隔离副本构建。CI 通过
 `RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
 门，避免本地与云端验收逻辑分叉。
+
+本地工程化验收为：
+
+```bash
+RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
+```
+
+它完成格式检查、静态分析、Release 安装、版本烟测、TGZ 打包和 SHA-256
+输出。产物当前定位为内部验证包；公开发行限制见
+[`RELEASE.md`](./RELEASE.md)，HDF5 决策见
+[`HDF5_SCHEMA_DECISION.md`](./HDF5_SCHEMA_DECISION.md)。
 
 ## 阶段 A：独立派生工程
 
@@ -304,7 +322,8 @@ Debug/诊断路径继续保留有限性检查，Release 快路径在每频完成
 - [x] solver 对冻结缓存和已校验逐频投影使用私有预验证入口；
 - [x] 单频、nonreuse、reuse、parallel 的统计聚合与
   `--profile-influence` 诊断输出；
-- [x] Release/Debug、49 个 Python 测试、独立性扫描和隔离构建质量门；
+- [x] Release/Debug、50 个标准工具测试、9 个 PlotRead 测试、独立性扫描和
+  隔离构建质量门；
 - [x] Munk 2频 smoke：`20.1310 s → 18.7690 s`，SHD 哈希不变；
 - [x] 将已验证 `(depth, range)` 映射为一次线性索引，消除同一贡献的两次
   `workspace.at()` 边界检查；
@@ -353,8 +372,8 @@ parallel-10 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`。
 图像专化在每条射线入口按 `imageCount=1/2/3` 选择模板实例，在 depth 热
 循环中以 `if constexpr` 保留 true → surface → bottom 的固定求和顺序。
 新增组件测试逐位比较专化热路径和详细诊断路径，并显式覆盖原先缺少的
-`imageCount=2`。完整质量门 Debug/Release 24/24、Python 49/49、独立构建
-24/24 通过。
+`imageCount=2`。最终完整质量门 Debug/Release 25/25、标准 Python 50/50、
+PlotRead 9/9、独立构建 25/25 通过。
 
 `7ce9c7d` 后 Munk 16频中位数为 reuse `87.578 s`、parallel-8
 `25.525 s`、parallel-10 `23.715 s`；相对当前 reuse 加速为

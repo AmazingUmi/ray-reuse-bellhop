@@ -27,6 +27,31 @@
         "RAYREUSE_ENABLE_SANITIZERS": "OFF",
         "RAYREUSE_WARNINGS_AS_ERRORS": "ON"
       }
+    },
+    {
+      "name": "static-analysis",
+      "displayName": "AppleClang static analysis",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/static-analysis",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "BUILD_TESTING": "OFF",
+        "RAYREUSE_ENABLE_SANITIZERS": "OFF",
+        "RAYREUSE_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "package",
+      "displayName": "Versioned release package",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/package",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "RAYREUSE_ENABLE_SANITIZERS": "OFF",
+        "RAYREUSE_WARNINGS_AS_ERRORS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -37,6 +62,13 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "package",
+      "configurePreset": "package",
+      "targets": [
+        "package"
+      ]
     }
   ],
   "testPresets": [
