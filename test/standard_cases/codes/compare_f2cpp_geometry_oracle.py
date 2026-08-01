@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import subprocess
@@ -30,14 +31,61 @@ FIELD_RULES = {
     "mid_z_m": ("mid_z_m", 1e-8, 1e-10),
 }
 
+PROBE_SCHEMA = "bellhop.cpp.ray_path_probe"
+PROBE_SCHEMA_VERSION = 1
+
 
 def load_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as stream:
         return list(csv.DictReader(stream))
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_probe_manifest(
+    manifest_path: Path,
+    *,
+    expected_producer: str,
+    csv_path: Path,
+    point_count: int,
+    step_count: int,
+    termination: str,
+) -> dict[str, object]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    expected = {
+        "schema": PROBE_SCHEMA,
+        "schema_version": PROBE_SCHEMA_VERSION,
+        "contract_version": 1,
+        "producer": expected_producer,
+        "status": "complete",
+        "points_file": csv_path.name,
+        "point_count": point_count,
+        "integrated_step_count": step_count,
+        "termination": termination,
+        "index_base": 1,
+        "numeric_precision": "binary64",
+        "units": "SI",
+    }
+    for field, value in expected.items():
+        if manifest.get(field) != value:
+            raise ValueError(
+                f"probe manifest field {field}: "
+                f"{manifest.get(field)!r} != {value!r}"
+            )
+    with csv_path.open(newline="", encoding="utf-8") as stream:
+        columns = next(csv.reader(stream))
+    if manifest.get("columns") != columns:
+        raise ValueError("probe manifest columns do not match CSV header")
+    return manifest
+
+
 def compare(
-    oracle_dir: Path, probe: Path, probe_configuration: str
+    oracle_dir: Path,
+    probe: Path,
+    probe_configuration: str,
+    expected_producer: str | None = None,
 ) -> dict[str, object]:
     manifest = json.loads(
         (oracle_dir / "manifest.json").read_text(encoding="utf-8")
@@ -61,21 +109,37 @@ def compare(
             text=True,
         )
         f2cpp_rows = load_csv(f2cpp_csv)
-
-    summary_fields = completed.stdout.strip().split(",")
-    if len(summary_fields) != 3:
-        raise ValueError(f"unexpected F2CPP probe summary: {completed.stdout!r}")
-    point_count, step_count = map(int, summary_fields[:2])
-    termination = summary_fields[2]
-    expected_step_count = int(manifest["integrated_step_count"])
-    if point_count != len(oracle_rows) or len(f2cpp_rows) != len(oracle_rows):
-        raise ValueError("F2CPP/Fortran point-count mismatch")
-    if step_count != expected_step_count:
-        raise ValueError("F2CPP/Fortran integrated-step mismatch")
-    if termination != "ExitedDomain":
-        raise ValueError(f"unexpected F2CPP termination: {termination!r}")
-    if manifest["termination_reason"] != "spatial_box_range":
-        raise ValueError("Fortran oracle did not terminate at the range box")
+        summary_fields = completed.stdout.strip().split(",")
+        if len(summary_fields) != 3:
+            raise ValueError(
+                f"unexpected C++ probe summary: {completed.stdout!r}"
+            )
+        point_count, step_count = map(int, summary_fields[:2])
+        termination = summary_fields[2]
+        expected_step_count = int(manifest["integrated_step_count"])
+        if point_count != len(oracle_rows) or len(f2cpp_rows) != len(oracle_rows):
+            raise ValueError("C++/Fortran point-count mismatch")
+        if step_count != expected_step_count:
+            raise ValueError("C++/Fortran integrated-step mismatch")
+        if termination != "ExitedDomain":
+            raise ValueError(f"unexpected C++ termination: {termination!r}")
+        if manifest["termination_reason"] != "spatial_box_range":
+            raise ValueError("Fortran oracle did not terminate at the range box")
+        probe_manifest = None
+        if expected_producer is not None:
+            probe_manifest = validate_probe_manifest(
+                Path(str(f2cpp_csv) + ".manifest.json"),
+                expected_producer=expected_producer,
+                csv_path=f2cpp_csv,
+                point_count=point_count,
+                step_count=step_count,
+                termination=termination,
+            )
+            if int(probe_manifest.get("reflection_event_count", -1)) != int(
+                manifest["reflection_event_count"]
+            ):
+                raise ValueError("C++/Fortran reflection-event-count mismatch")
+        probe_csv_sha256 = _sha256(f2cpp_csv)
 
     worst = {
         "scaled_error": 0.0,
@@ -133,9 +197,12 @@ def compare(
                 )
 
     return {
+        "producer": expected_producer,
         "point_count": point_count,
         "integrated_step_count": step_count,
         "termination": termination,
+        "probe_csv_sha256": probe_csv_sha256,
+        "probe_manifest": probe_manifest,
         "worst_comparison": worst,
     }
 

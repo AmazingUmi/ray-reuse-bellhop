@@ -271,6 +271,21 @@ if(BUILD_TESTING)
     tests/component/geometry_tracer_munk_test.cpp
     component
   )
+  add_executable(
+    bellhop_rayreuse_geometry_oracle_probe
+    tests/tools/geometry_oracle_probe.cpp
+  )
+  target_include_directories(
+    bellhop_rayreuse_geometry_oracle_probe
+    PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+  )
+  target_link_libraries(
+    bellhop_rayreuse_geometry_oracle_probe
+    PRIVATE
+      bellhop_rayreuse_core
+      bellhop_rayreuse_project_options
+  )
   add_test(NAME rayreuse.cli.help COMMAND bellhop_rayreuse --help)
   set_tests_properties(rayreuse.cli.help PROPERTIES LABELS "unit")
 

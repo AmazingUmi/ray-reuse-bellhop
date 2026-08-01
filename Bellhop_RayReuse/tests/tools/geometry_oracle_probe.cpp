@@ -1,4 +1,3 @@
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -7,29 +6,28 @@
 #include <stdexcept>
 #include <string>
 
-#include "bellhop/model/environment.hpp"
-#include "bellhop/model/simulation_case.hpp"
-#include "bellhop/ray/geometry_tracer.hpp"
+#include "rayreuse/model/environment.hpp"
+#include "rayreuse/model/simulation_case.hpp"
+#include "rayreuse/ray/geometry_tracer.hpp"
 #include "support/munk_case_fixture.hpp"
 
 namespace {
 
-const char* terminationName(bellhop::RayTerminationReason reason) {
+const char* terminationName(rayreuse::RayTerminationReason reason) {
   switch (reason) {
-    case bellhop::RayTerminationReason::ExitedDomain:
+    case rayreuse::RayTerminationReason::ExitedDomain:
       return "ExitedDomain";
-    case bellhop::RayTerminationReason::NumericalFailure:
+    case rayreuse::RayTerminationReason::NumericalFailure:
       return "NumericalFailure";
-    case bellhop::RayTerminationReason::PointLimit:
+    case rayreuse::RayTerminationReason::PointLimit:
       return "PointLimit";
   }
   return "Unknown";
 }
 
-void writeManifest(const std::filesystem::path& csvPath,
-                   double launchAngle,
+void writeManifest(const std::filesystem::path& csvPath, double launchAngle,
                    const std::string& configuration,
-                   const bellhop::RayPath& path) {
+                   const rayreuse::RayPath& path) {
   const std::filesystem::path manifestPath(csvPath.string() + ".manifest.json");
   std::ofstream output(manifestPath);
   if (!output) {
@@ -39,7 +37,7 @@ void writeManifest(const std::filesystem::path& csvPath,
          << "  \"schema\": \"bellhop.cpp.ray_path_probe\",\n"
          << "  \"schema_version\": 1,\n"
          << "  \"contract_version\": 1,\n"
-         << "  \"producer\": \"f2cpp\",\n"
+         << "  \"producer\": \"rayreuse\",\n"
          << "  \"status\": \"complete\",\n"
          << "  \"configuration\": \"" << configuration << "\",\n"
          << "  \"launch_angle_rad\": " << launchAngle << ",\n"
@@ -79,8 +77,7 @@ int main(int argc, char* argv[]) {
     return 2;
   }
 
-  const bool useMunkConfiguration =
-      argc == 4 && std::string(argv[3]) == "munk";
+  const bool useMunkConfiguration = argc == 4 && std::string(argv[3]) == "munk";
   if (argc == 4 && !useMunkConfiguration) {
     std::cerr << "unknown probe configuration: " << argv[3] << '\n';
     return 2;
@@ -103,39 +100,35 @@ int main(int argc, char* argv[]) {
       sourceDepth = std::stod(argv[4]);
       depthLimit = std::stod(argv[5]);
       const unsigned long long requestedMaximum = std::stoull(argv[6]);
-      if (requestedMaximum >
-          std::numeric_limits<std::size_t>::max()) {
+      if (requestedMaximum > std::numeric_limits<std::size_t>::max()) {
         throw std::out_of_range("MAX_POINTS exceeds size_t");
       }
-      maximumRayPoints =
-          static_cast<std::size_t>(requestedMaximum);
+      maximumRayPoints = static_cast<std::size_t>(requestedMaximum);
     }
   } catch (const std::exception& error) {
     std::cerr << "invalid probe argument: " << error.what() << '\n';
     return 2;
   }
 
-  const bellhop::Environment environment =
+  const rayreuse::Environment environment =
       useMunkConfiguration
-          ? bellhop::test::makeMunkEnvironment()
-          : bellhop::Environment(
-                bellhop::SoundSpeedProfile(
-                    {{.depth = 0.0,
-                      .soundSpeed = 1500.0,
-                      .density = 1000.0},
+          ? rayreuse::test::makeMunkEnvironment()
+          : rayreuse::Environment(
+                rayreuse::SoundSpeedProfile(
+                    {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
                      {.depth = bottomDepth,
                       .soundSpeed = 1500.0,
                       .density = 1000.0}}),
-                bellhop::BoundaryModel::vacuum(0.0),
-                bellhop::BoundaryModel::rigid(bottomDepth));
-  const bellhop::GeometryTracer tracer(
+                rayreuse::BoundaryModel::vacuum(0.0),
+                rayreuse::BoundaryModel::rigid(bottomDepth));
+  const rayreuse::GeometryTracer tracer(
       environment,
-      bellhop::IntegratorSettings{.stepLength = stepLength,
-                                  .rangeLimit = rangeLimit,
-                                  .depthLimit = depthLimit,
-                                  .maximumRayPoints = maximumRayPoints});
-  const bellhop::RayPath path =
-      tracer.trace(bellhop::Source{.depth = sourceDepth}, launchAngle);
+      rayreuse::IntegratorSettings{.stepLength = stepLength,
+                                   .rangeLimit = rangeLimit,
+                                   .depthLimit = depthLimit,
+                                   .maximumRayPoints = maximumRayPoints});
+  const rayreuse::RayPath path =
+      tracer.trace(rayreuse::Source{.depth = sourceDepth}, launchAngle);
 
   std::ofstream output(argv[1]);
   if (!output) {
@@ -153,15 +146,15 @@ int main(int argc, char* argv[]) {
   std::size_t topBounces = 0U;
   std::size_t bottomBounces = 0U;
   for (std::size_t index = 0U; index < path.points.size(); ++index) {
-    const bellhop::RayState& point = path.points[index];
-    bellhop::StepQuadrature step;
+    const rayreuse::RayState& point = path.points[index];
+    rayreuse::StepQuadrature step;
     const char* pointKind = "source";
     std::size_t stepValid = 0U;
     std::size_t incomingStepIndex = 0U;
     if (index > 0U && eventIndex < path.events.size() &&
         path.events[eventIndex].rayPointIndex + 1U == index) {
       if (path.events[eventIndex].boundary ==
-          bellhop::ReflectionBoundary::SeaSurface) {
+          rayreuse::ReflectionBoundary::SeaSurface) {
         pointKind = "top_reflection";
         ++topBounces;
       } else {
@@ -182,10 +175,10 @@ int main(int argc, char* argv[]) {
            << point.slowness.depth << ',' << point.dynamicP[0] << ','
            << point.dynamicP[1] << ',' << point.dynamicQ[0] << ','
            << point.dynamicQ[1] << ',' << point.soundSpeed << ','
-           << point.realTravelTime << ',' << topBounces << ','
-           << bottomBounces << ',' << step.stepLength << ','
-           << step.startWeight << ',' << step.midpointWeight << ','
-           << step.midpoint.range << ',' << step.midpoint.depth << '\n';
+           << point.realTravelTime << ',' << topBounces << ',' << bottomBounces
+           << ',' << step.stepLength << ',' << step.startWeight << ','
+           << step.midpointWeight << ',' << step.midpoint.range << ','
+           << step.midpoint.depth << '\n';
   }
   if (!output) {
     std::cerr << "failed while writing output CSV\n";

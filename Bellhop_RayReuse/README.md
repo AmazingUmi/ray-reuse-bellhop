@@ -50,7 +50,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 该入口依次执行 Debug ASan/UBSan、Release、两套 25 项 CTest、Conda `py`
-下 62 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
+下 69 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
 动态链接独立性扫描，以及无 F2CPP 目录的 Release 隔离构建。GitHub Actions
 使用固定的 Python 3.12.9 和 NumPy 2.2.6 调用同一脚本；本地默认仍严格使用
 名为 `py` 的 Conda 环境。
@@ -77,6 +77,26 @@ single 全频门控，在 broadband 仅 `fmax` 门控，因为其 D-02 策略会
 单频重新规划发射扇。RayReuse 的 nonreuse/reuse/parallel 均逐频对照原版，
 并要求三个模式的 SHD 逐字节一致。该长于普通质量门的矩阵不进入每次提交的
 默认快速门。
+
+三模型单线程同工作量阶段微基准为：
+
+```bash
+Bellhop_RayReuse/scripts/single_thread_microbenchmark.sh
+```
+
+它以相同 single ENV 报告原始阶段和统一 `Trace + Project + Influence` 核心
+中位数；阶段边界限制见
+[`doc/SINGLE_THREAD_MICROBENCHMARK.md`](./doc/SINGLE_THREAD_MICROBENCHMARK.md)。
+
+Fortran/F2CPP/RayReuse 中间几何状态门为：
+
+```bash
+Bellhop_RayReuse/scripts/intermediate_state_gate.sh
+```
+
+它覆盖 direct、vacuum/rigid、Munk 的位置、慢度、动态 `p/q`、实走时、
+modified-box 求积子集和反射顺序；F2CPP 契约见
+[`../Bellhop_F2CPP/doc/INTERMEDIATE_STATE_CONTRACT.md`](../Bellhop_F2CPP/doc/INTERMEDIATE_STATE_CONTRACT.md)。
 
 ## 运行入口
 

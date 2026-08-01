@@ -7,6 +7,7 @@
 | [USAGE.md](./USAGE.md) | 环境要求、编译、测试、CLI、输入输出和故障排查 | 使用者、测试人员 |
 | [BUILD_PLAN.md](./BUILD_PLAN.md) | G0/M1/M2 工作包、依赖顺序和完成证据 | 开发者、维护者 |
 | [DERIVATION_MANIFEST.md](./DERIVATION_MANIFEST.md) | 最终快照身份、校验和、性能门和 RayReuse 派生清单 | 审计者、RayReuse 开发者 |
+| [INTERMEDIATE_STATE_CONTRACT.md](./INTERMEDIATE_STATE_CONTRACT.md) | 数值接口、单位和 geometry probe schema v1 | 数值开发者、审计者 |
 
 全项目设计、理论和变量契约仍保存在仓库根目录的 `doc/`：
 

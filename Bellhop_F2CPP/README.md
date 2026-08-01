@@ -52,6 +52,7 @@ build/release/bellhop_f2cpp
 - [F2CPP 文档索引](./doc/README.md)；
 - [构建与验收计划](./doc/BUILD_PLAN.md)；
 - [最终派生清单](./doc/DERIVATION_MANIFEST.md)。
+- [数值接口与中间状态契约 v1](./doc/INTERMEDIATE_STATE_CONTRACT.md)。
 
 全项目设计与数值契约：
 

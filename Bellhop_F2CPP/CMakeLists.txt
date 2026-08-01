@@ -228,6 +228,12 @@ if(BUILD_TESTING)
     tests/component/geometry_tracer_munk_test.cpp
     component
   )
+  add_f2cpp_test(
+    bellhop_f2cpp_numerical_contract_tests
+    f2cpp.unit.numerical_contract
+    tests/unit/numerical_contract_test.cpp
+    unit
+  )
   add_executable(
     bellhop_f2cpp_geometry_oracle_probe
     tests/tools/geometry_oracle_probe.cpp
