@@ -393,6 +393,25 @@ G4 为原版二维 Fortran 增加 `BELLHOP_PROFILE_STAGES=1` 显式开关，默�
 逐字节一致；使用方法见
 [`../../Bellhop_origin/STAGE_PROFILING.md`](../../Bellhop_origin/STAGE_PROFILING.md)。
 
+G5 在干净提交 `06e390fc9338e2b94c29b9492027c3a59391dd5d` 关闭本地出口。
+完整质量门通过 Debug/Release/隔离构建各 25/25 CTest、标准 Python 62/62、
+PlotRead 9/9 和独立性扫描；工程门通过格式、Clang static analyzer、Release
+安装烟测与 CPack。内部 TGZ SHA-256 为
+`9b5e512ffe73c1e12f5da642e291dbbf2886d8b60ef288f747df705ae3b4ea08`。
+
+G4 插桩后的原版可执行文件 SHA-256 为
+`0b728f0879adc684adcdd1d87c077cadabaef11ddb570d763ff8ef2ebb813b0b`；由于
+默认输出及 profiled SHD 与冻结 oracle 逐字节一致，G0/G1 快照继续保留其
+生成时的 `f35bbdd` 来源和 `f77b7bb...` 可执行文件身份，不重新生成。最终
+三模型矩阵仍为 12/12 通过、门控失败 0，误差上限与 `9f254bd` 轮一致；详细
+身份见 [`MODEL_MATRIX_RESULTS_06E390F.md`](./MODEL_MATRIX_RESULTS_06E390F.md)。
+
+本机工具链为 Apple clang/clang-format 21.0.0、GNU Fortran 14.2.0、CMake
+4.0.2、Conda `py` Python 3.12.9 和 NumPy 2.2.6。`/usr/bin/time -l` 对 Munk
+50 Hz 原版单频算例记录最大 RSS `3,342,336 B`（约 `3.19 MiB`）；同轮阶段
+时间为 Trace `0.015576 s`、Influence `2.631201 s`、Scale `0.000029 s`、
+Output `0.000635 s`。该 RSS 是本机构建的单次进程基线，不外推为跨平台上限。
+
 ## 14. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：

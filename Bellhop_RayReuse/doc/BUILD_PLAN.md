@@ -415,7 +415,7 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 3. [x] 实现快照校验器、复压力/TL/相位 floor 规则及逐样本失败报告；
 4. [x] 建立六例 single、两频 smoke 的三模型自动对照门；
 5. [x] 为原版 Fortran 增加默认关闭的 Trace/Influence/Scale/输出计时；
-6. [ ] 运行完整回归、记录本机工具链/RSS 并关闭阶段文档。
+6. [x] 运行完整回归、记录本机工具链/RSS 并关闭阶段文档。
 
 契约和显式更新命令见
 [`../../test/standard_cases/REFERENCE_SNAPSHOTS.md`](../../test/standard_cases/REFERENCE_SNAPSHOTS.md)。
@@ -430,3 +430,19 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 - RayReuse 三个多频模式继续满足既定容差和确定性要求；
 - Fortran 诊断计时开启前后 SHD 不变；
 - 完整质量门和工程门通过，长时 16/64频矩阵仍只在里程碑运行。
+
+### G 阶段完成状态（2026-08-01）
+
+- [x] 完整质量门：Debug/Release/隔离构建各 25/25 CTest，标准 Python
+  62/62，PlotRead 9/9，独立性扫描通过；
+- [x] 完整工程门：格式、Clang static analyzer、Release 安装烟测和 CPack
+  TGZ 均通过；
+- [x] 干净提交 `06e390f` 的三模型矩阵 12/12 通过，门控失败为 0；
+- [x] Munk 50 Hz 原版算例最大 RSS `3,342,336 B`（约 `3.19 MiB`），
+  profile 开启后的 SHD 仍与冻结 oracle 逐字节一致；
+- [x] 工具链、二进制哈希、误差上限和内部制品哈希已进入阶段关闭记录。
+
+最终本机矩阵证据见
+[`MODEL_MATRIX_RESULTS_06E390F.md`](./MODEL_MATRIX_RESULTS_06E390F.md)。远端
+CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件，不属于 G 阶段本地
+数值加固出口。

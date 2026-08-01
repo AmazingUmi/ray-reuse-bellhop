@@ -41,6 +41,19 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 
 该哈希只标识上述本机内部验证产物，不代表签名、公证或跨平台发行认证。
 
+### G 阶段关闭产物
+
+2026-08-01 在同一 Darwin arm64 本机以干净源提交
+`06e390fc9338e2b94c29b9492027c3a59391dd5d` 再次运行工程门并通过，生成同名
+内部 TGZ：
+
+- `bellhop-rayreuse-0.1.0-Darwin-arm64.tar.gz`
+- SHA-256：`9b5e512ffe73c1e12f5da642e291dbbf2886d8b60ef288f747df705ae3b4ea08`
+
+本轮同时通过完整质量门和三模型数值矩阵；其工具链、模型二进制身份、误差
+上限和 RSS 见 [`MODEL_MATRIX_RESULTS_06E390F.md`](./MODEL_MATRIX_RESULTS_06E390F.md)。
+前一哈希保留为 `b04ccbc` 的历史内部构建记录，不再代表当前工作树制品。
+
 ## 对外发布前置条件
 
 - 冻结 LICENSE、版权归属和 NOTICE；
