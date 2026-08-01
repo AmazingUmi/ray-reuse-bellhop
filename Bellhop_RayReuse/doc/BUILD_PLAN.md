@@ -35,7 +35,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
-Release、25 项 CTest、54 项标准工具测试、9 项 PlotRead 测试、独立性扫描
+Release、25 项 CTest、58 项标准工具测试、9 项 PlotRead 测试、独立性扫描
 和无 F2CPP 隔离副本构建。CI 通过
 `RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
 门，避免本地与云端验收逻辑分叉。
@@ -412,7 +412,7 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 
 1. [x] 冻结三模型职责、紧凑快照 schema、更新规则和快速/完整矩阵；
 2. [x] 为六例 `single` 生成原版 oracle 紧凑快照，每例 16 个代表点；
-3. [ ] 实现快照校验器、复压力/TL/相位 floor 规则及失败报告；
+3. [x] 实现快照校验器、复压力/TL/相位 floor 规则及逐样本失败报告；
 4. [ ] 建立六例 single、两频 smoke 的三模型自动对照门；
 5. [ ] 为原版 Fortran 增加默认关闭的 Trace/Influence/Scale/输出计时；
 6. [ ] 运行完整回归、记录本机工具链/RSS 并关闭阶段文档。

@@ -42,6 +42,21 @@ conda run -n py python test/standard_cases/codes/reference_snapshots.py \
 提交参考更新时必须同时记录：修改原因、oracle 源码/可执行文件身份、最大数值
 变化以及完整三模型回归结果。不得仅因候选实现发生变化而重建 oracle。
 
+检查一个或多个参考文件的 schema 与派生量内部一致性：
+
+```bash
+conda run -n py python test/standard_cases/codes/reference_snapshots.py \
+  check test/standard_cases/results/reference/origin/single/*.json
+```
+
+将任意候选 SHD 的频率切片与参考比较并可选保存 JSON 报告：
+
+```bash
+conda run -n py python test/standard_cases/codes/reference_snapshots.py \
+  validate /path/to/reference.json /path/to/candidate.shd \
+  --candidate-frequency-index 0 --report /path/to/report.json
+```
+
 ## 验收矩阵
 
 快速门使用已提交的紧凑快照和单元测试，不启动求解器。集成门运行六例
@@ -50,6 +65,7 @@ single 和两频 broadband smoke：原版 Fortran 是主参考，F2CPP 与 RayRe
 里程碑时手动运行。
 
 复压力绝对/相对误差是主判据，TL 是幅值高于既定 pressure floor 后的辅助
-判据。相位只在参考与候选幅值均高于 phase floor 时比较，避免近零复压力的
-无意义相位跳变。具体数值沿用 `codes/tolerances.toml`，后续若增加相位规则
-必须先用三模型实测误差冻结，不得凭经验收紧。
+判据。相位只在参考与候选幅值均高于 `1.0e-4` 时比较，避免近零复压力的
+无意义相位跳变；`1.0e-3 rad` 相位限值与 `1.0e-7` 压力绝对预算在该 floor
+处一致。具体数值统一来自 `codes/tolerances.toml`，G3 必须用三模型实测误差
+复核该门，后续不得凭经验收紧。

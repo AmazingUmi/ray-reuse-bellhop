@@ -7,6 +7,10 @@ relative_floor = 1.0e-10
 absolute_db = 1.0e-3
 pressure_floor = 1.0e-10
 
+[phase]
+absolute_rad = 1.0e-3
+pressure_floor = 1.0e-4
+
 [trajectory]
 position_m = 1.0e-8
 slowness_s_per_m = 1.0e-12

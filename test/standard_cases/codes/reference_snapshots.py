@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import cmath
 import hashlib
 import itertools
 import json
 import math
 from pathlib import Path
 import sys
+import tomllib
 from typing import Sequence
 
 
@@ -24,6 +26,7 @@ from bellhop_io_py.shd import ShdReader
 
 SCHEMA = "bellhop.standard_case.compact_reference"
 SCHEMA_VERSION = 1
+DEFAULT_TOLERANCES = CODES_ROOT / "tolerances.toml"
 
 
 def sha256_file(path: Path) -> str:
@@ -234,6 +237,288 @@ def create_from_manifest(
     )
 
 
+def load_reference(path: Path) -> dict[str, object]:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError(f"{path}: reference must be a JSON object")
+    if document.get("schema") != SCHEMA:
+        raise ValueError(f"{path}: unsupported reference schema")
+    if document.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(f"{path}: unsupported reference schema version")
+    samples = document.get("samples")
+    if not isinstance(samples, list) or not samples:
+        raise ValueError(f"{path}: reference samples must be a non-empty list")
+
+    seen_ids: set[str] = set()
+    for sample in samples:
+        if not isinstance(sample, dict):
+            raise ValueError(f"{path}: reference sample must be an object")
+        sample_id = sample.get("id")
+        if not isinstance(sample_id, str) or not sample_id:
+            raise ValueError(f"{path}: reference sample needs an id")
+        if sample_id in seen_ids:
+            raise ValueError(f"{path}: duplicate sample id {sample_id!r}")
+        seen_ids.add(sample_id)
+        pressure = sample.get("pressure")
+        if not isinstance(pressure, dict):
+            raise ValueError(f"{path}: sample {sample_id} lacks pressure")
+        try:
+            value = complex(
+                float(pressure["real"]), float(pressure["imag"])
+            )
+            stored_magnitude = float(pressure["magnitude"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(
+                f"{path}: sample {sample_id} has invalid pressure values"
+            ) from error
+        magnitude = abs(value)
+        if not math.isclose(
+            magnitude,
+            stored_magnitude,
+            rel_tol=1.0e-15,
+            abs_tol=1.0e-300,
+        ):
+            raise ValueError(
+                f"{path}: sample {sample_id} magnitude is inconsistent"
+            )
+        stored_tl = pressure.get("transmission_loss_db")
+        if magnitude == 0.0:
+            if stored_tl is not None:
+                raise ValueError(
+                    f"{path}: zero sample {sample_id} must have null TL"
+                )
+        else:
+            expected_tl = -20.0 * math.log10(magnitude)
+            if not isinstance(stored_tl, (int, float)) or not math.isclose(
+                float(stored_tl),
+                expected_tl,
+                rel_tol=1.0e-15,
+                abs_tol=1.0e-12,
+            ):
+                raise ValueError(
+                    f"{path}: sample {sample_id} TL is inconsistent"
+                )
+    return document
+
+
+def load_tolerances(path: Path) -> dict[str, dict[str, float]]:
+    with path.open("rb") as stream:
+        raw = tomllib.load(stream)
+    required = {
+        "pressure": ("absolute", "relative", "relative_floor"),
+        "transmission_loss": ("absolute_db", "pressure_floor"),
+        "phase": ("absolute_rad", "pressure_floor"),
+    }
+    result: dict[str, dict[str, float]] = {}
+    for section, names in required.items():
+        values = raw.get(section)
+        if not isinstance(values, dict):
+            raise ValueError(f"missing tolerance section {section!r}")
+        result[section] = {}
+        for name in names:
+            try:
+                value = float(values[name])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(
+                    f"invalid tolerance {section}.{name}"
+                ) from error
+            if value < 0.0 or not math.isfinite(value):
+                raise ValueError(
+                    f"tolerance {section}.{name} must be finite and non-negative"
+                )
+            result[section][name] = value
+    return result
+
+
+def compare_pressure_values(
+    reference: complex,
+    candidate: complex,
+    tolerances: dict[str, dict[str, float]],
+) -> dict[str, float | bool | None]:
+    reference_magnitude = abs(reference)
+    candidate_magnitude = abs(candidate)
+    pressure_rules = tolerances["pressure"]
+    absolute_error = abs(candidate - reference)
+    relative_error = absolute_error / max(
+        reference_magnitude, pressure_rules["relative_floor"]
+    )
+    pressure_limit = (
+        pressure_rules["absolute"]
+        + pressure_rules["relative"] * reference_magnitude
+    )
+    pressure_passed = absolute_error <= pressure_limit
+
+    tl_rules = tolerances["transmission_loss"]
+    tl_compared = reference_magnitude > tl_rules["pressure_floor"]
+    tl_error: float | None = None
+    tl_passed = True
+    if tl_compared:
+        reference_tl = -20.0 * math.log10(reference_magnitude)
+        candidate_tl = -20.0 * math.log10(
+            max(candidate_magnitude, tl_rules["pressure_floor"])
+        )
+        tl_error = abs(candidate_tl - reference_tl)
+        tl_passed = tl_error <= tl_rules["absolute_db"]
+
+    phase_rules = tolerances["phase"]
+    phase_compared = (
+        reference_magnitude > phase_rules["pressure_floor"]
+        and candidate_magnitude > phase_rules["pressure_floor"]
+    )
+    phase_error: float | None = None
+    phase_passed = True
+    if phase_compared:
+        phase_error = abs(cmath.phase(candidate / reference))
+        phase_passed = phase_error <= phase_rules["absolute_rad"]
+
+    return {
+        "pressure_absolute": absolute_error,
+        "pressure_relative": relative_error,
+        "pressure_limit": pressure_limit,
+        "pressure_passed": pressure_passed,
+        "tl_compared": tl_compared,
+        "tl_difference_db": tl_error,
+        "tl_passed": tl_passed,
+        "phase_compared": phase_compared,
+        "phase_difference_rad": phase_error,
+        "phase_passed": phase_passed,
+        "passed": pressure_passed and tl_passed and phase_passed,
+    }
+
+
+def validate_candidate(
+    reference_path: Path,
+    candidate_path: Path,
+    candidate_frequency_index: int,
+    tolerances_path: Path,
+) -> tuple[bool, dict[str, object]]:
+    reference = load_reference(reference_path)
+    tolerances = load_tolerances(tolerances_path)
+    reader = ShdReader(candidate_path)
+    field = reader.read(frequency_index=candidate_frequency_index)
+
+    expected_dimensions = tuple(int(value) for value in reference["shd"]["dimensions"])
+    failures: list[dict[str, object]] = []
+    if reader.header.dimensions != expected_dimensions:
+        failures.append(
+            {
+                "id": "header",
+                "reasons": [
+                    f"dimensions {reader.header.dimensions} != {expected_dimensions}"
+                ],
+            }
+        )
+    expected_frequency = float(reference["frequency_hz"])
+    if not math.isclose(
+        field.frequency_hz,
+        expected_frequency,
+        rel_tol=1.0e-12,
+        abs_tol=1.0e-9,
+    ):
+        failures.append(
+            {
+                "id": "header",
+                "reasons": [
+                    f"frequency {field.frequency_hz} != {expected_frequency}"
+                ],
+            }
+        )
+
+    maxima = {
+        "pressure_absolute": 0.0,
+        "pressure_relative": 0.0,
+        "tl_difference_db": 0.0,
+        "phase_difference_rad": 0.0,
+    }
+    compared = {"pressure": 0, "tl": 0, "phase": 0}
+    axes = {
+        "bearing": reader.header.bearings_deg,
+        "source_depth": reader.header.source_depths_m,
+        "receiver_depth": reader.header.receiver_depths_m,
+        "receiver_range": reader.header.receiver_ranges_m,
+    }
+    for sample in reference["samples"]:
+        sample_id = str(sample["id"])
+        indices = sample["indices"]
+        index_tuple = (
+            int(indices["bearing"]),
+            int(indices["source_depth"]),
+            int(indices["receiver_depth"]),
+            int(indices["receiver_range"]),
+        )
+        reasons: list[str] = []
+        for name, axis in axes.items():
+            index = int(indices[name])
+            coordinate_name = (
+                f"{name}_deg" if name == "bearing" else f"{name}_m"
+            )
+            expected_coordinate = float(
+                sample["coordinates"][coordinate_name]
+            )
+            if not 0 <= index < axis.size:
+                reasons.append(f"{name} index {index} is out of range")
+            elif float(axis[index]) != expected_coordinate:
+                reasons.append(
+                    f"{name} coordinate {float(axis[index])} != {expected_coordinate}"
+                )
+        if reasons:
+            failures.append({"id": sample_id, "reasons": reasons})
+            continue
+
+        reference_pressure = complex(
+            float(sample["pressure"]["real"]),
+            float(sample["pressure"]["imag"]),
+        )
+        candidate_pressure = complex(field.pressure[index_tuple])
+        metrics = compare_pressure_values(
+            reference_pressure, candidate_pressure, tolerances
+        )
+        compared["pressure"] += 1
+        maxima["pressure_absolute"] = max(
+            maxima["pressure_absolute"],
+            float(metrics["pressure_absolute"]),
+        )
+        maxima["pressure_relative"] = max(
+            maxima["pressure_relative"],
+            float(metrics["pressure_relative"]),
+        )
+        if metrics["tl_compared"]:
+            compared["tl"] += 1
+            maxima["tl_difference_db"] = max(
+                maxima["tl_difference_db"],
+                float(metrics["tl_difference_db"]),
+            )
+        if metrics["phase_compared"]:
+            compared["phase"] += 1
+            maxima["phase_difference_rad"] = max(
+                maxima["phase_difference_rad"],
+                float(metrics["phase_difference_rad"]),
+            )
+        if not metrics["passed"]:
+            if not metrics["pressure_passed"]:
+                reasons.append("pressure tolerance exceeded")
+            if not metrics["tl_passed"]:
+                reasons.append("TL tolerance exceeded")
+            if not metrics["phase_passed"]:
+                reasons.append("phase tolerance exceeded")
+            failures.append(
+                {"id": sample_id, "reasons": reasons, "metrics": metrics}
+            )
+
+    report: dict[str, object] = {
+        "reference": str(reference_path),
+        "candidate": str(candidate_path),
+        "case_id": reference["case_id"],
+        "frequency_hz": expected_frequency,
+        "sample_count": len(reference["samples"]),
+        "compared": compared,
+        "maxima": maxima,
+        "failures": failures,
+        "passed": not failures,
+    }
+    return not failures, report
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Create compact numerical references from passed runs."
@@ -243,31 +528,75 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("manifest", type=Path)
     generate.add_argument("output", type=Path)
     generate.add_argument("--source-revision", required=True)
+    check = subparsers.add_parser("check")
+    check.add_argument("references", nargs="+", type=Path)
+    validate = subparsers.add_parser("validate")
+    validate.add_argument("reference", type=Path)
+    validate.add_argument("candidate", type=Path)
+    validate.add_argument("--candidate-frequency-index", type=int, default=0)
+    validate.add_argument(
+        "--tolerances", type=Path, default=DEFAULT_TOLERANCES
+    )
+    validate.add_argument("--report", type=Path)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        snapshot = create_from_manifest(
-            args.manifest.resolve(), args.source_revision
-        )
-        output = args.output.resolve()
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
-            json.dumps(
-                snapshot,
+        if args.command == "generate":
+            snapshot = create_from_manifest(
+                args.manifest.resolve(), args.source_revision
+            )
+            output = args.output.resolve()
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(
+                json.dumps(
+                    snapshot,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                    allow_nan=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            print(f"Wrote compact reference: {output}")
+            return 0
+        if args.command == "check":
+            for reference in args.references:
+                load_reference(reference.resolve())
+            print(f"Checked {len(args.references)} compact reference(s)")
+            return 0
+        if args.command == "validate":
+            passed, report = validate_candidate(
+                args.reference.resolve(),
+                args.candidate.resolve(),
+                args.candidate_frequency_index,
+                args.tolerances.resolve(),
+            )
+            contents = json.dumps(
+                report,
                 ensure_ascii=False,
                 indent=2,
                 sort_keys=True,
                 allow_nan=False,
             )
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"Wrote compact reference: {output}")
-        return 0
-    except (FileNotFoundError, KeyError, OSError, ValueError) as error:
+            print(contents)
+            if args.report is not None:
+                report_path = args.report.resolve()
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(contents + "\n", encoding="utf-8")
+            return 0 if passed else 1
+        raise AssertionError(f"unhandled command: {args.command}")
+    except (
+        FileNotFoundError,
+        IndexError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         print(f"reference_snapshots.py: {error}", file=sys.stderr)
         return 1
 
