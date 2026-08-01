@@ -10,7 +10,7 @@ conda run -n py python --version
 阶段必须按 A → B → C → D → E 推进；阶段 F 在这些正确性和并行契约冻结后
 按小步性能提交推进。每一阶段只有在出口条件关闭后，才进入下一阶段。命令块
 是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
-[`DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
+[`archive/DERIVATION_RECORD.md`](./archive/DERIVATION_RECORD.md) 和对应基准记录中。
 
 截至 2026-08-01，A～E、F1 和 F2 均已关闭。F2 的 range-major 临时布局和
 range-batch 换序因 2频回退而回滚；`eedc790` 的图像专化和 `fe6b33f` 的
@@ -20,7 +20,7 @@ Hermite 内部快路径、Release 末端有限性校验和 `7ce9c7d` 的只读�
 segment 端点与插值差值缓存、receiver-depth 数量与连续数据指针及
 64-depth tile 均因 2频回退已回滚。Munk 64频精选矩阵已完成，p8/p10
 相对 reuse 为 `3.543×/3.513×`，当前保留 8 workers。详见
-[`BENCHMARK_RESULTS_FDAAF56.md`](./BENCHMARK_RESULTS_FDAAF56.md)。
+[`BENCHMARK_RESULTS_FDAAF56.md`](./archive/benchmarks/BENCHMARK_RESULTS_FDAAF56.md)。
 
 里程碑后的本地工程化也已关闭：全量 clang-format 门、compilation database
 驱动的 Clang static analyzer、版本 `0.1.0`、安装烟测和 CPack TGZ 已合并为
@@ -48,8 +48,8 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 
 它完成格式检查、静态分析、Release 安装、版本烟测、TGZ 打包和 SHA-256
 输出。产物当前定位为内部验证包；公开发行限制见
-[`RELEASE.md`](./RELEASE.md)，HDF5 决策见
-[`HDF5_SCHEMA_DECISION.md`](./HDF5_SCHEMA_DECISION.md)。
+[`RELEASE.md`](./guides/RELEASE.md)，HDF5 决策见
+[`HDF5_SCHEMA_DECISION.md`](./decisions/HDF5_SCHEMA_DECISION.md)。
 
 ## 阶段 A：独立派生工程
 
@@ -278,7 +278,7 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 正式性能记录使用
 `test/standard_cases/codes/benchmark_rayreuse.py`，由其固定并记录配置、
 轮换多轮样本、测量外部 wall/隔离 max RSS，并执行 ENV/SHD 哈希门；完整协议
-见 [`BENCHMARKING.md`](./BENCHMARKING.md)。
+见 [`BENCHMARKING.md`](./guides/BENCHMARKING.md)。
 
 ### 出口
 
@@ -443,7 +443,7 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 - [x] 工具链、二进制哈希、误差上限和内部制品哈希已进入阶段关闭记录。
 
 最终本机矩阵证据见
-[`MODEL_MATRIX_RESULTS_06E390F.md`](./MODEL_MATRIX_RESULTS_06E390F.md)。远端
+[`MODEL_MATRIX_RESULTS_06E390F.md`](./reports/MODEL_MATRIX_RESULTS_06E390F.md)。远端
 CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件，不属于 G 阶段本地
 数值加固出口。
 
@@ -457,10 +457,10 @@ CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件�
    返回类型，定义 C++ geometry probe schema v1；
 3. [x] 建立 origin/F2CPP/RayReuse 中间几何状态门，覆盖 direct、
    vacuum/rigid、Munk；
-4. [ ] 按 [`CROSS_COMPILER_PLAN.md`](./CROSS_COMPILER_PLAN.md) 执行本地
+4. [ ] 按 [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) 执行本地
    AppleClang↔GCC C++ 矩阵；第二 Fortran 编译器单独等待可用工具链。
 
 干净提交 `c417095` 的中位数和逐点比较结果见
-[`LOCAL_VALIDATION_RESULTS_C417095.md`](./LOCAL_VALIDATION_RESULTS_C417095.md)。
+[`LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md)。
 geometry schema v1 明确不包含完整反射声学、逐频投影或 Influence image 表；
 这些扩展必须使用新 schema 版本，不能静默扩大 v1。

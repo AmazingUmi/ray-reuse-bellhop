@@ -118,7 +118,7 @@ worker 时间之和，可超过 wall，只能用于热点定位，不能用于�
   `1dd1dc263915323077909e162b01d9da7dbc58d6d9ae0e1ea9b990c9981fbab5`）
 
 原始 JSON 是本机构建产物，不进入 Git；本文件冻结可审阅结论和报告哈希。
-完整采样规则与复跑命令见 [`BENCHMARKING.md`](./BENCHMARKING.md)。
+完整采样规则与复跑命令见 [`BENCHMARKING.md`](../../guides/BENCHMARKING.md)。
 
 ## 下一步决策
 

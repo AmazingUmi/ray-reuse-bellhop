@@ -64,7 +64,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 该入口检查全量 C++ 格式，按 compilation database 运行 Clang static
 analyzer，构建并安装 `0.1.0`，验证 `--version`，生成 CPack TGZ 并输出
 SHA-256。当前包只用于内部验证；许可证和目标平台契约冻结前不得作为公开
-发行包。具体限制见 [`doc/RELEASE.md`](./doc/RELEASE.md)。
+发行包。具体限制见 [`doc/guides/RELEASE.md`](./doc/guides/RELEASE.md)。
 
 原版 Bellhop、F2CPP 和 RayReuse 的本地数值矩阵为：
 
@@ -86,7 +86,7 @@ Bellhop_RayReuse/scripts/single_thread_microbenchmark.sh
 
 它以相同 single ENV 报告原始阶段和统一 `Trace + Project + Influence` 核心
 中位数；阶段边界限制见
-[`doc/SINGLE_THREAD_MICROBENCHMARK.md`](./doc/SINGLE_THREAD_MICROBENCHMARK.md)。
+[`doc/guides/SINGLE_THREAD_MICROBENCHMARK.md`](./doc/guides/SINGLE_THREAD_MICROBENCHMARK.md)。
 
 Fortran/F2CPP/RayReuse 中间几何状态门为：
 
@@ -162,7 +162,7 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
 max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提交、可执行文件
 哈希、机器、工具链、workers、频率、预算及原始样本统一写入 JSON。完整协议
-和命令见 [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)。
+和命令见 [`doc/guides/BENCHMARKING.md`](./doc/guides/BENCHMARKING.md)。
 
 首轮正式 Munk 16频五轮结果为 parallel-8 `4.424×`、parallel-10
 `4.643×`，达到项目 `≥4×` 门槛；但 Influence 占 nonreuse wall 的
@@ -183,22 +183,10 @@ SHD 一致；64频保留 8 workers。紧预算与逐频诊断进一步确认固�
 
 ## 文档
 
-- [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：阶段 A～F 的入口、出口和验收命令；
-- [`doc/BENCHMARKING.md`](./doc/BENCHMARKING.md)：可重复性能基准协议、命令和报告字段；
-- [`doc/BENCHMARK_RESULTS_C77FF60.md`](./doc/BENCHMARK_RESULTS_C77FF60.md)：首轮 16 频 direct/Munk 正式基准；
-- [`doc/BENCHMARK_RESULTS_FDAAF56.md`](./doc/BENCHMARK_RESULTS_FDAAF56.md)：F2 收敛后的 Munk 64频精选矩阵；
-- [`doc/BENCHMARK_RESULTS_96F23F8.md`](./doc/BENCHMARK_RESULTS_96F23F8.md)：F1 重复校验移出及 Munk 2频对照；
-- [`doc/BENCHMARK_RESULTS_4AF3F7F.md`](./doc/BENCHMARK_RESULTS_4AF3F7F.md)：F1 线性压力访问及 2/16频确认；
-- [`doc/BENCHMARK_RESULTS_EEDC790.md`](./doc/BENCHMARK_RESULTS_EEDC790.md)：F2 布局 screen、图像专化及 2/16频确认；
-- [`doc/BENCHMARK_RESULTS_FE6B33F.md`](./doc/BENCHMARK_RESULTS_FE6B33F.md)：F2 向量化审计、Hermite 快路径及 2/16频确认；
-- [`doc/BENCHMARK_RESULTS_F1511B9.md`](./doc/BENCHMARK_RESULTS_F1511B9.md)：F2 末端有限性校验及 2/16频确认；
-- [`doc/BENCHMARK_RESULTS_7CE9C7D.md`](./doc/BENCHMARK_RESULTS_7CE9C7D.md)：F2 循环不变量提升及 2/16频确认；
-- [`doc/BENCHMARK_RESULTS_4F8B227.md`](./doc/BENCHMARK_RESULTS_4F8B227.md)：F2 紧预算算例的固定开销与 worker 梯度；
-- [`doc/BENCHMARK_RESULTS_23E36AA.md`](./doc/BENCHMARK_RESULTS_23E36AA.md)：F2 Munk 逐频任务分布与调度结论；
-- [`doc/DERIVATION_RECORD.md`](./doc/DERIVATION_RECORD.md)：派生来源、独立工程身份、CLI 契约建议和实际验收记录；
-- [`doc/MODEL_MATRIX_RESULTS_9F254BD.md`](./doc/MODEL_MATRIX_RESULTS_9F254BD.md)：原版/F2CPP/RayReuse 本地 single 与两频矩阵；
-- [`doc/RELEASE.md`](./doc/RELEASE.md)：`0.1.0` 内部包的构建、验证和公开发布前置条件；
-- [`doc/HDF5_SCHEMA_DECISION.md`](./doc/HDF5_SCHEMA_DECISION.md)：HDF5 候选 schema 与延后实现决策；
+- [`doc/README.md`](./doc/README.md)：RayReuse 内部文档总入口和目录规则；
+- [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：已完成阶段、当前 H4 工作和验收命令；
+- [`doc/guides/BENCHMARKING.md`](./doc/guides/BENCHMARKING.md)：可重复性能基准协议；
+- [`doc/reports/LOCAL_VALIDATION_RESULTS_C417095.md`](./doc/reports/LOCAL_VALIDATION_RESULTS_C417095.md)：当前本地验证基线；
 - [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
 - [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
 - [`../test/standard_cases/README.md`](../test/standard_cases/README.md)：共享标准算例入口。

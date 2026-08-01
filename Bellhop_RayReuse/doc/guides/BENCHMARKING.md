@@ -106,17 +106,17 @@ median/min/max；存在 `nonreuse` 时，按外部 wall 中位数计算
 报告默认写入 `Bellhop_RayReuse/build/benchmarks/`，该目录属于可再生成构建
 产物，不进入 Git。需要归档时应将 JSON 连同对应提交或发布附件一起保存。
 提交 `c77ff60` 的首轮正式结果与结论见
-[`BENCHMARK_RESULTS_C77FF60.md`](./BENCHMARK_RESULTS_C77FF60.md)。
+[`BENCHMARK_RESULTS_C77FF60.md`](../archive/benchmarks/BENCHMARK_RESULTS_C77FF60.md)。
 阶段 F1 提交 `96f23f8` 的 Munk 2频前后对照和诊断计数见
-[`BENCHMARK_RESULTS_96F23F8.md`](./BENCHMARK_RESULTS_96F23F8.md)。
+[`BENCHMARK_RESULTS_96F23F8.md`](../archive/benchmarks/BENCHMARK_RESULTS_96F23F8.md)。
 F1 关闭提交 `4af3f7f` 的线性压力访问及 2/16频确认见
-[`BENCHMARK_RESULTS_4AF3F7F.md`](./BENCHMARK_RESULTS_4AF3F7F.md)。
+[`BENCHMARK_RESULTS_4AF3F7F.md`](../archive/benchmarks/BENCHMARK_RESULTS_4AF3F7F.md)。
 F2 提交 `eedc790` 的两个布局回滚实验、图像专化及 2/16频确认见
-[`BENCHMARK_RESULTS_EEDC790.md`](./BENCHMARK_RESULTS_EEDC790.md)。
+[`BENCHMARK_RESULTS_EEDC790.md`](../archive/benchmarks/BENCHMARK_RESULTS_EEDC790.md)。
 F2 提交 `fe6b33f` 的向量化审计、诊断专化回滚、Hermite 快路径及
 2/16频确认见
-[`BENCHMARK_RESULTS_FE6B33F.md`](./BENCHMARK_RESULTS_FE6B33F.md)。
+[`BENCHMARK_RESULTS_FE6B33F.md`](../archive/benchmarks/BENCHMARK_RESULTS_FE6B33F.md)。
 F2 提交 `f1511b9` 的 Release 末端有限性校验边界及 2/16频确认见
-[`BENCHMARK_RESULTS_F1511B9.md`](./BENCHMARK_RESULTS_F1511B9.md)。
+[`BENCHMARK_RESULTS_F1511B9.md`](../archive/benchmarks/BENCHMARK_RESULTS_F1511B9.md)。
 F2 提交 `7ce9c7d` 的环境/segment 循环不变量提升及 2/16频确认见
-[`BENCHMARK_RESULTS_7CE9C7D.md`](./BENCHMARK_RESULTS_7CE9C7D.md)。
+[`BENCHMARK_RESULTS_7CE9C7D.md`](../archive/benchmarks/BENCHMARK_RESULTS_7CE9C7D.md)。

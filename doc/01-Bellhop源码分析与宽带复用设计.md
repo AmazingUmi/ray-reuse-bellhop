@@ -12,7 +12,7 @@
 4. 当前真正参与构建的二维代码与仓库中的三维扩展代码有何区别；
 5. 后续进行 ray-reuse 重构时，应如何划分模块边界。
 
-分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 已建立职责 README、尚无 C++ 实现；`Bellhop_RayReuse/` 目前只有职责说明。工程演进关系为：先完成 F2CPP 优化单频实现，再复制/派生其已验证代码形成 RayReuse 并进行宽带轨迹复用改造；派生后两者独立构建和运行。
+分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 的优化单频实现和 `Bellhop_RayReuse/` 的宽带轨迹复用实现均已完成本地数值验收；RayReuse 从已验证的 F2CPP 代码派生后独立构建和运行。当前实施状态见 [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md)。
 
 ## 2. 总体功能分层
 
@@ -1209,11 +1209,11 @@ wall，则保留显式 execution mode/worker 配置，不为追求线程数线�
 当前仓库状态为：
 
 - `Bellhop_origin/Makefile` 已能可重现构建二维 release/static `Bellhop_origin/bin/bellhop.exe`；
-- `Bellhop_F2CPP/` 已建立职责 README，`Bellhop_RayReuse/` 已建立空目录，C++ 实现尚未开始；
+- `Bellhop_F2CPP/` 已完成优化单频复刻，`Bellhop_RayReuse/` 已完成独立宽带 nonreuse、串行 reuse 和有界频率并行实现；
 - 当前代码基线应视为原始、单频 Bellhop 模型；
 - `freqVec`、部分多频 SHD 头处理和测试目录中的宽带结果，是此前尝试多频计算时直接拷入的实验文件，不代表原始模型已经具备或验证了宽带基础设施；
 - 后续实现可以参考这些实验文件，但验证链必须依次使用可重现的原始单频 Bellhop、C++ 单频复刻和宽带非复用基线；
-- 小型单频标准算例和独立 Python SHD 读取回归已建立；当前下一步是冻结指定点复压力/TL 容差、导出中间状态并分阶段计时，而不是直接移植完整 Influence。
+- 六例标准算例、独立 Python SHD 读取、完整场/中间状态门和分阶段计时均已建立；当前下一步是 RayReuse H4 本地跨编译器验证。
 
 最终架构决策如下：
 

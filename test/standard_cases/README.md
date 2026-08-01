@@ -165,7 +165,7 @@ TL 差异。
 `nonreuse`、`reuse`、`parallel`。它支持固定 workers、队列和内存预算，按
 轮次旋转配置顺序，并将外部 wall、隔离 max RSS、PRT 阶段计时、输入/SHD
 哈希及运行元数据写入 JSON。正式基准默认拒绝脏工作区；协议和推荐命令见
-[`../../Bellhop_RayReuse/doc/BENCHMARKING.md`](../../Bellhop_RayReuse/doc/BENCHMARKING.md)。
+[`../../Bellhop_RayReuse/doc/guides/BENCHMARKING.md`](../../Bellhop_RayReuse/doc/guides/BENCHMARKING.md)。
 
 ## 版本职责
 
