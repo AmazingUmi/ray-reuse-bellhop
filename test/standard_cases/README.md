@@ -189,7 +189,8 @@ profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调�
 
 ## 后续补充
 
-1. 冻结六个算例的复压力、TL、相位容差与紧凑参考采样。
+1. 按 [`REFERENCE_SNAPSHOTS.md`](./REFERENCE_SNAPSHOTS.md) 冻结并校验六个
+   算例的复压力、TL、相位规则与紧凑参考采样。
 2. 导出每步 `x/t/p/q/c/tau`、求积状态和终止原因。
 3. 导出反射事件及单条射线 Influence 贡献。
 4. 将 benchmark 元数据中已具备的提交、工具链、平台、线程和峰值内存按需

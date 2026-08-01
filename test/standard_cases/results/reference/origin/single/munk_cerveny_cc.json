@@ -1,0 +1,435 @@
+{
+  "artifacts": {
+    "environment": {
+      "name": "munk_cerveny_cc_f000_50Hz.env",
+      "sha256": "586df5562611479b351fd6810a34b390c18b5696b13beb17dd45d53643209132"
+    },
+    "executable": {
+      "name": "bellhop",
+      "sha256": "f77b7bb60509fdb5e0f22b03a71c27ad4998718ba864e5206e5e48bd461ddcee"
+    },
+    "shade": {
+      "name": "munk_cerveny_cc_f000_50Hz.shd",
+      "sha256": "f6c1a4ff6a1032a0abbff4e045f39de9f6aed5810598fefb369ea484846204f2"
+    }
+  },
+  "case_id": "munk_cerveny_cc",
+  "frequency_hz": 50.0,
+  "frequency_index": 0,
+  "oracle_version": "origin",
+  "profile": "single",
+  "sample_policy": {
+    "bearing_max_count": 3,
+    "include_max_magnitude": true,
+    "receiver_depth_max_count": 3,
+    "receiver_range_max_count": 5,
+    "source_depth_max_count": 3
+  },
+  "samples": [
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 0.0,
+        "receiver_range_m": 0.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz000_rr000",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 0,
+        "receiver_range": 0,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 0.0,
+        "receiver_range_m": 25000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz000_rr125",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 0,
+        "receiver_range": 125,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 0.0,
+        "receiver_range_m": 50000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz000_rr250",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 0,
+        "receiver_range": 250,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 0.0,
+        "receiver_range_m": 75000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz000_rr375",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 0,
+        "receiver_range": 375,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 0.0,
+        "receiver_range_m": 100000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz000_rr500",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 0,
+        "receiver_range": 500,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 1025.0,
+        "receiver_range_m": 200.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz041_rr001",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 41,
+        "receiver_range": 1,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": -0.004198525100946426,
+        "magnitude": 0.004349347108917793,
+        "real": -0.0011354326270520687,
+        "transmission_loss_db": 47.231518623092015
+      },
+      "selection": [
+        "max_magnitude"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 2500.0,
+        "receiver_range_m": 0.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz100_rr000",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 100,
+        "receiver_range": 0,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 2500.0,
+        "receiver_range_m": 25000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz100_rr125",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 100,
+        "receiver_range": 125,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": -3.3726164474501275e-06,
+        "magnitude": 1.7032777984275904e-05,
+        "real": 1.6695537851774134e-05,
+        "transmission_loss_db": 95.37429028813307
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 2500.0,
+        "receiver_range_m": 50000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz100_rr250",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 100,
+        "receiver_range": 250,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 1.857888128142804e-05,
+        "magnitude": 2.524405301017391e-05,
+        "real": -1.709056414256338e-05,
+        "transmission_loss_db": 91.9568183303621
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 2500.0,
+        "receiver_range_m": 75000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz100_rr375",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 100,
+        "receiver_range": 375,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": -1.2640537534025498e-05,
+        "magnitude": 2.0531540455481817e-05,
+        "real": -1.6179028534679674e-05,
+        "transmission_loss_db": 93.75156929683833
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 2500.0,
+        "receiver_range_m": 100000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz100_rr500",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 100,
+        "receiver_range": 500,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 5000.0,
+        "receiver_range_m": 0.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz200_rr000",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 200,
+        "receiver_range": 0,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 5000.0,
+        "receiver_range_m": 25000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz200_rr125",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 200,
+        "receiver_range": 125,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": -2.40446170209907e-05,
+        "magnitude": 6.56583051176051e-05,
+        "real": 6.109721289249137e-05,
+        "transmission_loss_db": 83.6542066440044
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 5000.0,
+        "receiver_range_m": 50000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz200_rr250",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 200,
+        "receiver_range": 250,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": -3.59473483513284e-06,
+        "magnitude": 1.9559013780783647e-05,
+        "real": -1.922583942359779e-05,
+        "transmission_loss_db": 94.1730609463484
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 5000.0,
+        "receiver_range_m": 75000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz200_rr375",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 200,
+        "receiver_range": 375,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": -1.8961489445246116e-07,
+        "magnitude": 5.407713378465192e-06,
+        "real": 5.404388048191322e-06,
+        "transmission_loss_db": 105.3397267017194
+      },
+      "selection": [
+        "grid"
+      ]
+    },
+    {
+      "coordinates": {
+        "bearing_deg": 0.0,
+        "receiver_depth_m": 5000.0,
+        "receiver_range_m": 100000.0,
+        "source_depth_m": 1000.0
+      },
+      "id": "b000_sz000_rz200_rr500",
+      "indices": {
+        "bearing": 0,
+        "receiver_depth": 200,
+        "receiver_range": 500,
+        "source_depth": 0
+      },
+      "pressure": {
+        "imag": 0.0,
+        "magnitude": 0.0,
+        "real": 0.0,
+        "transmission_loss_db": null
+      },
+      "selection": [
+        "grid"
+      ]
+    }
+  ],
+  "schema": "bellhop.standard_case.compact_reference",
+  "schema_version": 1,
+  "shd": {
+    "byte_order": "little",
+    "dimensions": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      201,
+      501
+    ],
+    "plot_type": "rectilin",
+    "title": "BELLHOP- Munk profile, Cartesian Cerveny beams, standard baseline"
+  },
+  "source_position_m": {
+    "x": 0.0,
+    "y": 0.0
+  },
+  "source_revision": "f35bbdd"
+}

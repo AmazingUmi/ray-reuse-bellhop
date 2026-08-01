@@ -14,5 +14,6 @@ results/<version>/<case>/<profile>/
     └── <root>.shd
 ```
 
-未来冻结的小型参考采样也放在 `results/reference/`，并通过 `.gitignore`
-按需显式放行；完整 SHD 始终由测试过程重新生成。
+冻结的小型参考采样放在 `results/reference/`，并通过 `.gitignore` 显式放行；
+完整 SHD 始终由测试过程重新生成。参考文件的生成、来源和更新规则见
+[`../REFERENCE_SNAPSHOTS.md`](../REFERENCE_SNAPSHOTS.md)。

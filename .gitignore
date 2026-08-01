@@ -8,6 +8,8 @@
 # Generated inputs and outputs from the standard-case runner
 /test/standard_cases/results/*
 !/test/standard_cases/results/README.md
+!/test/standard_cases/results/reference/
+!/test/standard_cases/results/reference/**
 
 # Python caches and local editable-install metadata
 __pycache__/

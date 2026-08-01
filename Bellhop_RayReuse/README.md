@@ -50,7 +50,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 该入口依次执行 Debug ASan/UBSan、Release、两套 25 项 CTest、Conda `py`
-下 50 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
+下 54 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
 动态链接独立性扫描，以及无 F2CPP 目录的 Release 隔离构建。GitHub Actions
 使用固定的 Python 3.12.9 和 NumPy 2.2.6 调用同一脚本；本地默认仍严格使用
 名为 `py` 的 Conda 环境。

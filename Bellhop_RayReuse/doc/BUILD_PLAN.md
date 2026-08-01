@@ -35,7 +35,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
-Release、25 项 CTest、50 项标准工具测试、9 项 PlotRead 测试、独立性扫描
+Release、25 项 CTest、54 项标准工具测试、9 项 PlotRead 测试、独立性扫描
 和无 F2CPP 隔离副本构建。CI 通过
 `RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
 门，避免本地与云端验收逻辑分叉。
@@ -401,3 +401,32 @@ PlotRead 9/9、独立构建 25/25 通过。
 - 16频所有模式 SHD 继续逐字节一致，完整质量门通过；
 - 8/10 workers 的选择在三轮以上复测中稳定，或明确保留显式配置而不设默认；
 - 64频精选矩阵完成后，再决定 `parallel` 默认值和后续 receiver tile 范围。
+
+## 阶段 G：数值参考与可移植性加固
+
+本阶段完全使用本地构建与结果，不以配置远端或云端 CI 为入口。原版 Bellhop
+Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，RayReuse
+是覆盖 single、nonreuse、reuse、parallel 的被验收对象。
+
+### 实施顺序
+
+1. [x] 冻结三模型职责、紧凑快照 schema、更新规则和快速/完整矩阵；
+2. [x] 为六例 `single` 生成原版 oracle 紧凑快照，每例 16 个代表点；
+3. [ ] 实现快照校验器、复压力/TL/相位 floor 规则及失败报告；
+4. [ ] 建立六例 single、两频 smoke 的三模型自动对照门；
+5. [ ] 为原版 Fortran 增加默认关闭的 Trace/Influence/Scale/输出计时；
+6. [ ] 运行完整回归、记录本机工具链/RSS 并关闭阶段文档。
+
+契约和显式更新命令见
+[`../../test/standard_cases/REFERENCE_SNAPSHOTS.md`](../../test/standard_cases/REFERENCE_SNAPSHOTS.md)。
+首批快照以原版可执行文件 SHA-256
+`f77b7bb60509fdb5e0f22b03a71c27ad4998718ba864e5206e5e48bd461ddcee`
+和来源提交 `f35bbdd` 标识，不提交完整 SHD。
+
+### 出口
+
+- 已提交快照只能显式更新，快速门不会启动求解器或覆盖 oracle；
+- 六例 single 和两频 smoke 均产生原版/F2CPP/RayReuse 可追溯误差报告；
+- RayReuse 三个多频模式继续满足既定容差和确定性要求；
+- Fortran 诊断计时开启前后 SHD 不变；
+- 完整质量门和工程门通过，长时 16/64频矩阵仍只在里程碑运行。
