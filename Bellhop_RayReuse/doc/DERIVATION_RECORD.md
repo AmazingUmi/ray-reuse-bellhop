@@ -385,6 +385,14 @@ NAlpha 并按当前单频规划，因此 broadband 只在 `fmax` 门控；12 个
 干净提交 `9f254bd` 的最终身份、二进制哈希和误差汇总见
 [`MODEL_MATRIX_RESULTS_9F254BD.md`](./MODEL_MATRIX_RESULTS_9F254BD.md)。
 
+G4 为原版二维 Fortran 增加 `BELLHOP_PROFILE_STAGES=1` 显式开关，默认 PRT
+和求解路径保持原状。direct single 的 Trace/Influence/Scale/Output 为
+`0.00498/0.01167/0.000001/0.000198 s`；Munk single 为
+`0.01580/2.63189/0.000030/0.000721 s`，总 CPU `2.65 s`。Munk Influence
+占已分类阶段约 99%。direct 开启/关闭及 Munk profiled SHD 与冻结 oracle
+逐字节一致；使用方法见
+[`../../Bellhop_origin/STAGE_PROFILING.md`](../../Bellhop_origin/STAGE_PROFILING.md)。
+
 ## 14. 后续验收记录规则
 
 每次关闭阶段出口时至少记录：

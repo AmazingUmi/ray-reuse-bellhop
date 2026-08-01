@@ -34,10 +34,18 @@ PROGRAM BELLHOP
   IMPLICIT NONE
   
   LOGICAL, PARAMETER   :: Inline = .FALSE.
-  INTEGER              :: jj
+  LOGICAL              :: ProfileStages
+  INTEGER              :: jj, ProfileLength, ProfileStatus
+  REAL                 :: OutputSeconds, StageStart, StageStop
+  CHARACTER ( LEN=32 ) :: ProfileValue
   CHARACTER ( LEN=80 ) :: FileRoot
 
   ThreeD = .FALSE.
+  ProfileStages = .FALSE.
+  OutputSeconds = 0.0
+  ProfileValue = ''
+  CALL GET_ENVIRONMENT_VARIABLE( 'BELLHOP_PROFILE_STAGES', ProfileValue, ProfileLength, ProfileStatus )
+  IF ( ProfileStatus == 0 .AND. ProfileLength > 0 ) ProfileStages = TRIM( ProfileValue ) == '1'
 
   ! get the file root for naming all input and output files
   ! should add some checks here ...
@@ -145,7 +153,12 @@ PROGRAM BELLHOP
      Pos%theta( 1 ) = 0.
   END IF
 
+  IF ( ProfileStages ) CALL CPU_TIME( StageStart )
   CALL OpenOutputFiles( FileRoot, ThreeD )
+  IF ( ProfileStages ) THEN
+     CALL CPU_TIME( StageStop )
+     OutputSeconds = OutputSeconds + StageStop - StageStart
+  END IF
   CALL BellhopCore
 
   CONTAINS
@@ -159,7 +172,9 @@ SUBROUTINE BellhopCore
 
   INTEGER, PARAMETER   :: ArrivalsStorage = 20000000, MinNArr = 10
   INTEGER              :: IBPvec( 1 ), ibp, is, iBeamWindow2, Irz1, Irec, NalphaOpt, iSeg
-  REAL                 :: Tstart, Tstop
+  REAL                 :: Tstart, Tstop, TraceStart, TraceStop, InfluenceStart, InfluenceStop, &
+                          ScaleStart, ScaleStop, OutputStart, OutputStop
+  REAL                 :: TraceSeconds, InfluenceSeconds, ScaleSeconds
   REAL        (KIND=8) :: Amp0, DalphaOpt, xs( 2 ), RadiusMax, s, &
                           c, cimag, gradc( 2 ), crr, crz, czz, rho
   COMPLEX, ALLOCATABLE :: U( :, : )
@@ -168,6 +183,9 @@ SUBROUTINE BellhopCore
   TYPE ( InfluenceOracleResult ) :: InfluenceResult
 
   CALL CPU_TIME( Tstart )
+  TraceSeconds = 0.0
+  InfluenceSeconds = 0.0
+  ScaleSeconds = 0.0
 
   omega = 2.0 * pi * freq
 
@@ -294,12 +312,18 @@ SUBROUTINE BellhopCore
 
            CALL OraclePrepareRay( is, ialpha, Angles%alpha( ialpha ) )
            CALL InfluenceOraclePrepareRay( is, ialpha, Angles%alpha( ialpha ) )
+           IF ( ProfileStages ) CALL CPU_TIME( TraceStart )
            CALL TraceRay2D( xs, Angles%alpha( ialpha ), Amp0 )   ! Trace a ray
+           IF ( ProfileStages ) THEN
+              CALL CPU_TIME( TraceStop )
+              TraceSeconds = TraceSeconds + TraceStop - TraceStart
+           END IF
 
            IF ( Beam%RunType( 1 : 1 ) == 'R' ) THEN   ! Write the ray trajectory to RAYFile
               CALL WriteRay2D( SrcDeclAngle, Beam%Nsteps )
            ELSE                                       ! Compute the contribution to the field
 
+              IF ( ProfileStages ) CALL CPU_TIME( InfluenceStart )
               epsilon = PickEpsilon( Beam%Type( 1 : 2 ), omega, c, gradc, Angles%alpha( ialpha ), &
                    Angles%Dalpha, Beam%rLoop, Beam%epsMultiplier ) ! 'optimal' beam constant
 
@@ -330,6 +354,10 @@ SUBROUTINE BellhopCore
               CASE DEFAULT
                  CALL InfluenceGeoHatCart(      U, Angles%alpha( ialpha ), Angles%Dalpha )
               END SELECT
+              IF ( ProfileStages ) THEN
+                 CALL CPU_TIME( InfluenceStop )
+                 InfluenceSeconds = InfluenceSeconds + InfluenceStop - InfluenceStart
+              END IF
 
            END IF
         END IF
@@ -339,12 +367,22 @@ SUBROUTINE BellhopCore
 
      SELECT CASE ( Beam%RunType( 1 : 1 ) )
      CASE ( 'C', 'S', 'I' )   ! TL calculation
+        IF ( ProfileStages ) CALL CPU_TIME( ScaleStart )
         CALL ScalePressure( Angles%Dalpha, ray2D( 1 )%c, Pos%Rr, U, NRz_per_range, Pos%NRr, Beam%RunType, freq )
+        IF ( ProfileStages ) THEN
+           CALL CPU_TIME( ScaleStop )
+           ScaleSeconds = ScaleSeconds + ScaleStop - ScaleStart
+           CALL CPU_TIME( OutputStart )
+        END IF
         IRec = 10 + NRz_per_range * ( is - 1 )
         RcvrDepth: DO Irz1 = 1, NRz_per_range
            IRec = IRec + 1
            WRITE( SHDFile, REC = IRec ) U( Irz1, 1 : Pos%NRr )
         END DO RcvrDepth
+        IF ( ProfileStages ) THEN
+           CALL CPU_TIME( OutputStop )
+           OutputSeconds = OutputSeconds + OutputStop - OutputStart
+        END IF
      CASE ( 'A' )             ! arrivals calculation, ascii
         CALL WriteArrivalsASCII(  Pos%Rr, NRz_per_range, Pos%NRr, Beam%RunType( 4 : 4 ) )
      CASE ( 'a' )             ! arrivals calculation, binary
@@ -356,9 +394,23 @@ SUBROUTINE BellhopCore
   CALL InfluenceOracleFinalize()
   CALL OracleFinalize()
 
+  IF ( ProfileStages .AND. ( Beam%RunType( 1 : 1 ) == 'C' .OR. &
+       Beam%RunType( 1 : 1 ) == 'S' .OR. Beam%RunType( 1 : 1 ) == 'I' ) ) THEN
+     CALL CPU_TIME( OutputStart )
+     FLUSH( SHDFile )
+     CALL CPU_TIME( OutputStop )
+     OutputSeconds = OutputSeconds + OutputStop - OutputStart
+  END IF
+
   ! Display run time
   CALL CPU_TIME( Tstop )
   WRITE( PRTFile, "( /, ' CPU Time = ', G15.3, 's' )" ) Tstop - Tstart
+  IF ( ProfileStages ) THEN
+     WRITE( PRTFile, "( ' Stage Trace seconds = ', G15.7 )" ) TraceSeconds
+     WRITE( PRTFile, "( ' Stage Influence seconds = ', G15.7 )" ) InfluenceSeconds
+     WRITE( PRTFile, "( ' Stage Scale seconds = ', G15.7 )" ) ScaleSeconds
+     WRITE( PRTFile, "( ' Stage Output seconds = ', G15.7 )" ) OutputSeconds
+  END IF
 
   ! close all files
   SELECT CASE ( Beam%RunType( 1 : 1 ) )

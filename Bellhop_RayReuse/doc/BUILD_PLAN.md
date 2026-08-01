@@ -414,7 +414,7 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 2. [x] 为六例 `single` 生成原版 oracle 紧凑快照，每例 16 个代表点；
 3. [x] 实现快照校验器、复压力/TL/相位 floor 规则及逐样本失败报告；
 4. [x] 建立六例 single、两频 smoke 的三模型自动对照门；
-5. [ ] 为原版 Fortran 增加默认关闭的 Trace/Influence/Scale/输出计时；
+5. [x] 为原版 Fortran 增加默认关闭的 Trace/Influence/Scale/输出计时；
 6. [ ] 运行完整回归、记录本机工具链/RSS 并关闭阶段文档。
 
 契约和显式更新命令见
