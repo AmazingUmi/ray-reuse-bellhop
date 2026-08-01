@@ -12,8 +12,7 @@
 namespace rayreuse {
 namespace {
 
-constexpr double kLegacyCoefficientKillThreshold =
-    static_cast<double>(1.0e-5F);
+constexpr double kLegacyCoefficientKillThreshold = static_cast<double>(1.0e-5F);
 
 void requireFinite(double value, std::string_view name) {
   if (!std::isfinite(value)) {
@@ -33,9 +32,8 @@ void requireFinitePositive(double value, std::string_view name) {
 }
 
 [[nodiscard]] std::complex<double> fluidHalfSpaceCoefficient(
-    const AcousticMaterial& material, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness) {
+    const AcousticMaterial& material, double frequency, double waterDensity,
+    double tangentSlowness, double outwardNormalSlowness) {
   if (material.shearSoundSpeed != 0.0) {
     throw ValidationError(
         "elastic acoustic half-spaces are not supported by M2-02");
@@ -48,12 +46,9 @@ void requireFinitePositive(double value, std::string_view name) {
       material.compressionalSoundSpeed,
       compressionalAttenuation.imaginarySoundSpeed};
 
-  const double angularFrequency =
-      2.0 * std::numbers::pi * frequency;
-  const double tangentWavenumber =
-      angularFrequency * tangentSlowness;
-  const double normalWavenumber =
-      angularFrequency * outwardNormalSlowness;
+  const double angularFrequency = 2.0 * std::numbers::pi * frequency;
+  const double tangentWavenumber = angularFrequency * tangentSlowness;
+  const double normalWavenumber = angularFrequency * outwardNormalSlowness;
   const std::complex<double> materialWavenumber =
       angularFrequency / compressionalSoundSpeed;
 
@@ -73,10 +68,8 @@ void requireFinitePositive(double value, std::string_view name) {
 
   const std::complex<double> imaginaryNormalImpedance{
       0.0, normalWavenumber * material.density};
-  const std::complex<double> waterTerm =
-      waterDensity * verticalWavenumber;
-  const std::complex<double> denominator =
-      waterTerm + imaginaryNormalImpedance;
+  const std::complex<double> waterTerm = waterDensity * verticalWavenumber;
+  const std::complex<double> denominator = waterTerm + imaginaryNormalImpedance;
   if (denominator == std::complex<double>{}) {
     throw ValidationError(
         "acoustic half-space reflection denominator must not be zero");
@@ -102,15 +95,13 @@ BoundaryAcousticsResult classifyBoundaryCoefficient(
   }
 
   const double magnitude = std::abs(rawCoefficient);
-  const bool suppressed =
-      suppressSmallAcousticCoefficient &&
-      magnitude < kLegacyCoefficientKillThreshold;
+  const bool suppressed = suppressSmallAcousticCoefficient &&
+                          magnitude < kLegacyCoefficientKillThreshold;
   if (suppressed) {
-    return BoundaryAcousticsResult{
-        .rawCoefficient = rawCoefficient,
-        .amplitudeMultiplier = 0.0,
-        .phaseIncrement = 0.0,
-        .coefficientSuppressed = true};
+    return BoundaryAcousticsResult{.rawCoefficient = rawCoefficient,
+                                   .amplitudeMultiplier = 0.0,
+                                   .phaseIncrement = 0.0,
+                                   .coefficientSuppressed = true};
   }
 
   return BoundaryAcousticsResult{
@@ -122,9 +113,8 @@ BoundaryAcousticsResult classifyBoundaryCoefficient(
 }
 
 BoundaryAcousticsResult evaluateBoundaryAcoustics(
-    const BoundaryModel& boundary, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness) {
+    const BoundaryModel& boundary, double frequency, double waterDensity,
+    double tangentSlowness, double outwardNormalSlowness) {
   requireFinitePositive(frequency, "frequency");
   requireFinitePositive(waterDensity, "waterDensity");
   requireFinite(tangentSlowness, "tangentSlowness");
@@ -145,9 +135,9 @@ BoundaryAcousticsResult evaluateBoundaryAcoustics(
             "acoustic half-space is missing material properties");
       }
       return classifyBoundaryCoefficient(
-          fluidHalfSpaceCoefficient(
-              *boundary.material(), frequency, waterDensity,
-              tangentSlowness, outwardNormalSlowness),
+          fluidHalfSpaceCoefficient(*boundary.material(), frequency,
+                                    waterDensity, tangentSlowness,
+                                    outwardNormalSlowness),
           true);
   }
 

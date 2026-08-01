@@ -14,8 +14,7 @@ constexpr double kDecibelsPerNeper = 8.6858896;
 constexpr double kHertzPerKilohertz = 1000.0;
 // AttenMod.f90 spells these two Thorp constants without a D exponent.  The
 // legacy calculation therefore promotes their binary32 values to REAL(8).
-constexpr double kThorpRelaxationCoefficient =
-    static_cast<double>(0.11F);
+constexpr double kThorpRelaxationCoefficient = static_cast<double>(0.11F);
 constexpr double kThorpDecibelsPerKilometerPerNeper =
     static_cast<double>(8685.8896F);
 
@@ -36,8 +35,7 @@ void validateRawAttenuation(const RawAttenuation& attenuation) {
   requireFinite(attenuation.value, "attenuation.value");
   requireFinitePositive(attenuation.referenceFrequency,
                         "attenuation.referenceFrequency");
-  requireFinite(attenuation.powerLawExponent,
-                "attenuation.powerLawExponent");
+  requireFinite(attenuation.powerLawExponent, "attenuation.powerLawExponent");
   requireFinitePositive(attenuation.transitionFrequency,
                         "attenuation.transitionFrequency");
   if (attenuation.value < 0.0) {
@@ -46,7 +44,7 @@ void validateRawAttenuation(const RawAttenuation& attenuation) {
 }
 
 double baseAttenuationNpPerMeter(const RawAttenuation& attenuation,
-                                double frequency, double soundSpeed) {
+                                 double frequency, double soundSpeed) {
   switch (attenuation.unit) {
     case AttenuationUnit::NepersPerMeter:
       return attenuation.value;
@@ -59,15 +57,13 @@ double baseAttenuationNpPerMeter(const RawAttenuation& attenuation,
           attenuation.value / kDecibelsPerNeper;
       double frequencyFactor = 0.0;
       if (frequency < attenuation.transitionFrequency) {
-        frequencyFactor =
-            std::pow(frequency / attenuation.referenceFrequency,
-                     attenuation.powerLawExponent);
+        frequencyFactor = std::pow(frequency / attenuation.referenceFrequency,
+                                   attenuation.powerLawExponent);
       } else {
-        frequencyFactor =
-            (frequency / attenuation.referenceFrequency) *
-            std::pow(attenuation.transitionFrequency /
-                         attenuation.referenceFrequency,
-                     attenuation.powerLawExponent - 1.0);
+        frequencyFactor = (frequency / attenuation.referenceFrequency) *
+                          std::pow(attenuation.transitionFrequency /
+                                       attenuation.referenceFrequency,
+                                   attenuation.powerLawExponent - 1.0);
       }
       if (!std::isfinite(frequencyFactor)) {
         throw ValidationError(
@@ -82,8 +78,7 @@ double baseAttenuationNpPerMeter(const RawAttenuation& attenuation,
              (kHertzPerKilohertz * kDecibelsPerNeper);
 
     case AttenuationUnit::DecibelsPerWavelength:
-      return attenuation.value * frequency /
-             (kDecibelsPerNeper * soundSpeed);
+      return attenuation.value * frequency / (kDecibelsPerNeper * soundSpeed);
 
     case AttenuationUnit::QualityFactor:
       if (attenuation.value == 0.0) {
@@ -123,8 +118,7 @@ double thorpAttenuationNpPerMeter(double frequency) {
   requireFinitePositive(frequency, "frequency");
 
   const double frequencyKilohertz = frequency / kHertzPerKilohertz;
-  const double frequencySquared =
-      frequencyKilohertz * frequencyKilohertz;
+  const double frequencySquared = frequencyKilohertz * frequencyKilohertz;
   const double decibelsPerKilometer =
       3.3e-3 +
       kThorpRelaxationCoefficient * frequencySquared /
@@ -132,8 +126,7 @@ double thorpAttenuationNpPerMeter(double frequency) {
       44.0 * frequencySquared / (4100.0 + frequencySquared) +
       3.0e-4 * frequencySquared;
   const double result =
-      decibelsPerKilometer /
-      kThorpDecibelsPerKilometerPerNeper;
+      decibelsPerKilometer / kThorpDecibelsPerKilometerPerNeper;
   if (!std::isfinite(result) || result < 0.0) {
     throw ValidationError("Thorp attenuation must be finite and non-negative");
   }
@@ -158,19 +151,16 @@ double attenuationNpPerMeter(const RawAttenuation& attenuation,
   return result;
 }
 
-double imaginarySoundSpeedFromAttenuation(double attenuation,
-                                          double frequency,
+double imaginarySoundSpeedFromAttenuation(double attenuation, double frequency,
                                           double soundSpeed) {
   requireFinite(attenuation, "attenuationNpPerMeter");
   requireFinitePositive(frequency, "frequency");
   requireFinitePositive(soundSpeed, "soundSpeed");
   if (attenuation < 0.0) {
-    throw ValidationError(
-        "attenuationNpPerMeter must be non-negative");
+    throw ValidationError("attenuationNpPerMeter must be non-negative");
   }
 
-  const double angularFrequency =
-      2.0 * std::numbers::pi * frequency;
+  const double angularFrequency = 2.0 * std::numbers::pi * frequency;
   const double result =
       attenuation * soundSpeed * soundSpeed / angularFrequency;
   if (!std::isfinite(result)) {
@@ -183,15 +173,14 @@ double imaginarySoundSpeedFromAttenuation(double attenuation,
   return result;
 }
 
-AttenuationConversion convertAttenuation(
-    const RawAttenuation& attenuation, double frequency,
-    double soundSpeed) {
+AttenuationConversion convertAttenuation(const RawAttenuation& attenuation,
+                                         double frequency, double soundSpeed) {
   const double converted =
       attenuationNpPerMeter(attenuation, frequency, soundSpeed);
   return AttenuationConversion{
       .attenuationNpPerMeter = converted,
-      .imaginarySoundSpeed = imaginarySoundSpeedFromAttenuation(
-          converted, frequency, soundSpeed),
+      .imaginarySoundSpeed =
+          imaginarySoundSpeedFromAttenuation(converted, frequency, soundSpeed),
   };
 }
 

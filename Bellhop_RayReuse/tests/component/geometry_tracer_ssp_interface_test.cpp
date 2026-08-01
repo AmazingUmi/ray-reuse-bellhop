@@ -32,12 +32,8 @@ Environment makeDownwardCrossingEnvironment() {
   return Environment(
       SoundSpeedProfile(
           {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
-           {.depth = kInterfaceDepth,
-            .soundSpeed = 1500.0,
-            .density = 1000.0},
-           {.depth = 1000.0,
-            .soundSpeed = 1550.0,
-            .density = 1000.0}}),
+           {.depth = kInterfaceDepth, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 1000.0, .soundSpeed = 1550.0, .density = 1000.0}}),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
 }
 
@@ -45,12 +41,8 @@ Environment makeUpwardCrossingEnvironment() {
   return Environment(
       SoundSpeedProfile(
           {{.depth = 0.0, .soundSpeed = 1450.0, .density = 1000.0},
-           {.depth = kInterfaceDepth,
-            .soundSpeed = 1500.0,
-            .density = 1000.0},
-           {.depth = 1000.0,
-            .soundSpeed = 1500.0,
-            .density = 1000.0}}),
+           {.depth = kInterfaceDepth, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0}}),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
 }
 
@@ -64,31 +56,27 @@ IntegratorSettings makeSettings(std::size_t maximumRayPoints = 8U) {
 bool finiteState(const RayState& state) {
   return rayreuse::isFinite(state.position) &&
          rayreuse::isFinite(state.slowness) &&
-         std::isfinite(state.dynamicP[0]) &&
-         std::isfinite(state.dynamicP[1]) &&
-         std::isfinite(state.dynamicQ[0]) &&
-         std::isfinite(state.dynamicQ[1]) &&
-         std::isfinite(state.soundSpeed) &&
-         std::isfinite(state.realTravelTime);
+         std::isfinite(state.dynamicP[0]) && std::isfinite(state.dynamicP[1]) &&
+         std::isfinite(state.dynamicQ[0]) && std::isfinite(state.dynamicQ[1]) &&
+         std::isfinite(state.soundSpeed) && std::isfinite(state.realTravelTime);
 }
 
 void checkPathInvariants(Context& context, const RayPath& path,
                          const char* direction) {
-  context.check(path.points.size() == path.steps.size() + 1U,
-                std::string(direction) +
-                    " crossing retains the points/steps invariant");
+  context.check(
+      path.points.size() == path.steps.size() + 1U,
+      std::string(direction) + " crossing retains the points/steps invariant");
   for (const RayState& state : path.points) {
-    context.check(finiteState(state),
-                  std::string(direction) +
-                      " crossing retains finite ray states");
+    context.check(
+        finiteState(state),
+        std::string(direction) + " crossing retains finite ray states");
   }
   for (const auto& step : path.steps) {
-    context.check(std::isfinite(step.stepLength) &&
-                      std::isfinite(step.startWeight) &&
-                      std::isfinite(step.midpointWeight) &&
-                      rayreuse::isFinite(step.midpoint),
-                  std::string(direction) +
-                      " crossing retains finite step quadrature");
+    context.check(
+        std::isfinite(step.stepLength) && std::isfinite(step.startWeight) &&
+            std::isfinite(step.midpointWeight) &&
+            rayreuse::isFinite(step.midpoint),
+        std::string(direction) + " crossing retains finite step quadrature");
     context.checkNear(
         step.startWeight + step.midpointWeight, step.stepLength, 1.0e-12,
         std::string(direction) + " quadrature weights sum to the step");
@@ -118,42 +106,35 @@ std::size_t findAlignedNode(Context& context, const RayPath& path,
 
 void checkHorizontalSlowness(Context& context, const RayPath& path,
                              const char* direction) {
-  const double initialHorizontalSlowness =
-      path.points.front().slowness.range;
+  const double initialHorizontalSlowness = path.points.front().slowness.range;
   for (const RayState& state : path.points) {
-    context.checkNear(
-        state.slowness.range, initialHorizontalSlowness, 1.0e-15,
-        std::string(direction) +
-            " crossing preserves Snell horizontal slowness");
+    context.checkNear(state.slowness.range, initialHorizontalSlowness, 1.0e-15,
+                      std::string(direction) +
+                          " crossing preserves Snell horizontal slowness");
   }
 }
 
 void testDownwardInterfaceCrossing(Context& context) {
   const GeometryTracer tracer(makeDownwardCrossingEnvironment(),
                               makeSettings());
-  const RayPath path =
-      tracer.trace(Source{.depth = 450.0}, 30.0 * kPi / 180.0);
+  const RayPath path = tracer.trace(Source{.depth = 450.0}, 30.0 * kPi / 180.0);
 
   context.check(path.terminationReason == RayTerminationReason::PointLimit,
                 "downward SSP crossing continues to the point limit");
   checkPathInvariants(context, path, "downward");
   checkHorizontalSlowness(context, path, "downward");
 
-  const std::size_t nodeIndex =
-      findAlignedNode(context, path, "downward");
+  const std::size_t nodeIndex = findAlignedNode(context, path, "downward");
   if (nodeIndex + 1U < path.points.size()) {
-    context.checkNear(path.steps[nodeIndex].stepLength, kMinimumStep,
-                      1.0e-14,
+    context.checkNear(path.steps[nodeIndex].stepLength, kMinimumStep, 1.0e-14,
                       "downward node departure uses one minimum forward step");
-    context.check(path.points[nodeIndex + 1U].position.depth >
-                      kInterfaceDepth,
+    context.check(path.points[nodeIndex + 1U].position.depth > kInterfaceDepth,
                   "downward crossing updates the segment hint after the node");
   }
 }
 
 void testUpwardInterfaceCrossing(Context& context) {
-  const GeometryTracer tracer(makeUpwardCrossingEnvironment(),
-                              makeSettings());
+  const GeometryTracer tracer(makeUpwardCrossingEnvironment(), makeSettings());
   const RayPath path =
       tracer.trace(Source{.depth = 550.0}, -30.0 * kPi / 180.0);
 
@@ -164,11 +145,9 @@ void testUpwardInterfaceCrossing(Context& context) {
 
   const std::size_t nodeIndex = findAlignedNode(context, path, "upward");
   if (nodeIndex + 1U < path.points.size()) {
-    context.checkNear(path.steps[nodeIndex].stepLength, kMinimumStep,
-                      1.0e-14,
+    context.checkNear(path.steps[nodeIndex].stepLength, kMinimumStep, 1.0e-14,
                       "upward node departure uses one minimum forward step");
-    context.check(path.points[nodeIndex + 1U].position.depth <
-                      kInterfaceDepth,
+    context.check(path.points[nodeIndex + 1U].position.depth < kInterfaceDepth,
                   "upward crossing updates the segment hint after the node");
   }
 }
@@ -177,8 +156,7 @@ void testSourceOnNodeMovesWithoutLooping(Context& context) {
   const GeometryTracer tracer(makeDownwardCrossingEnvironment(),
                               makeSettings(5U));
   const RayPath path =
-      tracer.trace(Source{.depth = kInterfaceDepth},
-                   30.0 * kPi / 180.0);
+      tracer.trace(Source{.depth = kInterfaceDepth}, 30.0 * kPi / 180.0);
 
   context.check(path.terminationReason == RayTerminationReason::PointLimit,
                 "source on an internal node does not fail numerically");
@@ -198,40 +176,32 @@ void testSeaBoundariesReflect(Context& context) {
   const Environment environment(
       SoundSpeedProfile(
           {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
-           {.depth = kInterfaceDepth,
-            .soundSpeed = 1500.0,
-            .density = 1000.0},
-           {.depth = 1000.0,
-            .soundSpeed = 1500.0,
-            .density = 1000.0}}),
+           {.depth = kInterfaceDepth, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0}}),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
   const GeometryTracer tracer(environment, makeSettings());
 
-  const RayPath surface =
-      tracer.trace(Source{.depth = 50.0}, -0.5 * kPi);
+  const RayPath surface = tracer.trace(Source{.depth = 50.0}, -0.5 * kPi);
+  context.check(surface.terminationReason == RayTerminationReason::PointLimit,
+                "sea-surface reflection continues to the point limit");
   context.check(
-      surface.terminationReason == RayTerminationReason::PointLimit,
-      "sea-surface reflection continues to the point limit");
-  context.check(!surface.events.empty() &&
-                    surface.events.front().boundary ==
-                        rayreuse::ReflectionBoundary::SeaSurface,
-                "sea-surface encounter emits a surface event");
+      !surface.events.empty() && surface.events.front().boundary ==
+                                     rayreuse::ReflectionBoundary::SeaSurface,
+      "sea-surface encounter emits a surface event");
   context.check(surface.points.size() ==
                     surface.steps.size() + surface.events.size() + 1U,
                 "surface reflection preserves P = 1 + S + E");
 
-  const RayPath seabed =
-      tracer.trace(Source{.depth = 950.0}, 0.5 * kPi);
+  const RayPath seabed = tracer.trace(Source{.depth = 950.0}, 0.5 * kPi);
+  context.check(seabed.terminationReason == RayTerminationReason::PointLimit,
+                "seabed reflection continues to the point limit");
   context.check(
-      seabed.terminationReason == RayTerminationReason::PointLimit,
-      "seabed reflection continues to the point limit");
-  context.check(!seabed.events.empty() &&
-                    seabed.events.front().boundary ==
-                        rayreuse::ReflectionBoundary::Seabed,
-                "seabed encounter emits a bottom event");
-  context.check(seabed.points.size() ==
-                    seabed.steps.size() + seabed.events.size() + 1U,
-                "seabed reflection preserves P = 1 + S + E");
+      !seabed.events.empty() && seabed.events.front().boundary ==
+                                    rayreuse::ReflectionBoundary::Seabed,
+      "seabed encounter emits a bottom event");
+  context.check(
+      seabed.points.size() == seabed.steps.size() + seabed.events.size() + 1U,
+      "seabed reflection preserves P = 1 + S + E");
 }
 
 }  // namespace

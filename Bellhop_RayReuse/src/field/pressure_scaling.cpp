@@ -16,24 +16,21 @@ void requireFinite(double value, const std::string& name) {
   }
 }
 
-void requireFiniteComplex(std::complex<double> value,
-                          const std::string& name) {
-  if (!std::isfinite(value.real()) ||
-      !std::isfinite(value.imag())) {
+void requireFiniteComplex(std::complex<double> value, const std::string& name) {
+  if (!std::isfinite(value.real()) || !std::isfinite(value.imag())) {
     throw ValidationError(name + " must be finite");
   }
 }
 
 }  // namespace
 
-void scaleCoherentCartesianPointPressure(
-    FrequencyWorkspace& workspace, const ReceiverGrid& receivers,
-    double launchAngleSpacingRadians, double sourceSoundSpeed) {
-  requireFinite(
-      launchAngleSpacingRadians, "launch-angle spacing");
+void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
+                                         const ReceiverGrid& receivers,
+                                         double launchAngleSpacingRadians,
+                                         double sourceSoundSpeed) {
+  requireFinite(launchAngleSpacingRadians, "launch-angle spacing");
   if (launchAngleSpacingRadians <= 0.0) {
-    throw ValidationError(
-        "launch-angle spacing must be positive");
+    throw ValidationError("launch-angle spacing must be positive");
   }
   requireFinite(sourceSoundSpeed, "source sound speed");
   if (sourceSoundSpeed <= 0.0) {
@@ -45,13 +42,11 @@ void scaleCoherentCartesianPointPressure(
         "pressure-scaling workspace and receiver-grid sizes must match");
   }
   for (const std::complex<double> pressure : workspace.pressure()) {
-    requireFiniteComplex(
-        pressure, "unscaled workspace pressure");
+    requireFiniteComplex(pressure, "unscaled workspace pressure");
   }
 
   const double beamScale =
-      (-launchAngleSpacingRadians *
-       std::sqrt(workspace.frequency())) /
+      (-launchAngleSpacingRadians * std::sqrt(workspace.frequency())) /
       sourceSoundSpeed;
   requireFinite(beamScale, "Cartesian point-source beam scale");
   if (beamScale == 0.0) {
@@ -63,11 +58,8 @@ void scaleCoherentCartesianPointPressure(
   rangeFactors.reserve(receivers.rangeCount());
   for (const double range : receivers.ranges()) {
     const double factor =
-        range == 0.0
-            ? 0.0
-            : beamScale / std::sqrt(std::abs(range));
-    requireFinite(
-        factor, "Cartesian point-source range factor");
+        range == 0.0 ? 0.0 : beamScale / std::sqrt(std::abs(range));
+    requireFinite(factor, "Cartesian point-source range factor");
     if (range != 0.0 && factor == 0.0) {
       throw ValidationError(
           "Cartesian point-source range factor must not underflow to zero");
@@ -77,23 +69,21 @@ void scaleCoherentCartesianPointPressure(
 
   // Validate the complete scaled field before modifying the workspace so a
   // numerical overflow cannot leave a partially scaled result.
-  for (std::size_t rangeIndex = 0U;
-       rangeIndex < workspace.rangeCount(); ++rangeIndex) {
-    for (std::size_t depthIndex = 0U;
-         depthIndex < workspace.depthCount(); ++depthIndex) {
+  for (std::size_t rangeIndex = 0U; rangeIndex < workspace.rangeCount();
+       ++rangeIndex) {
+    for (std::size_t depthIndex = 0U; depthIndex < workspace.depthCount();
+         ++depthIndex) {
       requireFiniteComplex(
-          workspace.at(depthIndex, rangeIndex) *
-              rangeFactors[rangeIndex],
+          workspace.at(depthIndex, rangeIndex) * rangeFactors[rangeIndex],
           "scaled workspace pressure");
     }
   }
 
-  for (std::size_t rangeIndex = 0U;
-       rangeIndex < workspace.rangeCount(); ++rangeIndex) {
-    for (std::size_t depthIndex = 0U;
-         depthIndex < workspace.depthCount(); ++depthIndex) {
-      workspace.at(depthIndex, rangeIndex) *=
-          rangeFactors[rangeIndex];
+  for (std::size_t rangeIndex = 0U; rangeIndex < workspace.rangeCount();
+       ++rangeIndex) {
+    for (std::size_t depthIndex = 0U; depthIndex < workspace.depthCount();
+         ++depthIndex) {
+      workspace.at(depthIndex, rangeIndex) *= rangeFactors[rangeIndex];
     }
   }
 }

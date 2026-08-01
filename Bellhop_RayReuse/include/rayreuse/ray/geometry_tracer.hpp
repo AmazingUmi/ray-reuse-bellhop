@@ -20,12 +20,10 @@ namespace rayreuse {
 // transitions remain distinct from integrated StepQuadrature transitions.
 class GeometryTracer {
  public:
-  GeometryTracer(const Environment& environment,
-                 IntegratorSettings integrator);
+  GeometryTracer(const Environment& environment, IntegratorSettings integrator);
   explicit GeometryTracer(const SimulationCase& simulation);
 
-  [[nodiscard]] RayPath trace(const Source& source,
-                              double launchAngle) const;
+  [[nodiscard]] RayPath trace(const Source& source, double launchAngle) const;
 
  private:
   CLinearSsp soundSpeedProfile_;

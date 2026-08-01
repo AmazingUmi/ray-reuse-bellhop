@@ -80,22 +80,19 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
         "minimumLaunchAngle must be less than maximumLaunchAngle");
   }
 
-  const double angleSpan =
-      input.maximumLaunchAngle - input.minimumLaunchAngle;
+  const double angleSpan = input.maximumLaunchAngle - input.minimumLaunchAngle;
   if (!std::isfinite(angleSpan) || angleSpan <= 0.0) {
     throw ValidationError("launch angle span must be finite and positive");
   }
 
-  const double phaseCriterion =
-      kPhaseCriterionScale * input.maximumRange * designFrequency /
-      kReferenceSoundSpeed;
-  const std::size_t phaseCriterionCount = std::max(
-      checkedFloorToCount(phaseCriterion, "phase criterion count"),
-      kMinimumPhaseCriterionCount);
+  const double phaseCriterion = kPhaseCriterionScale * input.maximumRange *
+                                designFrequency / kReferenceSoundSpeed;
+  const std::size_t phaseCriterionCount =
+      std::max(checkedFloorToCount(phaseCriterion, "phase criterion count"),
+               kMinimumPhaseCriterionCount);
 
   const double depthAngularStep =
-      std::atan(input.waterDepth /
-                (kDepthRangeFactor * input.maximumRange));
+      std::atan(input.waterDepth / (kDepthRangeFactor * input.maximumRange));
   if (!std::isfinite(depthAngularStep) || depthAngularStep <= 0.0) {
     throw ValidationError(
         "depth criterion angular step must be finite and positive");
@@ -105,21 +102,18 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
 
   const double sufficiencyAngularStep =
       std::sqrt(input.sourceSoundSpeed /
-                (kSufficiencyFactor * designFrequency *
-                 input.maximumRange));
-  if (!std::isfinite(sufficiencyAngularStep) ||
-      sufficiencyAngularStep <= 0.0) {
+                (kSufficiencyFactor * designFrequency * input.maximumRange));
+  if (!std::isfinite(sufficiencyAngularStep) || sufficiencyAngularStep <= 0.0) {
     throw ValidationError(
         "sufficiency angular step must be finite and positive");
   }
-  const std::size_t minimumRecommendedAngleCount = checkedAddTwo(
-      checkedFloorToCount(angleSpan / sufficiencyAngularStep,
-                          "minimum recommended angle count"),
-      "minimum recommended angle count");
+  const std::size_t minimumRecommendedAngleCount =
+      checkedAddTwo(checkedFloorToCount(angleSpan / sufficiencyAngularStep,
+                                        "minimum recommended angle count"),
+                    "minimum recommended angle count");
 
-  const std::size_t launchAngleCount =
-      std::max({phaseCriterionCount, depthCriterionCount,
-                minimumRecommendedAngleCount});
+  const std::size_t launchAngleCount = std::max(
+      {phaseCriterionCount, depthCriterionCount, minimumRecommendedAngleCount});
 
   std::vector<double> launchAngles;
   if (launchAngleCount > launchAngles.max_size()) {
@@ -131,18 +125,14 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
   double launchAngleStep =
       angleSpan / static_cast<double>(launchAngleCount - 1U);
   if (input.inputDegreeBounds.has_value()) {
-    const LaunchAngleDegreeBounds bounds =
-        input.inputDegreeBounds.value();
+    const LaunchAngleDegreeBounds bounds = input.inputDegreeBounds.value();
     requireFinite(bounds.minimum, "inputDegreeBounds.minimum");
     requireFinite(bounds.maximum, "inputDegreeBounds.maximum");
     if (bounds.minimum >= bounds.maximum) {
-      throw ValidationError(
-          "input degree minimum must be less than maximum");
+      throw ValidationError("input degree minimum must be less than maximum");
     }
-    if (bounds.minimum * kRadiansPerDegree !=
-            input.minimumLaunchAngle ||
-        bounds.maximum * kRadiansPerDegree !=
-            input.maximumLaunchAngle) {
+    if (bounds.minimum * kRadiansPerDegree != input.minimumLaunchAngle ||
+        bounds.maximum * kRadiansPerDegree != input.maximumLaunchAngle) {
       throw ValidationError(
           "input degree bounds must exactly match the radian bounds");
     }
@@ -156,19 +146,15 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
         static_cast<double>(launchAngleCount - 1U);
     for (std::size_t index = 0U; index < launchAngleCount; ++index) {
       const double launchAngleDegrees =
-          bounds.minimum +
-          static_cast<double>(index) * launchAngleStepDegrees;
-      launchAngles[index] =
-          launchAngleDegrees * kRadiansPerDegree;
+          bounds.minimum + static_cast<double>(index) * launchAngleStepDegrees;
+      launchAngles[index] = launchAngleDegrees * kRadiansPerDegree;
     }
-    launchAngleStep =
-        (launchAngles.back() - launchAngles.front()) /
-        static_cast<double>(launchAngleCount - 1U);
+    launchAngleStep = (launchAngles.back() - launchAngles.front()) /
+                      static_cast<double>(launchAngleCount - 1U);
   } else {
     for (std::size_t index = 0U; index < launchAngleCount; ++index) {
-      launchAngles[index] =
-          std::fma(static_cast<double>(index), launchAngleStep,
-                   input.minimumLaunchAngle);
+      launchAngles[index] = std::fma(static_cast<double>(index),
+                                     launchAngleStep, input.minimumLaunchAngle);
     }
     launchAngles.front() = input.minimumLaunchAngle;
     launchAngles.back() = input.maximumLaunchAngle;

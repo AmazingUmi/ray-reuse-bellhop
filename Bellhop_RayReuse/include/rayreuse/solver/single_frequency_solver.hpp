@@ -38,14 +38,12 @@ class SingleFrequencySolver {
 
   [[nodiscard]] static SingleFrequencyResult solveFrequencyFromCache(
       const SimulationCase& simulation, double frequency,
-      const RayPathCache& rayCache, double epsilonMultiplier,
-      double loopRange,
+      const RayPathCache& rayCache, double epsilonMultiplier, double loopRange,
       CartesianCervenySettings influenceSettings = {});
 
   [[nodiscard]] static SingleFrequencyResult solve(
-      const SimulationCase& simulation,
-      double epsilonMultiplier, double loopRange,
-      CartesianCervenySettings influenceSettings = {});
+      const SimulationCase& simulation, double epsilonMultiplier,
+      double loopRange, CartesianCervenySettings influenceSettings = {});
 
   [[nodiscard]] static SingleFrequencyResult solveAtFrequency(
       const SimulationCase& simulation, double frequency,

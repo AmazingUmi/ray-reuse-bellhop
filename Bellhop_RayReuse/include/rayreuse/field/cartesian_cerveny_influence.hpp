@@ -94,26 +94,23 @@ struct CartesianCervenyDiagnostic {
   std::complex<double> finalContribution{};
 };
 
-[[nodiscard]] int updateCervenyKmah(
-    std::complex<double> qLeft, std::complex<double> qRight,
-    int currentKmah);
+[[nodiscard]] int updateCervenyKmah(std::complex<double> qLeft,
+                                    std::complex<double> qRight,
+                                    int currentKmah);
 
-[[nodiscard]] double cervenyHermiteTaper(
-    double offset, double fullValueRadius,
-    double zeroValueRadius);
+[[nodiscard]] double cervenyHermiteTaper(double offset, double fullValueRadius,
+                                         double zeroValueRadius);
 
 class CartesianCervenyInfluence {
  public:
-  CartesianCervenyInfluence(
-      Environment environment, ReceiverGrid receivers,
-      CartesianCervenySettings settings = {});
+  CartesianCervenyInfluence(Environment environment, ReceiverGrid receivers,
+                            CartesianCervenySettings settings = {});
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      std::complex<double> epsilon,
-      std::optional<CartesianCervenyDiagnosticRequest>
-          diagnosticRequest = std::nullopt,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest =
+          std::nullopt,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
  private:
@@ -122,25 +119,21 @@ class CartesianCervenyInfluence {
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
   accumulatePrevalidated(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      std::complex<double> epsilon,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   template <bool CollectStatistics>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
   accumulateWithImageCount(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      std::complex<double> epsilon,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
       CartesianCervenyStatistics* statistics) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
-  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
-  accumulateImpl(
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateImpl(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      std::complex<double> epsilon,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
       CartesianCervenyStatistics* statistics) const;
 

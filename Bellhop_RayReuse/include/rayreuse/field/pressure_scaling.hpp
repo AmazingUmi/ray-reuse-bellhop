@@ -5,8 +5,9 @@
 
 namespace rayreuse {
 
-void scaleCoherentCartesianPointPressure(
-    FrequencyWorkspace& workspace, const ReceiverGrid& receivers,
-    double launchAngleSpacingRadians, double sourceSoundSpeed);
+void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
+                                         const ReceiverGrid& receivers,
+                                         double launchAngleSpacingRadians,
+                                         double sourceSoundSpeed);
 
 }  // namespace rayreuse

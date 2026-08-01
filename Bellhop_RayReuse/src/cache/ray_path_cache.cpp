@@ -38,8 +38,7 @@ class FingerprintBuilder {
   [[nodiscard]] std::uint64_t value() const noexcept { return hash_; }
 
  private:
-  static constexpr std::uint64_t kFnvOffsetBasis =
-      14695981039346656037ULL;
+  static constexpr std::uint64_t kFnvOffsetBasis = 14695981039346656037ULL;
   static constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
   std::uint64_t hash_{kFnvOffsetBasis};
@@ -84,8 +83,7 @@ void appendEvent(FingerprintBuilder& fingerprint,
   fingerprint.append(event.normalSlowness);
 }
 
-void appendPath(FingerprintBuilder& fingerprint,
-                const RayPath& path) noexcept {
+void appendPath(FingerprintBuilder& fingerprint, const RayPath& path) noexcept {
   constexpr std::uint64_t kPathMarker = 0x5241595041544801ULL;
   constexpr std::uint64_t kPointsMarker = 0x504f494e54530101ULL;
   constexpr std::uint64_t kStepsMarker = 0x5354455053010101ULL;
@@ -131,15 +129,13 @@ void validateRayState(const RayState& point, double previousTravelTime) {
   if (point.soundSpeed <= 0.0) {
     throw ValidationError("ray-state sound speed must be positive");
   }
-  if (point.realTravelTime < 0.0 ||
-      point.realTravelTime < previousTravelTime) {
+  if (point.realTravelTime < 0.0 || point.realTravelTime < previousTravelTime) {
     throw ValidationError("ray-state travel time must be non-decreasing");
   }
 }
 
 void validateStep(const StepQuadrature& step) {
-  if (!std::isfinite(step.stepLength) ||
-      !std::isfinite(step.startWeight) ||
+  if (!std::isfinite(step.stepLength) || !std::isfinite(step.startWeight) ||
       !std::isfinite(step.midpointWeight) || !isFinite(step.midpoint)) {
     throw ValidationError("ray path contains non-finite quadrature data");
   }
@@ -150,8 +146,7 @@ void validateStep(const StepQuadrature& step) {
   }
   const double weightError =
       std::abs(step.startWeight + step.midpointWeight - step.stepLength);
-  const double weightTolerance =
-      1.0e-12 * std::max(1.0, step.stepLength);
+  const double weightTolerance = 1.0e-12 * std::max(1.0, step.stepLength);
   if (weightError > weightTolerance) {
     throw ValidationError(
         "ray quadrature weights must sum to the actual step length");
@@ -172,8 +167,7 @@ void validateEvent(const ReflectionEvent& event,
       !std::isfinite(event.normalSlowness)) {
     throw ValidationError("reflection event contains a non-finite value");
   }
-  if (std::abs(norm(event.boundaryTangent) - 1.0) >
-          kGeometryTolerance ||
+  if (std::abs(norm(event.boundaryTangent) - 1.0) > kGeometryTolerance ||
       std::abs(norm(event.outwardNormal) - 1.0) > kGeometryTolerance ||
       std::abs(dot(event.boundaryTangent, event.outwardNormal)) >
           kGeometryTolerance) {
@@ -188,11 +182,10 @@ void validateEvent(const ReflectionEvent& event,
         "reflection-event position must match its pre/post point pair");
   }
   const double timeTolerance =
-      kTravelTimeTolerance *
-      std::max({1.0, incidentPoint.realTravelTime,
-                reflectedPoint.realTravelTime});
-  if (std::abs(incidentPoint.realTravelTime -
-               reflectedPoint.realTravelTime) > timeTolerance) {
+      kTravelTimeTolerance * std::max({1.0, incidentPoint.realTravelTime,
+                                       reflectedPoint.realTravelTime});
+  if (std::abs(incidentPoint.realTravelTime - reflectedPoint.realTravelTime) >
+      timeTolerance) {
     throw ValidationError(
         "reflection pre/post points must have the same travel time");
   }
@@ -207,10 +200,8 @@ void validateEvent(const ReflectionEvent& event,
       dot(event.incidentSlowness, event.boundaryTangent);
   const double incidentNormal =
       dot(event.incidentSlowness, event.outwardNormal);
-  if (std::abs(event.tangentSlowness - incidentTangent) >
-          kSlownessTolerance ||
-      std::abs(event.normalSlowness - incidentNormal) >
-          kSlownessTolerance) {
+  if (std::abs(event.tangentSlowness - incidentTangent) > kSlownessTolerance ||
+      std::abs(event.normalSlowness - incidentNormal) > kSlownessTolerance) {
     throw ValidationError(
         "reflection-event scalar slowness components are inconsistent");
   }
@@ -223,8 +214,8 @@ void validateEvent(const ReflectionEvent& event,
     throw ValidationError(
         "reflection-event slowness does not satisfy mirror reflection");
   }
-  if (std::abs(incidentPoint.soundSpeed * norm(event.incidentSlowness) -
-               1.0) > kSlownessNormTolerance ||
+  if (std::abs(incidentPoint.soundSpeed * norm(event.incidentSlowness) - 1.0) >
+          kSlownessNormTolerance ||
       std::abs(reflectedPoint.soundSpeed * norm(event.reflectedSlowness) -
                1.0) > kSlownessNormTolerance) {
     throw ValidationError(
@@ -243,8 +234,7 @@ void validatePath(const RayPath& path) {
       std::numeric_limits<std::size_t>::max() - path.events.size()) {
     throw ValidationError("ray path transition count overflows size_t");
   }
-  const std::size_t transitionCount =
-      path.steps.size() + path.events.size();
+  const std::size_t transitionCount = path.steps.size() + path.events.size();
   if (path.points.size() - 1U != transitionCount) {
     throw ValidationError(
         "ray path requires one step or reflection event per point pair");
@@ -337,8 +327,7 @@ std::size_t RayPathCache::memoryFootprintBytes() const noexcept {
 
 std::uint64_t RayPathCache::contentFingerprint() const {
   if (!frozen_) {
-    throw std::logic_error(
-        "cannot fingerprint an unfrozen RayPathCache");
+    throw std::logic_error("cannot fingerprint an unfrozen RayPathCache");
   }
 
   constexpr std::uint64_t kCacheMarker = 0x5241594341434801ULL;

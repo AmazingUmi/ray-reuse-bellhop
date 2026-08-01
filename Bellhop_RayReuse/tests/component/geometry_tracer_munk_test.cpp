@@ -18,12 +18,10 @@ using rayreuse::Source;
 using rayreuse::test::Context;
 
 void testMunkOracleRegression(Context& context) {
-  const GeometryTracer tracer(
-      rayreuse::test::makeMunkEnvironment(),
-      rayreuse::test::makeMunkIntegratorSettings());
-  const auto path =
-      tracer.trace(Source{.depth = 1000.0},
-                   rayreuse::test::kMunkOracleLaunchAngle);
+  const GeometryTracer tracer(rayreuse::test::makeMunkEnvironment(),
+                              rayreuse::test::makeMunkIntegratorSettings());
+  const auto path = tracer.trace(Source{.depth = 1000.0},
+                                 rayreuse::test::kMunkOracleLaunchAngle);
 
   context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
                 "Munk ray exits through the strict range box");
@@ -39,28 +37,22 @@ void testMunkOracleRegression(Context& context) {
     return;
   }
 
-  const auto [minimumDepth, maximumDepth] = std::minmax_element(
-      path.points.begin(), path.points.end(),
-      [](const auto& left, const auto& right) {
-        return left.position.depth < right.position.depth;
-      });
-  context.checkNear(minimumDepth->position.depth, 999.9935394381022,
-                    2.0e-7,
+  const auto [minimumDepth, maximumDepth] =
+      std::minmax_element(path.points.begin(), path.points.end(),
+                          [](const auto& left, const auto& right) {
+                            return left.position.depth < right.position.depth;
+                          });
+  context.checkNear(minimumDepth->position.depth, 999.9935394381022, 2.0e-7,
                     "Munk ray minimum depth matches the Fortran oracle");
-  context.checkNear(maximumDepth->position.depth, 1646.3104064731708,
-                    2.0e-7,
+  context.checkNear(maximumDepth->position.depth, 1646.3104064731708, 2.0e-7,
                     "Munk ray crosses multiple C-linear SSP layers");
 
   const std::size_t reducedStepCount = static_cast<std::size_t>(
       std::count_if(path.steps.begin(), path.steps.end(),
-                    [](const auto& step) {
-                      return step.stepLength < 500.0;
-                    }));
+                    [](const auto& step) { return step.stepLength < 500.0; }));
   const std::size_t subMeterStepCount = static_cast<std::size_t>(
       std::count_if(path.steps.begin(), path.steps.end(),
-                    [](const auto& step) {
-                      return step.stepLength < 1.0;
-                    }));
+                    [](const auto& step) { return step.stepLength < 1.0; }));
   context.check(reducedStepCount == 108U,
                 "Munk path records every SSP and range reduced step");
   context.check(subMeterStepCount == 59U,
@@ -88,38 +80,30 @@ void testMunkBoundaryReflectionRegression(Context& context) {
     std::size_t bottomBounceCount{};
   };
   constexpr std::array expectedTraces{
-      ExpectedTrace{
-          .launchAngle = -rayreuse::test::kMunkExtremeLaunchAngle,
-          .pointCount = 547U,
-          .stepCount = 539U,
-          .topBounceCount = 4U,
-          .bottomBounceCount = 3U},
-      ExpectedTrace{
-          .launchAngle = rayreuse::test::kMunkExtremeLaunchAngle,
-          .pointCount = 543U,
-          .stepCount = 536U,
-          .topBounceCount = 3U,
-          .bottomBounceCount = 3U}};
+      ExpectedTrace{.launchAngle = -rayreuse::test::kMunkExtremeLaunchAngle,
+                    .pointCount = 547U,
+                    .stepCount = 539U,
+                    .topBounceCount = 4U,
+                    .bottomBounceCount = 3U},
+      ExpectedTrace{.launchAngle = rayreuse::test::kMunkExtremeLaunchAngle,
+                    .pointCount = 543U,
+                    .stepCount = 536U,
+                    .topBounceCount = 3U,
+                    .bottomBounceCount = 3U}};
 
-  const GeometryTracer tracer(
-      rayreuse::test::makeMunkEnvironment(),
-      rayreuse::test::makeMunkIntegratorSettings());
+  const GeometryTracer tracer(rayreuse::test::makeMunkEnvironment(),
+                              rayreuse::test::makeMunkIntegratorSettings());
   RayPathCache cache;
   for (const ExpectedTrace& expected : expectedTraces) {
-    auto path =
-        tracer.trace(Source{.depth = 1000.0}, expected.launchAngle);
-    const std::size_t topBounceCount = static_cast<std::size_t>(
-        std::count_if(path.events.begin(), path.events.end(),
-                      [](const auto& event) {
-                        return event.boundary ==
-                               ReflectionBoundary::SeaSurface;
-                      }));
-    const std::size_t bottomBounceCount = path.events.size() -
-                                          topBounceCount;
+    auto path = tracer.trace(Source{.depth = 1000.0}, expected.launchAngle);
+    const std::size_t topBounceCount = static_cast<std::size_t>(std::count_if(
+        path.events.begin(), path.events.end(), [](const auto& event) {
+          return event.boundary == ReflectionBoundary::SeaSurface;
+        }));
+    const std::size_t bottomBounceCount = path.events.size() - topBounceCount;
 
-    context.check(
-        path.terminationReason == RayTerminationReason::ExitedDomain,
-        "extreme Munk ray exits through the range box");
+    context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
+                  "extreme Munk ray exits through the range box");
     context.check(path.points.size() == expected.pointCount,
                   "extreme Munk point count matches the Fortran oracle");
     context.check(path.steps.size() == expected.stepCount,
@@ -128,9 +112,9 @@ void testMunkBoundaryReflectionRegression(Context& context) {
                   "extreme Munk sea-surface bounce count matches");
     context.check(bottomBounceCount == expected.bottomBounceCount,
                   "extreme Munk seabed bounce count matches");
-    context.check(path.points.size() ==
-                      1U + path.steps.size() + path.events.size(),
-                  "extreme Munk path satisfies P = 1 + S + E");
+    context.check(
+        path.points.size() == 1U + path.steps.size() + path.events.size(),
+        "extreme Munk path satisfies P = 1 + S + E");
     cache.append(std::move(path));
   }
 

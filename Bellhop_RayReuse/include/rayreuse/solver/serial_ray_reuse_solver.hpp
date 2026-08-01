@@ -46,8 +46,7 @@ class SerialRayReuseSolver {
 
   [[nodiscard]] static SerialRayReuseResult solve(
       const SimulationCase& simulation, double epsilonMultiplier,
-      double loopRange,
-      CartesianCervenySettings influenceSettings = {},
+      double loopRange, CartesianCervenySettings influenceSettings = {},
       bool verifyCacheFingerprint = false);
 };
 

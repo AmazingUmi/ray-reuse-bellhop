@@ -56,9 +56,9 @@ struct IntegratorSettings {
 
 class SimulationCase {
  public:
-  SimulationCase(Environment environment, Source source,
-                 ReceiverGrid receivers, FrequencyGrid frequencies,
-                 LaunchFan launchFan, IntegratorSettings integrator);
+  SimulationCase(Environment environment, Source source, ReceiverGrid receivers,
+                 FrequencyGrid frequencies, LaunchFan launchFan,
+                 IntegratorSettings integrator);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;

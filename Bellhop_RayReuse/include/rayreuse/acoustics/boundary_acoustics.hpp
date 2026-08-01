@@ -19,16 +19,14 @@ struct BoundaryAcousticsResult {
 // coefficient. Small-coefficient suppression is enabled only for acoustic
 // half-spaces; vacuum and rigid coefficients are never suppressed.
 [[nodiscard]] BoundaryAcousticsResult classifyBoundaryCoefficient(
-    std::complex<double> rawCoefficient,
-    bool suppressSmallAcousticCoefficient);
+    std::complex<double> rawCoefficient, bool suppressSmallAcousticCoefficient);
 
 // Evaluates the per-frequency coefficient for a frozen geometry event.
 // Slowness components are projections on the boundary tangent and outward
 // normal. M2-02 accepts vacuum, rigid, and fluid acoustic half-spaces;
 // elastic half-spaces fail explicitly.
 [[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
-    const BoundaryModel& boundary, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness);
+    const BoundaryModel& boundary, double frequency, double waterDensity,
+    double tangentSlowness, double outwardNormalSlowness);
 
 }  // namespace rayreuse

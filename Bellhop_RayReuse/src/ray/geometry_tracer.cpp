@@ -51,8 +51,7 @@ void validateIntegrator(const IntegratorSettings& integrator) {
     throw ValidationError("integrator.depthLimit must be positive");
   }
   if (integrator.maximumRayPoints < 2U) {
-    throw ValidationError(
-        "integrator.maximumRayPoints must be at least two");
+    throw ValidationError("integrator.maximumRayPoints must be at least two");
   }
 }
 
@@ -64,15 +63,15 @@ void validateIntegrator(const IntegratorSettings& integrator) {
          std::abs(position.depth) > integrator.depthLimit;
 }
 
-[[nodiscard]] double crossingDistance(double initialCoordinate,
-                                      double tangent,
+[[nodiscard]] double crossingDistance(double initialCoordinate, double tangent,
                                       double boundaryCoordinate) {
   return (boundaryCoordinate - initialCoordinate) / tangent;
 }
 
-[[nodiscard]] double boundaryDistance(
-    Vec2 position, ReflectionBoundary boundary, double seaSurfaceDepth,
-    double seabedDepth) noexcept {
+[[nodiscard]] double boundaryDistance(Vec2 position,
+                                      ReflectionBoundary boundary,
+                                      double seaSurfaceDepth,
+                                      double seabedDepth) noexcept {
   switch (boundary) {
     case ReflectionBoundary::SeaSurface:
       return position.depth - seaSurfaceDepth;
@@ -102,9 +101,8 @@ void validateIntegrator(const IntegratorSettings& integrator) {
   const double initialSeabedDistance =
       boundaryDistance(initialPosition, ReflectionBoundary::Seabed,
                        seaSurfaceDepth, seabedDepth);
-  const double endSeabedDistance =
-      boundaryDistance(endPosition, ReflectionBoundary::Seabed,
-                       seaSurfaceDepth, seabedDepth);
+  const double endSeabedDistance = boundaryDistance(
+      endPosition, ReflectionBoundary::Seabed, seaSurfaceDepth, seabedDepth);
   if (initialSeabedDistance > 0.0 && endSeabedDistance <= 0.0) {
     return ReflectionBoundary::Seabed;
   }
@@ -123,15 +121,14 @@ class GeometryStepLimiter {
 
   [[nodiscard]] double operator()(const StepLimitRequest& request) const {
     double step = request.proposedStepLength;
-    const Vec2 trial =
-        request.initialPosition + step * request.unitTangent;
+    const Vec2 trial = request.initialPosition + step * request.unitTangent;
 
-    reduceForSpatialCoordinate(
-        request.initialPosition.range, request.unitTangent.range,
-        trial.range, integrator_.rangeLimit, step);
-    reduceForSpatialCoordinate(
-        request.initialPosition.depth, request.unitTangent.depth,
-        trial.depth, integrator_.depthLimit, step);
+    reduceForSpatialCoordinate(request.initialPosition.range,
+                               request.unitTangent.range, trial.range,
+                               integrator_.rangeLimit, step);
+    reduceForSpatialCoordinate(request.initialPosition.depth,
+                               request.unitTangent.depth, trial.depth,
+                               integrator_.depthLimit, step);
 
     reduceForDepthEvents(request, trial.depth, step);
 
@@ -146,10 +143,8 @@ class GeometryStepLimiter {
 
  private:
   static void reduceForSpatialCoordinate(double initialCoordinate,
-                                         double tangent,
-                                         double trialCoordinate,
-                                         double absoluteLimit,
-                                         double& step) {
+                                         double tangent, double trialCoordinate,
+                                         double absoluteLimit, double& step) {
     if (std::abs(trialCoordinate) <= absoluteLimit) {
       return;
     }
@@ -159,15 +154,14 @@ class GeometryStepLimiter {
     }
     const double crossedBoundary =
         std::copysign(absoluteLimit, trialCoordinate);
-    const double boxStep =
-        (crossedBoundary - initialCoordinate) / tangent;
+    const double boxStep = (crossedBoundary - initialCoordinate) / tangent;
     if (boxStep >= 0.0) {
       step = std::min(step, boxStep);
     }
   }
 
-  void reduceForDepthEvents(const StepLimitRequest& request,
-                            double trialDepth, double& step) const {
+  void reduceForDepthEvents(const StepLimitRequest& request, double trialDepth,
+                            double& step) const {
     if (request.initialSegmentIndex + 1U >= profileDepths_.size()) {
       return;
     }
@@ -177,8 +171,7 @@ class GeometryStepLimiter {
       return;
     }
 
-    const double segmentTop =
-        profileDepths_[request.initialSegmentIndex];
+    const double segmentTop = profileDepths_[request.initialSegmentIndex];
     const double segmentBottom =
         profileDepths_[request.initialSegmentIndex + 1U];
 
@@ -193,8 +186,7 @@ class GeometryStepLimiter {
       reduceAtDepth(request.initialPosition.depth, tangent, seaSurfaceDepth_,
                     step);
     } else if (trialDepth > seabedDepth_) {
-      reduceAtDepth(request.initialPosition.depth, tangent, seabedDepth_,
-                    step);
+      reduceAtDepth(request.initialPosition.depth, tangent, seabedDepth_, step);
     }
   }
 
@@ -233,8 +225,7 @@ GeometryTracer::GeometryTracer(const Environment& environment,
 GeometryTracer::GeometryTracer(const SimulationCase& simulation)
     : GeometryTracer(simulation.environment(), simulation.integrator()) {}
 
-RayPath GeometryTracer::trace(const Source& source,
-                              double launchAngle) const {
+RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
   requireFinite(source.depth, "source.depth");
   requireFinite(source.amplitude, "source.amplitude");
   requireFinite(launchAngle, "launchAngle");
@@ -270,69 +261,49 @@ RayPath GeometryTracer::trace(const Source& source,
   const double horizontalAdvancePerStep =
       integrator_.stepLength * std::abs(launchCosine);
   const double nominalStepEstimate =
-      horizontalAdvancePerStep >
-              std::numeric_limits<double>::min()
-          ? std::ceil(
-                integrator_.rangeLimit /
-                horizontalAdvancePerStep)
-          : static_cast<double>(
-                integrator_.maximumRayPoints);
+      horizontalAdvancePerStep > std::numeric_limits<double>::min()
+          ? std::ceil(integrator_.rangeLimit / horizontalAdvancePerStep)
+          : static_cast<double>(integrator_.maximumRayPoints);
   const double verticalTravelEstimate =
-      nominalStepEstimate * integrator_.stepLength *
-      std::abs(launchSine);
-  const double firstBoundaryDistance =
-      launchSine >= 0.0
-          ? seabedDepth_ - source.depth
-          : source.depth - seaSurfaceDepth_;
-  const double waterDepth =
-      seabedDepth_ - seaSurfaceDepth_;
+      nominalStepEstimate * integrator_.stepLength * std::abs(launchSine);
+  const double firstBoundaryDistance = launchSine >= 0.0
+                                           ? seabedDepth_ - source.depth
+                                           : source.depth - seaSurfaceDepth_;
+  const double waterDepth = seabedDepth_ - seaSurfaceDepth_;
   const double reflectionEstimate =
       verticalTravelEstimate < firstBoundaryDistance
           ? 0.0
-          : 1.0 +
-                std::floor(
-                    (verticalTravelEstimate -
-                     firstBoundaryDistance) /
-                    waterDepth);
+          : 1.0 + std::floor((verticalTravelEstimate - firstBoundaryDistance) /
+                             waterDepth);
   // Each reflection adds a derived point and usually induces one minimum
   // continuation step. Unlike the former fixed 2*range estimate, this leaves
   // direct narrow-angle fans compact and reserves event storage only for
   // reflections that can actually occur.
   const double pointEstimate =
-      std::min(
-          static_cast<double>(integrator_.maximumRayPoints),
-          nominalStepEstimate + 2.0 * reflectionEstimate + 8.0);
-  const std::size_t initialPointCapacity =
-      std::min(
-          integrator_.maximumRayPoints,
-          std::max(
-              std::size_t{64U},
-              static_cast<std::size_t>(pointEstimate)));
+      std::min(static_cast<double>(integrator_.maximumRayPoints),
+               nominalStepEstimate + 2.0 * reflectionEstimate + 8.0);
+  const std::size_t initialPointCapacity = std::min(
+      integrator_.maximumRayPoints,
+      std::max(std::size_t{64U}, static_cast<std::size_t>(pointEstimate)));
   const std::size_t initialEventCapacity =
-      std::min(
-          initialPointCapacity / 2U,
-          static_cast<std::size_t>(
-              std::min(
-                  reflectionEstimate + 2.0,
-                  static_cast<double>(
-                      integrator_.maximumRayPoints))));
+      std::min(initialPointCapacity / 2U,
+               static_cast<std::size_t>(std::min(
+                   reflectionEstimate + 2.0,
+                   static_cast<double>(integrator_.maximumRayPoints))));
   path.points.reserve(initialPointCapacity);
   path.steps.reserve(initialPointCapacity - 1U);
   path.events.reserve(initialEventCapacity);
   path.points.push_back(
       RayState{.position = sourcePosition,
-               .slowness =
-                   Vec2{.range =
-                            launchCosine / sourceSample.soundSpeed,
-                        .depth =
-                            launchSine / sourceSample.soundSpeed},
+               .slowness = Vec2{.range = launchCosine / sourceSample.soundSpeed,
+                                .depth = launchSine / sourceSample.soundSpeed},
                .dynamicP = {1.0, 0.0},
                .dynamicQ = {0.0, 1.0},
                .soundSpeed = sourceSample.soundSpeed,
                .realTravelTime = 0.0});
 
-  const GeometryStepLimiter geometryLimiter(
-      integrator_, profileDepths_, seaSurfaceDepth_, seabedDepth_);
+  const GeometryStepLimiter geometryLimiter(integrator_, profileDepths_,
+                                            seaSurfaceDepth_, seabedDepth_);
   const StepLimiter stepLimiter =
       [&geometryLimiter](const StepLimitRequest& request) {
         return geometryLimiter(request);
@@ -346,18 +317,16 @@ RayPath GeometryTracer::trace(const Source& source,
 
     RayStepResult result;
     try {
-      result = stepRay(
-          soundSpeedProfile_, path.points.back(), segmentIndex,
-          integrator_.stepLength, stepLimiter);
+      result = stepRay(soundSpeedProfile_, path.points.back(), segmentIndex,
+                       integrator_.stepLength, stepLimiter);
     } catch (const ValidationError&) {
       path.terminationReason = RayTerminationReason::NumericalFailure;
       return path;
     }
 
     const std::optional<ReflectionBoundary> boundary =
-        crossedBoundary(path.points.back().position,
-                        result.endState.position, seaSurfaceDepth_,
-                        seabedDepth_);
+        crossedBoundary(path.points.back().position, result.endState.position,
+                        seaSurfaceDepth_, seabedDepth_);
 
     std::optional<FlatBoundaryReflection> reflection;
     if (boundary.has_value()) {
@@ -370,24 +339,19 @@ RayPath GeometryTracer::trace(const Source& source,
       }
 
       try {
-        const SoundSpeedSample arrivalSample =
-            soundSpeedProfile_.evaluate(result.endState.position,
-                                        result.segmentIndex);
-        const bool isSurface =
-            *boundary == ReflectionBoundary::SeaSurface;
+        const SoundSpeedSample arrivalSample = soundSpeedProfile_.evaluate(
+            result.endState.position, result.segmentIndex);
+        const bool isSurface = *boundary == ReflectionBoundary::SeaSurface;
         reflection = reflectAtFlatBoundary(
             result.endState, *boundary,
             FlatBoundaryGeometry{
                 .point =
                     Vec2{.range = 0.0,
-                         .depth = isSurface ? seaSurfaceDepth_
-                                            : seabedDepth_},
+                         .depth = isSurface ? seaSurfaceDepth_ : seabedDepth_},
                 .tangent = Vec2{.range = 1.0, .depth = 0.0},
                 .outwardNormal =
-                    Vec2{.range = 0.0,
-                         .depth = isSurface ? -1.0 : 1.0},
-                .soundSpeedGradient =
-                    arrivalSample.soundSpeedGradient,
+                    Vec2{.range = 0.0, .depth = isSurface ? -1.0 : 1.0},
+                .soundSpeedGradient = arrivalSample.soundSpeedGradient,
                 .segmentIndex = 0U,
                 .maximumIncidentPlaneDistance =
                     1.0e-3 * integrator_.stepLength},

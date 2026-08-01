@@ -49,8 +49,8 @@ std::size_t CLinearSsp::segmentCount() const noexcept {
   return segments_.size();
 }
 
-std::size_t CLinearSsp::locateSegment(
-    double depth, std::size_t previousSegment) const {
+std::size_t CLinearSsp::locateSegment(double depth,
+                                      std::size_t previousSegment) const {
   requireFinite(depth, "SSP query depth");
   if (previousSegment >= segments_.size()) {
     throw ValidationError("SSP previous segment index is out of range");
@@ -81,8 +81,8 @@ std::size_t CLinearSsp::locateSegment(
   return std::min(upperNodeIndex - 1U, segments_.size() - 1U);
 }
 
-SoundSpeedSample CLinearSsp::evaluateAtSegment(
-    Vec2 position, std::size_t segmentIndex) const {
+SoundSpeedSample CLinearSsp::evaluateAtSegment(Vec2 position,
+                                               std::size_t segmentIndex) const {
   if (!isFinite(position)) {
     throw ValidationError("SSP query position must be finite");
   }
@@ -108,14 +108,12 @@ SoundSpeedSample CLinearSsp::evaluatePolynomial(
   }
   const Segment& segment = segments_[segmentIndex];
   const double depthOffset = position.depth - segment.minimumDepth;
-  const double soundSpeed =
-      segment.soundSpeedAtMinimumDepth +
-      depthOffset * segment.soundSpeedDepthGradient;
+  const double soundSpeed = segment.soundSpeedAtMinimumDepth +
+                            depthOffset * segment.soundSpeedDepthGradient;
   const double weight =
       depthOffset / (segment.maximumDepth - segment.minimumDepth);
-  const double density =
-      (1.0 - weight) * segment.densityAtMinimumDepth +
-      weight * segment.densityAtMaximumDepth;
+  const double density = (1.0 - weight) * segment.densityAtMinimumDepth +
+                         weight * segment.densityAtMaximumDepth;
 
   requireFinite(soundSpeed, "interpolated sound speed");
   requireFinite(density, "interpolated density");
@@ -132,8 +130,8 @@ SoundSpeedSample CLinearSsp::evaluatePolynomial(
       .segmentIndex = segmentIndex};
 }
 
-SoundSpeedSample CLinearSsp::evaluate(
-    Vec2 position, std::size_t previousSegment) const {
+SoundSpeedSample CLinearSsp::evaluate(Vec2 position,
+                                      std::size_t previousSegment) const {
   const std::size_t segmentIndex =
       locateSegment(position.depth, previousSegment);
   return evaluatePolynomial(position, segmentIndex);

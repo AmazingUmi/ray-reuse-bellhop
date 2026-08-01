@@ -12,9 +12,8 @@ struct AttenuationConversion {
 // Converts the immutable parser-facing attenuation specification at one
 // frequency.  AttenuationUnit::DecibelsPerMeterKilohertz follows legacy
 // Bellhop code F exactly: its raw value is dB/(m*kHz), not dB/(km*kHz).
-[[nodiscard]] double attenuationNpPerMeter(
-    const RawAttenuation& attenuation, double frequency,
-    double soundSpeed);
+[[nodiscard]] double attenuationNpPerMeter(const RawAttenuation& attenuation,
+                                           double frequency, double soundSpeed);
 
 // Updated Thorp formula used by AttenMod.f90, returned in Np/m.
 [[nodiscard]] double thorpAttenuationNpPerMeter(double frequency);
@@ -25,7 +24,6 @@ struct AttenuationConversion {
     double attenuationNpPerMeter, double frequency, double soundSpeed);
 
 [[nodiscard]] AttenuationConversion convertAttenuation(
-    const RawAttenuation& attenuation, double frequency,
-    double soundSpeed);
+    const RawAttenuation& attenuation, double frequency, double soundSpeed);
 
 }  // namespace rayreuse

@@ -65,8 +65,7 @@ FrequencyGrid::FrequencyGrid(std::vector<double> values)
       throw ValidationError("frequencies must be positive");
     }
     if (index > 0U && values_[index - 1U] >= value) {
-      throw ValidationError(
-          "frequency grid must be strictly increasing");
+      throw ValidationError("frequency grid must be strictly increasing");
     }
   }
 }
@@ -121,27 +120,22 @@ SimulationCase::SimulationCase(Environment environment, Source source,
     throw ValidationError("integrator.depthLimit must be positive");
   }
   if (integrator_.maximumRayPoints < 2U) {
-    throw ValidationError(
-        "integrator.maximumRayPoints must be at least two");
+    throw ValidationError("integrator.maximumRayPoints must be at least two");
   }
 
   const CLinearSsp soundSpeedProfile(environment_.soundSpeedProfile());
-  const SoundSpeedSample sourceSample =
-      soundSpeedProfile.evaluate(
-          Vec2{.range = 0.0, .depth = source_.depth}, 0U);
-  launchFanPlan_ = LaunchFanPlanner::plan(
-      LaunchFanPlanningInput{
-          .frequencies = frequencies_.values(),
-          .sourceSoundSpeed = sourceSample.soundSpeed,
-          .waterDepth = environment_.waterDepth(),
-          .maximumRange = receivers_.ranges().back(),
-          .minimumLaunchAngle = launchFan.minimumAngle,
-          .maximumLaunchAngle = launchFan.maximumAngle,
-          .explicitLaunchAngleCount =
-              launchFan.explicitLaunchAngleCount,
-          .inputDegreeBounds =
-              launchFan.inputDegreeBounds,
-      });
+  const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
+      Vec2{.range = 0.0, .depth = source_.depth}, 0U);
+  launchFanPlan_ = LaunchFanPlanner::plan(LaunchFanPlanningInput{
+      .frequencies = frequencies_.values(),
+      .sourceSoundSpeed = sourceSample.soundSpeed,
+      .waterDepth = environment_.waterDepth(),
+      .maximumRange = receivers_.ranges().back(),
+      .minimumLaunchAngle = launchFan.minimumAngle,
+      .maximumLaunchAngle = launchFan.maximumAngle,
+      .explicitLaunchAngleCount = launchFan.explicitLaunchAngleCount,
+      .inputDegreeBounds = launchFan.inputDegreeBounds,
+  });
 }
 
 const Environment& SimulationCase::environment() const noexcept {

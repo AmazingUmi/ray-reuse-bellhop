@@ -13,8 +13,7 @@
 namespace rayreuse {
 namespace {
 
-constexpr double kLegacyActiveAmplitudeThreshold =
-    static_cast<double>(0.005F);
+constexpr double kLegacyActiveAmplitudeThreshold = static_cast<double>(0.005F);
 
 void validateProjectionInput(const RayPath& path, double frequency,
                              double sourceAmplitude) {
@@ -29,13 +28,11 @@ void validateProjectionInput(const RayPath& path, double frequency,
     throw ValidationError("projected ray path must contain at least one point");
   }
   if (path.steps.size() >
-      std::numeric_limits<std::size_t>::max() -
-          path.events.size()) {
+      std::numeric_limits<std::size_t>::max() - path.events.size()) {
     throw ValidationError(
         "projected ray path transition count overflows size_t");
   }
-  if (path.points.size() - 1U !=
-      path.steps.size() + path.events.size()) {
+  if (path.points.size() - 1U != path.steps.size() + path.events.size()) {
     throw ValidationError(
         "projected ray path requires one step or reflection event per "
         "point pair");
@@ -56,8 +53,7 @@ void validateProjectionInput(const RayPath& path, double frequency,
     havePrevious = true;
   }
   if (!std::isfinite(path.points.front().realTravelTime)) {
-    throw ValidationError(
-        "projected source travel time must be finite");
+    throw ValidationError("projected source travel time must be finite");
   }
 }
 
@@ -69,8 +65,7 @@ void validateProjectionInput(const RayPath& path, double frequency,
 }
 
 [[nodiscard]] const BoundaryModel& boundaryForEvent(
-    const Environment& environment,
-    ReflectionBoundary boundary) {
+    const Environment& environment, ReflectionBoundary boundary) {
   switch (boundary) {
     case ReflectionBoundary::SeaSurface:
       return environment.seaSurface();
@@ -80,8 +75,7 @@ void validateProjectionInput(const RayPath& path, double frequency,
   throw ValidationError("projection reflection boundary is invalid");
 }
 
-void requireFiniteProjectionPoint(
-    const RayFrequencyPoint& point) {
+void requireFiniteProjectionPoint(const RayFrequencyPoint& point) {
   if (!std::isfinite(point.complexTravelTime.real()) ||
       !std::isfinite(point.complexTravelTime.imag()) ||
       !std::isfinite(point.amplitude) ||
@@ -96,13 +90,13 @@ void requireFiniteProjectionPoint(
 FrequencyProjector::FrequencyProjector(Environment environment)
     : environment_(std::move(environment)) {}
 
-RayFrequencyState FrequencyProjector::project(
-    const RayPath& path, double frequency,
-    double sourceAmplitude) const {
+RayFrequencyState FrequencyProjector::project(const RayPath& path,
+                                              double frequency,
+                                              double sourceAmplitude) const {
   validateProjectionInput(path, frequency, sourceAmplitude);
 
-  CLinearFrequencySsp soundSpeedProfile(
-      environment_.soundSpeedProfile(), frequency);
+  CLinearFrequencySsp soundSpeedProfile(environment_.soundSpeedProfile(),
+                                        frequency);
   const bool losslessProfile = soundSpeedProfile.isLossless();
   const std::optional<std::complex<double>> uniformComplexSoundSpeed =
       soundSpeedProfile.uniformComplexSoundSpeed();
@@ -113,18 +107,16 @@ RayFrequencyState FrequencyProjector::project(
 
   RayFrequencyState result{.frequency = frequency};
   result.points.reserve(path.points.size());
-  result.points.push_back(
-      RayFrequencyPoint{
-          .complexTravelTime =
-              {path.points.front().realTravelTime, 0.0},
-          .amplitude = sourceAmplitude,
-          .reflectionPhase = 0.0,
-          .active = true});
+  result.points.push_back(RayFrequencyPoint{
+      .complexTravelTime = {path.points.front().realTravelTime, 0.0},
+      .amplitude = sourceAmplitude,
+      .reflectionPhase = 0.0,
+      .active = true});
 
   std::size_t stepIndex = 0U;
   std::size_t eventIndex = 0U;
-  for (std::size_t edgeIndex = 0U;
-       edgeIndex + 1U < path.points.size(); ++edgeIndex) {
+  for (std::size_t edgeIndex = 0U; edgeIndex + 1U < path.points.size();
+       ++edgeIndex) {
     const RayFrequencyPoint& current = result.points.back();
     RayFrequencyPoint next = current;
 
@@ -138,14 +130,12 @@ RayFrequencyState FrequencyProjector::project(
       segmentIndex = waterSample.segmentIndex;
       const BoundaryModel& boundary =
           boundaryForEvent(environment_, event.boundary);
-      const BoundaryAcousticsResult acoustics =
-          evaluateBoundaryAcoustics(
-              boundary, frequency, waterSample.density,
-              event.tangentSlowness, event.normalSlowness);
+      const BoundaryAcousticsResult acoustics = evaluateBoundaryAcoustics(
+          boundary, frequency, waterSample.density, event.tangentSlowness,
+          event.normalSlowness);
       next.amplitude *= acoustics.amplitudeMultiplier;
       next.reflectionPhase += acoustics.phaseIncrement;
-      next.active =
-          current.active && amplitudeRemainsActive(next.amplitude);
+      next.active = current.active && amplitudeRemainsActive(next.amplitude);
       ++eventIndex;
     } else {
       if (stepIndex >= path.steps.size()) {
@@ -155,52 +145,41 @@ RayFrequencyState FrequencyProjector::project(
       const StepQuadrature& quadrature = path.steps[stepIndex];
       if (!std::isfinite(quadrature.startWeight) ||
           !std::isfinite(quadrature.midpointWeight) ||
-          quadrature.startWeight < 0.0 ||
-          quadrature.midpointWeight < 0.0) {
+          quadrature.startWeight < 0.0 || quadrature.midpointWeight < 0.0) {
         throw ValidationError(
             "projection quadrature weights must be finite and non-negative");
       }
       if (losslessProfile) {
-        next.complexTravelTime = {
-            path.points[edgeIndex + 1U].realTravelTime, 0.0};
+        next.complexTravelTime = {path.points[edgeIndex + 1U].realTravelTime,
+                                  0.0};
       } else if (uniformComplexSoundSpeed.has_value()) {
         next.complexTravelTime +=
-            quadrature.startWeight /
-                uniformComplexSoundSpeed.value() +
-            quadrature.midpointWeight /
-                uniformComplexSoundSpeed.value();
+            quadrature.startWeight / uniformComplexSoundSpeed.value() +
+            quadrature.midpointWeight / uniformComplexSoundSpeed.value();
       } else {
-        const SoundSpeedSample startSample =
-            soundSpeedProfile.evaluate(
-                path.points[edgeIndex].position, segmentIndex);
-        const SoundSpeedSample midpointSample =
-            soundSpeedProfile.evaluate(
-                quadrature.midpoint, startSample.segmentIndex);
+        const SoundSpeedSample startSample = soundSpeedProfile.evaluate(
+            path.points[edgeIndex].position, segmentIndex);
+        const SoundSpeedSample midpointSample = soundSpeedProfile.evaluate(
+            quadrature.midpoint, startSample.segmentIndex);
         next.complexTravelTime +=
             quadrature.startWeight /
-                std::complex<double>{
-                    startSample.soundSpeed,
-                    startSample.imaginarySoundSpeed} +
+                std::complex<double>{startSample.soundSpeed,
+                                     startSample.imaginarySoundSpeed} +
             quadrature.midpointWeight /
-                std::complex<double>{
-                    midpointSample.soundSpeed,
-                    midpointSample.imaginarySoundSpeed};
-        const SoundSpeedSample endSample =
-            soundSpeedProfile.evaluate(
-                path.points[edgeIndex + 1U].position,
-                startSample.segmentIndex);
+                std::complex<double>{midpointSample.soundSpeed,
+                                     midpointSample.imaginarySoundSpeed};
+        const SoundSpeedSample endSample = soundSpeedProfile.evaluate(
+            path.points[edgeIndex + 1U].position, startSample.segmentIndex);
         segmentIndex = endSample.segmentIndex;
       }
-      next.active =
-          current.active && amplitudeRemainsActive(next.amplitude);
+      next.active = current.active && amplitudeRemainsActive(next.amplitude);
       ++stepIndex;
     }
     requireFiniteProjectionPoint(next);
     result.points.push_back(next);
   }
 
-  if (stepIndex != path.steps.size() ||
-      eventIndex != path.events.size()) {
+  if (stepIndex != path.steps.size() || eventIndex != path.events.size()) {
     throw ValidationError(
         "projection did not consume every step and reflection event");
   }

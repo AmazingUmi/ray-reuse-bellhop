@@ -1,3 +1,5 @@
+#include "rayreuse/ray/geometry_tracer.hpp"
+
 #include <cmath>
 #include <cstddef>
 #include <iostream>
@@ -9,7 +11,6 @@
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/simulation_case.hpp"
-#include "rayreuse/ray/geometry_tracer.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -33,29 +34,22 @@ constexpr double kSoundSpeed = 1500.0;
 
 Environment makeConstantEnvironment(double surfaceDepth = 0.0,
                                     double bottomDepth = 1000.0) {
-  return Environment(
-      SoundSpeedProfile(
-          {{.depth = surfaceDepth,
-            .soundSpeed = kSoundSpeed,
-            .density = 1000.0},
-           {.depth = bottomDepth,
-            .soundSpeed = kSoundSpeed,
-            .density = 1000.0}}),
-      BoundaryModel::vacuum(surfaceDepth),
-      BoundaryModel::rigid(bottomDepth));
+  return Environment(SoundSpeedProfile({{.depth = surfaceDepth,
+                                         .soundSpeed = kSoundSpeed,
+                                         .density = 1000.0},
+                                        {.depth = bottomDepth,
+                                         .soundSpeed = kSoundSpeed,
+                                         .density = 1000.0}}),
+                     BoundaryModel::vacuum(surfaceDepth),
+                     BoundaryModel::rigid(bottomDepth));
 }
 
 Environment makeLinearGradientEnvironment() {
   return Environment(
       SoundSpeedProfile(
-          {{.depth = -5000.0,
-            .soundSpeed = 1400.0,
-            .density = 1000.0},
-           {.depth = 5000.0,
-            .soundSpeed = 1600.0,
-            .density = 1000.0}}),
-      BoundaryModel::vacuum(-5000.0),
-      BoundaryModel::rigid(5000.0));
+          {{.depth = -5000.0, .soundSpeed = 1400.0, .density = 1000.0},
+           {.depth = 5000.0, .soundSpeed = 1600.0, .density = 1000.0}}),
+      BoundaryModel::vacuum(-5000.0), BoundaryModel::rigid(5000.0));
 }
 
 IntegratorSettings makeSettings(double rangeLimit = 5100.0,
@@ -97,13 +91,12 @@ void testHorizontalRayAndMinimumBoxStep(Context& context) {
 void testBackwardRayUsesSignedBoxIntersection(Context& context) {
   const GeometryTracer tracer(makeConstantEnvironment(),
                               makeSettings(25.0, 1100.0));
-  const RayPath path =
-      tracer.trace(Source{.depth = 500.0}, kPi);
+  const RayPath path = tracer.trace(Source{.depth = 500.0}, kPi);
 
   context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
                 "backward horizontal ray exits the strict spatial box");
-  context.checkNear(path.points[path.points.size() - 2U].position.range,
-                    -25.0, 1.0e-14,
+  context.checkNear(path.points[path.points.size() - 2U].position.range, -25.0,
+                    1.0e-14,
                     "backward ray lands on the signed negative range box");
   context.check(path.points.back().position.range < -25.0,
                 "backward ray terminates after a negative-range overshoot");
@@ -114,8 +107,7 @@ void testSmallAngleAnalyticState(Context& context) {
   const GeometryTracer tracer(makeConstantEnvironment(),
                               makeSettings(45.0, 1100.0));
   const RayPath path = tracer.trace(Source{.depth = 500.0}, angle);
-  const Vec2 direction{.range = std::cos(angle),
-                       .depth = std::sin(angle)};
+  const Vec2 direction{.range = std::cos(angle), .depth = std::sin(angle)};
 
   double arcLength = 0.0;
   for (std::size_t index = 0; index < path.points.size(); ++index) {
@@ -126,14 +118,12 @@ void testSmallAngleAnalyticState(Context& context) {
     context.checkNear(point.position.range, arcLength * direction.range,
                       2.0e-13,
                       "constant-speed small-angle range is a straight line");
-    context.checkNear(point.position.depth,
-                      500.0 + arcLength * direction.depth, 2.0e-13,
+    context.checkNear(point.position.depth, 500.0 + arcLength * direction.depth,
+                      2.0e-13,
                       "constant-speed small-angle depth is a straight line");
-    context.checkNear(point.slowness.range,
-                      direction.range / kSoundSpeed, 0.0,
+    context.checkNear(point.slowness.range, direction.range / kSoundSpeed, 0.0,
                       "constant-speed range slowness is invariant");
-    context.checkNear(point.slowness.depth,
-                      direction.depth / kSoundSpeed, 0.0,
+    context.checkNear(point.slowness.depth, direction.depth / kSoundSpeed, 0.0,
                       "constant-speed depth slowness is invariant");
     context.checkNear(point.dynamicP[0], 1.0, 0.0,
                       "first dynamic p is constant");
@@ -152,16 +142,13 @@ void testSmallAngleAnalyticState(Context& context) {
 }
 
 void testSnellInvariantInLinearGradient(Context& context) {
-  const GeometryTracer tracer(
-      makeLinearGradientEnvironment(),
-      IntegratorSettings{.stepLength = 10.0,
-                         .rangeLimit = 10000.0,
-                         .depthLimit = 6000.0,
-                         .maximumRayPoints = 100U});
-  const RayPath path =
-      tracer.trace(Source{.depth = 0.0}, 0.2);
-  const double initialHorizontalSlowness =
-      path.points.front().slowness.range;
+  const GeometryTracer tracer(makeLinearGradientEnvironment(),
+                              IntegratorSettings{.stepLength = 10.0,
+                                                 .rangeLimit = 10000.0,
+                                                 .depthLimit = 6000.0,
+                                                 .maximumRayPoints = 100U});
+  const RayPath path = tracer.trace(Source{.depth = 0.0}, 0.2);
+  const double initialHorizontalSlowness = path.points.front().slowness.range;
 
   context.check(path.terminationReason == RayTerminationReason::PointLimit,
                 "linear-gradient Snell trace reaches its point limit");
@@ -175,14 +162,12 @@ void testSnellInvariantInLinearGradient(Context& context) {
 void testDynamicQMatchesLaunchAngleFiniteDifference(Context& context) {
   constexpr double baseAngle = 0.1;
   constexpr double angleIncrement = 1.0e-6;
-  const IntegratorSettings settings{
-      .stepLength = 10.0,
-      .rangeLimit = 10000.0,
-      .depthLimit = 1100.0,
-      .maximumRayPoints = 52U};
+  const IntegratorSettings settings{.stepLength = 10.0,
+                                    .rangeLimit = 10000.0,
+                                    .depthLimit = 1100.0,
+                                    .maximumRayPoints = 52U};
   const GeometryTracer tracer(makeConstantEnvironment(), settings);
-  const RayPath base =
-      tracer.trace(Source{.depth = 500.0}, baseAngle);
+  const RayPath base = tracer.trace(Source{.depth = 500.0}, baseAngle);
   const RayPath minus =
       tracer.trace(Source{.depth = 500.0}, baseAngle - angleIncrement);
   const RayPath plus =
@@ -194,8 +179,7 @@ void testDynamicQMatchesLaunchAngleFiniteDifference(Context& context) {
                        .depth = std::cos(baseAngle)};
   const double finiteDifferenceNormal =
       rayreuse::dot(positionDerivative, rayNormal);
-  const double dynamicNormal =
-      base.points.back().dynamicQ[0] / kSoundSpeed;
+  const double dynamicNormal = base.points.back().dynamicQ[0] / kSoundSpeed;
 
   context.checkNear(
       dynamicNormal, finiteDifferenceNormal, 1.0e-6,
@@ -219,34 +203,29 @@ void testSecondOrderStepConvergence(Context& context) {
   const RayPath coarse = traceLinearGradient(20.0);
   const RayPath fine = traceLinearGradient(10.0);
   const RayPath reference = traceLinearGradient(0.3125);
-  const double coarseError =
-      rayreuse::norm(coarse.points.back().position -
-                    reference.points.back().position);
-  const double fineError =
-      rayreuse::norm(fine.points.back().position -
-                    reference.points.back().position);
+  const double coarseError = rayreuse::norm(coarse.points.back().position -
+                                            reference.points.back().position);
+  const double fineError = rayreuse::norm(fine.points.back().position -
+                                          reference.points.back().position);
 
-  context.check(coarse.terminationReason == RayTerminationReason::PointLimit &&
-                    fine.terminationReason == RayTerminationReason::PointLimit &&
-                    reference.terminationReason ==
-                        RayTerminationReason::PointLimit,
-                "convergence traces cover the same arc length");
+  context.check(
+      coarse.terminationReason == RayTerminationReason::PointLimit &&
+          fine.terminationReason == RayTerminationReason::PointLimit &&
+          reference.terminationReason == RayTerminationReason::PointLimit,
+      "convergence traces cover the same arc length");
   context.check(fineError > 0.0 && coarseError / fineError > 3.8,
                 "modified Heun geometry converges at second order");
 }
 
 void testDepthBoxUsesMinimumStep(Context& context) {
-  const GeometryTracer tracer(
-      makeConstantEnvironment(-1000.0, 2000.0),
-      makeSettings(1000.0, 505.0));
-  const RayPath path =
-      tracer.trace(Source{.depth = 500.0}, 0.5 * kPi);
+  const GeometryTracer tracer(makeConstantEnvironment(-1000.0, 2000.0),
+                              makeSettings(1000.0, 505.0));
+  const RayPath path = tracer.trace(Source{.depth = 500.0}, 0.5 * kPi);
 
   context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
                 "vertical ray exits the strict depth box");
-  context.checkNear(path.points[path.points.size() - 2U].position.depth,
-                    505.0, 0.0,
-                    "reduced step lands exactly on the depth box");
+  context.checkNear(path.points[path.points.size() - 2U].position.depth, 505.0,
+                    0.0, "reduced step lands exactly on the depth box");
   context.checkNear(path.steps.back().stepLength, 0.01, 1.0e-15,
                     "depth box also uses the minimum forward step");
   context.check(path.points.back().position.depth > 505.0,
@@ -276,18 +255,15 @@ void testSspCrossingContinuesToBoundary(Context& context) {
            {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
            {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0}}),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
-  GeometryTracer tracer(
-      environment,
-      IntegratorSettings{.stepLength = 60.0,
-                         .rangeLimit = 1000.0,
-                         .depthLimit = 1100.0,
-                         .maximumRayPoints = 6U});
-  const RayPath path =
-      tracer.trace(Source{.depth = 50.0}, 0.5 * kPi);
+  GeometryTracer tracer(environment,
+                        IntegratorSettings{.stepLength = 60.0,
+                                           .rangeLimit = 1000.0,
+                                           .depthLimit = 1100.0,
+                                           .maximumRayPoints = 6U});
+  const RayPath path = tracer.trace(Source{.depth = 50.0}, 0.5 * kPi);
 
-  context.check(
-      path.terminationReason == RayTerminationReason::PointLimit,
-      "continued SSP trace reaches its configured point limit");
+  context.check(path.terminationReason == RayTerminationReason::PointLimit,
+                "continued SSP trace reaches its configured point limit");
   std::size_t interfaceCount = 0U;
   std::size_t interfaceIndex = path.points.size();
   for (std::size_t index = 0U; index < path.points.size(); ++index) {
@@ -314,10 +290,9 @@ void testStandardDirectOracleShape(Context& context) {
   constexpr double minimumDegrees = -5.0;
   constexpr double maximumDegrees = 5.0;
   const double degrees =
-      minimumDegrees +
-      static_cast<double>(oneBasedAlphaIndex - 1U) *
-          (maximumDegrees - minimumDegrees) /
-          static_cast<double>(angleCount - 1U);
+      minimumDegrees + static_cast<double>(oneBasedAlphaIndex - 1U) *
+                           (maximumDegrees - minimumDegrees) /
+                           static_cast<double>(angleCount - 1U);
   const double angle = degrees * kPi / 180.0;
 
   const GeometryTracer tracer(makeConstantEnvironment(), makeSettings());
@@ -355,14 +330,11 @@ void testInputValidation(Context& context) {
   context.expectThrows<ValidationError>(
       [&tracer] {
         static_cast<void>(tracer.trace(
-            Source{.depth = 500.0},
-            std::numeric_limits<double>::quiet_NaN()));
+            Source{.depth = 500.0}, std::numeric_limits<double>::quiet_NaN()));
       },
       "non-finite launch angle is rejected");
   context.expectThrows<ValidationError>(
-      [&tracer] {
-        static_cast<void>(tracer.trace(Source{.depth = 0.0}, 0.0));
-      },
+      [&tracer] { static_cast<void>(tracer.trace(Source{.depth = 0.0}, 0.0)); },
       "source on the sea surface is rejected");
 }
 

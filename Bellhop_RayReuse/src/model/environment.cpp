@@ -38,8 +38,7 @@ void validateMaterial(const AcousticMaterial& material) {
   requireFinite(material.shearSoundSpeed, "material.shearSoundSpeed");
   requireFinite(material.density, "material.density");
   if (material.compressionalSoundSpeed <= 0.0) {
-    throw ValidationError(
-        "material.compressionalSoundSpeed must be positive");
+    throw ValidationError("material.compressionalSoundSpeed must be positive");
   }
   if (material.shearSoundSpeed < 0.0) {
     throw ValidationError("material.shearSoundSpeed must be non-negative");
@@ -72,8 +71,7 @@ SoundSpeedProfile::SoundSpeedProfile(std::vector<SoundSpeedPoint> points)
     if (point.density <= 0.0) {
       throw ValidationError("soundSpeedProfile.density must be positive");
     }
-    validateRawAttenuation(point.attenuation,
-                           "soundSpeedProfile.attenuation");
+    validateRawAttenuation(point.attenuation, "soundSpeedProfile.attenuation");
     if (index > 0U && points_[index - 1U].depth >= point.depth) {
       throw ValidationError(
           "sound-speed profile depths must be strictly increasing");
@@ -125,7 +123,8 @@ BoundaryKind BoundaryModel::kind() const noexcept { return kind_; }
 
 double BoundaryModel::depth() const noexcept { return depth_; }
 
-const std::optional<AcousticMaterial>& BoundaryModel::material() const noexcept {
+const std::optional<AcousticMaterial>& BoundaryModel::material()
+    const noexcept {
   return material_;
 }
 

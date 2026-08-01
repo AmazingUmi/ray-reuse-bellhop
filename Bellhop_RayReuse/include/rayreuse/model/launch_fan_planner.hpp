@@ -41,8 +41,7 @@ struct LaunchFanPlan {
 
 class LaunchFanPlanner {
  public:
-  [[nodiscard]] static LaunchFanPlan plan(
-      const LaunchFanPlanningInput& input);
+  [[nodiscard]] static LaunchFanPlan plan(const LaunchFanPlanningInput& input);
 };
 
 }  // namespace rayreuse

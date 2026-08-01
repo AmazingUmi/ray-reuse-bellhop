@@ -12,9 +12,8 @@ class FrequencyProjector {
  public:
   explicit FrequencyProjector(Environment environment);
 
-  [[nodiscard]] RayFrequencyState project(
-      const RayPath& path, double frequency,
-      double sourceAmplitude) const;
+  [[nodiscard]] RayFrequencyState project(const RayPath& path, double frequency,
+                                          double sourceAmplitude) const;
 
  private:
   Environment environment_;

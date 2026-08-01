@@ -42,8 +42,7 @@ Environment makeEnvironment() {
       {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0},
   };
   return Environment(SoundSpeedProfile(std::move(points)),
-                     BoundaryModel::vacuum(0.0),
-                     BoundaryModel::rigid(1000.0));
+                     BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
 }
 
 SimulationCase makeSimulationCase(std::vector<double> frequencies) {
@@ -51,10 +50,9 @@ SimulationCase makeSimulationCase(std::vector<double> frequencies) {
       makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
       ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
       FrequencyGrid(std::move(frequencies)),
-      LaunchFan{
-          .minimumAngle = -0.1,
-          .maximumAngle = 0.1,
-          .explicitLaunchAngleCount = 301U},
+      LaunchFan{.minimumAngle = -0.1,
+                .maximumAngle = 0.1,
+                .explicitLaunchAngleCount = 301U},
       IntegratorSettings{.stepLength = 10.0,
                          .rangeLimit = 5100.0,
                          .depthLimit = 1100.0,
@@ -89,8 +87,7 @@ RayPath makeRayPath() {
 }
 
 RayPath makeReflectedRayPath() {
-  constexpr double kSlownessComponent =
-      1.0 / (1500.0 * 1.4142135623730950488);
+  constexpr double kSlownessComponent = 1.0 / (1500.0 * 1.4142135623730950488);
   RayPath path;
   path.launchAngle = -0.78539816339744830962;
   path.points = {
@@ -151,8 +148,7 @@ void testVec2(Context& context) {
                     "Vec2 norm uses range/depth components");
   context.check(rayreuse::dot(value, Vec2{1.0, 2.0}) == 11.0,
                 "Vec2 dot product");
-  context.check(value + Vec2{2.0, -1.0} == Vec2{5.0, 3.0},
-                "Vec2 addition");
+  context.check(value + Vec2{2.0, -1.0} == Vec2{5.0, 3.0}, "Vec2 addition");
 }
 
 void testSimulationCase(Context& context) {
@@ -167,18 +163,15 @@ void testSimulationCase(Context& context) {
                 "receiver range count");
   context.check(simulation.launchFanPlan().launchAngleCount == 300U,
                 "SimulationCase enforces D-02 instead of accepting 301");
-  context.check(
-      simulation.launchFanPlan().launchAngles.size() ==
-          simulation.launchFanPlan().launchAngleCount,
-      "SimulationCase stores the complete derived launch fan");
+  context.check(simulation.launchFanPlan().launchAngles.size() ==
+                    simulation.launchFanPlan().launchAngleCount,
+                "SimulationCase stores the complete derived launch fan");
 
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(makeSimulationCase({})); },
       "empty frequency list is rejected");
-  const SimulationCase broadband =
-      makeSimulationCase({25.0, 50.0, 100.0});
-  const SimulationCase highestFrequencyOnly =
-      makeSimulationCase({100.0});
+  const SimulationCase broadband = makeSimulationCase({25.0, 50.0, 100.0});
+  const SimulationCase highestFrequencyOnly = makeSimulationCase({100.0});
   context.check(
       broadband.frequencies().size() == 3U &&
           broadband.frequencies().designFrequency() == 100.0 &&
@@ -250,9 +243,8 @@ void testRayPathCache(Context& context) {
   RayPathCache changedLaunchAngleCache;
   changedLaunchAngleCache.append(std::move(changedLaunchAnglePath));
   changedLaunchAngleCache.freeze();
-  context.check(
-      changedLaunchAngleCache.contentFingerprint() != fingerprint,
-      "ray launch angle affects the fingerprint");
+  context.check(changedLaunchAngleCache.contentFingerprint() != fingerprint,
+                "ray launch angle affects the fingerprint");
 
   RayPath changedStatePath = makeRayPath();
   changedStatePath.points.back().dynamicP[1] = 0.125;
@@ -271,14 +263,12 @@ void testRayPathCache(Context& context) {
                 "StepQuadrature semantic fields affect the fingerprint");
 
   RayPath changedTerminationPath = makeRayPath();
-  changedTerminationPath.terminationReason =
-      RayTerminationReason::PointLimit;
+  changedTerminationPath.terminationReason = RayTerminationReason::PointLimit;
   RayPathCache changedTerminationCache;
   changedTerminationCache.append(std::move(changedTerminationPath));
   changedTerminationCache.freeze();
-  context.check(
-      changedTerminationCache.contentFingerprint() != fingerprint,
-      "ray termination reason affects the fingerprint");
+  context.check(changedTerminationCache.contentFingerprint() != fingerprint,
+                "ray termination reason affects the fingerprint");
 
   RayPathCache reflectedCache;
   reflectedCache.append(makeReflectedRayPath());
@@ -293,10 +283,9 @@ void testRayPathCache(Context& context) {
   RayPathCache changedEventCache;
   changedEventCache.append(std::move(changedEventPath));
   changedEventCache.freeze();
-  context.check(
-      changedEventCache.contentFingerprint() !=
-          reflectedCache.contentFingerprint(),
-      "ReflectionEvent semantic fields affect the fingerprint");
+  context.check(changedEventCache.contentFingerprint() !=
+                    reflectedCache.contentFingerprint(),
+                "ReflectionEvent semantic fields affect the fingerprint");
 
   RayPathCache orderedCache;
   orderedCache.append(makeRayPath());
@@ -306,9 +295,9 @@ void testRayPathCache(Context& context) {
   reversedCache.append(makeReflectedRayPath());
   reversedCache.append(makeRayPath());
   reversedCache.freeze();
-  context.check(orderedCache.contentFingerprint() !=
-                    reversedCache.contentFingerprint(),
-                "cache path order affects the fingerprint");
+  context.check(
+      orderedCache.contentFingerprint() != reversedCache.contentFingerprint(),
+      "cache path order affects the fingerprint");
   context.check(orderedCache.contentFingerprint() != fingerprint,
                 "cache container sizes affect the fingerprint");
 
@@ -316,8 +305,7 @@ void testRayPathCache(Context& context) {
       [&cache] { cache.append(makeRayPath()); },
       "frozen RayPathCache rejects mutation");
 
-  const double cachedTravelTime =
-      cache.at(0U).points.back().realTravelTime;
+  const double cachedTravelTime = cache.at(0U).points.back().realTravelTime;
   RayFrequencyState frequencyState{
       .frequency = 50.0,
       .points = std::vector<RayFrequencyPoint>(
@@ -327,9 +315,8 @@ void testRayPathCache(Context& context) {
                             .reflectionPhase = 0.25,
                             .active = true})};
   frequencyState.points.back().amplitude = 0.25;
-  context.check(
-      cache.at(0U).points.back().realTravelTime == cachedTravelTime,
-      "frequency-state mutation cannot change cached geometry");
+  context.check(cache.at(0U).points.back().realTravelTime == cachedTravelTime,
+                "frequency-state mutation cannot change cached geometry");
 
   RayPath invalidEventPath = makeRayPath();
   invalidEventPath.events.push_back(
@@ -366,13 +353,11 @@ void testFrequencyWorkspace(Context& context) {
   workspace.at(1U, 2U) = std::complex<double>{3.0, -4.0};
   context.check(workspace.at(1U, 2U) == std::complex<double>{3.0, -4.0},
                 "workspace range is contiguous inside each depth");
-  context.check(
-      workspace.pressure()[5U] == std::complex<double>{3.0, -4.0},
-      "workspace pressure span exposes depth-major linear storage");
+  context.check(workspace.pressure()[5U] == std::complex<double>{3.0, -4.0},
+                "workspace pressure span exposes depth-major linear storage");
   workspace.pressure()[3U] = std::complex<double>{-2.0, 1.0};
-  context.check(
-      workspace.at(1U, 0U) == std::complex<double>{-2.0, 1.0},
-      "workspace checked and linear access share the same storage");
+  context.check(workspace.at(1U, 0U) == std::complex<double>{-2.0, 1.0},
+                "workspace checked and linear access share the same storage");
   workspace.clear();
   context.check(workspace.at(1U, 2U) == std::complex<double>{},
                 "workspace clear resets pressure");

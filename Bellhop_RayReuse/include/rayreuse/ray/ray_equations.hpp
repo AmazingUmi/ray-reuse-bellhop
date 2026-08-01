@@ -15,8 +15,7 @@ namespace rayreuse {
   const double xi = slowness.range;
   const double zeta = slowness.depth;
   return hessian.rangeRange * zeta * zeta -
-         2.0 * hessian.rangeDepth * xi * zeta +
-         hessian.depthDepth * xi * xi;
+         2.0 * hessian.rangeDepth * xi * zeta + hessian.depthDepth * xi * xi;
 }
 
 }  // namespace rayreuse

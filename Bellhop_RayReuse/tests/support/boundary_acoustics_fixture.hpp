@@ -28,12 +28,9 @@ struct HalfSpaceCoefficientFixture {
 // 0.5 dB/wavelength, whose Bellhop CRCI conversion gives the frequency-
 // independent imaginary speed below.  The 250 Hz expected coefficient is
 // independently recorded by Fortran ray-oracle schema v2.
-inline constexpr double kAcousticBottomImaginarySpeed =
-    1.4567095091567458e+1;
-inline constexpr double kAcousticBottomTangentSlowness =
-    1.16349376248555840e-5;
-inline constexpr double kAcousticBottomNormalSlowness =
-    6.66565130104260846e-4;
+inline constexpr double kAcousticBottomImaginarySpeed = 1.4567095091567458e+1;
+inline constexpr double kAcousticBottomTangentSlowness = 1.16349376248555840e-5;
+inline constexpr double kAcousticBottomNormalSlowness = 6.66565130104260846e-4;
 inline constexpr std::complex<double> kAcousticBottomRawCoefficient{
     1.19750743411546456e-1, 4.51660947385581959e-3};
 
@@ -45,14 +42,11 @@ inline constexpr std::array<HalfSpaceCoefficientFixture, 7>
             .waterDensity = 1000.0,
             .compressionalSoundSpeed = 1590.0,
             .attenuationDecibelsPerWavelength = 0.5,
-            .compressionalImaginarySoundSpeed =
-                kAcousticBottomImaginarySpeed,
+            .compressionalImaginarySoundSpeed = kAcousticBottomImaginarySpeed,
             .halfSpaceDensity = 1200.0,
             .tangentSlowness = kAcousticBottomTangentSlowness,
-            .outwardNormalSlowness =
-                kAcousticBottomNormalSlowness,
-            .expectedRawCoefficient =
-                kAcousticBottomRawCoefficient,
+            .outwardNormalSlowness = kAcousticBottomNormalSlowness,
+            .expectedRawCoefficient = kAcousticBottomRawCoefficient,
             .expectedSuppressed = false,
         },
         {
@@ -61,14 +55,11 @@ inline constexpr std::array<HalfSpaceCoefficientFixture, 7>
             .waterDensity = 1000.0,
             .compressionalSoundSpeed = 1590.0,
             .attenuationDecibelsPerWavelength = 0.5,
-            .compressionalImaginarySoundSpeed =
-                kAcousticBottomImaginarySpeed,
+            .compressionalImaginarySoundSpeed = kAcousticBottomImaginarySpeed,
             .halfSpaceDensity = 1200.0,
             .tangentSlowness = kAcousticBottomTangentSlowness,
-            .outwardNormalSlowness =
-                kAcousticBottomNormalSlowness,
-            .expectedRawCoefficient =
-                kAcousticBottomRawCoefficient,
+            .outwardNormalSlowness = kAcousticBottomNormalSlowness,
+            .expectedRawCoefficient = kAcousticBottomRawCoefficient,
             .expectedSuppressed = false,
         },
         {
@@ -77,14 +68,11 @@ inline constexpr std::array<HalfSpaceCoefficientFixture, 7>
             .waterDensity = 1000.0,
             .compressionalSoundSpeed = 1590.0,
             .attenuationDecibelsPerWavelength = 0.5,
-            .compressionalImaginarySoundSpeed =
-                kAcousticBottomImaginarySpeed,
+            .compressionalImaginarySoundSpeed = kAcousticBottomImaginarySpeed,
             .halfSpaceDensity = 1200.0,
             .tangentSlowness = kAcousticBottomTangentSlowness,
-            .outwardNormalSlowness =
-                kAcousticBottomNormalSlowness,
-            .expectedRawCoefficient =
-                kAcousticBottomRawCoefficient,
+            .outwardNormalSlowness = kAcousticBottomNormalSlowness,
+            .expectedRawCoefficient = kAcousticBottomRawCoefficient,
             .expectedSuppressed = false,
         },
         {
@@ -93,14 +81,12 @@ inline constexpr std::array<HalfSpaceCoefficientFixture, 7>
             .waterDensity = 1000.0,
             .compressionalSoundSpeed = 1590.0,
             .attenuationDecibelsPerWavelength = 0.5,
-            .compressionalImaginarySoundSpeed =
-                kAcousticBottomImaginarySpeed,
+            .compressionalImaginarySoundSpeed = kAcousticBottomImaginarySpeed,
             .halfSpaceDensity = 1200.0,
             .tangentSlowness = 4.71404520791031639e-4,
-            .outwardNormalSlowness =
-                4.71404520791031639e-4,
-            .expectedRawCoefficient = {
-                1.5203227482134690e-1, 1.0210756168578604e-2},
+            .outwardNormalSlowness = 4.71404520791031639e-4,
+            .expectedRawCoefficient = {1.5203227482134690e-1,
+                                       1.0210756168578604e-2},
             .expectedSuppressed = false,
         },
         {
@@ -109,14 +95,12 @@ inline constexpr std::array<HalfSpaceCoefficientFixture, 7>
             .waterDensity = 1000.0,
             .compressionalSoundSpeed = 1590.0,
             .attenuationDecibelsPerWavelength = 0.5,
-            .compressionalImaginarySoundSpeed =
-                kAcousticBottomImaginarySpeed,
+            .compressionalImaginarySoundSpeed = kAcousticBottomImaginarySpeed,
             .halfSpaceDensity = 1200.0,
             .tangentSlowness = -4.71404520791031639e-4,
-            .outwardNormalSlowness =
-                4.71404520791031639e-4,
-            .expectedRawCoefficient = {
-                1.5203227482134690e-1, 1.0210756168578604e-2},
+            .outwardNormalSlowness = 4.71404520791031639e-4,
+            .expectedRawCoefficient = {1.5203227482134690e-1,
+                                       1.0210756168578604e-2},
             .expectedSuppressed = false,
         },
         {
@@ -138,13 +122,12 @@ inline constexpr std::array<HalfSpaceCoefficientFixture, 7>
             .waterDensity = 1000.0,
             .compressionalSoundSpeed = 1600.0,
             .attenuationDecibelsPerWavelength = 0.8,
-            .compressionalImaginarySoundSpeed =
-                2.3453939266926216e+1,
+            .compressionalImaginarySoundSpeed = 2.3453939266926216e+1,
             .halfSpaceDensity = 1800.0,
             .tangentSlowness = 6.24684579927731513e-4,
             .outwardNormalSlowness = 1.58041869239525804e-4,
-            .expectedRawCoefficient = {
-                5.12048537181218011e-1, 3.15260767533924291e-1},
+            .expectedRawCoefficient = {5.12048537181218011e-1,
+                                       3.15260767533924291e-1},
             .expectedSuppressed = false,
         },
     }};
@@ -165,8 +148,7 @@ inline constexpr double kPi = 3.14159265358979323846;
 // ReflectMod.f90 spells the cutoff as default-real 1.0E-5.  With the
 // repository's normal gfortran flags, comparison promotes this binary32 value
 // to double rather than comparing against the nearest binary64 1e-5.
-inline constexpr double kLegacyCoefficientKillThreshold =
-    9.9999997473787516e-6;
+inline constexpr double kLegacyCoefficientKillThreshold = 9.9999997473787516e-6;
 
 // Fortran keeps cumulative reflection phase unwrapped.  Tests compare phase
 // modulo 2*pi using atan2(sin(delta), cos(delta)); expectedWrappedPhase records
@@ -197,8 +179,7 @@ inline constexpr std::array<RawCoefficientApplicationFixture, 6>
         },
         {
             .name = "raw_complex_coefficient_scales_and_adds_arg",
-            .rawCoefficient = {
-                4.3879128094518638e-1, 2.3971276930210150e-1},
+            .rawCoefficient = {4.3879128094518638e-1, 2.3971276930210150e-1},
             .acousticHalfSpace = true,
             .incomingAmplitude = 2.0,
             .incomingUnwrappedPhase = 3.0,
@@ -231,13 +212,11 @@ inline constexpr std::array<RawCoefficientApplicationFixture, 6>
         },
         {
             .name = "exact_threshold_is_not_killed",
-            .rawCoefficient = {
-                kLegacyCoefficientKillThreshold, 0.0},
+            .rawCoefficient = {kLegacyCoefficientKillThreshold, 0.0},
             .acousticHalfSpace = true,
             .incomingAmplitude = 2.0,
             .incomingUnwrappedPhase = 3.0,
-            .expectedAmplitude =
-                2.0 * kLegacyCoefficientKillThreshold,
+            .expectedAmplitude = 2.0 * kLegacyCoefficientKillThreshold,
             .expectedUnwrappedPhase = 3.0,
             .expectedWrappedPhase = 3.0,
             .expectedSuppressed = false,

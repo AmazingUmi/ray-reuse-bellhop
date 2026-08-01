@@ -26,15 +26,12 @@ struct ParsedEnvironment {
 class EnvironmentParser {
  public:
   [[nodiscard]] static ParsedEnvironment parse(
-      std::istream& input,
-      std::string sourceName = "<stream>",
-      std::optional<std::vector<double>> frequencyOverrideHz =
-          std::nullopt);
+      std::istream& input, std::string sourceName = "<stream>",
+      std::optional<std::vector<double>> frequencyOverrideHz = std::nullopt);
 
   [[nodiscard]] static ParsedEnvironment parseFile(
       const std::filesystem::path& path,
-      std::optional<std::vector<double>> frequencyOverrideHz =
-          std::nullopt);
+      std::optional<std::vector<double>> frequencyOverrideHz = std::nullopt);
 };
 
 }  // namespace rayreuse

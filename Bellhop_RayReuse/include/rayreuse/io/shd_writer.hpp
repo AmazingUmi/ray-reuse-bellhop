@@ -13,10 +13,8 @@ namespace rayreuse {
 
 class ShdFrequencyWriter {
  public:
-  ShdFrequencyWriter(
-      const std::filesystem::path& path,
-      std::string_view title,
-      const SimulationCase& simulation);
+  ShdFrequencyWriter(const std::filesystem::path& path, std::string_view title,
+                     const SimulationCase& simulation);
   ~ShdFrequencyWriter() noexcept;
 
   ShdFrequencyWriter(const ShdFrequencyWriter&) = delete;
@@ -24,9 +22,7 @@ class ShdFrequencyWriter {
   ShdFrequencyWriter(ShdFrequencyWriter&&) noexcept;
   ShdFrequencyWriter& operator=(ShdFrequencyWriter&&) noexcept;
 
-  void writeFrequency(
-      std::size_t index,
-      const FrequencyWorkspace& workspace);
+  void writeFrequency(std::size_t index, const FrequencyWorkspace& workspace);
   void finalize();
 
  private:
@@ -36,17 +32,15 @@ class ShdFrequencyWriter {
 
 class ShdWriter {
  public:
-  static void writeSingleFrequency(
-      const std::filesystem::path& path,
-      std::string_view title,
-      const SimulationCase& simulation,
-      const FrequencyWorkspace& workspace);
+  static void writeSingleFrequency(const std::filesystem::path& path,
+                                   std::string_view title,
+                                   const SimulationCase& simulation,
+                                   const FrequencyWorkspace& workspace);
 
-  static void writeFrequencies(
-      const std::filesystem::path& path,
-      std::string_view title,
-      const SimulationCase& simulation,
-      std::span<const FrequencyWorkspace> workspaces);
+  static void writeFrequencies(const std::filesystem::path& path,
+                               std::string_view title,
+                               const SimulationCase& simulation,
+                               std::span<const FrequencyWorkspace> workspaces);
 };
 
 }  // namespace rayreuse

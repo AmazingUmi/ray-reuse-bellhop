@@ -1,3 +1,5 @@
+#include "rayreuse/model/c_linear_ssp.hpp"
+
 #include <iostream>
 #include <limits>
 #include <string>
@@ -5,7 +7,6 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
-#include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "support/test_harness.hpp"
 
@@ -67,8 +68,7 @@ void testConstantProfile(Context& context) {
 void testPiecewiseLinearProfile(Context& context) {
   const CLinearSsp ssp(makePiecewiseLinearProfile());
 
-  const auto first =
-      ssp.evaluate(Vec2{.range = 25.0, .depth = 50.0}, 0U);
+  const auto first = ssp.evaluate(Vec2{.range = 25.0, .depth = 50.0}, 0U);
   context.checkNear(first.soundSpeed, 1490.0, 1.0e-12,
                     "first segment sound-speed interpolation");
   context.checkNear(first.imaginarySoundSpeed, 0.0, 0.0,
@@ -79,19 +79,16 @@ void testPiecewiseLinearProfile(Context& context) {
                     "first segment density interpolation");
   checkZeroHessian(context, first, "first linear segment");
 
-  const auto second =
-      ssp.evaluate(Vec2{.range = 25.0, .depth = 200.0}, 0U);
+  const auto second = ssp.evaluate(Vec2{.range = 25.0, .depth = 200.0}, 0U);
   context.checkNear(second.soundSpeed, 1480.0, 1.0e-12,
                     "second segment sound-speed interpolation");
   context.checkNear(second.soundSpeedGradient.depth, -0.2, 1.0e-15,
                     "second segment analytic derivative");
   context.checkNear(second.density, 1040.0, 1.0e-12,
                     "second segment density interpolation");
-  context.check(second.segmentIndex == 1U,
-                "locator advances the segment hint");
+  context.check(second.segmentIndex == 1U, "locator advances the segment hint");
 
-  const auto third =
-      ssp.evaluate(Vec2{.range = 25.0, .depth = 450.0}, 1U);
+  const auto third = ssp.evaluate(Vec2{.range = 25.0, .depth = 450.0}, 1U);
   context.checkNear(third.soundSpeed, 1490.0, 1.0e-12,
                     "third segment sound-speed interpolation");
   context.checkNear(third.soundSpeedGradient.depth, 0.2, 1.0e-15,
@@ -152,43 +149,38 @@ void testValidation(Context& context) {
       "non-finite query depth is rejected");
   context.expectThrows<ValidationError>(
       [&ssp] {
-        static_cast<void>(ssp.evaluate(
-            Vec2{.range = std::numeric_limits<double>::infinity(),
-                 .depth = 50.0},
-            0U));
+        static_cast<void>(
+            ssp.evaluate(Vec2{.range = std::numeric_limits<double>::infinity(),
+                              .depth = 50.0},
+                         0U));
       },
       "non-finite query range is rejected");
-  const auto above =
-      ssp.evaluate(Vec2{.range = 0.0, .depth = -1.0}, 0U);
+  const auto above = ssp.evaluate(Vec2{.range = 0.0, .depth = -1.0}, 0U);
   context.check(above.segmentIndex == 0U,
                 "query above the profile extrapolates the first segment");
   context.checkNear(above.soundSpeed, 1479.8, 1.0e-12,
                     "top boundary overshoot preserves C-linear slope");
-  const auto below =
-      ssp.evaluate(Vec2{.range = 0.0, .depth = 601.0}, 0U);
+  const auto below = ssp.evaluate(Vec2{.range = 0.0, .depth = 601.0}, 0U);
   context.check(below.segmentIndex == 2U,
                 "query below the profile extrapolates the final segment");
   context.checkNear(below.soundSpeed, 1520.2, 1.0e-12,
                     "bottom boundary overshoot preserves C-linear slope");
   context.expectThrows<ValidationError>(
       [&ssp] {
-        static_cast<void>(
-            ssp.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 3U));
+        static_cast<void>(ssp.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 3U));
       },
       "invalid previous segment hint is rejected");
   context.expectThrows<ValidationError>(
       [&ssp] {
-        static_cast<void>(ssp.evaluateAtSegment(
-            Vec2{.range = 0.0, .depth = 200.0}, 0U));
+        static_cast<void>(
+            ssp.evaluateAtSegment(Vec2{.range = 0.0, .depth = 200.0}, 0U));
       },
       "explicit segment evaluation rejects extrapolation");
 
   const double tinyDepthInterval = std::numeric_limits<double>::denorm_min();
   const SoundSpeedProfile illConditionedProfile(
       {{.depth = 0.0, .soundSpeed = 1.0, .density = 1000.0},
-       {.depth = tinyDepthInterval,
-        .soundSpeed = 2.0,
-        .density = 1000.0}});
+       {.depth = tinyDepthInterval, .soundSpeed = 2.0, .density = 1000.0}});
   context.expectThrows<ValidationError>(
       [&illConditionedProfile] {
         static_cast<void>(CLinearSsp(illConditionedProfile));

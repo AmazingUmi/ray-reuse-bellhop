@@ -32,8 +32,8 @@ class FrequencyWorkspace {
   [[nodiscard]] std::span<const std::complex<double>> pressure() const noexcept;
   [[nodiscard]] std::complex<double>& at(std::size_t depthIndex,
                                          std::size_t rangeIndex);
-  [[nodiscard]] const std::complex<double>& at(
-      std::size_t depthIndex, std::size_t rangeIndex) const;
+  [[nodiscard]] const std::complex<double>& at(std::size_t depthIndex,
+                                               std::size_t rangeIndex) const;
   void clear() noexcept;
 
  private:

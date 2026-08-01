@@ -25,8 +25,8 @@ class Context {
     std::ostringstream detail;
     detail << message << " (actual="
            << std::setprecision(std::numeric_limits<double>::max_digits10)
-           << actual << ", expected=" << expected
-           << ", tolerance=" << tolerance << ')';
+           << actual << ", expected=" << expected << ", tolerance=" << tolerance
+           << ')';
     check(std::abs(actual - expected) <= tolerance, detail.str());
   }
 
@@ -38,8 +38,8 @@ class Context {
       return;
     } catch (const std::exception& error) {
       ++failureCount_;
-      std::cerr << "FAIL: " << message << " (unexpected exception: "
-                << error.what() << ")\n";
+      std::cerr << "FAIL: " << message
+                << " (unexpected exception: " << error.what() << ")\n";
       return;
     } catch (...) {
       ++failureCount_;

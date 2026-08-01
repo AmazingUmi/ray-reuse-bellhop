@@ -73,7 +73,8 @@ class BoundaryModel {
 
   [[nodiscard]] BoundaryKind kind() const noexcept;
   [[nodiscard]] double depth() const noexcept;
-  [[nodiscard]] const std::optional<AcousticMaterial>& material() const noexcept;
+  [[nodiscard]] const std::optional<AcousticMaterial>& material()
+      const noexcept;
 
  private:
   BoundaryModel(BoundaryKind kind, double depth,

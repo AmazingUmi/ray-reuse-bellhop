@@ -42,14 +42,14 @@ class CLinearSsp {
 
   [[nodiscard]] std::size_t segmentCount() const noexcept;
 
-  [[nodiscard]] std::size_t locateSegment(
-      double depth, std::size_t previousSegment) const;
+  [[nodiscard]] std::size_t locateSegment(double depth,
+                                          std::size_t previousSegment) const;
 
   [[nodiscard]] SoundSpeedSample evaluateAtSegment(
       Vec2 position, std::size_t segmentIndex) const;
 
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
 
  private:
   struct Segment {

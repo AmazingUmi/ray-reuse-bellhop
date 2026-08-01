@@ -30,8 +30,7 @@ class BroadbandNonReuseSolver {
  public:
   [[nodiscard]] static BroadbandNonReuseResult solve(
       const SimulationCase& simulation, double epsilonMultiplier,
-      double loopRange,
-      CartesianCervenySettings influenceSettings = {});
+      double loopRange, CartesianCervenySettings influenceSettings = {});
 };
 
 }  // namespace rayreuse

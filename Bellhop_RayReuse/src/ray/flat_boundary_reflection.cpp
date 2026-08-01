@@ -17,8 +17,7 @@ constexpr double kSlownessNormTolerance = 1.0e-4;
 constexpr double kPositionTolerance = 1.0e-8;
 constexpr double kGrazingTolerance = 1.0e-12;
 
-[[nodiscard]] bool finiteArray(
-    const std::array<double, 2>& values) noexcept {
+[[nodiscard]] bool finiteArray(const std::array<double, 2>& values) noexcept {
   return std::isfinite(values[0]) && std::isfinite(values[1]);
 }
 
@@ -60,8 +59,7 @@ void validateGeometry(ReflectionBoundary boundary,
         "flat-boundary incident-plane tolerance must be non-negative");
   }
   if (std::abs(norm(geometry.tangent) - 1.0) > kFrameTolerance ||
-      std::abs(norm(geometry.outwardNormal) - 1.0) >
-          kFrameTolerance ||
+      std::abs(norm(geometry.outwardNormal) - 1.0) > kFrameTolerance ||
       std::abs(dot(geometry.tangent, geometry.outwardNormal)) >
           kFrameTolerance) {
     throw ValidationError(
@@ -80,8 +78,7 @@ void validateGeometry(ReflectionBoundary boundary,
   }
 
   const double planeDistance =
-      std::abs(dot(incidentPosition - geometry.point,
-                   geometry.outwardNormal));
+      std::abs(dot(incidentPosition - geometry.point, geometry.outwardNormal));
   if (planeDistance >
       geometry.maximumIncidentPlaneDistance + kPositionTolerance) {
     throw ValidationError(
@@ -89,31 +86,28 @@ void validateGeometry(ReflectionBoundary boundary,
   }
 }
 
-[[nodiscard]] double dynamicJump(
-    const RayState& incidentState, const RayState& reflectedState,
-    ReflectionBoundary boundary, const FlatBoundaryGeometry& geometry,
-    double tangentSlowness, double normalSlowness,
-    BoundaryCurvatureMode curvatureMode) {
+[[nodiscard]] double dynamicJump(const RayState& incidentState,
+                                 const RayState& reflectedState,
+                                 ReflectionBoundary boundary,
+                                 const FlatBoundaryGeometry& geometry,
+                                 double tangentSlowness, double normalSlowness,
+                                 BoundaryCurvatureMode curvatureMode) {
   const Vec2 incidentUnitTangent =
       incidentState.soundSpeed * incidentState.slowness;
   const Vec2 reflectedUnitTangent =
       reflectedState.soundSpeed * reflectedState.slowness;
 
-  const Vec2 incidentRayNormal{
-      .range = -incidentUnitTangent.depth,
-      .depth = incidentUnitTangent.range};
+  const Vec2 incidentRayNormal{.range = -incidentUnitTangent.depth,
+                               .depth = incidentUnitTangent.range};
   // ReflectMod.f90 reverses the orientation of the reflected ray's (t,n)
   // frame before evaluating the jump.
-  const Vec2 reflectedRayNormal{
-      .range = reflectedUnitTangent.depth,
-      .depth = -reflectedUnitTangent.range};
+  const Vec2 reflectedRayNormal{.range = reflectedUnitTangent.depth,
+                                .depth = -reflectedUnitTangent.range};
 
   double normalGradientJump =
-      -dot(geometry.soundSpeedGradient,
-           reflectedRayNormal - incidentRayNormal);
-  const double tangentGradientJump =
-      -dot(geometry.soundSpeedGradient,
-           reflectedUnitTangent - incidentUnitTangent);
+      -dot(geometry.soundSpeedGradient, reflectedRayNormal - incidentRayNormal);
+  const double tangentGradientJump = -dot(
+      geometry.soundSpeedGradient, reflectedUnitTangent - incidentUnitTangent);
   if (boundary == ReflectionBoundary::SeaSurface) {
     normalGradientJump = -normalGradientJump;
   }
@@ -121,8 +115,7 @@ void validateGeometry(ReflectionBoundary boundary,
   const double incidenceRatio = tangentSlowness / normalSlowness;
   double jump =
       incidenceRatio *
-      (2.0 * normalGradientJump -
-       incidenceRatio * tangentGradientJump) /
+      (2.0 * normalGradientJump - incidenceRatio * tangentGradientJump) /
       (incidentState.soundSpeed * incidentState.soundSpeed);
 
   switch (curvatureMode) {
@@ -135,8 +128,7 @@ void validateGeometry(ReflectionBoundary boundary,
       jump = 0.0;
       break;
     default:
-      throw ValidationError(
-          "unknown dynamic reflection curvature mode");
+      throw ValidationError("unknown dynamic reflection curvature mode");
   }
 
   if (!std::isfinite(jump)) {
@@ -155,12 +147,10 @@ FlatBoundaryReflection reflectAtFlatBoundary(
   validateState(incidentState);
   validateGeometry(boundary, geometry, incidentState.position);
 
-  const double tangentSlowness =
-      dot(incidentState.slowness, geometry.tangent);
+  const double tangentSlowness = dot(incidentState.slowness, geometry.tangent);
   const double normalSlowness =
       dot(incidentState.slowness, geometry.outwardNormal);
-  const double unitNormalSlowness =
-      incidentState.soundSpeed * normalSlowness;
+  const double unitNormalSlowness = incidentState.soundSpeed * normalSlowness;
   if (unitNormalSlowness <= kGrazingTolerance) {
     throw ValidationError(
         "incident ray must cross the flat boundary toward its exterior");
@@ -168,34 +158,30 @@ FlatBoundaryReflection reflectAtFlatBoundary(
 
   RayState reflectedState = incidentState;
   reflectedState.slowness =
-      incidentState.slowness -
-      2.0 * normalSlowness * geometry.outwardNormal;
+      incidentState.slowness - 2.0 * normalSlowness * geometry.outwardNormal;
 
   const double jump =
       dynamicJump(incidentState, reflectedState, boundary, geometry,
                   tangentSlowness, normalSlowness, curvatureMode);
-  for (std::size_t index = 0; index < reflectedState.dynamicP.size();
-       ++index) {
+  for (std::size_t index = 0; index < reflectedState.dynamicP.size(); ++index) {
     reflectedState.dynamicP[index] =
-        incidentState.dynamicP[index] +
-        incidentState.dynamicQ[index] * jump;
+        incidentState.dynamicP[index] + incidentState.dynamicQ[index] * jump;
   }
 
   return FlatBoundaryReflection{
       .reflectedState = reflectedState,
-      .event =
-          ReflectionEvent{
-              .rayPointIndex = rayPointIndex,
-              .boundary = boundary,
-              .boundarySegmentIndex = geometry.segmentIndex,
-              .position = incidentState.position,
-              .boundaryTangent = geometry.tangent,
-              .outwardNormal = geometry.outwardNormal,
-              .incidentSlowness = incidentState.slowness,
-              .reflectedSlowness = reflectedState.slowness,
-              .tangentSlowness = tangentSlowness,
-              .normalSlowness = normalSlowness,
-          }};
+      .event = ReflectionEvent{
+          .rayPointIndex = rayPointIndex,
+          .boundary = boundary,
+          .boundarySegmentIndex = geometry.segmentIndex,
+          .position = incidentState.position,
+          .boundaryTangent = geometry.tangent,
+          .outwardNormal = geometry.outwardNormal,
+          .incidentSlowness = incidentState.slowness,
+          .reflectedSlowness = reflectedState.slowness,
+          .tangentSlowness = tangentSlowness,
+          .normalSlowness = normalSlowness,
+      }};
 }
 
 }  // namespace rayreuse

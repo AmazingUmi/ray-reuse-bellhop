@@ -20,41 +20,35 @@ void accumulateTimings(SingleFrequencyTimings& total,
   total.projectSeconds += value.projectSeconds;
   total.influenceSeconds += value.influenceSeconds;
   total.scaleSeconds += value.scaleSeconds;
-  accumulateCartesianCervenyStatistics(
-      total.influenceStatistics, value.influenceStatistics);
+  accumulateCartesianCervenyStatistics(total.influenceStatistics,
+                                       value.influenceStatistics);
 }
 
 }  // namespace
 
 BroadbandNonReuseResult BroadbandNonReuseSolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
-    double loopRange,
-    CartesianCervenySettings influenceSettings) {
+    double loopRange, CartesianCervenySettings influenceSettings) {
   BroadbandNonReuseResult result;
   result.frequencyResults.reserve(simulation.frequencies().size());
 
   const Clock::time_point wallBegin = Clock::now();
   for (const double frequency : simulation.frequencies().values()) {
     SingleFrequencyResult frequencyResult =
-        SingleFrequencySolver::solveAtFrequency(
-            simulation, frequency, epsilonMultiplier, loopRange,
-            influenceSettings);
+        SingleFrequencySolver::solveAtFrequency(simulation, frequency,
+                                                epsilonMultiplier, loopRange,
+                                                influenceSettings);
 
     ++result.statistics.tracePassCount;
     result.statistics.totalRayCount += frequencyResult.rayCount;
-    result.statistics.totalRayPointCount +=
-        frequencyResult.totalRayPointCount;
-    result.statistics.cumulativeRayCacheBytes +=
-        frequencyResult.rayCacheBytes;
+    result.statistics.totalRayPointCount += frequencyResult.totalRayPointCount;
+    result.statistics.cumulativeRayCacheBytes += frequencyResult.rayCacheBytes;
     result.statistics.peakRayCacheBytes = std::max(
-        result.statistics.peakRayCacheBytes,
-        frequencyResult.rayCacheBytes);
-    accumulateTimings(
-        result.statistics.phaseTotals, frequencyResult.timings);
+        result.statistics.peakRayCacheBytes, frequencyResult.rayCacheBytes);
+    accumulateTimings(result.statistics.phaseTotals, frequencyResult.timings);
     result.frequencyResults.push_back(std::move(frequencyResult));
   }
-  result.statistics.wallSeconds =
-      elapsedSeconds(wallBegin, Clock::now());
+  result.statistics.wallSeconds = elapsedSeconds(wallBegin, Clock::now());
 
   return result;
 }

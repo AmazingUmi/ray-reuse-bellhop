@@ -43,64 +43,53 @@ struct WorkState {
   return std::chrono::duration<double>(end - begin).count();
 }
 
-void accumulateProjectionTimings(
-    SingleFrequencyTimings& total,
-    const SingleFrequencyTimings& value) {
+void accumulateProjectionTimings(SingleFrequencyTimings& total,
+                                 const SingleFrequencyTimings& value) {
   total.projectSeconds += value.projectSeconds;
   total.influenceSeconds += value.influenceSeconds;
   total.scaleSeconds += value.scaleSeconds;
-  accumulateCartesianCervenyStatistics(
-      total.influenceStatistics, value.influenceStatistics);
+  accumulateCartesianCervenyStatistics(total.influenceStatistics,
+                                       value.influenceStatistics);
 }
 
-[[nodiscard]] std::size_t checkedMultiply(
-    std::size_t left, std::size_t right,
-    const char* message) {
-  if (left != 0U &&
-      right > std::numeric_limits<std::size_t>::max() / left) {
+[[nodiscard]] std::size_t checkedMultiply(std::size_t left, std::size_t right,
+                                          const char* message) {
+  if (left != 0U && right > std::numeric_limits<std::size_t>::max() / left) {
     throw ValidationError(message);
   }
   return left * right;
 }
 
-[[nodiscard]] std::size_t checkedAdd(
-    std::size_t left, std::size_t right,
-    const char* message) {
-  if (right >
-      std::numeric_limits<std::size_t>::max() - left) {
+[[nodiscard]] std::size_t checkedAdd(std::size_t left, std::size_t right,
+                                     const char* message) {
+  if (right > std::numeric_limits<std::size_t>::max() - left) {
     throw ValidationError(message);
   }
   return left + right;
 }
 
-[[nodiscard]] std::size_t workspaceBytes(
-    const SimulationCase& simulation) {
+[[nodiscard]] std::size_t workspaceBytes(const SimulationCase& simulation) {
   const std::size_t cellCount = checkedMultiply(
-      simulation.receivers().depthCount(),
-      simulation.receivers().rangeCount(),
+      simulation.receivers().depthCount(), simulation.receivers().rangeCount(),
       "frequency workspace cell count overflows size_t");
-  return checkedMultiply(
-      cellCount, sizeof(std::complex<double>),
-      "frequency workspace byte count overflows size_t");
+  return checkedMultiply(cellCount, sizeof(std::complex<double>),
+                         "frequency workspace byte count overflows size_t");
 }
 
-[[nodiscard]] std::size_t estimatedPeakBytes(
-    std::size_t rayCacheBytes, std::size_t workspaceByteCount,
-    std::size_t frequencyCount, std::size_t activeFrequencyLimit,
-    std::size_t queueCapacity) {
+[[nodiscard]] std::size_t estimatedPeakBytes(std::size_t rayCacheBytes,
+                                             std::size_t workspaceByteCount,
+                                             std::size_t frequencyCount,
+                                             std::size_t activeFrequencyLimit,
+                                             std::size_t queueCapacity) {
   const std::size_t simultaneousWorkspaceCount = std::min(
       frequencyCount,
-      checkedAdd(
-          checkedAdd(
-              activeFrequencyLimit, queueCapacity,
-              "parallel workspace count overflows size_t"),
-          1U,
-          "parallel consumer workspace count overflows size_t"));
+      checkedAdd(checkedAdd(activeFrequencyLimit, queueCapacity,
+                            "parallel workspace count overflows size_t"),
+                 1U, "parallel consumer workspace count overflows size_t"));
   return checkedAdd(
       rayCacheBytes,
-      checkedMultiply(
-          simultaneousWorkspaceCount, workspaceByteCount,
-          "parallel workspace memory estimate overflows size_t"),
+      checkedMultiply(simultaneousWorkspaceCount, workspaceByteCount,
+                      "parallel workspace memory estimate overflows size_t"),
       "parallel peak memory estimate overflows size_t");
 }
 
@@ -114,11 +103,9 @@ void accumulateProjectionTimings(
     return unconstrained;
   }
 
-  for (std::size_t candidate = unconstrained;
-       candidate > 0U; --candidate) {
-    if (estimatedPeakBytes(
-            rayCacheBytes, workspaceByteCount, frequencyCount,
-            candidate, queueCapacity) <= memoryBudgetBytes) {
+  for (std::size_t candidate = unconstrained; candidate > 0U; --candidate) {
+    if (estimatedPeakBytes(rayCacheBytes, workspaceByteCount, frequencyCount,
+                           candidate, queueCapacity) <= memoryBudgetBytes) {
       return candidate;
     }
   }
@@ -127,8 +114,7 @@ void accumulateProjectionTimings(
       "one active frequency");
 }
 
-void recordFailure(WorkState& state,
-                   std::exception_ptr failure) {
+void recordFailure(WorkState& state, std::exception_ptr failure) {
   {
     const std::lock_guard lock(state.mutex);
     if (!state.failure) {
@@ -142,20 +128,17 @@ void recordFailure(WorkState& state,
 
 }  // namespace
 
-ParallelRayReuseStatistics
-ParallelRayReuseSolver::solveStreaming(
+ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, const RayReuseFrequencyConsumer& consumer,
     ParallelRayReuseSettings settings,
-    CartesianCervenySettings influenceSettings,
-    bool verifyCacheFingerprint) {
+    CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint) {
   if (!consumer) {
     throw ValidationError(
         "parallel ray-reuse frequency consumer must be callable");
   }
   if (settings.workerCount == 0U) {
-    throw ValidationError(
-        "parallel ray-reuse worker count must be positive");
+    throw ValidationError("parallel ray-reuse worker count must be positive");
   }
   if (settings.outputQueueCapacity == 0U) {
     throw ValidationError(
@@ -167,50 +150,34 @@ ParallelRayReuseSolver::solveStreaming(
   }
 
   const Clock::time_point wallBegin = Clock::now();
-  RayFanTraceResult trace =
-      SingleFrequencySolver::traceRayFan(simulation);
-  const std::size_t frequencyCount =
-      simulation.frequencies().size();
-  const std::size_t effectiveQueueCapacity = std::min(
-      settings.outputQueueCapacity, frequencyCount);
-  const std::size_t workspaceByteCount =
-      workspaceBytes(simulation);
-  const std::size_t cacheByteCount =
-      trace.cache.memoryFootprintBytes();
-  const std::size_t activeFrequencyLimit =
-      selectActiveFrequencyLimit(
-          frequencyCount, settings.workerCount,
-          effectiveQueueCapacity, cacheByteCount,
-          workspaceByteCount, settings.memoryBudgetBytes);
+  RayFanTraceResult trace = SingleFrequencySolver::traceRayFan(simulation);
+  const std::size_t frequencyCount = simulation.frequencies().size();
+  const std::size_t effectiveQueueCapacity =
+      std::min(settings.outputQueueCapacity, frequencyCount);
+  const std::size_t workspaceByteCount = workspaceBytes(simulation);
+  const std::size_t cacheByteCount = trace.cache.memoryFootprintBytes();
+  const std::size_t activeFrequencyLimit = selectActiveFrequencyLimit(
+      frequencyCount, settings.workerCount, effectiveQueueCapacity,
+      cacheByteCount, workspaceByteCount, settings.memoryBudgetBytes);
 
   ParallelRayReuseStatistics statistics;
   statistics.tracePassCount = 1U;
   statistics.rayCount = trace.cache.size();
-  statistics.totalRayPointCount =
-      trace.totalRayPointCount;
+  statistics.totalRayPointCount = trace.totalRayPointCount;
   statistics.rayCacheBytes = cacheByteCount;
-  statistics.requestedWorkerCount =
-      settings.workerCount;
-  statistics.activeFrequencyLimit =
-      activeFrequencyLimit;
-  statistics.outputQueueCapacity =
-      effectiveQueueCapacity;
-  statistics.estimatedWorkspaceBytes =
-      workspaceByteCount;
+  statistics.requestedWorkerCount = settings.workerCount;
+  statistics.activeFrequencyLimit = activeFrequencyLimit;
+  statistics.outputQueueCapacity = effectiveQueueCapacity;
+  statistics.estimatedWorkspaceBytes = workspaceByteCount;
   statistics.estimatedPeakMemoryBytes =
-      estimatedPeakBytes(
-          cacheByteCount, workspaceByteCount, frequencyCount,
-          activeFrequencyLimit, effectiveQueueCapacity);
-  statistics.memoryBudgetBytes =
-      settings.memoryBudgetBytes;
-  statistics.phaseTotals.traceSeconds =
-      trace.traceSeconds;
+      estimatedPeakBytes(cacheByteCount, workspaceByteCount, frequencyCount,
+                         activeFrequencyLimit, effectiveQueueCapacity);
+  statistics.memoryBudgetBytes = settings.memoryBudgetBytes;
+  statistics.phaseTotals.traceSeconds = trace.traceSeconds;
   statistics.frequencyTimings.resize(frequencyCount);
-  statistics.cacheFingerprintVerified =
-      verifyCacheFingerprint;
+  statistics.cacheFingerprintVerified = verifyCacheFingerprint;
   if (verifyCacheFingerprint) {
-    statistics.cacheFingerprintBefore =
-        trace.cache.contentFingerprint();
+    statistics.cacheFingerprintBefore = trace.cache.contentFingerprint();
   }
 
   WorkState state;
@@ -224,8 +191,7 @@ ParallelRayReuseSolver::solveStreaming(
         std::size_t frequencyIndex{};
         {
           const std::lock_guard lock(state.mutex);
-          if (state.stopping ||
-              state.nextIndex >= frequencyCount) {
+          if (state.stopping || state.nextIndex >= frequencyCount) {
             break;
           }
           frequencyIndex = state.nextIndex;
@@ -234,31 +200,24 @@ ParallelRayReuseSolver::solveStreaming(
 
         SingleFrequencyResult frequencyResult =
             SingleFrequencySolver::solveFrequencyFromCache(
-                simulation,
-                simulation.frequencies().values()[frequencyIndex],
-                trace.cache, epsilonMultiplier, loopRange,
-                influenceSettings);
+                simulation, simulation.frequencies().values()[frequencyIndex],
+                trace.cache, epsilonMultiplier, loopRange, influenceSettings);
 
         {
           std::unique_lock lock(state.mutex);
-          state.queueSpaceAvailable.wait(
-              lock, [&]() {
-                return state.stopping ||
-                       state.completed.size() <
-                           effectiveQueueCapacity;
-              });
+          state.queueSpaceAvailable.wait(lock, [&]() {
+            return state.stopping ||
+                   state.completed.size() < effectiveQueueCapacity;
+          });
           if (state.stopping) {
             break;
           }
-          state.completed.push_back(
-              CompletedFrequency{
-                  .index = frequencyIndex,
-                  .workspace =
-                      std::move(frequencyResult.workspace),
-                  .timings = frequencyResult.timings});
-          state.peakQueuedResults = std::max(
-              state.peakQueuedResults,
-              state.completed.size());
+          state.completed.push_back(CompletedFrequency{
+              .index = frequencyIndex,
+              .workspace = std::move(frequencyResult.workspace),
+              .timings = frequencyResult.timings});
+          state.peakQueuedResults =
+              std::max(state.peakQueuedResults, state.completed.size());
         }
         state.resultAvailable.notify_one();
       }
@@ -274,8 +233,8 @@ ParallelRayReuseSolver::solveStreaming(
   };
 
   try {
-    for (std::size_t workerIndex = 0U;
-         workerIndex < activeFrequencyLimit; ++workerIndex) {
+    for (std::size_t workerIndex = 0U; workerIndex < activeFrequencyLimit;
+         ++workerIndex) {
       workers.emplace_back(worker);
     }
   } catch (...) {
@@ -287,12 +246,10 @@ ParallelRayReuseSolver::solveStreaming(
     std::exception_ptr failure;
     {
       std::unique_lock lock(state.mutex);
-      state.resultAvailable.wait(
-          lock, [&]() {
-            return state.failure ||
-                   !state.completed.empty() ||
-                   state.workersRemaining == 0U;
-          });
+      state.resultAvailable.wait(lock, [&]() {
+        return state.failure || !state.completed.empty() ||
+               state.workersRemaining == 0U;
+      });
       failure = state.failure;
     }
     if (failure) {
@@ -306,20 +263,16 @@ ParallelRayReuseSolver::solveStreaming(
             "parallel ray-reuse workers stopped before "
             "all frequencies completed");
       }
-      CompletedFrequency value =
-          std::move(state.completed.front());
+      CompletedFrequency value = std::move(state.completed.front());
       state.completed.pop_front();
       return value;
     }();
     state.queueSpaceAvailable.notify_one();
 
     try {
-      statistics.frequencyTimings[completed.index] =
-          completed.timings;
-      accumulateProjectionTimings(
-          statistics.phaseTotals, completed.timings);
-      consumer(completed.index,
-               std::move(completed.workspace),
+      statistics.frequencyTimings[completed.index] = completed.timings;
+      accumulateProjectionTimings(statistics.phaseTotals, completed.timings);
+      consumer(completed.index, std::move(completed.workspace),
                completed.timings);
       ++consumedCount;
     } catch (...) {
@@ -341,18 +294,13 @@ ParallelRayReuseSolver::solveStreaming(
   }
 
   if (verifyCacheFingerprint) {
-    statistics.cacheFingerprintAfter =
-        trace.cache.contentFingerprint();
-    if (statistics.cacheFingerprintAfter !=
-        statistics.cacheFingerprintBefore) {
-      throw ValidationError(
-          "parallel ray-reuse modified the frozen ray cache");
+    statistics.cacheFingerprintAfter = trace.cache.contentFingerprint();
+    if (statistics.cacheFingerprintAfter != statistics.cacheFingerprintBefore) {
+      throw ValidationError("parallel ray-reuse modified the frozen ray cache");
     }
   }
-  statistics.peakQueuedResults =
-      state.peakQueuedResults;
-  statistics.wallSeconds =
-      elapsedSeconds(wallBegin, Clock::now());
+  statistics.peakQueuedResults = state.peakQueuedResults;
+  statistics.wallSeconds = elapsedSeconds(wallBegin, Clock::now());
   return statistics;
 }
 

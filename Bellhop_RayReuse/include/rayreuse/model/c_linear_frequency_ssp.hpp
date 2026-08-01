@@ -24,18 +24,18 @@ class CLinearFrequencySsp {
   // These queries let the frequency projector bypass repeated C-linear
   // evaluation without changing the general nonuniform path.
   [[nodiscard]] bool isLossless() const noexcept;
-  [[nodiscard]] std::optional<std::complex<double>>
-  uniformComplexSoundSpeed() const noexcept;
+  [[nodiscard]] std::optional<std::complex<double>> uniformComplexSoundSpeed()
+      const noexcept;
 
   [[nodiscard]] SoundSpeedSample evaluateAtSegment(
       Vec2 position, std::size_t segmentIndex) const;
 
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
 
  private:
-  [[nodiscard]] SoundSpeedSample addImaginarySoundSpeed(
-      SoundSpeedSample sample, double depth) const;
+  [[nodiscard]] SoundSpeedSample addImaginarySoundSpeed(SoundSpeedSample sample,
+                                                        double depth) const;
 
   double frequency_;
   CLinearSsp realProfile_;

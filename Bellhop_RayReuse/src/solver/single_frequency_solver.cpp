@@ -24,13 +24,11 @@ using Clock = std::chrono::steady_clock;
   return std::chrono::duration<double>(end - begin).count();
 }
 
-void requireSimulationFrequency(
-    const SimulationCase& simulation, double frequency) {
-  const std::vector<double>& frequencies =
-      simulation.frequencies().values();
+void requireSimulationFrequency(const SimulationCase& simulation,
+                                double frequency) {
+  const std::vector<double>& frequencies = simulation.frequencies().values();
   if (!std::isfinite(frequency) ||
-      !std::binary_search(
-          frequencies.begin(), frequencies.end(), frequency)) {
+      !std::binary_search(frequencies.begin(), frequencies.end(), frequency)) {
     throw ValidationError(
         "requested frequency does not belong to the simulation");
   }
@@ -39,16 +37,14 @@ void requireSimulationFrequency(
 }  // namespace
 
 SingleFrequencyResult SingleFrequencySolver::solve(
-    const SimulationCase& simulation,
-    double epsilonMultiplier, double loopRange,
-    CartesianCervenySettings influenceSettings) {
+    const SimulationCase& simulation, double epsilonMultiplier,
+    double loopRange, CartesianCervenySettings influenceSettings) {
   if (simulation.frequencies().size() != 1U) {
     throw ValidationError(
         "single-frequency solve requires exactly one frequency");
   }
-  return solveAtFrequency(
-      simulation, simulation.frequencies().values().front(),
-      epsilonMultiplier, loopRange, influenceSettings);
+  return solveAtFrequency(simulation, simulation.frequencies().values().front(),
+                          epsilonMultiplier, loopRange, influenceSettings);
 }
 
 RayFanTraceResult SingleFrequencySolver::traceRayFan(
@@ -61,10 +57,8 @@ RayFanTraceResult SingleFrequencySolver::traceRayFan(
   const Clock::time_point traceBegin = Clock::now();
   std::size_t totalRayPointCount = 0U;
   for (const double launchAngle : launchFan.launchAngles) {
-    RayPath path =
-        tracer.trace(simulation.source(), launchAngle);
-    if (path.terminationReason !=
-        RayTerminationReason::ExitedDomain) {
+    RayPath path = tracer.trace(simulation.source(), launchAngle);
+    if (path.terminationReason != RayTerminationReason::ExitedDomain) {
       throw ValidationError(
           "single-frequency solve encountered a ray that did not "
           "exit the spatial domain normally");
@@ -83,13 +77,11 @@ RayFanTraceResult SingleFrequencySolver::traceRayFan(
 
 SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const SimulationCase& simulation, double frequency,
-    const RayPathCache& rayCache, double epsilonMultiplier,
-    double loopRange,
+    const RayPathCache& rayCache, double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings) {
   requireSimulationFrequency(simulation, frequency);
   if (!rayCache.frozen()) {
-    throw ValidationError(
-        "frequency projection requires a frozen ray cache");
+    throw ValidationError("frequency projection requires a frozen ray cache");
   }
 
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
@@ -97,24 +89,15 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
       simulation.environment().soundSpeedProfile());
   const double sourceSoundSpeed =
       soundSpeedProfile
-          .evaluate(
-              Vec2{
-                  .range = 0.0,
-                  .depth = simulation.source().depth},
-              0U)
+          .evaluate(Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U)
           .soundSpeed;
-  const BeamEpsilon epsilon =
-      pickMinimumWidthEpsilon(
-          frequency, sourceSoundSpeed, loopRange,
-          epsilonMultiplier);
+  const BeamEpsilon epsilon = pickMinimumWidthEpsilon(
+      frequency, sourceSoundSpeed, loopRange, epsilonMultiplier);
 
-  FrequencyWorkspace workspace(
-      frequency, simulation.receivers());
-  const FrequencyProjector projector(
-      simulation.environment());
+  FrequencyWorkspace workspace(frequency, simulation.receivers());
+  const FrequencyProjector projector(simulation.environment());
   const CartesianCervenyInfluence influence(
-      simulation.environment(), simulation.receivers(),
-      influenceSettings);
+      simulation.environment(), simulation.receivers(), influenceSettings);
 
   double projectSeconds = 0.0;
   double influenceSeconds = 0.0;
@@ -124,24 +107,20 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     totalRayPointCount += path.points.size();
     const Clock::time_point projectBegin = Clock::now();
     const RayFrequencyState frequencyState =
-        projector.project(
-            path, frequency, simulation.source().amplitude);
+        projector.project(path, frequency, simulation.source().amplitude);
     const Clock::time_point projectEnd = Clock::now();
     static_cast<void>(influence.accumulatePrevalidated(
         workspace, path, frequencyState, epsilon.value,
-        influenceSettings.collectStatistics
-            ? &influenceStatistics
-            : nullptr));
+        influenceSettings.collectStatistics ? &influenceStatistics : nullptr));
     const Clock::time_point influenceEnd = Clock::now();
     projectSeconds += elapsedSeconds(projectBegin, projectEnd);
-    influenceSeconds +=
-        elapsedSeconds(projectEnd, influenceEnd);
+    influenceSeconds += elapsedSeconds(projectEnd, influenceEnd);
   }
 
   const Clock::time_point scaleBegin = Clock::now();
-  scaleCoherentCartesianPointPressure(
-      workspace, simulation.receivers(),
-      launchFan.launchAngleStep, sourceSoundSpeed);
+  scaleCoherentCartesianPointPressure(workspace, simulation.receivers(),
+                                      launchFan.launchAngleStep,
+                                      sourceSoundSpeed);
   const Clock::time_point scaleEnd = Clock::now();
 
   return SingleFrequencyResult{
@@ -149,14 +128,12 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
       .rayCount = rayCache.size(),
       .totalRayPointCount = totalRayPointCount,
       .rayCacheBytes = rayCache.memoryFootprintBytes(),
-      .timings =
-          SingleFrequencyTimings{
-              .traceSeconds = 0.0,
-              .projectSeconds = projectSeconds,
-              .influenceSeconds = influenceSeconds,
-              .scaleSeconds =
-                  elapsedSeconds(scaleBegin, scaleEnd),
-              .influenceStatistics = influenceStatistics}};
+      .timings = SingleFrequencyTimings{
+          .traceSeconds = 0.0,
+          .projectSeconds = projectSeconds,
+          .influenceSeconds = influenceSeconds,
+          .scaleSeconds = elapsedSeconds(scaleBegin, scaleEnd),
+          .influenceStatistics = influenceStatistics}};
 }
 
 SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
@@ -165,9 +142,9 @@ SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
     CartesianCervenySettings influenceSettings) {
   requireSimulationFrequency(simulation, frequency);
   RayFanTraceResult trace = traceRayFan(simulation);
-  SingleFrequencyResult result = solveFrequencyFromCache(
-      simulation, frequency, trace.cache, epsilonMultiplier,
-      loopRange, influenceSettings);
+  SingleFrequencyResult result =
+      solveFrequencyFromCache(simulation, frequency, trace.cache,
+                              epsilonMultiplier, loopRange, influenceSettings);
   result.timings.traceSeconds = trace.traceSeconds;
   return result;
 }
