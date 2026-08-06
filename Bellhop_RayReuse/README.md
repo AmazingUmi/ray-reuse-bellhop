@@ -131,6 +131,22 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 都无法容纳时直接拒绝运行。预算覆盖射线缓存及有界频率工作区，不等同于
 进程全部 RSS。三个模式均保留为数值与性能对照入口。
 
+RayReuse 也支持直接在 `.env` 的频率记录中写严格递增列表。这是一个
+RayReuse 扩展，例如：
+
+```text
+50 100 150 200 250 / ! FREQS (Hz), RayReuse extension
+```
+
+这种 ENV 无需再提供 `--frequencies-hz`：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+  --execution-mode reuse
+```
+
+显式 `--frequencies-hz` 仍优先于 ENV 频率记录，便于脚本临时覆盖。
+
 Influence 诊断默认关闭。需要记录射线/segment/range/depth/image 工作量及
 validation、precompute、hot-loop 细分计时时，可显式添加：
 

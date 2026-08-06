@@ -5,6 +5,11 @@
 /Bellhop_F2CPP/build/
 /Bellhop_RayReuse/build/
 
+# Generated engineering showcase results and figures
+/demo/results/*
+!/demo/results/README.md
+/demo/figures/
+
 # Generated inputs and outputs from the standard-case runner
 /test/standard_cases/results/*
 !/test/standard_cases/results/README.md

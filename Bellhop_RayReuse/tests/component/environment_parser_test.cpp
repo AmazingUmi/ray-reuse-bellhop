@@ -142,6 +142,36 @@ void testFrequencyOverride(Context& context) {
       "frequency override replaces the env scalar and plans at fmax");
 }
 
+void testEnvironmentFrequencyList(Context& context) {
+  std::string contents = renderCase("munk_cerveny_cc", 50.0, 5000U);
+  replaceFirst(contents, "50          ! FREQ (Hz)",
+               "50 100 150 200 250 / ! FREQS (Hz), RayReuse extension");
+  const ParsedEnvironment parsed =
+      parseText(contents, "munk_multifrequency.env");
+
+  context.check(
+      parsed.simulationCase.frequencies().values() ==
+              std::vector<double>({50.0, 100.0, 150.0, 200.0, 250.0}) &&
+          parsed.simulationCase.frequencies().designFrequency() == 250.0 &&
+          parsed.simulationCase.launchFanPlan().designFrequency == 250.0,
+      "an ENV frequency list directly configures broadband fmax planning");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string descending = contents;
+        replaceFirst(descending, "50 100 150 200 250", "50 100 90 200 250");
+        static_cast<void>(parseText(descending, "descending_frequencies.env"));
+      },
+      "a descending ENV frequency list is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string duplicate = contents;
+        replaceFirst(duplicate, "50 100 150 200 250", "50 100 100 200 250");
+        static_cast<void>(parseText(duplicate, "duplicate_frequencies.env"));
+      },
+      "a duplicate ENV frequency is rejected");
+}
+
 void testBoundaryCases(Context& context) {
   const ParsedEnvironment rigid =
       parseText(renderCase("constant_speed_vacuum_rigid", 250.0, 1570U),
@@ -320,6 +350,7 @@ int main() {
   Context context;
   testDirectCase(context);
   testFrequencyOverride(context);
+  testEnvironmentFrequencyList(context);
   testBoundaryCases(context);
   testAttenuationCases(context);
   testMunkCase(context);

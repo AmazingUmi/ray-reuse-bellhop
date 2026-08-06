@@ -182,6 +182,29 @@ void requireTokenCount(const Record& record, std::size_t expected,
   }
 }
 
+[[nodiscard]] std::vector<double> parseFrequencies(
+    const Record& record, const std::string& sourceName) {
+  if (record.tokens.empty()) {
+    fail(sourceName, record.lineNumber,
+         "frequency record requires at least one value");
+  }
+  std::vector<double> frequencies;
+  frequencies.reserve(record.tokens.size());
+  for (std::size_t index = 0U; index < record.tokens.size(); ++index) {
+    const double frequency =
+        parseDouble(record, index, sourceName, "frequency");
+    if (frequency <= 0.0) {
+      fail(sourceName, record.lineNumber, "frequencies must be positive");
+    }
+    if (!frequencies.empty() && frequency <= frequencies.back()) {
+      fail(sourceName, record.lineNumber,
+           "frequencies must be strictly increasing");
+    }
+    frequencies.push_back(frequency);
+  }
+  return frequencies;
+}
+
 [[nodiscard]] std::size_t parseCount(
     const Record& record, std::size_t index, const std::string& sourceName,
     std::string_view fieldName, bool allowZero = false,
@@ -356,12 +379,8 @@ ParsedEnvironment EnvironmentParser::parse(
   }
 
   const Record frequencyRecord = reader.require("frequency");
-  requireTokenCount(frequencyRecord, 1U, source, "frequency");
-  const double frequency =
-      parseDouble(frequencyRecord, 0U, source, "frequency");
-  if (frequency <= 0.0) {
-    fail(source, frequencyRecord.lineNumber, "frequency must be positive");
-  }
+  std::vector<double> environmentFrequencies =
+      parseFrequencies(frequencyRecord, source);
 
   const Record mediaRecord = reader.require("medium count");
   requireTokenCount(mediaRecord, 1U, source, "medium count");
@@ -603,7 +622,7 @@ ParsedEnvironment EnvironmentParser::parse(
   ReceiverGrid receivers(std::move(receiverDepths), std::move(receiverRanges));
   std::vector<double> frequencies = frequencyOverrideHz.has_value()
                                         ? std::move(*frequencyOverrideHz)
-                                        : std::vector<double>{frequency};
+                                        : std::move(environmentFrequencies);
   SimulationCase simulationCase(
       std::move(environment),
       Source{.depth = sourceDepths.front(), .amplitude = 1.0},
