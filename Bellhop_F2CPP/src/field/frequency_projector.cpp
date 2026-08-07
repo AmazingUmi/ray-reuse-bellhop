@@ -111,7 +111,7 @@ RayFrequencyState FrequencyProjector::project(
       soundSpeedProfile.evaluate(path.points.front().position, segmentIndex);
   segmentIndex = sourceSample.segmentIndex;
 
-  RayFrequencyState result{.frequency = frequency};
+  RayFrequencyState result{.frequency = frequency, .points = {}};
   result.points.reserve(path.points.size());
   result.points.push_back(
       RayFrequencyPoint{

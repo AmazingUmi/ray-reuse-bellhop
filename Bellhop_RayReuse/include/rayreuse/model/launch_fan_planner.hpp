@@ -21,12 +21,12 @@ struct LaunchFanPlanningInput {
 
   // D-02 policy A keeps this parser-facing value for compatibility but always
   // derives the actual count from the highest design frequency.
-  std::optional<std::size_t> explicitLaunchAngleCount;
+  std::optional<std::size_t> explicitLaunchAngleCount{};
 
   // The parser preserves the original degree endpoints so legacy Bellhop's
   // degree-domain SubTab operation can be reproduced without converting the
   // radian-domain core inputs back to degrees.
-  std::optional<LaunchAngleDegreeBounds> inputDegreeBounds;
+  std::optional<LaunchAngleDegreeBounds> inputDegreeBounds{};
 };
 
 struct LaunchFanPlan {

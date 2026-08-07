@@ -47,7 +47,7 @@ struct Record {
 [[nodiscard]] Record tokenizeRecord(
     const std::string& line, std::size_t lineNumber,
     const std::string& sourceName) {
-  Record record{.lineNumber = lineNumber};
+  Record record{.lineNumber = lineNumber, .tokens = {}};
   std::string token;
   char quote = '\0';
 

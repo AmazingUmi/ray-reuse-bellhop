@@ -43,8 +43,8 @@ struct Source {
 struct LaunchFan {
   double minimumAngle{};
   double maximumAngle{};
-  std::optional<std::size_t> explicitLaunchAngleCount;
-  std::optional<LaunchAngleDegreeBounds> inputDegreeBounds;
+  std::optional<std::size_t> explicitLaunchAngleCount{};
+  std::optional<LaunchAngleDegreeBounds> inputDegreeBounds{};
 };
 
 struct IntegratorSettings {

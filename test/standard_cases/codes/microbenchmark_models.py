@@ -86,11 +86,39 @@ def summarize_samples(
     fields = tuple(samples[0])
     if any(tuple(sample) != fields for sample in samples):
         raise ValueError("timing samples must have identical fields")
+    values_by_field = {
+        field: [sample[field] for sample in samples] for field in fields
+    }
+    medians = {
+        field: statistics.median(values)
+        for field, values in values_by_field.items()
+    }
+    means = {
+        field: statistics.fmean(values)
+        for field, values in values_by_field.items()
+    }
     return {
         "sample_count": len(samples),
-        "median": {
-            field: statistics.median(sample[field] for sample in samples)
-            for field in fields
+        "median": medians,
+        "minimum": {
+            field: min(values) for field, values in values_by_field.items()
+        },
+        "maximum": {
+            field: max(values) for field, values in values_by_field.items()
+        },
+        "median_absolute_deviation": {
+            field: statistics.median(
+                abs(value - medians[field]) for value in values
+            )
+            for field, values in values_by_field.items()
+        },
+        "coefficient_of_variation": {
+            field: (
+                statistics.pstdev(values) / means[field]
+                if means[field] != 0.0
+                else 0.0
+            )
+            for field, values in values_by_field.items()
         },
         "samples": list(samples),
     }

@@ -84,10 +84,14 @@ namespace {
 CommandLineOptions parseCommandLine(
     std::span<const std::string_view> arguments) {
   if (arguments.size() == 1U && arguments.front() == "--help") {
-    return CommandLineOptions{.showHelp = true};
+    CommandLineOptions options;
+    options.showHelp = true;
+    return options;
   }
   if (arguments.size() == 1U && arguments.front() == "--version") {
-    return CommandLineOptions{.showVersion = true};
+    CommandLineOptions options;
+    options.showVersion = true;
+    return options;
   }
   if (arguments.empty()) {
     throw ValidationError("a file root is required");

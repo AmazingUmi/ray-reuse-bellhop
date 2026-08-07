@@ -61,6 +61,15 @@ class MicrobenchmarkModelsTests(unittest.TestCase):
         self.assertEqual(summary["sample_count"], 3)
         self.assertEqual(summary["median"]["trace_seconds"], 2.0)
         self.assertEqual(summary["median"]["formula_core_seconds"], 7.0)
+        self.assertEqual(summary["minimum"]["trace_seconds"], 1.0)
+        self.assertEqual(summary["maximum"]["trace_seconds"], 3.0)
+        self.assertEqual(
+            summary["median_absolute_deviation"]["trace_seconds"], 1.0
+        )
+        self.assertAlmostEqual(
+            summary["coefficient_of_variation"]["trace_seconds"],
+            0.408248290463863,
+        )
 
 
 if __name__ == "__main__":

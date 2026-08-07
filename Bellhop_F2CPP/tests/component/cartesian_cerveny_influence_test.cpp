@@ -51,6 +51,10 @@ constexpr double kDirectLaunchAngle =
     -2.91861078928821462e-4;
 constexpr double kMunkInfluenceLaunchAngle =
     -1.77682903819398719e-1;
+// libstdc++ and libc++ complex elementary functions differ by a few ulps in
+// this reflected diagnostic while preserving the legacy binary32 result.
+constexpr double kCrossCompilerImageTolerance = 1.0e-12;
+constexpr double kCrossCompilerContributionTolerance = 2.0e-11;
 
 std::vector<double> linearGrid(double first, double last,
                                std::size_t count) {
@@ -454,11 +458,12 @@ void testRigidReflectionOracle(Context& context) {
   checkComplexNear(
       context, value.rawImageSum,
       {-1.41887004393691341e-1, -1.53140961897156558},
-      1.0e-15, "rigid reflection image sum");
+      kCrossCompilerImageTolerance, "rigid reflection image sum");
   checkComplexNear(
       context, value.finalContribution,
       {-1.11848963840907825e1, -3.24003551467677156e1},
-      2.0e-14, "rigid reflection final ray contribution");
+      kCrossCompilerContributionTolerance,
+      "rigid reflection final ray contribution");
   checkFloatBits(
       context, value.finalContribution,
       0xc132f556U, 0xc20199f7U,
