@@ -1,5 +1,9 @@
 # H4 本地跨编译器验证操作计划
 
+> 执行状态（2026-08-07）：H4-0～H4-4 的 C++ AppleClang↔GCC 矩阵已完成，
+> 结果见 [`CROSS_COMPILER_RESULTS_H4.md`](../reports/CROSS_COMPILER_RESULTS_H4.md)。
+> H4-5 等待真正独立的第二套 Fortran 编译器；本计划不再是活动本地待办。
+
 ## 目标与当前条件
 
 H4 只做本地可移植性验证，不配置或推送远端。当前可直接使用：
@@ -135,8 +139,8 @@ floor 比较 AppleClang↔GCC 的 F2CPP、RayReuse 输出，并报告每例最�
 
 ## 出口与失败处理
 
-H4 C++ 出口：双工具链构建/CTest、两套三模型矩阵、两套中间状态矩阵全部
-通过，并产生汇总 JSON/Markdown。Fortran 出口独立记录为“已通过”或“等待
+H4 C++ 出口已关闭：双工具链构建/CTest、两套三模型矩阵、两套中间状态矩阵
+全部通过，并已产生汇总 JSON/Markdown。Fortran 出口独立记录为“等待
 第二编译器”，不阻塞本地 C++ 矩阵，但阻止宣称完整跨编译器发布支持。
 
 任一失败按 `compile → contract test → intermediate state → final field →

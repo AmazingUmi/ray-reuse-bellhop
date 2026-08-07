@@ -449,7 +449,7 @@ CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件�
 
 ## 阶段 H：单线程基线与中间状态契约
 
-### H1～H3 完成状态（2026-08-01）
+### H1～H4 C++ 完成状态（2026-08-07）
 
 1. [x] 建立三模型 single 同工作量微基准；显式固定单线程、预热、轮换顺序、
    可执行文件哈希和阶段映射；
@@ -457,10 +457,16 @@ CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件�
    返回类型，定义 C++ geometry probe schema v1；
 3. [x] 建立 origin/F2CPP/RayReuse 中间几何状态门，覆盖 direct、
    vacuum/rigid、Munk；
-4. [ ] 按 [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) 执行本地
-   AppleClang↔GCC C++ 矩阵；第二 Fortran 编译器单独等待可用工具链。
+4. [x] 按 [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) 完成本地
+   AppleClang↔GCC C++ 构建、最终场、中间状态和微基准矩阵；第二 Fortran
+   编译器单独等待可用工具链。
 
 干净提交 `c417095` 的中位数和逐点比较结果见
 [`LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md)。
 geometry schema v1 明确不包含完整反射声学、逐频投影或 Influence image 表；
 这些扩展必须使用新 schema 版本，不能静默扩大 v1。
+
+H4 C++ 关闭证据见
+[`CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md)。两套
+工具链内测试与数值门全部通过；第二套独立 Fortran 编译器未就绪，因此不
+宣称完整跨编译器发布支持。
