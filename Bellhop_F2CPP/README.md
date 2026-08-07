@@ -51,6 +51,7 @@ build/release/bellhop_f2cpp
 - [完整使用说明](./doc/USAGE.md)：环境、编译、测试、CLI、输入输出和排错；
 - [F2CPP 文档索引](./doc/README.md)；
 - [构建与验收计划](./doc/BUILD_PLAN.md)；
+- [二维功能进一步复刻计划](./doc/FURTHER_REPLICATION_PLAN.md)；
 - [最终派生清单](./doc/DERIVATION_MANIFEST.md)。
 - [数值接口与中间状态契约 v1](./doc/INTERMEDIATE_STATE_CONTRACT.md)。
 
@@ -64,10 +65,12 @@ build/release/bellhop_f2cpp
 
 G0、M1、M2 已全部完成：
 
-- Debug ASan/UBSan 与 Release 各 20/20 CTest；
-- 标准算例 Python 测试 21/21；
+- Debug ASan/UBSan 与 Release 当前各 21/21 CTest；
+- 标准算例 Python 测试当前 69/69；
 - 六个单频案例 PRT/SHD 校验和完整复压力/TL 比较 6/6；
 - R-15 的 16 频 trace-once 摊销性能门 6/6；
 - 最终快照已允许派生 `Bellhop_RayReuse`。
 
-支持范围和已知限制以[完整使用说明](./doc/USAGE.md)为准。
+支持范围和已知限制以[完整使用说明](./doc/USAGE.md)为准。后续二维功能按
+[进一步复刻计划](./doc/FURTHER_REPLICATION_PLAN.md)推进；3D、N×2D 和
+beam shift 不在该路线内。

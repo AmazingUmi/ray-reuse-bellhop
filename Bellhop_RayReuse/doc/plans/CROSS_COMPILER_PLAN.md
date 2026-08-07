@@ -2,7 +2,8 @@
 
 > 执行状态（2026-08-07）：H4-0～H4-4 的 C++ AppleClang↔GCC 矩阵已完成，
 > 结果见 [`CROSS_COMPILER_RESULTS_H4.md`](../reports/CROSS_COMPILER_RESULTS_H4.md)。
-> H4-5 等待真正独立的第二套 Fortran 编译器；本计划不再是活动本地待办。
+> 后续项目决策将 GNU Fortran/gfortran 冻结为唯一支持的 Fortran oracle
+> 工具链，H4-5 已取消；本计划是历史记录，不再是活动待办。
 
 ## 目标与当前条件
 
@@ -14,9 +15,9 @@ H4 只做本地可移植性验证，不配置或推送远端。当前可直接�
 | C++ 对照 | `/opt/homebrew/bin/g++-14`，GCC 14.2.0 |
 | Fortran 基线 | `/opt/homebrew/bin/gfortran-14`，GNU Fortran 14.2.0 |
 
-本机没有第二套独立 Fortran 编译器。H4 可先关闭 C++ AppleClang↔GCC
-矩阵；Fortran 跨编译器项必须等 arm64 macOS 可用的 LLVM Flang 或另一目标
-平台编译器到位后执行，不能把同一 gfortran 的别名当作两个工具链。
+本机没有第二套独立 Fortran 编译器。H4 已以 C++ AppleClang↔GCC 矩阵关闭；
+后续项目决策不再规划 LLVM Flang 或另一 Fortran 工具链，也不把同一
+gfortran 的别名当作两个工具链。
 
 ## H4-0：冻结输入与目录
 
@@ -126,22 +127,17 @@ floor 比较 AppleClang↔GCC 的 F2CPP、RayReuse 输出，并报告每例最�
 性能不是跨编译器阻断门。若 7 次样本变异系数超过 `5%`，只记录数据，不作
 快慢结论；不得据此改变默认 worker。
 
-## H4-5：第二 Fortran 编译器
+## H4-5：第二 Fortran 编译器（已取消）
 
-只有获得真正独立的 Fortran 编译器后执行：
-
-1. 构建原版二维 Bellhop，保留 `BELLHOP_PROFILE_STAGES` 和 oracle 诊断；
-2. 运行六例 single 紧凑参考门及三例中间状态 validator；
-3. 与 gfortran 结果进行数值比较，不要求 SHD 字节一致；
-4. 记录 compiler/runtime 依赖和 stage/RSS；
-5. 若编译器改变默认实数或复数语义，必须显式 flags 固定 binary32/binary64，
-   不得修改 oracle 迎合结果。
+项目已决定统一使用 GNU Fortran/gfortran，不再建立第二 Fortran 编译器矩阵。
+该项不构成发布声明：项目只声明 gfortran oracle 可重现，不声明其他 Fortran
+编译器兼容。
 
 ## 出口与失败处理
 
-H4 C++ 出口已关闭：双工具链构建/CTest、两套三模型矩阵、两套中间状态矩阵
-全部通过，并已产生汇总 JSON/Markdown。Fortran 出口独立记录为“等待
-第二编译器”，不阻塞本地 C++ 矩阵，但阻止宣称完整跨编译器发布支持。
+H4 出口已关闭：双 C++ 工具链构建/CTest、两套三模型矩阵、两套中间状态矩阵
+全部通过，并已产生汇总 JSON/Markdown；Fortran oracle 支持范围明确限定为
+GNU Fortran/gfortran。
 
 任一失败按 `compile → contract test → intermediate state → final field →
 performance` 顺序定位。只允许针对明确 compiler-id 的构建修正；数值公式、

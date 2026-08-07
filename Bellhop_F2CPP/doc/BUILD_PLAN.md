@@ -435,8 +435,8 @@ Release CLI 已打通：
 
 六例最终结果均通过。最大压力绝对误差出现在
 `constant_speed_vacuum_rigid`，为 `7.27386151e-8`；最大 TL 差同样在该例，
-为 `3.12805176e-4 dB`。Debug ASan/UBSan 和 Release 各 20 个 CTest、
-标准算例 Python 21 个测试全部通过。`single_frequency_solver` 组件还在
+为 `3.12805176e-4 dB`。当前 Debug ASan/UBSan 和 Release 各 21 个 CTest、
+标准算例 Python 69 个测试全部通过。`single_frequency_solver` 组件还在
 sanitizer 下逐一执行直达、刚性反射、损耗声学底、5 kHz 无损、Thorp 和
 Munk 缩小版完整数值链，并覆盖异常终止拒绝。
 
@@ -449,5 +449,7 @@ Project+Influence 约为 `2.24 s`，三轮分项总计中位数为 `2.300 s`，
 Munk 缓存估算为 `62,718,712 B`，实测峰值 RSS 为 `66,125,824 B`。
 
 R-15 已确认保留完整冻结缓存。16 频 trace-once 摊销门六例全部通过，
-M2-14/M2-15 已关闭。F2CPP 的下一步不再增加多频运行模式，而是按派生
-清单建立独立 `Bellhop_RayReuse/`，从 P8 单频与宽带非复用基线开始。
+M2-14/M2-15 已关闭。独立 `Bellhop_RayReuse/` 已按派生清单建立；F2CPP
+后续仍保持单频定位，并按
+[二维功能进一步复刻计划](./FURTHER_REPLICATION_PLAN.md)继续扩展二维
+Bellhop 功能，不实施 3D、N×2D 或多频调度。

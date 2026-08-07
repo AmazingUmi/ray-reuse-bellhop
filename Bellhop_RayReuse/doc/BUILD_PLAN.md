@@ -458,8 +458,8 @@ CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件�
 3. [x] 建立 origin/F2CPP/RayReuse 中间几何状态门，覆盖 direct、
    vacuum/rigid、Munk；
 4. [x] 按 [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) 完成本地
-   AppleClang↔GCC C++ 构建、最终场、中间状态和微基准矩阵；第二 Fortran
-   编译器单独等待可用工具链。
+   AppleClang↔GCC C++ 构建、最终场、中间状态和微基准矩阵；GNU
+   Fortran/gfortran 冻结为唯一 Fortran oracle 工具链。
 
 干净提交 `c417095` 的中位数和逐点比较结果见
 [`LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md)。
@@ -468,5 +468,5 @@ geometry schema v1 明确不包含完整反射声学、逐频投影或 Influence
 
 H4 C++ 关闭证据见
 [`CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md)。两套
-工具链内测试与数值门全部通过；第二套独立 Fortran 编译器未就绪，因此不
-宣称完整跨编译器发布支持。
+工具链内测试与数值门全部通过。后续项目决策已取消第二 Fortran 编译器项；
+本项目不宣称 gfortran 之外的 Fortran 编译器支持。

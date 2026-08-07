@@ -9,15 +9,15 @@
 | 目的 | 文档 |
 |---|---|
 | 查看当前阶段与验收出口 | [`BUILD_PLAN.md`](./BUILD_PLAN.md) |
-| 查看跨编译器后续条件 | [`plans/CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) |
+| 查看跨编译器历史计划 | [`plans/CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) |
 | 复现性能测试 | [`guides/BENCHMARKING.md`](./guides/BENCHMARKING.md) |
 | 查看当前本地验证基线 | [`reports/LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md) |
 | 查看当前三模型数值矩阵 | [`reports/MODEL_MATRIX_RESULTS_06E390F.md`](./reports/MODEL_MATRIX_RESULTS_06E390F.md) |
 | 查看 H4 跨编译器结果 | [`reports/CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md) |
 
-当前 A～G、F1/F2 和 H1～H4 C++ 矩阵已完成。第二套独立 Fortran 编译器、
-远端推送、云端 CI 首跑和分支保护等待外部条件或用户决定，不作为当前本地
-开发中的活动计划。
+当前 A～G、F1/F2 和 H1～H4 矩阵已完成。GNU Fortran/gfortran 是唯一支持
+的 Fortran oracle 工具链；不再等待第二套 Fortran 编译器。远端推送、云端
+CI 首跑和分支保护等待用户决定，不作为当前本地开发中的活动计划。
 
 ## 分类
 
@@ -30,7 +30,7 @@
 ### plans
 
 - [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md)：已完成的 H4 C++
-  操作计划及第二 Fortran 编译器后续条件。
+  操作计划；第二 Fortran 编译器项已按后续项目决策关闭。
 
 总实施状态仍集中在 [`BUILD_PLAN.md`](./BUILD_PLAN.md)，避免多个活动总计划并存。
 

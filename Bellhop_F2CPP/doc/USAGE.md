@@ -135,7 +135,8 @@ ctest --test-dir build/release \
   --output-on-failure
 ```
 
-最终快照的 Debug 和 Release 均为 20/20。
+初始 M2 派生快照的 Debug 和 Release 均为 20/20；增加数值契约测试后的
+当前 H4 基线均为 21/21。
 
 ### 4.2 Python 标准算例基础测试
 
@@ -146,7 +147,7 @@ python3 -m unittest discover \
   -s test/standard_cases/codes/tests -p 'test_*.py'
 ```
 
-最终快照为 21/21。
+当前项目基线为 69/69。
 
 ### 4.3 六个单频端到端案例
 
