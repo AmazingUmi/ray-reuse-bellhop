@@ -107,6 +107,7 @@ add_library(
     src/ray/ray_stepper.cpp
     src/solver/single_frequency_solver.cpp
     src/solver/ray_trace_solver.cpp
+    src/solver/arrival_solver.cpp
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
   # AttenMod calls the libm pow implementation. AppleClang otherwise lowers
@@ -237,6 +238,12 @@ if(BUILD_TESTING)
     bellhop_f2cpp_arrival_workspace_tests
     f2cpp.component.arrival_workspace
     tests/component/arrival_workspace_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_arrival_solver_tests
+    f2cpp.component.arrival_solver
+    tests/component/arrival_solver_test.cpp
     component
   )
   add_f2cpp_test(

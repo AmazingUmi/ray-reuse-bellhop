@@ -330,7 +330,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.geometric_
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -409,10 +409,18 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_so
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-01-T4 checkpoint commit.
+- Tests: AppleClang Debug ASan/UBSan and GCC 14 Release/Werror arrival-solver
+  targets passed; focused two-source, attenuation, reflection, directional-
+  pattern, invalid-mode/layout/consumer, and abnormal-termination tests passed;
+  `git diff --check` passed.
+- Oracle / parity result: projection uses the accepted `FrequencyProjector`
+  and T3 geometric-hat sink; end-to-end ARR product parity remains assigned to
+  I8-04.
+- Notes: one frozen source fan and one lazy arrival workspace are streamed to a
+  const consumer in sorted source order, then released. Statistics use checked
+  arithmetic and report trace/project/influence/consumer timing, candidates,
+  saturation, and peak cache/workspace storage.
 
 ## I8-01-T5
 
