@@ -1188,7 +1188,7 @@ void testPiecewiseLinearLongMaterials(Context& context) {
       "two-frequency projection preserves frozen LL event materials");
 
   for (const auto& [name, bathymetry] :
-       std::array<std::pair<std::string, std::string>, 3>{
+       std::array<std::pair<std::string, std::string>, 2>{
            std::pair{
                "ll_six_columns",
                "LL\n2\n-1 1000 1600 0 1.5 0.1\n"
@@ -1196,19 +1196,31 @@ void testPiecewiseLinearLongMaterials(Context& context) {
            std::pair{
                "ll_eight_columns",
                "LL\n2\n-1 1000 1600 0 1.5 0.1 0 99\n"
-               "2 1000 1800 0 2.0 0.2 0 99\n"},
-           std::pair{
-               "ll_elastic_material",
-               "LL\n2\n-1 1000 1600 100 1.5 0.1 0\n"
-               "2 1000 1800 100 2.0 0.2 0\n"}}) {
+               "2 1000 1800 0 2.0 0.2 0 99\n"}}) {
     const TemporaryLongBoundaryCase rejected(name, bathymetry);
     context.expectThrows<ValidationError>(
         [&] {
           static_cast<void>(
               EnvironmentParser::parseFile(rejected.environmentPath()));
         },
-        "LL rejects malformed column counts and elastic materials");
+        "LL rejects malformed column counts");
   }
+
+  const TemporaryLongBoundaryCase elastic(
+      "ll_elastic_material",
+      "LL\n3\n-1 1000 1600 700 1.5 0.1 0.03\n"
+      "2 1000 1800 900 2.0 0.2 0.05\n"
+      "4 1000 2000 1100 2.5 0.3 0.07\n");
+  const ParsedEnvironment elasticParsed = EnvironmentParser::parseFile(
+      elastic.environmentPath());
+  const auto& elasticSeabed =
+      elasticParsed.simulationCase.environment().seabed();
+  context.checkNear(elasticSeabed.materialAtSegment(2U).shearSoundSpeed,
+                    900.0, 0.0,
+                    "LL parser retains segment shear speed");
+  context.checkNear(
+      elasticSeabed.materialAtSegment(2U).shearAttenuation.value,
+      0.05, 0.0, "LL parser retains segment shear attenuation");
 }
 
 void testCurvilinearShortBoundaries(Context& context) {

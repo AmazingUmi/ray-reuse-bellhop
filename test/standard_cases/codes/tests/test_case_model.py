@@ -35,6 +35,7 @@ class CaseModelTests(unittest.TestCase):
                 "i3_piecewise_boundaries",
                 "i3_curvilinear_oracle",
                 "i3_long_format_materials",
+                "elastic_ll_top_bottom",
                 "attenuation_unit_n",
                 "attenuation_unit_f",
                 "attenuation_unit_m",

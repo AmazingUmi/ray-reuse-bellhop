@@ -82,7 +82,7 @@ void validateFrozenMaterial(const FrozenBoundaryMaterial& frozen) {
       !std::isfinite(material.shearSoundSpeed) ||
       !std::isfinite(material.density) ||
       material.compressionalSoundSpeed <= 0.0 ||
-      material.shearSoundSpeed != 0.0 || material.density <= 0.0) {
+      material.shearSoundSpeed < 0.0 || material.density <= 0.0) {
     throw ValidationError(
         "frozen long-format boundary material is invalid");
   }
@@ -101,9 +101,10 @@ void validateFrozenMaterial(const FrozenBoundaryMaterial& frozen) {
           "frozen long-format boundary attenuation is invalid");
     }
   }
-  if (material.shearAttenuation.value != 0.0) {
+  if (material.shearSoundSpeed == 0.0 &&
+      material.shearAttenuation.value != 0.0) {
     throw ValidationError(
-        "frozen long-format boundary material must be fluid-only");
+        "zero frozen long-format shear speed requires zero shear attenuation");
   }
 }
 

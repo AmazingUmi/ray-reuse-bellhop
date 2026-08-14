@@ -149,7 +149,7 @@ RayFrequencyState FrequencyProjector::project(
                     waterSample.soundSpeed, waterSample.density,
                     event.tangentSlowness, event.normalSlowness)
           : useFrozenLongMaterial
-              ? evaluateFluidHalfSpaceAcoustics(
+              ? evaluateAcousticHalfSpaceAcoustics(
                     event.longMaterialOverride->material,
                     event.longMaterialOverride->attenuationEvaluationDepth,
                     environment_.volumeAttenuation(), frequency,

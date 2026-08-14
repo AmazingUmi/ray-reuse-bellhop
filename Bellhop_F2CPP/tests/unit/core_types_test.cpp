@@ -141,19 +141,19 @@ void testEnvironmentVolumeAttenuation(Context& context) {
 
   AcousticMaterial elasticMaterial = fluidMaterial;
   elasticMaterial.shearSoundSpeed = 100.0;
-  context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(BoundaryModel::acousticHalfSpace(
-            BoundaryGeometry::piecewiseLinear(
-                {{.range = 0.0, .depth = 1000.0},
-                 {.range = 1000.0, .depth = 1000.0}},
-                1000.0, BoundaryOrientation::Lower),
-            fluidMaterial,
-            std::make_shared<const std::vector<AcousticMaterial>>(
-                std::vector<AcousticMaterial>{elasticMaterial,
-                                              elasticMaterial})));
-      },
-      "elastic long-format boundary materials remain unsupported");
+  const BoundaryModel elasticLongBoundary =
+      BoundaryModel::acousticHalfSpace(
+          BoundaryGeometry::piecewiseLinear(
+              {{.range = 0.0, .depth = 1000.0},
+               {.range = 1000.0, .depth = 1000.0}},
+              1000.0, BoundaryOrientation::Lower),
+          fluidMaterial,
+          std::make_shared<const std::vector<AcousticMaterial>>(
+              std::vector<AcousticMaterial>{elasticMaterial,
+                                            elasticMaterial}));
+  context.checkNear(elasticLongBoundary.materialAtSegment(1U).shearSoundSpeed,
+                    100.0, 0.0,
+                    "elastic long-format boundary retains shear material");
 
   const BoundaryModel grain = BoundaryModel::grainSizeHalfSpace(1000.0, 2.6);
   context.check(grain.grainSizeMaterial().has_value(),
@@ -876,6 +876,18 @@ void testRayPathCache(Context& context) {
   frozenMaterialCache.append(std::move(frozenMaterialPath));
   frozenMaterialCache.freeze();
 
+  FrozenBoundaryMaterial validElasticFrozenMaterial = validFrozenMaterial;
+  validElasticFrozenMaterial.material.shearSoundSpeed = 900.0;
+  validElasticFrozenMaterial.material.shearAttenuation = {
+      .value = 0.05,
+      .unit = AttenuationUnit::DecibelsPerWavelength};
+  RayPath elasticFrozenPath = makeReflectedRayPath();
+  elasticFrozenPath.events.front().longMaterialOverride =
+      validElasticFrozenMaterial;
+  RayPathCache elasticFrozenCache;
+  elasticFrozenCache.append(std::move(elasticFrozenPath));
+  elasticFrozenCache.freeze();
+
   RayPath invalidFrozenDepth = makeReflectedRayPath();
   invalidFrozenDepth.events.front().longMaterialOverride =
       validFrozenMaterial;
@@ -908,7 +920,7 @@ void testRayPathCache(Context& context) {
   invalidFrozenShearCache.append(std::move(invalidFrozenShear));
   context.expectThrows<ValidationError>(
       [&invalidFrozenShearCache] { invalidFrozenShearCache.freeze(); },
-      "frozen LL material rejects shear attenuation");
+      "zero-shear frozen LL material rejects shear attenuation");
 
   RayPath invalidLegacyMirror = makeLegacyFrameReflectedRayPath();
   invalidLegacyMirror.points[1U].slowness.depth += 1.0e-6;

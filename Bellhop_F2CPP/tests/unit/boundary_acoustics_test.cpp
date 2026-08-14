@@ -433,6 +433,29 @@ void testLongFormatSegmentMaterialAndDepth(Context& context) {
                    direct.rawCoefficient, 0.0,
                    "LL segment coefficient uses its frozen left-node material");
 
+  auto mutableElastic = std::vector<AcousticMaterial>(*longMaterials);
+  mutableElastic[1U].shearSoundSpeed = 900.0;
+  mutableElastic[1U].shearAttenuation = {
+      .value = 0.05,
+      .unit = AttenuationUnit::DecibelsPerWavelength};
+  const auto elasticMaterials =
+      std::make_shared<const std::vector<AcousticMaterial>>(
+          std::move(mutableElastic));
+  const BoundaryModel elasticBoundary = BoundaryModel::acousticHalfSpace(
+      boundary.geometry(), *boundary.material(), elasticMaterials);
+  const BoundaryAcousticsResult elastic = evaluateBoundaryAcoustics(
+      elasticBoundary, 2U, VolumeAttenuation{}, 1000.0, 1000.0,
+      1.0 / 1500.0, 1.0 / 1500.0);
+  const BoundaryAcousticsResult directElastic =
+      evaluateAcousticHalfSpaceAcoustics(
+          (*elasticMaterials)[1U], 1.0e20, VolumeAttenuation{}, 1000.0,
+          1000.0, 1.0 / 1500.0, 1.0 / 1500.0);
+  checkComplexNear(context, elastic.rawCoefficient,
+                   directElastic.rawCoefficient, 0.0,
+                   "elastic LL segment evaluates both P and S material");
+  context.check(elastic.rawCoefficient != second.rawCoefficient,
+                "elastic LL shear properties affect reflection");
+
   const VolumeAttenuation biological{
       .model = VolumeAttenuationModel::Biological,
       .parameters =

@@ -943,14 +943,25 @@ void testFrozenLongMaterialOverridesEnvironmentFallback(Context& context) {
       "multi-frequency projection does not mutate frozen LL material");
 
   RayPath elasticLongOverride = path;
-  elasticLongOverride.events.front()
-      .longMaterialOverride->material.shearSoundSpeed = 900.0;
-  context.expectThrows<ValidationError>(
-      [&projector, &elasticLongOverride] {
-        static_cast<void>(
-            projector.project(elasticLongOverride, 1000.0, 1.0));
-      },
-      "projector keeps elastic LL material explicitly unsupported");
+  auto& elasticMaterial = elasticLongOverride.events.front()
+                              .longMaterialOverride->material;
+  elasticMaterial.shearSoundSpeed = 900.0;
+  elasticMaterial.shearAttenuation = {
+      .value = 0.05,
+      .unit = AttenuationUnit::DecibelsPerWavelength};
+  const RayFrequencyState elasticState =
+      projector.project(elasticLongOverride, 1000.0, 1.0);
+  const ReflectionEvent& elasticEvent = elasticLongOverride.events.front();
+  const auto expectedElastic = evaluateAcousticHalfSpaceAcoustics(
+      elasticMaterial, 1.0e20, environment.volumeAttenuation(), 1000.0,
+      kWaterDensity, elasticEvent.tangentSlowness,
+      elasticEvent.normalSlowness);
+  context.checkNear(elasticState.points.back().amplitude,
+                    expectedElastic.amplitudeMultiplier, 2.0e-15,
+                    "projector evaluates frozen elastic LL amplitude");
+  context.checkNear(elasticState.points.back().reflectionPhase,
+                    expectedElastic.phaseIncrement, 2.0e-15,
+                    "projector evaluates frozen elastic LL phase");
 
   const RayFrequencyState rigid =
       FrequencyProjector(makeConstantEnvironment())

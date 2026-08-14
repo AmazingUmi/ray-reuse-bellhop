@@ -826,23 +826,26 @@ struct ParsedBoundaryFile {
           "boundary compressional attenuation");
       const double shearAttenuation = parseDouble(
           pointRecord, 6U, source, "boundary shear attenuation");
-      if (compressionalSoundSpeed <= 0.0 || densityInput <= 0.0 ||
-          compressionalAttenuation < 0.0) {
+      if (compressionalSoundSpeed <= 0.0 || shearSoundSpeed < 0.0 ||
+          densityInput <= 0.0 || compressionalAttenuation < 0.0 ||
+          shearAttenuation < 0.0) {
         fail(source, pointRecord.lineNumber,
              "long-format boundary requires positive compressional speed/"
-             "density and non-negative attenuation");
+             "density, non-negative shear speed, and non-negative "
+             "attenuation");
       }
-      if (shearSoundSpeed != 0.0 || shearAttenuation != 0.0) {
+      if (shearSoundSpeed == 0.0 && shearAttenuation != 0.0) {
         fail(source, pointRecord.lineNumber,
-             "elastic long-format boundary materials are not supported");
+             "zero long-format shear speed requires zero shear attenuation");
       }
       nodeMaterials.push_back(AcousticMaterial{
           .compressionalSoundSpeed = compressionalSoundSpeed,
-          .shearSoundSpeed = 0.0,
+          .shearSoundSpeed = shearSoundSpeed,
           .density = densityInput * kDensityInputToSi,
           .compressionalAttenuation = makeAttenuation(
               compressionalAttenuation, attenuationUnit),
-          .shearAttenuation = makeAttenuation(0.0, attenuationUnit)});
+          .shearAttenuation = makeAttenuation(
+              shearAttenuation, attenuationUnit)});
     }
   }
   reader.requireEnd();

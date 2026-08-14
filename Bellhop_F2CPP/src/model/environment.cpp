@@ -408,11 +408,6 @@ BoundaryModel BoundaryModel::acousticHalfSpace(
   if (longMaterials) {
     for (const AcousticMaterial& nodeMaterial : *longMaterials) {
       validateMaterial(nodeMaterial);
-      if (nodeMaterial.shearSoundSpeed != 0.0 ||
-          nodeMaterial.shearAttenuation.value != 0.0) {
-        throw ValidationError(
-            "long-format boundary materials must be fluid-only");
-      }
     }
   }
   return BoundaryModel(
