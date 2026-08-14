@@ -21,3 +21,6 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 ._*
+
+# Accidental output from invoking Bellhop with an empty file root
+/.prt
