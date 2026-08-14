@@ -421,7 +421,7 @@ CC→R→CC 会移除异类产品和陈旧临时文件，标准案例的单频/�
 复用旧 manifest 或输出。最终 AppleClang Debug/Release 与 GCC14 Werror
 均为 28/28 CTest，Python 标准工具 86/86，单频端到端案例保持 33/33；
 冻结摘要为 `doc/validation/i6_output_safety_report.json`。随后 I7-01～I7-06
-也已完成；I8 架构审查与任务拆分已完成，功能实现尚未开始。
+与 I8-01～I8-04 也已完成并冻结。
 
 ### I7：场分量、相干类型与 beam family
 
@@ -515,29 +515,28 @@ G/B/S 三例使用相同 300 条发射射线与场布局，Origin/F2CPP 最大�
 `doc/validation/i7_gaussian_beams_report.json`。最终 AppleClang Debug
 ASan/UBSan、AppleClang Release 与 GCC14 Werror CTest 均为 32/32，Python
 标准工具 123/123，单频案例 52/52（51 SHD + 1 RAY）。I8 架构审查与任务
-拆分已经完成；I8-01-T1/T2 已验收并冻结 Arrival 类型、checked capacity
-planner、lazy source-local workspace，以及 Origin-compatible `AddArr`
-grouping/merge/capacity 语义，当前暂停在 I8-01-T3 之前。
+拆分随后完成，并已由下一段的 I8 完成记录关闭。
 
 ### I8：arrivals 与 eigenray
 
-- [ ] I8-01 Arrival data model & accumulation：`ArrivalCandidate`/`Arrival`
+- [x] I8-01 Arrival data model & accumulation：`ArrivalCandidate`/`Arrival`
   精度边界、每 source/频率独立 workspace、Origin 容量公式、last-only
   duplicate merge、最弱到达替换，以及 G/g/B contribution sink 与流式 solver。
-- [ ] I8-02 Arrival writers：checked layout、ASCII `A`、GNU Fortran sequential
+- [x] I8-02 Arrival writers：checked layout、ASCII `A`、GNU Fortran sequential
   unformatted binary `a`、多 source 写出、PRT 统计和 SHD/RAY/ARR 原子生命周期。
-- [ ] I8-03 Eigenray mode：复用 G/g/B receiver contribution 命中，保留每个
+- [x] I8-03 Eigenray mode：复用 G/g/B receiver contribution 命中，保留每个
   命中的 ray prefix，按 EOF 解释变长 `.ray` block，不和 arrival 去重/容量混用。
-- [ ] I8-04 Validation & documentation：独立 ARR/E reader、直接 `ArrMod`
+- [x] I8-04 Validation & documentation：独立 ARR/E reader、直接 `ArrMod`
   组件 oracle、直达/多径/焦散/重复/容量/零到达矩阵、Origin↔F2CPP 报告和
   全回归收口。
 
 I8 的冻结架构、支持/拒绝矩阵、阶段依赖和 18 个 OpenCode 原子任务见
 [`tasks/I8_arrivals_eigenray/README.md`](./tasks/I8_arrivals_eigenray/README.md)。
-任务文档是后续实现的唯一正式定义；OpenCode 每次只执行一个 T、不提交，
-Codex 检查实际 working tree、运行对应测试和 Fortran oracle，验收后更新任务
-状态并创建 checkpoint。当前 I8-01-T1/T2 为 ACCEPTED，I8-01 阶段为
-IN_PROGRESS，其余任务均为 TODO。
+任务文档保留了逐项设计与验收记录。I8-01～I8-04 的全部任务均为 ACCEPTED；
+真实 `ArrMod` probe 的 15 个场景、六例 ARR 与四例 E 的 Origin/F2CPP parity、
+产品生命周期和全回归均已形成冻结报告。最终 Debug/Release/GCC14 Werror
+CTest 为 37/37，Python 为 142/142，F2CPP 单频案例为 62/62。I8 当前冻结并
+暂停在 I9 之前；未启动 RayReuse 同步。
 
 出口：arrivals/eigenray 与 TL 模式共享已验收 tracer，但拥有独立的数据和
 writer；任何容量截断都必须在 PRT 中可见。
@@ -579,8 +578,7 @@ writer；任何容量截断都必须在 PRT 中可见。
 | 收口 | I9 | 形成可声明的二维兼容范围和新派生基线 |
 
 I0～I2、I3-01～I3-06、I4-01～I4-05、I5-01～I5-05、I6-01～I6-05 和
-I7-01～I7-06 已按纵切完成。I8 已完成架构设计和任务文档创建，I8-01-T1/T2
-已验收，当前尚未开始 I8-01-T3。
+I7-01～I7-06、I8-01～I8-04 已按纵切完成并冻结，当前暂停在 I9 之前。
 每个阶段开始前仍应根据实际
 算例需求复核优先级；该复核只能调整尚未开始阶段的先后，不能绕过依赖门。
 

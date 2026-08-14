@@ -1,0 +1,369 @@
+{
+  "command": [
+    "validate_i8_output_safety.py",
+    "--executable",
+    "<executable>",
+    "--fixture-dir",
+    "<fixture-dir>",
+    "--output",
+    "<report>"
+  ],
+  "executable": {
+    "mtime_ns": 1786706526480000000,
+    "sha256": "1c8edd6ebce9a52f5fc9eda969c6600a4ff07bbd01ad60803069028b181cd5b1"
+  },
+  "schema_version": 1,
+  "sources": {
+    "Bellhop_F2CPP/app/main.cpp": {
+      "mtime_ns": 1786705155340000000,
+      "sha256": "a1eed0d2178c4edd959783a6e266e01d7b397880fe3d4635a20c13844bc03319"
+    },
+    "Bellhop_F2CPP/src/io/arrival_writer.cpp": {
+      "mtime_ns": 1786703058690000000,
+      "sha256": "4bc1107495fd8d145d9d11ac030538696850976f6f4460cb6f655b201fb25bc8"
+    },
+    "Bellhop_F2CPP/src/io/eigenray_writer.cpp": {
+      "mtime_ns": 1786703784380000000,
+      "sha256": "1c8c4e4dfe48d90988edb5760dd34521ed419e86fe63f8afd1a2f36123a9a998"
+    },
+    "Bellhop_F2CPP/src/io/ray_prefix_writer.cpp": {
+      "mtime_ns": 1786702898100000000,
+      "sha256": "2aa76ae2a20ea33abcf351fb1d4f44e469df6c8578022de34e7e6fed8925a49a"
+    },
+    "Bellhop_F2CPP/src/io/ray_writer.cpp": {
+      "mtime_ns": 1786702927860000000,
+      "sha256": "7170dd3ee13d13ef619e69b42057e324b37fd3ef88c569afdcb89cf9ba98ef45"
+    },
+    "Bellhop_F2CPP/src/io/shd_writer.cpp": {
+      "mtime_ns": 1786698078910000000,
+      "sha256": "b45b8659bbf82b84a7fe5fa84c21cadca73b0c50544fe6fca82cf9a931fe1fbe"
+    }
+  },
+  "status": "passed",
+  "steps": [
+    {
+      "expected_product": "shd",
+      "fixture": "cli_coherent.env",
+      "fixture_identity": {
+        "mtime_ns": 1786698078980000000,
+        "sha256": "64f634de4cabe749662bfaec5e8dd4aa904cb41d012b88765d70529dc8352f76"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": "256c027e32a2e353470b9f5450c833d9f374a5447b19c50ab9cbd5b65d26abc8",
+          "size_bytes": 1968,
+          "type": "file"
+        }
+      },
+      "name": "coherent_1",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "ray",
+      "fixture": "cli_ray.env",
+      "fixture_identity": {
+        "mtime_ns": 1786698078980000000,
+        "sha256": "2c6325e3bbe40f5059648c93991084ea28f0381ea90a421473497d32227ce0f6"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": "31e9010c1fd4820c508e71847d63e3ed323d9e72511ca1a1fd857571fd917ac8",
+          "size_bytes": 28048,
+          "type": "file"
+        },
+        "shd": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        }
+      },
+      "name": "ray",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "arr",
+      "fixture": "cli_arrival_ascii.env",
+      "fixture_identity": {
+        "mtime_ns": 1786704322120000000,
+        "sha256": "e0669110ea9c32fba6a0ce49d83c6a5b78fafcbd0f6c7c58b24b3e150d1d301a"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": "b1018382b17c8ef6a0cc6aa2d26d03392bd7f0c55df3d0f55231e2fbb90deea8",
+          "size_bytes": 181,
+          "type": "file"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        }
+      },
+      "name": "arrivals_ascii",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "arr",
+      "fixture": "cli_arrival_binary.env",
+      "fixture_identity": {
+        "mtime_ns": 1786704322180000000,
+        "sha256": "d4b0a3172c21f4f0bf5bede2a376b45d3eeb872ca8a50a7a4a1f496f96049e47"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": "3a7a1394d9790206e0ce757cc419340ac1c7b4eebe4d07c550aa05e797b9ee07",
+          "size_bytes": 220,
+          "type": "file"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        }
+      },
+      "name": "arrivals_binary",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "ray",
+      "fixture": "cli_eigenray_gaussian.env",
+      "fixture_identity": {
+        "mtime_ns": 1786704573330000000,
+        "sha256": "078ae5c664381df82e7dd094afb52a8172e6d687c79403eb76a6f16aaf3933c5"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": "ca45199448059e646fa0d913538ea755cbcd05e4cd21a175a6a9f550d2ad5711",
+          "size_bytes": 1090875,
+          "type": "file"
+        },
+        "shd": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        }
+      },
+      "name": "eigenray",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "shd",
+      "fixture": "cli_coherent.env",
+      "fixture_identity": {
+        "mtime_ns": 1786698078980000000,
+        "sha256": "64f634de4cabe749662bfaec5e8dd4aa904cb41d012b88765d70529dc8352f76"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": "256c027e32a2e353470b9f5450c833d9f374a5447b19c50ab9cbd5b65d26abc8",
+          "size_bytes": 1968,
+          "type": "file"
+        }
+      },
+      "name": "coherent_2",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "ray",
+      "fixture": "cli_eigenray_zero.env",
+      "fixture_identity": {
+        "mtime_ns": 1786704481960000000,
+        "sha256": "3266124c39bb4f3700b7f9f7bc7cc7270c02ad5566ca2101c6a93cb010dd56ef"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": "09caeb52eb9c2902585e83c9e871714ae059072a45c190e49ae046edc785c259",
+          "size_bytes": 31575,
+          "type": "file"
+        },
+        "shd": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        }
+      },
+      "name": "eigenray_zero",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "expected_product": "shd",
+      "fixture": "cli_coherent.env",
+      "fixture_identity": {
+        "mtime_ns": 1786698078980000000,
+        "sha256": "64f634de4cabe749662bfaec5e8dd4aa904cb41d012b88765d70529dc8352f76"
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": "256c027e32a2e353470b9f5450c833d9f374a5447b19c50ab9cbd5b65d26abc8",
+          "size_bytes": 1968,
+          "type": "file"
+        }
+      },
+      "name": "coherent_preservation_seed",
+      "returncode": 0,
+      "stale_final_cleanup": true,
+      "stale_temporary_cleanup": true,
+      "status": "passed"
+    },
+    {
+      "fixture_identities": {
+        "cli_solver_failure.env": {
+          "mtime_ns": 1786706436160000000,
+          "sha256": "6d8f00a8e3b2c67810e8a5b4446483dea40f692a735630faf5e378cb3e27d461"
+        },
+        "cli_solver_failure.ssp": {
+          "mtime_ns": 1786706436220000000,
+          "sha256": "634bf4ad435eccd061f9461753ead84ba471514706173d310379ff19ddbefe20"
+        }
+      },
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": "256c027e32a2e353470b9f5450c833d9f374a5447b19c50ab9cbd5b65d26abc8",
+          "size_bytes": 1968,
+          "type": "file"
+        }
+      },
+      "name": "solve_failure_preserves_shd",
+      "preserved_product": "shd",
+      "returncode": 1,
+      "status": "passed"
+    },
+    {
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": "256c027e32a2e353470b9f5450c833d9f374a5447b19c50ab9cbd5b65d26abc8",
+          "size_bytes": 1968,
+          "type": "file"
+        }
+      },
+      "name": "parse_failure_preserves_shd",
+      "preserved_product": "shd",
+      "returncode": 1,
+      "status": "passed"
+    },
+    {
+      "formal_products": {
+        "arr": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "directory"
+        },
+        "ray": {
+          "sha256": null,
+          "size_bytes": 0,
+          "type": "missing"
+        },
+        "shd": {
+          "sha256": "256c027e32a2e353470b9f5450c833d9f374a5447b19c50ab9cbd5b65d26abc8",
+          "size_bytes": 1968,
+          "type": "file"
+        }
+      },
+      "name": "blocked_arrival_publish_preserves_shd",
+      "preserved_product": "shd",
+      "returncode": 1,
+      "status": "passed"
+    }
+  ],
+  "validator": "i8_output_safety",
+  "validator_source": {
+    "mtime_ns": 1786706436270000000,
+    "sha256": "691e8e1ce68af77ff7336d65d7f328660c6f1b7745033bac008425a14268e93f"
+  }
+}

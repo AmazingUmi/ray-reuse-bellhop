@@ -1,6 +1,6 @@
 # I8 — Arrivals / Eigenray
 
-> Design status: architecture reviewed and frozen; I8 implementation is in progress.
+> Design status: architecture, implementation, and validation are accepted; I8 is frozen.
 > Baseline: `recovery/f2cpp-i7-complete` at the accepted I7 baseline.
 > Task authority: the `I8-xx-Tn` definitions in this directory are the only
 > formal instructions for OpenCode.
@@ -13,7 +13,7 @@ transmission-loss or ordinary ray-trace paths. Arrivals and eigenrays must reuse
 the existing immutable geometry trace and per-frequency acoustic projection;
 they must not use `FrequencyWorkspace::pressure` as storage.
 
-## Baseline
+## Entry Baseline
 
 - I7-06 is accepted and frozen.
 - AppleClang Debug ASan/UBSan, AppleClang Release, and GCC 14 Release/Werror
@@ -269,7 +269,7 @@ OpenCode must execute only one named task per session.
 | I8-01 Arrival data model & accumulation | ACCEPTED | T1–T5 ACCEPTED |
 | I8-02 Arrival writers | ACCEPTED | T1–T3 ACCEPTED |
 | I8-03 Eigenray mode | ACCEPTED | T1–T5 ACCEPTED |
-| I8-04 Validation & documentation | IN_PROGRESS | T1–T4 ACCEPTED; T5 TODO |
+| I8-04 Validation & documentation | ACCEPTED | T1–T5 ACCEPTED |
 
 I8-01-T1–T4 have established the accepted record types, checked capacity
 planner, source-local workspace, and Origin-compatible candidate accumulation.
@@ -289,7 +289,8 @@ duplicate-boundary, signed cusp, capacity replacement/discard and zero-cell
 semantics against the F2CPP production accumulator. T3/T4 add six ARR and four
 E Origin/F2CPP cases: stored arrival fields are bit-identical, and all 2200
 eigenray blocks / 876191 prefix points agree exactly. Final output-safety and
-full-regression closure remain assigned to T5.
+full-regression closure are accepted in T5. I8 is complete and frozen; no I9
+or RayReuse work is part of this checkpoint.
 
 ## Codex / OpenCode handoff
 

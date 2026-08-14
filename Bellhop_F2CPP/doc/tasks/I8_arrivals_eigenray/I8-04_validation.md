@@ -443,7 +443,7 @@ Parity therefore compares the ordered EOF stream and every written prefix.
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -528,7 +528,20 @@ git diff --check
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-04-T5 / I8 closure checkpoint commit.
+- Tests: clean-first AppleClang Debug ASan/UBSan, AppleClang Release, and GCC
+  14 Release/Werror each passed 37/37 CTests; Python passed 142/142; all 62
+  F2CPP single-frequency cases passed. The I7 Gaussian-family and I6 ordinary
+  ray validators passed unchanged, and `git diff --check` passed.
+- Oracle / parity result: all four final reports have deterministic `passed`
+  status and were regenerated against the final Release executable. The
+  accumulator retains 15 scenarios / 24 arrivals / 144 bit-exact float fields;
+  ARR remains 0 ULP across every compared record; E remains exact across 2200
+  blocks / 876191 points. Output safety passes the formal
+  `CC -> R -> A -> a -> E -> CC` sequence, zero-hit E, stale final/temporary
+  cleanup, and parse/solve/publish-failure preservation.
+- Notes: the solver-failure gate uses a syntactically valid Q environment whose
+  range-dependent SSP ends before the configured tracing box, producing the
+  solver's deterministic abnormal-termination path without a test hook. No
+  numerical gate, public interface, I0–I7 code, Origin semantics, or RayReuse
+  source was changed during closure.

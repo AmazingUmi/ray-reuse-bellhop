@@ -3,8 +3,8 @@
 ## 1. 程序用途
 
 `bellhop_f2cpp` 是裁剪后的 C++20 单频二维 Bellhop 实现。它读取一个
-Bellhop `.env` 文件；coherent、incoherent 与 semi-coherent TL 模式计算
-Cartesian Cerveny 声场并写出 PRT/SHD，ray-trace 模式写出 PRT/RAY 射线轨迹。
+Bellhop `.env` 文件；coherent、incoherent 与 semi-coherent TL 模式写出
+PRT/SHD，ray-trace 与 eigenray 写出 PRT/RAY，arrivals 写出 PRT/ARR。
 
 程序内部始终先生成完整的频率无关射线轨迹，冻结为只读
 `RayPathCache`，再执行单频投影和声场累加：
@@ -16,7 +16,9 @@ Cartesian Cerveny 声场并写出 PRT/SHD，ray-trace 模式写出 PRT/RAY 射�
   → frozen RayPathCache
   ├─ C/I/S TL  → FrequencyProjector → CartesianCervenyInfluence
   │            → pressure/intensity scaling → .prt + .shd
-  └─ ray trace    → RayWriter → .prt + .ray
+  ├─ A/a arrivals → G/g/B contribution → ArrivalWorkspace → .arr
+  ├─ E eigenray   → G/g/B receiver hits → ray prefixes → .ray
+  └─ R ray trace  → RayWriter → .prt + .ray
 ```
 
 F2CPP 一次运行只接受一个频率。多频调度、实际轨迹复用和多频 SHD 属于
@@ -305,9 +307,10 @@ bellhop_f2cpp <file-root>
 <file-root>.prt
 ```
 
-`CC`、`IC`、`SC` TL 模式另写 `<file-root>.shd`；`R` ray-trace 模式另写
-`<file-root>.ray`，且不产生 SHD。输出与输入位于同一目录，程序会截断或
-替换同名输出；需要保留旧结果时应先复制或更换 file-root。
+`CC`、`IC`、`SC` TL 模式另写 `<file-root>.shd`；`R` ray-trace 与 `E`
+eigenray 写 `<file-root>.ray`；`A/a` arrivals 写 `<file-root>.arr`。每次成功
+只保留当前模式的正式产品。输出与输入位于同一目录；需要保留旧结果时应先
+复制或更换 file-root。
 
 ### 5.2 直接运行
 
@@ -361,22 +364,23 @@ python3 test/standard_cases/codes/standard_cases.py validate \
 
 | 项目 | 支持范围 |
 |---|---|
-| 维度与场 | 二维；coherent complex pressure，incoherent/semi-coherent intensity-derived pressure，或几何射线轨迹 |
-| 运行类型 | Cartesian Cerveny `CC`/`IC`/`SC`，或 ray-centered Cerveny `CR`/`IR`/`SR`；第 4 字符可选 point `R` 或 line `X`；另有安全子集内的 `R`/`RG`/`RGO` ray trace。TL 模式可用第 3 字符 `*` 启用 `.sbp`；仅 Cartesian TL 可用第 5 字符 `I` 启用 irregular SHD |
+| 维度与场 | 二维；coherent complex pressure，incoherent/semi-coherent intensity-derived pressure，普通射线，arrivals 或 eigenray prefixes |
+| 运行类型 | Cartesian Cerveny `CC`/`IC`/`SC`，或 ray-centered Cerveny `CR`/`IR`/`SR`；安全子集内的 `R`/`RG`/`RGO` ray trace；`A/a` arrivals；`E` eigenray。A/a/E 的 beam family 支持 Cartesian geometric hat `G`、ray-centered geometric hat `g` 和 Cartesian geometric Gaussian `B` |
 | 频率与声源 | 每次运行恰好一个频率；支持一个或多个 source depth |
 | 水体 | 一个水层、C-linear、N²-linear、PCHIP、Cubic Spline 或 Q 型范围相关二维 SSP、真空海面 |
 | 二维边界 | 平坦边界；`.ati/.bty` 的 piecewise-linear `LS`、canonical curvilinear `C` short format；piecewise-linear `LL` fluid long format |
 | 海底 | 刚性底 `R`，普通 ENV 流体/弹性声学半空间 `A`，bottom grain-size `G`，或 bottom tabulated reflection `F + .brc` |
 | 衰减 | `N/F/M/W/Q/L` 输入单位；可选 Thorp、Francois–Garrison 或 biological 体积衰减 |
-| 接收网格 | Cartesian TL：规则 depth×range 笛卡尔积，或等数量 depth/range 轴的 irregular SHD 布局；ray-centered TL：仅规则笛卡尔积；两者均要求至少两个、严格递增且等间距的接收距离。ray trace：允许 Origin 标准输入中的单个 receiver range，轨迹由 range box 截止 |
-| 波束 | Cartesian/ray-centered Cerveny TL：`F/M/W` beam width × `D/S/Z` reflection-curvature condition，1～3 个图像源；ray trace 不读取 beam/image 行 |
-| 发射角 | Cartesian/ray-centered TL 使用既有规划；ray trace 的显式 `Nalpha` 原样使用，`0` 自动取 50 |
+| 接收网格 | Cartesian TL：规则 depth×range 笛卡尔积，或等数量 depth/range 轴的 irregular SHD；ray-centered TL：仅规则网格。A/a/E 的 Cartesian G/B 支持规则及 Origin 配对 irregular 接收器，ray-centered g 仅规则、等间距 range；R 允许单个 receiver range |
+| 波束 | Cartesian/ray-centered Cerveny TL：`F/M/W` beam width × `D/S/Z` reflection-curvature condition，1～3 个图像源；A/a/E 仅 G/g/B，不读取 TL 的 beam/image 两行；R 同样不读取 |
+| 发射角 | TL 与 A/a/E 使用既有自动规划；R 的显式 `Nalpha` 原样使用，`0` 自动取 50 |
 
 不支持的选项会明确报错，而不会静默降级。当前不支持：
 
 - 多频 `.env` 或一次运行多频；
-- arrivals、eigenray；Cartesian P/V/H 仍按 Origin legacy no-op 兼容，物理
-  V/H 仅由 ray-centered Cerveny 计算；
+- `A/a/E` 的 simple Gaussian `S`、Cerveny `C`、ray-centered Gaussian 及其他
+  未验收 family；Cartesian P/V/H 仍按 Origin legacy no-op 兼容，物理 V/H
+  仅由 ray-centered Cerveny 计算；
 - ray-centered irregular receiver grid；首个纵切会明确拒绝，不会退化为
   Cartesian 或静默套用 CC 的 irregular legacy 深度语义；
 - 顶部声学/粒径/表格反射边界、`G+LL`、`F+LL`、弹性 `LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
@@ -490,7 +494,26 @@ bounce 数及 `range depth` 坐标。每次反射保留入射与反射两侧的�
 以兼容 Origin reader。该模式只输出 PRT/RAY，不执行逐频投影或声场累加，
 也不创建 SHD。
 
-### 6.7 C/I/S 相干模式
+### 6.7 A/a arrivals 与 E eigenray
+
+run type 首字符 `A` 生成 ASCII `.arr`，小写 `a` 生成 GNU Fortran
+sequential-unformatted binary `.arr`。第二字符选择 `G`（Cartesian geometric
+hat）、`g`（ray-centered geometric hat）或 `B`（Cartesian geometric
+Gaussian）；后续 `*`、`X/R`、irregular 等字符沿用已支持的 source pattern、
+point/line 和接收布局语义。A/a 在每个 source 的独立 workspace 中按 Origin
+`AddArr` 的 last-only delay/phase duplicate 规则合并；满 cell 时只以更强候选
+替换第一个最弱到达，PRT 会记录 candidate、merge、cusp、replacement、discard
+和 saturated-cell 统计。binary `a` 的 record marker/字段宽度与 GNU Fortran
+Origin 文件一致，不承诺其他编译器的私有 unformatted ABI。
+
+run type `E` 使用同样的 G/g/B receiver contribution traversal，但每个命中都
+独立写出对应冻结射线的 prefix；不执行 arrival duplicate merge 或容量截断。
+`.ray` 头中的 `Nalpha` 是发射扇数量，不是输出 block 数；正文必须读到 EOF，
+允许零 block、同一 launch angle 多个 block，以及 block 数大于或小于
+`Nalpha`。普通 R 仍保持 header-derived 固定 block 数，两种 reader 语义不得
+混用。A/a/E 都只支持单频二维安全子集，不读取 TL 专用 beam/image 行。
+
+### 6.8 C/I/S 相干模式
 
 TL run type 的第一个字符选择累加方式：`C` coherent、`I` incoherent、
 `S` semi-coherent；第二个字符选择 Cartesian Cerveny `C` 或 ray-centered
@@ -510,7 +533,7 @@ I/S 仍占用兼容的复数槽，但虚部严格为零，当前 Origin 兼容�
 实部为负。三例最终场与效果门见
 `doc/validation/i7_coherence_modes_report.json`。
 
-### 6.8 Ray-centered Cerveny
+### 6.9 Ray-centered Cerveny
 
 TL run type 的第二个字符写 `R` 可选择 ray-centered Cerveny，例如 coherent
 pressure 使用 `CR`，incoherent/semi-coherent 分别使用 `IR`/`SR`。该 family
@@ -526,7 +549,7 @@ Cartesian irregular 的 Origin legacy `Rz(1)` 语义。CC/P、CR/P、CR/V、
 CR/H 四例的冻结验证见
 `doc/validation/i7_ray_centered_components_report.json`。
 
-### 6.9 Q 型范围相关 SSP
+### 6.10 Q 型范围相关 SSP
 
 当 top/SSP option 的第一个字符为 `Q` 时，`.env` 中仍需提供参考 SSP 深度
 节点；这些节点定义二维网格的深度轴，并继续提供密度与原始衰减。实声速
@@ -666,7 +689,8 @@ PRT 是文本日志，包含：
 - 解析后的主要环境和网格配置；
 - 发射角、射线数、轨迹点数和缓存字节数；
 - C/I/S TL 模式的 Trace、Project、Influence、Scale、SHD 分阶段时间，
-  或 ray-trace 模式的 Trace 与 RAY 写出时间；
+  A/a 的 workspace/accumulator/ARR 统计，E 的 hit/prefix/RAY 统计，或
+  ray-trace 模式的 Trace 与 RAY 写出时间；
 - 成功标记或致命错误。
 
 C/I/S TL 成功文件以以下标记结束：
@@ -676,6 +700,8 @@ Bellhop F2CPP completed successfully
 ```
 
 ray-trace 成功文件以 `Bellhop F2CPP ray trace completed successfully` 结束。
+A/a 和 E 分别以 `Bellhop F2CPP arrivals completed successfully`、
+`Bellhop F2CPP eigenray completed successfully` 结束。
 
 ### SHD
 
@@ -689,11 +715,22 @@ SHD 保存单频复压力场：
 
 SHD 由 C/I/S TL 模式生成，三者使用相同布局；I/S 的复数压力槽虚部为零。
 
+### ARR
+
+ASCII `A` 与 binary `a` 保存同一 source-major、receiver-cell-major、arrival-
+major 语义：频率、source/receiver 轴、每 source 的最大到达数、每 cell 的到达
+计数，以及 amplitude、phase、复 delay、source/receiver declination 和
+top/bottom bounce。ASCII 适合检查与跨工具交换；binary 复刻当前 GNU Fortran
+Origin 的 sequential-unformatted 小端 record 布局。零到达 cell/source 是合法
+产品，不代表运行失败。
+
 ### RAY
 
 RAY 是二维 `rz` 文本轨迹文件，按 source-major、launch-angle-major 顺序保存
 每条射线的发射角、点数、上下边界反射次数与坐标。反射前后的同坐标点会
-同时保留；可用它们重建入射/反射折点。R 模式不会同时生成 SHD。
+同时保留；可用它们重建入射/反射折点。R 模式正文有固定射线数；E 模式按
+命中写变长 prefix stream 到 EOF，并允许 header-only 零命中产品。两者都不
+同时生成 SHD/ARR。
 
 ### 输出安全与资源上限
 
@@ -701,14 +738,14 @@ C/I/S TL 在分配场工作区和打开 SHD 前，先检查接收器场值总数
 source × workspace 总量、SHD record words/bytes、最终 record 号及总文件
 字节是否可由 Origin 兼容整数和本机流偏移安全表达。当前项目上限为每次
 TL 求解保留不超过 2,000,000 个复数场值、总射线数不超过
-2,000,000；R 模式不分配压力工作区，因此不受未使用的接收器笛卡尔积上限
-误伤，但仍执行总射线数门。
+2,000,000；R/A/a/E 不分配 TL 压力工作区，因此不受未使用的场 workspace
+上限误伤，但仍执行总射线数及各自 ARR/RAY layout/capacity 门。
 
-SHD 和 RAY 都先写同目录临时文件，完整关闭成功后才发布为最终产品。发布
+SHD、RAY 和 ARR 都先写同目录临时文件，完整关闭成功后才发布为最终产品。发布
 失败时旧的有效文件保持不变，临时文件会清理。同一 file-root 从 CC 切换到
-R 或从 R 切回 CC 时，成功后会删除另一模式的陈旧产品；启动时也会清除
-陈旧 `.shd.tmp/.ray.tmp`。PRT 仍会在失败时写出 `FATAL ERROR` 诊断。
-标准案例的 `run/test` 阶段同样先删除旧 manifest、PRT、SHD、RAY 和临时
+R/A/a/E 或切回 CC 时，成功后会删除其他模式的陈旧产品；启动时也会清除
+陈旧 `.shd.tmp/.ray.tmp/.arr.tmp`。PRT 仍会在失败时写出 `FATAL ERROR` 诊断。
+标准案例的 `run/test` 阶段同样先删除旧 manifest、PRT、SHD、RAY、ARR 和临时
 文件，避免失败执行被上一轮结果伪装为通过。
 
 ## 8. 常见问题

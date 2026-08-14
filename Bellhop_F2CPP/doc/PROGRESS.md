@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-14
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I7-06 已完成并冻结；I8-01-T1/T2 已验收，暂停在 I8-01-T3 之前。
+> 当前施工状态：I8 已完成并冻结；暂停在 I9 之前。
 
 ## 1. 已完成范围
 
@@ -35,17 +35,19 @@
 | I7-04 | 完成 | `C/I/S` 相干模式、逐 beam 强度累加、逐频 Lloyd mirror、最终强度平方根与 SHD |
 | I7-05 | 完成 | ray-centered Cerveny、规则接收网格求交与物理 `P/V/H` 分量变换 |
 | I7-06 | 完成 | Cartesian simple Gaussian、geometric Gaussian，以及 Cartesian/ray-centered geometric hat |
-| I8-01-T1 | 完成 | Origin-compatible Arrival 类型、checked 容量规划和 source/frequency-local 空 workspace |
-| I8-01-T2 | 完成 | last-only duplicate 判定、REAL4 weighted merge、cusp guard、容量替换/丢弃和统计 |
+| I8-01 | 完成 | Origin-compatible Arrival 模型、checked 容量、真实 AddArr 语义、G/g/B accumulation 与 source-streamed solver |
+| I8-02 | 完成 | ASCII `A`、GNU sequential-unformatted binary `a`、多 source ARR writer 与原子发布 |
+| I8-03 | 完成 | G/g/B eigenray 命中、冻结 ray prefix、EOF `.ray` writer 与 E-mode CLI |
+| I8-04 | 完成 | 独立 ARR/E reader、真实 ArrMod oracle、Origin/F2CPP 矩阵、输出安全与全回归报告 |
 
 ## 2. 当前验证基线
 
-- AppleClang Debug ASan/UBSan：32/32 CTest；
-- AppleClang Release：32/32 CTest；
-- GCC 14 Release/Werror：32/32 CTest，项目 C++ 源码无 GCC warning/error；
-- Python 标准算例工具：123/123；
-- F2CPP 单频端到端案例：52/52，其中 51 个验证 SHD 声场，ray-trace
-  案例验证 PRT/RAY 且明确不产生 SHD；
+- AppleClang Debug ASan/UBSan：37/37 CTest；
+- AppleClang Release：37/37 CTest；
+- GCC 14 Release/Werror：37/37 CTest，项目 C++ 源码无 GCC warning/error；
+- Python 标准算例工具：142/142；
+- F2CPP 单频端到端案例：62/62，其中新增 6 个 ARR、4 个 E，既有 SHD/RAY
+  案例全部保持通过；
 - I3-06 `LL` 最终场：最大复压力绝对误差 `4.66e-11`、最大相对误差
   `4.57e-7`、最大 TL 差 `7.63e-6 dB`。
 - I4-03 弹性海床最终场（1/2 kHz）：最大复压力绝对误差 `1.69e-8`、
@@ -124,6 +126,24 @@
   通过独立非空门。Origin 明确不提供 ray-centered geometric Gaussian，
   F2CPP 在 parser 边界保持相同拒绝。报告为
   [`validation/i7_gaussian_beams_report.json`](./validation/i7_gaussian_beams_report.json)。
+- I8 Arrival accumulator：直接链接真实 `ArrMod::AddArr` 的 15 个固定场景
+  产生 24 个存储到达，计数、顺序、bounce 和全部 144 个 float 字段逐位一致；
+  覆盖严格 delay/phase 边界、last-only duplicate、weighted merge、signed
+  axial-cusp guard、first-minimum tie、容量替换/丢弃和零到达。报告为
+  [`validation/i8_arrival_accumulator_report.json`](./validation/i8_arrival_accumulator_report.json)。
+- I8 ARR 六例矩阵覆盖 `A/a`、G/g/B、规则/不规则接收、多 source、反射多径、
+  unwrapped phase 和零到达；Origin/F2CPP 的 source/cell/arrival 顺序、计数、
+  bounce 以及全部存储字段一致，最坏误差 `0 ULP`，并包含 984 个反射到达和
+  单 cell 最大 123 个到达。报告为
+  [`validation/i8_arrivals_report.json`](./validation/i8_arrivals_report.json)。
+- I8 E 四例矩阵覆盖 G/g/B、多 source、重复 launch angle、反射 prefix 与零命中；
+  2200 个 EOF block、876191 个 prefix 点、2830/2830 次 top/bottom bounce
+  的结构和坐标全部一致，最大坐标误差 `0 m`。报告为
+  [`validation/i8_eigenrays_report.json`](./validation/i8_eigenrays_report.json)。
+- I8 输出安全门验证 `CC -> R -> A -> a -> E -> CC`、header-only 零命中 E、
+  陈旧 SHD/RAY/ARR 和 `.tmp` 清理，以及 parse、solver 和 publish 三阶段失败
+  对旧正式产品的保留。报告为
+  [`validation/i8_output_safety_report.json`](./validation/i8_output_safety_report.json)。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 [`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
@@ -147,28 +167,15 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 - [`USAGE.md`](./USAGE.md) 记录当前可实际使用的输入范围；
 - [`DERIVATION_MANIFEST.md`](./DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
   历史派生快照，继续用于追溯当时批准 RayReuse 的源码和性能门，不代表当前
-  I0～I7-06 扩展树的哈希。
+  I0～I8 扩展树的哈希。
 
 ## 5. 下一步
 
-I7-06 已完成并冻结。I8 arrivals/eigenray 的 Origin 数据流、Arrival 模型、
-容量/重复到达语义、A/a 格式、E 模式以及 oracle/validator 方案已经完成架构
-审查，正式任务定义位于
-[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)。
-I8-01-T1/T2 已验收：Arrival 候选/存储类型、Origin 容量公式、checked
-capacity plan、规则/不规则 receiver flat order、lazy workspace，以及
-`AddArr` 的 last-only grouping、REAL4 merge、cusp/capacity 语义和统计均已
-冻结；尚未开始 I8-01-T3 contribution sink。I7-05
-冻结的 ray-centered Cerveny 规则网格求交、`P/V/H` 分量变换和
-CC/P↔CR/P family 效果门，以及 I7-06 冻结的 G/B/S family 效果门，均不得在
-后续阶段反向混入已验收路径。ray-centered irregular receiver grid 继续明确
-拒绝；若未来开放，必须单独设计逐 range 深度配对语义和 Origin 对照门。
-I6-04 已直接消费既有冻结
-`RayPathCache`，支持 `R/RG/RGO`、全向源、真空
-海面/刚性海底、无 beam shift 和无损耗前缀的安全范围；显式 `Nalpha` 原样
-使用，`0` 自动规划为 50。R 模式只读取到 integrator 记录，不消费 TL 的
-`MS`/image 行，输出 PRT 与 RAY 而不产生 SHD。I4-05 已确认
-当前 Origin 2D 中 `P/W` 没有完整、可观察的反射消费/写出链，因此没有把
-它们伪装成 `F`；顶部 `F/.trc`、`F+LL`、顶部 `G`、`G+LL`、顶部声学
-半空间、弹性 `LL/CL`、3D、N×2D 或 beam shift 继续延期。这些范围以
-[`USAGE.md`](./USAGE.md) 的功能表为准。
+I8 arrivals/eigenray 已完成并冻结，正式任务与验收记录位于
+[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)。当前按
+要求暂停在 I9 之前，不启动二维兼容收口，也不向 `Bellhop_RayReuse` 同步。
+I8 继续复用冻结 `RayPathCache`，但 arrival workspace、duplicate/capacity
+语义和 E 的逐命中 prefix stream 均保持独立生命周期；E 不使用 arrival
+去重或容量截断。ray-centered irregular receiver grid、顶部 `F/.trc`、
+`F+LL`、顶部 `G`、`G+LL`、顶部声学半空间、弹性 `LL/CL`、3D、N×2D 和
+beam shift 仍明确延期，范围以 [`USAGE.md`](./USAGE.md) 为准。
