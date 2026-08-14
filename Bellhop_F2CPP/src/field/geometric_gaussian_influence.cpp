@@ -71,14 +71,16 @@ void validateInput(
     const RayFrequencyState& frequencyState, const ReceiverGrid& receivers,
     double launchAngleSpacingRadians,
     const std::optional<GeometricGaussianDiagnosticRequest>&
-        diagnosticRequest) {
+        diagnosticRequest,
+    const GeometricGaussianInfluence::EigenrayHitSink* eigenraySink) {
   const unsigned sinkCount =
       static_cast<unsigned>(pressureWorkspace != nullptr) +
       static_cast<unsigned>(intensityWorkspace != nullptr) +
-      static_cast<unsigned>(arrivalWorkspace != nullptr);
+      static_cast<unsigned>(arrivalWorkspace != nullptr) +
+      static_cast<unsigned>(eigenraySink != nullptr);
   if (sinkCount != 1U) {
     throw ValidationError(
-        "geometric Gaussian influence requires exactly one workspace");
+        "geometric Gaussian influence requires exactly one output sink");
   }
   if (!std::isfinite(launchAngleSpacingRadians) ||
       launchAngleSpacingRadians <= 0.0) {
@@ -100,17 +102,21 @@ void validateInput(
                                         ? pressureWorkspace->frequency()
                                     : intensityWorkspace != nullptr
                                         ? intensityWorkspace->frequency()
-                                        : arrivalWorkspace->frequency();
+                                    : arrivalWorkspace != nullptr
+                                        ? arrivalWorkspace->frequency()
+                                        : frequencyState.frequency;
   const std::size_t workspaceDepthCount =
       pressureWorkspace != nullptr
           ? pressureWorkspace->depthCount()
       : intensityWorkspace != nullptr ? intensityWorkspace->depthCount()
-                                      : arrivalWorkspace->depthCount();
+      : arrivalWorkspace != nullptr ? arrivalWorkspace->depthCount()
+                                    : receivers.receiversPerRange();
   const std::size_t workspaceRangeCount =
       pressureWorkspace != nullptr
           ? pressureWorkspace->rangeCount()
       : intensityWorkspace != nullptr ? intensityWorkspace->rangeCount()
-                                      : arrivalWorkspace->rangeCount();
+      : arrivalWorkspace != nullptr ? arrivalWorkspace->rangeCount()
+                                    : receivers.rangeCount();
   if (workspaceFrequency != frequencyState.frequency ||
       workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
@@ -182,9 +188,11 @@ GeometricGaussianInfluence::GeometricGaussianInfluence(
       throw ValidationError(
           "geometric Gaussian source geometry is invalid");
   }
-  if (!isTransmissionLossMode(runMode_) && !isArrivalMode(runMode_)) {
+  if (!isTransmissionLossMode(runMode_) && !isArrivalMode(runMode_) &&
+      !isEigenrayMode(runMode_)) {
     throw ValidationError(
-        "geometric Gaussian influence requires a field or arrival mode");
+        "geometric Gaussian influence requires a field, arrival, or "
+        "eigenray mode");
   }
 }
 
@@ -235,6 +243,22 @@ GeometricGaussianInfluence::accumulateArrivals(
                         launchAngleSpacingRadians, diagnosticRequest);
 }
 
+void GeometricGaussianInfluence::collectEigenrayHits(
+    const EigenrayHitSink& sink, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    double launchAngleSpacingRadians) const {
+  if (!isEigenrayMode(runMode_)) {
+    throw ValidationError(
+        "geometric Gaussian eigenrays require Eigenray mode");
+  }
+  if (!sink) {
+    throw ValidationError("geometric Gaussian eigenray hit sink is empty");
+  }
+  static_cast<void>(accumulateImpl(nullptr, nullptr, nullptr, path,
+                                   frequencyState, launchAngleSpacingRadians,
+                                   std::nullopt, &sink));
+}
+
 std::optional<GeometricGaussianDiagnostic>
 GeometricGaussianInfluence::accumulateImpl(
     FrequencyWorkspace* pressureWorkspace,
@@ -243,10 +267,11 @@ GeometricGaussianInfluence::accumulateImpl(
     const RayFrequencyState& frequencyState,
     double launchAngleSpacingRadians,
     std::optional<GeometricGaussianDiagnosticRequest>
-        diagnosticRequest) const {
+        diagnosticRequest,
+    const EigenrayHitSink* eigenraySink) const {
   validateInput(pressureWorkspace, intensityWorkspace, arrivalWorkspace, path,
                 frequencyState, receivers_, launchAngleSpacingRadians,
-                diagnosticRequest);
+                diagnosticRequest, eigenraySink);
   std::optional<GeometricGaussianDiagnostic> diagnostic;
   if (diagnosticRequest.has_value()) {
     diagnostic.emplace();
@@ -305,6 +330,10 @@ GeometricGaussianInfluence::accumulateImpl(
           double gaussianWeight, double amplitudeConstant,
           double causticPhase, std::complex<double> delay,
           double receiverDeclinationDegrees) {
+        if (eigenraySink != nullptr &&
+            !frequencyState.points[rightIndex].active) {
+          return;
+        }
         requireFinite(qInterpolated,
                       "geometric Gaussian interpolated q");
         requireFinite(geometricSigma,
@@ -324,7 +353,16 @@ GeometricGaussianInfluence::accumulateImpl(
 
         std::complex<double> pressureIncrement{};
         double intensityIncrement = 0.0;
-        if (pressureWorkspace != nullptr) {
+        if (eigenraySink != nullptr) {
+          const std::size_t prefixPointCount = rightIndex + 1U;
+          if (prefixPointCount < 2U || prefixPointCount > pointCount) {
+            throw ValidationError(
+                "geometric Gaussian eigenray prefix is outside the active "
+                "path");
+          }
+          (*eigenraySink)(EigenrayHit{rangeIndex, depthIndex,
+                                      prefixPointCount});
+        } else if (pressureWorkspace != nullptr) {
           const double amplitude = amplitudeConstant * gaussianWeight;
           const std::complex<double> phaseArgument =
               angularFrequency * delay - causticPhase;

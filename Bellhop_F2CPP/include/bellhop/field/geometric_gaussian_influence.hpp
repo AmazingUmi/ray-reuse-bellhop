@@ -2,9 +2,11 @@
 
 #include <complex>
 #include <cstddef>
+#include <functional>
 #include <optional>
 
 #include "bellhop/field/arrival_workspace.hpp"
+#include "bellhop/field/eigenray_hit.hpp"
 #include "bellhop/field/frequency_workspace.hpp"
 #include "bellhop/model/simulation_case.hpp"
 #include "bellhop/ray/ray_path.hpp"
@@ -50,6 +52,8 @@ struct GeometricGaussianDiagnostic {
 // Cartesian ray coordinates.
 class GeometricGaussianInfluence {
  public:
+  using EigenrayHitSink = std::function<void(const EigenrayHit&)>;
+
   explicit GeometricGaussianInfluence(
       ReceiverGrid receivers,
       SourceGeometry sourceGeometry = SourceGeometry::Point,
@@ -79,6 +83,10 @@ class GeometricGaussianInfluence {
       std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
+  void collectEigenrayHits(const EigenrayHitSink& sink, const RayPath& path,
+                           const RayFrequencyState& frequencyState,
+                           double launchAngleSpacingRadians) const;
+
  private:
   [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulateImpl(
       FrequencyWorkspace* pressureWorkspace,
@@ -87,7 +95,8 @@ class GeometricGaussianInfluence {
       const RayFrequencyState& frequencyState,
       double launchAngleSpacingRadians,
       std::optional<GeometricGaussianDiagnosticRequest>
-          diagnosticRequest) const;
+          diagnosticRequest,
+      const EigenrayHitSink* eigenraySink = nullptr) const;
 
   ReceiverGrid receivers_;
   SourceGeometry sourceGeometry_{SourceGeometry::Point};

@@ -96,6 +96,8 @@ void validateUniformRanges(const ReceiverGrid& receivers, double delta) {
 void validateInput(const FrequencyWorkspace* pressureWorkspace,
                    const IntensityWorkspace* intensityWorkspace,
                    const ArrivalWorkspace* arrivalWorkspace,
+                   const GeometricHatInfluence::EigenrayHitSink*
+                       eigenraySink,
                    const RayPath& path,
                    const RayFrequencyState& frequencyState,
                    const ReceiverGrid& receivers,
@@ -105,10 +107,11 @@ void validateInput(const FrequencyWorkspace* pressureWorkspace,
   const unsigned sinkCount =
       static_cast<unsigned>(pressureWorkspace != nullptr) +
       static_cast<unsigned>(intensityWorkspace != nullptr) +
-      static_cast<unsigned>(arrivalWorkspace != nullptr);
+      static_cast<unsigned>(arrivalWorkspace != nullptr) +
+      static_cast<unsigned>(eigenraySink != nullptr);
   if (sinkCount != 1U) {
     throw ValidationError(
-        "geometric hat influence requires exactly one workspace");
+        "geometric hat influence requires exactly one output sink");
   }
   if (!std::isfinite(launchAngleSpacingRadians) ||
       launchAngleSpacingRadians <= 0.0) {
@@ -127,17 +130,23 @@ void validateInput(const FrequencyWorkspace* pressureWorkspace,
                                         ? pressureWorkspace->frequency()
                                     : intensityWorkspace != nullptr
                                         ? intensityWorkspace->frequency()
-                                        : arrivalWorkspace->frequency();
+                                        : arrivalWorkspace != nullptr
+                                            ? arrivalWorkspace->frequency()
+                                            : frequencyState.frequency;
   const std::size_t workspaceDepthCount =
       pressureWorkspace != nullptr
           ? pressureWorkspace->depthCount()
-      : intensityWorkspace != nullptr ? intensityWorkspace->depthCount()
-                                      : arrivalWorkspace->depthCount();
+      : intensityWorkspace != nullptr
+          ? intensityWorkspace->depthCount()
+          : arrivalWorkspace != nullptr ? arrivalWorkspace->depthCount()
+                                        : receivers.receiversPerRange();
   const std::size_t workspaceRangeCount =
       pressureWorkspace != nullptr
           ? pressureWorkspace->rangeCount()
-      : intensityWorkspace != nullptr ? intensityWorkspace->rangeCount()
-                                      : arrivalWorkspace->rangeCount();
+      : intensityWorkspace != nullptr
+          ? intensityWorkspace->rangeCount()
+          : arrivalWorkspace != nullptr ? arrivalWorkspace->rangeCount()
+                                        : receivers.rangeCount();
   if (workspaceFrequency != frequencyState.frequency ||
       workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
@@ -213,7 +222,8 @@ GeometricHatInfluence::GeometricHatInfluence(
     default:
       throw ValidationError("geometric hat source geometry is invalid");
   }
-  if (!isTransmissionLossMode(runMode_) && !isArrivalMode(runMode_)) {
+  if (!isTransmissionLossMode(runMode_) && !isArrivalMode(runMode_) &&
+      !isEigenrayMode(runMode_)) {
     throw ValidationError(
         "geometric hat influence requires a field or arrival mode");
   }
@@ -262,16 +272,32 @@ GeometricHatInfluence::accumulateArrivals(
                         launchAngleSpacingRadians, diagnosticRequest);
 }
 
+void GeometricHatInfluence::collectEigenrayHits(
+    const EigenrayHitSink& sink, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    double launchAngleSpacingRadians) const {
+  if (!isEigenrayMode(runMode_)) {
+    throw ValidationError("geometric hat eigenrays require Eigenray mode");
+  }
+  if (!sink) {
+    throw ValidationError("geometric hat eigenray hit sink is empty");
+  }
+  static_cast<void>(accumulateImpl(nullptr, nullptr, nullptr, path,
+                                   frequencyState, launchAngleSpacingRadians,
+                                   std::nullopt, &sink));
+}
+
 std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
     FrequencyWorkspace* pressureWorkspace,
     IntensityWorkspace* intensityWorkspace,
     ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState,
     double launchAngleSpacingRadians,
-    std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const {
-  validateInput(pressureWorkspace, intensityWorkspace, arrivalWorkspace, path,
-                frequencyState, receivers_, launchAngleSpacingRadians,
-                diagnosticRequest);
+    std::optional<GeometricHatDiagnosticRequest> diagnosticRequest,
+    const EigenrayHitSink* eigenraySink) const {
+  validateInput(pressureWorkspace, intensityWorkspace, arrivalWorkspace,
+                eigenraySink, path, frequencyState, receivers_,
+                launchAngleSpacingRadians, diagnosticRequest);
   std::optional<GeometricHatDiagnostic> diagnostic;
   if (diagnosticRequest.has_value()) {
     diagnostic.emplace();
@@ -331,6 +357,10 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
           double amplitudeConstant, double causticPhase,
           std::complex<double> delay,
           double receiverDeclinationDegrees) {
+        if (eigenraySink != nullptr &&
+            !frequencyState.points[rightIndex].active) {
+          return;
+        }
         requireFinite(qInterpolated, "geometric hat interpolated q");
         requireFinite(hatWeight, "geometric hat weight");
         requireFinite(amplitudeConstant,
@@ -339,7 +369,15 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
         requireFiniteComplex(delay, "geometric hat delay");
         std::complex<double> pressureIncrement{};
         double intensityIncrement = 0.0;
-        if (pressureWorkspace != nullptr) {
+        if (eigenraySink != nullptr) {
+          const std::size_t prefixPointCount = rightIndex + 1U;
+          if (prefixPointCount < 2U || prefixPointCount > pointCount) {
+            throw ValidationError(
+                "geometric hat eigenray prefix is outside the active path");
+          }
+          (*eigenraySink)(EigenrayHit{rangeIndex, depthIndex,
+                                      prefixPointCount});
+        } else if (pressureWorkspace != nullptr) {
           const double amplitude = amplitudeConstant * hatWeight;
           const std::complex<double> phaseArgument =
               angularFrequency * delay - causticPhase;

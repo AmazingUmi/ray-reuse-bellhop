@@ -51,6 +51,7 @@ bool isTransmissionLossMode(SimulationRunMode mode) {
       return true;
     case SimulationRunMode::AsciiArrivals:
     case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
     case SimulationRunMode::RayTrace:
       return false;
   }
@@ -65,6 +66,22 @@ bool isArrivalMode(SimulationRunMode mode) {
     case SimulationRunMode::CoherentTransmissionLoss:
     case SimulationRunMode::IncoherentTransmissionLoss:
     case SimulationRunMode::SemiCoherentTransmissionLoss:
+    case SimulationRunMode::Eigenray:
+    case SimulationRunMode::RayTrace:
+      return false;
+  }
+  throw ValidationError("simulation run mode is invalid");
+}
+
+bool isEigenrayMode(SimulationRunMode mode) {
+  switch (mode) {
+    case SimulationRunMode::Eigenray:
+      return true;
+    case SimulationRunMode::CoherentTransmissionLoss:
+    case SimulationRunMode::IncoherentTransmissionLoss:
+    case SimulationRunMode::SemiCoherentTransmissionLoss:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
     case SimulationRunMode::RayTrace:
       return false;
   }
@@ -80,6 +97,7 @@ FieldAccumulationKind fieldAccumulationKind(SimulationRunMode mode) {
       return FieldAccumulationKind::Intensity;
     case SimulationRunMode::AsciiArrivals:
     case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
     case SimulationRunMode::RayTrace:
       return FieldAccumulationKind::None;
   }
@@ -92,6 +110,7 @@ bool usesLloydMirror(SimulationRunMode mode) {
     case SimulationRunMode::IncoherentTransmissionLoss:
     case SimulationRunMode::AsciiArrivals:
     case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
     case SimulationRunMode::RayTrace:
       return false;
     case SimulationRunMode::SemiCoherentTransmissionLoss:
@@ -295,6 +314,7 @@ SimulationCase::SimulationCase(Environment environment,
     case SimulationRunMode::SemiCoherentTransmissionLoss:
     case SimulationRunMode::AsciiArrivals:
     case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
     case SimulationRunMode::RayTrace:
       break;
     default:

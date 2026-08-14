@@ -1,6 +1,6 @@
 # I8 — Arrivals / Eigenray
 
-> Design status: architecture reviewed and frozen; implementation has not started.
+> Design status: architecture reviewed and frozen; I8 implementation is in progress.
 > Baseline: `recovery/f2cpp-i7-complete` at the accepted I7 baseline.
 > Task authority: the `I8-xx-Tn` definitions in this directory are the only
 > formal instructions for OpenCode.
@@ -268,7 +268,7 @@ OpenCode must execute only one named task per session.
 |---|---|---|
 | I8-01 Arrival data model & accumulation | ACCEPTED | T1–T5 ACCEPTED |
 | I8-02 Arrival writers | IN_PROGRESS | T1–T2 ACCEPTED; T3 TODO |
-| I8-03 Eigenray mode | TODO | T1–T5 |
+| I8-03 Eigenray mode | IN_PROGRESS | T1–T4 ACCEPTED; T5 TODO |
 | I8-04 Validation & documentation | IN_PROGRESS | T1 ACCEPTED; T2–T5 TODO |
 
 I8-01-T1–T4 have established the accepted record types, checked capacity
@@ -277,6 +277,11 @@ Geometric-hat contribution delivery now shares one accepted traversal across
 pressure, intensity, and arrival sinks plus source-streamed orchestration.
 Cartesian geometric-Gaussian arrival dispatch is also accepted; I8-01 is
 closed.
+
+I8-03-T1–T4 now provide immutable G/g/B eigenray hits, source-streamed solver
+callbacks over frozen caches, a shared ordinary/eigenray prefix encoder, and
+atomic EOF-terminated eigenray RAY writing. User-visible parser/CLI lifecycle
+remains assigned to T5.
 
 ## Codex / OpenCode handoff
 

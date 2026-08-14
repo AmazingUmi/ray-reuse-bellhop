@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "bellhop/error.hpp"
+#include "bellhop/field/eigenray_hit.hpp"
 #include "bellhop/field/geometric_hat_influence.hpp"
 #include "support/test_harness.hpp"
 
@@ -17,6 +18,7 @@ using bellhop::CervenyCoordinateSystem;
 using bellhop::ArrivalWorkspace;
 using bellhop::FrequencyWorkspace;
 using bellhop::FieldAccumulationKind;
+using bellhop::EigenrayHit;
 using bellhop::GeometricHatDiagnosticRequest;
 using bellhop::GeometricHatInfluence;
 using bellhop::IntensityWorkspace;
@@ -560,6 +562,72 @@ void testArrivalSinkBouncesCausticAndContracts(Context& context) {
       "TL influence cannot write an arrival workspace");
 }
 
+void testEigenraySinkOrderingAndActivePrefix(Context& context) {
+  const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
+  const RayPath path = makeHorizontalPath(
+      {0.0, 200.0, 400.0, 600.0}, {0.0, 100.0, 200.0, 300.0},
+      0.25);
+  RayFrequencyState frequencyState =
+      makeFrequencyState({0.0, 200.0, 400.0, 600.0}, 50.0);
+  const GeometricHatInfluence influence(
+      receivers, CervenyCoordinateSystem::Cartesian, SourceGeometry::Point,
+      SimulationRunMode::Eigenray);
+  std::vector<EigenrayHit> hits;
+  influence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { hits.push_back(hit); }, path,
+      frequencyState, kDalpha);
+  context.check(hits.size() == 3U, "E emits one hit per accepted G contribution");
+  context.check(hits[0].receiverRangeIndex == 0U &&
+                    hits[0].prefixPointCount == 2U &&
+                    hits[1].receiverRangeIndex == 1U &&
+                    hits[1].prefixPointCount == 3U &&
+                    hits[2].receiverRangeIndex == 2U &&
+                    hits[2].prefixPointCount == 4U,
+                "E preserves traversal order and exclusive prefixes");
+
+  frequencyState.points[3U].active = false;
+  hits.clear();
+  influence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { hits.push_back(hit); }, path,
+      frequencyState, kDalpha);
+  context.check(hits.size() == 2U && hits.back().prefixPointCount == 3U,
+                "E excludes inactive suffix contributions");
+  const std::size_t countBeforeRepeat = hits.size();
+  influence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { hits.push_back(hit); }, path,
+      frequencyState, kDalpha);
+  context.check(hits.size() == countBeforeRepeat * 2U,
+                "E retains repeated launch and endpoint hits");
+
+  std::vector<EigenrayHit> boundaryHits;
+  const GeometricHatInfluence oneHit(
+      ReceiverGrid({500.0}, {100.0}), CervenyCoordinateSystem::Cartesian,
+      SourceGeometry::Point, SimulationRunMode::Eigenray);
+  oneHit.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { boundaryHits.push_back(hit); }, path,
+      frequencyState, kDalpha);
+  context.check(boundaryHits.size() == 1U,
+                "E can emit exactly one accepted receiver hit");
+  const GeometricHatInfluence zeroHits(
+      ReceiverGrid({500.0}, {700.0}), CervenyCoordinateSystem::Cartesian,
+      SourceGeometry::Point, SimulationRunMode::Eigenray);
+  boundaryHits.clear();
+  zeroHits.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { boundaryHits.push_back(hit); }, path,
+      frequencyState, kDalpha);
+  context.check(boundaryHits.empty(),
+                "E can complete with no accepted receiver hit");
+  const GeometricHatInfluence fieldInfluence(
+      receivers, CervenyCoordinateSystem::Cartesian, SourceGeometry::Point,
+      SimulationRunMode::CoherentTransmissionLoss);
+  context.expectThrows<ValidationError>(
+      [&] {
+        fieldInfluence.collectEigenrayHits(
+            [&](const EigenrayHit&) {}, path, frequencyState, kDalpha);
+      },
+      "E sink requires Eigenray run mode");
+}
+
 }  // namespace
 
 int main() {
@@ -570,6 +638,7 @@ int main() {
   testDuplicateActivePrefixAndContracts(context);
   testArrivalSinkOriginFieldsAndMerge(context);
   testArrivalSinkBouncesCausticAndContracts(context);
+  testEigenraySinkOrderingAndActivePrefix(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
               << " geometric hat assertion(s) failed\n";

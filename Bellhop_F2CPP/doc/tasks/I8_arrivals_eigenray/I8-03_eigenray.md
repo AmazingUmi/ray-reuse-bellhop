@@ -11,7 +11,7 @@ prefixes of frozen rays. It is not an arrival view and is not ordinary `R`.
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -92,10 +92,15 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.geometric_
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-03 core checkpoint commit.
+- Tests: AppleClang Debug ASan/UBSan full CTest and focused GCC 14 Werror
+  geometric-hat/eigenray tests passed; zero, one, multiple, repeated and
+  inactive-suffix hits are covered; `git diff --check` passed.
+- Oracle / parity result: hit selection and exclusive prefix endpoints were
+  source-audited against `influence.f90::ApplyContribution`; product parity is
+  completed by I8-04-T4.
+- Notes: the immutable hit carries only receiver indices and prefix size; its
+  frozen path/cache lifetime remains owned by the synchronous solver callback.
 
 ## I8-03-T2
 
@@ -105,7 +110,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.geometric_
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -170,10 +175,15 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.geometric_
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: same I8-03 core checkpoint as T1/T3/T4.
+- Tests: B component tests passed on Debug sanitizer and GCC 14 Werror for
+  geometric, near-field and wavelength-cap widths, zero/multiple hits,
+  irregular receivers, ordering and active-prefix cutoff; arrival/field
+  regressions passed.
+- Oracle / parity result: B uses its accepted contribution window and the same
+  Origin `ApplyContribution` endpoint; fresh I7 Gaussian validation is part of
+  final I8 regression closure.
+- Notes: no pressure, intensity or arrival formula was duplicated or changed.
 
 ## I8-03-T3
 
@@ -183,7 +193,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.geometric_
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -256,10 +266,14 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.eigenray_s
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: same I8-03 core checkpoint as T1/T2/T4.
+- Tests: multi-source G and B solver tests passed on Debug sanitizer and GCC 14
+  Werror; callbacks prove frozen-cache identity, source/launch/hit order,
+  checked statistics, wrong-mode/family and empty-consumer rejection.
+- Oracle / parity result: tracing, projection and G/g/B dispatch reuse the
+  accepted ArrivalSolver lifecycle; end-to-end E parity remains I8-04-T4.
+- Notes: each synchronous callback receives the frozen source cache so the
+  writer can validate path identity without retaining mutable state.
 
 ## I8-03-T4
 
@@ -269,7 +283,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.eigenray_s
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -348,10 +362,15 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R 'f2cpp.component.(eigenray
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: same I8-03 core checkpoint as T1/T2/T3.
+- Tests: eigenray writer, ordinary R writer and reader regressions passed on
+  Debug sanitizer and GCC 14 Werror; tests cover zero/repeated/variable blocks,
+  prefix bounce visibility, invalid order/prefix and atomic cleanup.
+- Oracle / parity result: shared compression and prefix bounce semantics were
+  source-audited against `WriteRay.f90::WriteRay2D`; EOF product parity remains
+  I8-04-T4.
+- Notes: ordinary R and E share one prefix encoder; E deliberately writes no
+  block-count extension and may finalize a header-only zero-hit stream.
 
 ## I8-03-T5
 

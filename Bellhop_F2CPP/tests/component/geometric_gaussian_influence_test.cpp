@@ -15,6 +15,7 @@
 namespace {
 
 using bellhop::ArrivalWorkspace;
+using bellhop::EigenrayHit;
 using bellhop::FrequencyWorkspace;
 using bellhop::GeometricGaussianDiagnostic;
 using bellhop::GeometricGaussianDiagnosticRequest;
@@ -88,6 +89,21 @@ void checkComplexNear(Context& context, std::complex<double> actual,
                     message + " real");
   context.checkNear(actual.imag(), expected.imag(), tolerance,
                     message + " imaginary");
+}
+
+bool sameHits(const std::vector<EigenrayHit>& actual,
+              const std::vector<EigenrayHit>& expected) {
+  if (actual.size() != expected.size()) {
+    return false;
+  }
+  for (std::size_t index = 0U; index < actual.size(); ++index) {
+    if (actual[index].receiverRangeIndex != expected[index].receiverRangeIndex ||
+        actual[index].receiverDepthIndex != expected[index].receiverDepthIndex ||
+        actual[index].prefixPointCount != expected[index].prefixPointCount) {
+      return false;
+    }
+  }
+  return true;
 }
 
 GeometricGaussianDiagnostic runWidthDiagnostic(
@@ -422,6 +438,95 @@ void testArrivalSinkWidthBranchesAndFields(Context& context) {
                 "B arrivals retain irregular Cartesian support and caustics");
 }
 
+void testEigenraySinkAcrossWidthBranches(Context& context) {
+  const auto collectOne = [&](double leftQ, double rightQ,
+                              double rightDelay) {
+    const ReceiverGrid receivers({500.0}, {100.0, 300.0});
+    const RayPath path =
+        makeHorizontalPath({0.0, 200.0}, {leftQ, rightQ});
+    const RayFrequencyState frequencyState =
+        makeFrequencyState(2U, rightDelay);
+    const GeometricGaussianInfluence influence(
+        receivers, SourceGeometry::Point, SimulationRunMode::Eigenray);
+    std::vector<EigenrayHit> hits;
+    influence.collectEigenrayHits(
+        [&](const EigenrayHit& hit) { hits.push_back(hit); }, path,
+        frequencyState, kDalpha);
+    context.check(hits.size() == 1U &&
+                      hits.front().receiverRangeIndex == 0U &&
+                      hits.front().receiverDepthIndex == 0U &&
+                      hits.front().prefixPointCount == 2U,
+                  "B E sink emits the accepted contribution prefix");
+  };
+
+  collectOne(200.0, 400.0, 0.001);
+  collectOne(100.0, 200.0, 0.002);
+  collectOne(100.0, 200.0, 20.0);
+
+  const ReceiverGrid noHitReceivers({500.0801}, {100.0, 300.0});
+  const RayPath noHitPath = makeHorizontalPath({0.0, 200.0},
+                                                {200.0, 400.0});
+  const RayFrequencyState noHitFrequency = makeFrequencyState(2U, 0.001);
+  const GeometricGaussianInfluence noHitInfluence(
+      noHitReceivers, SourceGeometry::Line, SimulationRunMode::Eigenray);
+  std::vector<EigenrayHit> noHits;
+  noHitInfluence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { noHits.push_back(hit); }, noHitPath,
+      noHitFrequency, kDalpha);
+  context.check(noHits.empty(), "B E sink retains B's beam-window rejection");
+
+  const ReceiverGrid orderedReceivers({499.9, 500.0},
+                                      {100.0, 300.0});
+  const RayPath orderedPath = makeHorizontalPath(
+      {0.0, 200.0, 400.0}, {10000.0, 10000.0, 10000.0});
+  const RayFrequencyState orderedFrequency = makeFrequencyState(3U, 0.001);
+  const GeometricGaussianInfluence orderedInfluence(
+      orderedReceivers, SourceGeometry::Line, SimulationRunMode::Eigenray);
+  std::vector<EigenrayHit> orderedHits;
+  orderedInfluence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { orderedHits.push_back(hit); },
+      orderedPath, orderedFrequency, kDalpha);
+  context.check(orderedHits.size() == 4U,
+                "B E sink retains every receiver contribution");
+  const std::vector<EigenrayHit> expected{{0U, 0U, 2U}, {0U, 1U, 2U},
+                                           {1U, 0U, 3U}, {1U, 1U, 3U}};
+  context.check(sameHits(orderedHits, expected),
+                "B E sink preserves segment/range/depth traversal order");
+
+  RayFrequencyState inactiveFrequency = orderedFrequency;
+  inactiveFrequency.points[2U].active = false;
+  std::vector<EigenrayHit> activePrefixHits;
+  orderedInfluence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { activePrefixHits.push_back(hit); },
+      orderedPath, inactiveFrequency, kDalpha);
+  context.check(sameHits(activePrefixHits,
+                         std::vector<EigenrayHit>{{0U, 0U, 2U},
+                                                  {0U, 1U, 2U}}),
+                "B E sink excludes inactive-terminal contributions");
+
+  const ReceiverGrid irregular({499.9, 500.0}, {100.0, 300.0},
+                               ReceiverGridLayout::Irregular);
+  const GeometricGaussianInfluence irregularInfluence(
+      irregular, SourceGeometry::Line, SimulationRunMode::Eigenray);
+  std::vector<EigenrayHit> irregularHits;
+  irregularInfluence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { irregularHits.push_back(hit); },
+      orderedPath, orderedFrequency, kDalpha);
+  context.check(sameHits(irregularHits,
+                         std::vector<EigenrayHit>{{0U, 0U, 2U},
+                                                  {1U, 0U, 3U}}),
+                "B E sink retains Cartesian irregular receiver traversal");
+
+  const GeometricGaussianInfluence fieldInfluence(orderedReceivers);
+  context.expectThrows<ValidationError>(
+      [&] {
+        fieldInfluence.collectEigenrayHits(
+            [&](const EigenrayHit&) {}, orderedPath, orderedFrequency,
+            kDalpha);
+      },
+      "B E sink requires Eigenray mode");
+}
+
 }  // namespace
 
 int main() {
@@ -431,6 +536,7 @@ int main() {
   testGridWalkerCausticAndFrozenInput(context);
   testPrefixDuplicateAndContracts(context);
   testArrivalSinkWidthBranchesAndFields(context);
+  testEigenraySinkAcrossWidthBranches(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
               << " geometric Gaussian assertion(s) failed\n";

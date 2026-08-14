@@ -83,6 +83,8 @@ add_library(
     src/io/arrival_writer.cpp
     src/io/output_layout.cpp
     src/io/ray_writer.cpp
+    src/io/ray_prefix_writer.cpp
+    src/io/eigenray_writer.cpp
     src/io/shd_writer.cpp
     src/model/c_linear_frequency_ssp.cpp
     src/model/c_linear_ssp.cpp
@@ -109,6 +111,7 @@ add_library(
     src/solver/single_frequency_solver.cpp
     src/solver/ray_trace_solver.cpp
     src/solver/arrival_solver.cpp
+    src/solver/eigenray_solver.cpp
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
   # AttenMod calls the libm pow implementation. AppleClang otherwise lowers
@@ -329,6 +332,18 @@ if(BUILD_TESTING)
     bellhop_f2cpp_ray_trace_output_tests
     f2cpp.component.ray_trace_output
     tests/component/ray_trace_output_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_eigenray_writer_tests
+    f2cpp.component.eigenray_writer
+    tests/component/eigenray_writer_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_eigenray_solver_tests
+    f2cpp.component.eigenray_solver
+    tests/component/eigenray_solver_test.cpp
     component
   )
   add_f2cpp_test(

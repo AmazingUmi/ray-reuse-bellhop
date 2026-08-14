@@ -2,9 +2,11 @@
 
 #include <complex>
 #include <cstddef>
+#include <functional>
 #include <optional>
 
 #include "bellhop/field/arrival_workspace.hpp"
+#include "bellhop/field/eigenray_hit.hpp"
 #include "bellhop/field/frequency_workspace.hpp"
 #include "bellhop/model/simulation_case.hpp"
 #include "bellhop/ray/ray_path.hpp"
@@ -39,6 +41,8 @@ struct GeometricHatDiagnostic {
 // segments, while g intersects ray normals with each receiver-depth line.
 class GeometricHatInfluence {
  public:
+  using EigenrayHitSink = std::function<void(const EigenrayHit&)>;
+
   GeometricHatInfluence(
       ReceiverGrid receivers, CervenyCoordinateSystem coordinates,
       SourceGeometry sourceGeometry = SourceGeometry::Point,
@@ -67,6 +71,10 @@ class GeometricHatInfluence {
       std::optional<GeometricHatDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
+  void collectEigenrayHits(const EigenrayHitSink& sink, const RayPath& path,
+                           const RayFrequencyState& frequencyState,
+                           double launchAngleSpacingRadians) const;
+
  private:
   [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulateImpl(
       FrequencyWorkspace* pressureWorkspace,
@@ -74,7 +82,8 @@ class GeometricHatInfluence {
       ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState,
       double launchAngleSpacingRadians,
-      std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const;
+      std::optional<GeometricHatDiagnosticRequest> diagnosticRequest,
+      const EigenrayHitSink* eigenraySink = nullptr) const;
 
   ReceiverGrid receivers_;
   CervenyCoordinateSystem coordinates_{CervenyCoordinateSystem::Cartesian};

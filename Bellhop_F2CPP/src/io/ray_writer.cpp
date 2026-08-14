@@ -1,20 +1,18 @@
 #include "bellhop/io/ray_writer.hpp"
 
-#include <algorithm>
 #include <cstdint>
 #include <iomanip>
 #include <limits>
 #include <numbers>
+#include <string>
 #include <system_error>
 #include <utility>
-#include <vector>
 
 #include "bellhop/error.hpp"
+#include "bellhop/io/ray_prefix_writer.hpp"
 
 namespace bellhop {
 namespace {
-
-constexpr std::size_t kMaximumWrittenRayPoints = 500'000U;
 
 std::int32_t checkedOriginInt32(std::size_t value, const char* label) {
   if (value > static_cast<std::size_t>(
@@ -22,37 +20,6 @@ std::int32_t checkedOriginInt32(std::size_t value, const char* label) {
     throw ValidationError(std::string(label) + " exceeds the RAY int32 limit");
   }
   return static_cast<std::int32_t>(value);
-}
-
-std::size_t bounceCount(const RayPath& path, ReflectionBoundary boundary) {
-  return static_cast<std::size_t>(std::count_if(
-      path.events.begin(), path.events.end(),
-      [boundary](const ReflectionEvent& event) {
-        return event.boundary == boundary;
-      }));
-}
-
-std::vector<std::size_t> writtenPointIndices(
-    const RayPath& path, double topDepth, double bottomDepth) {
-  if (path.points.empty()) {
-    throw ValidationError("ray writer cannot write an empty ray path");
-  }
-  const std::size_t skip =
-      std::max(path.points.size() / kMaximumWrittenRayPoints,
-               std::size_t{1U});
-  std::vector<std::size_t> indices{0U};
-  indices.reserve(std::min(path.points.size(), kMaximumWrittenRayPoints + 2U));
-  for (std::size_t index = 1U; index < path.points.size(); ++index) {
-    const double depth = path.points[index].position.depth;
-    const bool nearBoundary =
-        std::min(bottomDepth - depth, depth - topDepth) < 0.2;
-    const bool stridePoint = ((index + 1U) % skip) == 0U;
-    const bool terminal = index + 1U == path.points.size();
-    if (nearBoundary || stridePoint || terminal) {
-      indices.push_back(index);
-    }
-  }
-  return indices;
 }
 
 }  // namespace
@@ -119,12 +86,12 @@ void RayWriter::appendSource(std::size_t sourceIndex,
       throw ValidationError(
           "ray writer cache launch angles are out of canonical order");
     }
-    const std::vector<std::size_t> indices =
-        writtenPointIndices(path, topDepth, bottomDepth);
-    const std::size_t topBounces =
-        bounceCount(path, ReflectionBoundary::SeaSurface);
-    const std::size_t bottomBounces =
-        bounceCount(path, ReflectionBoundary::Seabed);
+    const ray_output_detail::EncodedRayPrefix encoded =
+        ray_output_detail::encodeRayPrefix(path, path.points.size(), topDepth,
+                                           bottomDepth);
+    const std::vector<std::size_t>& indices = encoded.pointIndices;
+    const std::size_t topBounces = encoded.topBounceCount;
+    const std::size_t bottomBounces = encoded.bottomBounceCount;
     static_cast<void>(checkedOriginInt32(indices.size(), "RAY point count"));
     static_cast<void>(checkedOriginInt32(topBounces, "RAY top bounce count"));
     static_cast<void>(
