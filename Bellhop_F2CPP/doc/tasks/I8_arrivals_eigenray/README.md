@@ -269,7 +269,7 @@ OpenCode must execute only one named task per session.
 | I8-01 Arrival data model & accumulation | ACCEPTED | T1–T5 ACCEPTED |
 | I8-02 Arrival writers | ACCEPTED | T1–T3 ACCEPTED |
 | I8-03 Eigenray mode | ACCEPTED | T1–T5 ACCEPTED |
-| I8-04 Validation & documentation | IN_PROGRESS | T1–T2 ACCEPTED; T3–T5 TODO |
+| I8-04 Validation & documentation | IN_PROGRESS | T1–T4 ACCEPTED; T5 TODO |
 
 I8-01-T1–T4 have established the accepted record types, checked capacity
 planner, source-local workspace, and Origin-compatible candidate accumulation.
@@ -284,10 +284,12 @@ atomic EOF-terminated eigenray RAY writing. I8-02-T3/I8-03-T5 now expose A/a/E
 through the safe parser and atomic three-product CLI lifecycle with complete
 PRT statistics.
 
-I8-04-T2 directly links the repository's real `ArrMod::AddArr` and now freezes
-all duplicate-boundary, signed cusp, capacity replacement/discard and zero-cell
-semantics against the F2CPP production accumulator. End-to-end ARR/E matrices
-remain assigned to T3/T4.
+I8-04-T2 directly links the repository's real `ArrMod::AddArr` and freezes all
+duplicate-boundary, signed cusp, capacity replacement/discard and zero-cell
+semantics against the F2CPP production accumulator. T3/T4 add six ARR and four
+E Origin/F2CPP cases: stored arrival fields are bit-identical, and all 2200
+eigenray blocks / 876191 prefix points agree exactly. Final output-safety and
+full-regression closure remain assigned to T5.
 
 ## Codex / OpenCode handoff
 

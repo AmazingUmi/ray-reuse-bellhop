@@ -303,12 +303,18 @@ def validate_output(
             raise RuntimeError(f"{definition.case_id}: eigenray frequency mismatch")
         return
     if definition.output_kind == "arrivals_ascii":
-        result = parse_ascii_arrivals(output_path)
+        result = parse_ascii_arrivals(
+            output_path,
+            receiver_cell_count=definition.arrival_receiver_cell_count,
+        )
         if not np.isclose(result.header.frequency_hz, frequency_hz):
             raise RuntimeError(f"{definition.case_id}: ASCII ARR frequency mismatch")
         return
     if definition.output_kind == "arrivals_binary":
-        result = parse_binary_arrivals(output_path)
+        result = parse_binary_arrivals(
+            output_path,
+            receiver_cell_count=definition.arrival_receiver_cell_count,
+        )
         if not np.isclose(result.header.frequency_hz, frequency_hz):
             raise RuntimeError(f"{definition.case_id}: binary ARR frequency mismatch")
         return

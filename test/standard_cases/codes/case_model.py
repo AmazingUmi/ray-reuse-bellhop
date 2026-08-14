@@ -33,6 +33,7 @@ class CaseDefinition:
     maximum_angle_deg: float
     explicit_launch_angle_count: int | None
     expected_dimensions: tuple[int, ...] | None
+    arrival_receiver_cell_count: int | None
     prt_markers: tuple[str, ...]
     prt_forbidden_markers: tuple[str, ...]
     profiles: dict[str, dict[str, object]]
@@ -173,6 +174,20 @@ def load_case(case_directory: Path) -> CaseDefinition:
             )
     else:
         dimensions = None
+    raw_arrival_cell_count = validation.get("arrival_receiver_cell_count")
+    if raw_arrival_cell_count is not None:
+        if output_kind not in {"arrivals_ascii", "arrivals_binary"}:
+            raise ValueError(
+                f"{manifest_path}: arrival_receiver_cell_count is only valid "
+                "for ARR cases"
+            )
+        arrival_receiver_cell_count = int(raw_arrival_cell_count)
+        if arrival_receiver_cell_count <= 0:
+            raise ValueError(
+                f"{manifest_path}: arrival_receiver_cell_count must be positive"
+            )
+    else:
+        arrival_receiver_cell_count = None
     supported_versions = tuple(
         raw.get("compatibility", {}).get(
             "versions", ("origin", "f2cpp", "rayreuse")
@@ -206,6 +221,7 @@ def load_case(case_directory: Path) -> CaseDefinition:
         maximum_angle_deg=float(launch["maximum_angle_deg"]),
         explicit_launch_angle_count=explicit_launch_angle_count,
         expected_dimensions=dimensions,
+        arrival_receiver_cell_count=arrival_receiver_cell_count,
         prt_markers=tuple(validation.get("prt_markers", [])),
         prt_forbidden_markers=tuple(
             validation.get("prt_forbidden_markers", [])

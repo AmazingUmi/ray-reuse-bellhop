@@ -75,6 +75,16 @@ class CaseModelTests(unittest.TestCase):
                 "geometric_hat_cartesian_safe_control",
                 "geometric_gaussian_cartesian",
                 "simple_gaussian_cartesian",
+                "i8_arrivals_geometric_hat_ascii",
+                "i8_arrivals_geometric_hat_binary",
+                "i8_arrivals_geometric_hat_ray_centered",
+                "i8_arrivals_geometric_gaussian_irregular",
+                "i8_arrivals_line_directional_multisource",
+                "i8_arrivals_zero",
+                "i8_eigenray_geometric_hat",
+                "i8_eigenray_geometric_hat_ray_centered",
+                "i8_eigenray_geometric_gaussian",
+                "i8_eigenray_zero",
             },
         )
 

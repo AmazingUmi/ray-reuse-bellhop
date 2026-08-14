@@ -1,0 +1,211 @@
+{
+  "cases": [
+    "i8_eigenray_geometric_hat",
+    "i8_eigenray_geometric_hat_ray_centered",
+    "i8_eigenray_geometric_gaussian",
+    "i8_eigenray_zero"
+  ],
+  "command": [
+    "validate_i8_eigenrays.py",
+    "--results-root",
+    "<results-root>",
+    "--origin-executable",
+    "<origin-executable>",
+    "--f2cpp-executable",
+    "<f2cpp-executable>",
+    "--output",
+    "<report>"
+  ],
+  "comparison": {
+    "i8_eigenray_geometric_gaussian": {
+      "blocks": 1418,
+      "maximum_coordinate_error_location": null,
+      "maximum_coordinate_error_m": 0.0
+    },
+    "i8_eigenray_geometric_hat": {
+      "blocks": 316,
+      "maximum_coordinate_error_location": null,
+      "maximum_coordinate_error_m": 0.0
+    },
+    "i8_eigenray_geometric_hat_ray_centered": {
+      "blocks": 466,
+      "maximum_coordinate_error_location": null,
+      "maximum_coordinate_error_m": 0.0
+    },
+    "i8_eigenray_zero": {
+      "blocks": 0,
+      "maximum_coordinate_error_location": null,
+      "maximum_coordinate_error_m": 0.0
+    }
+  },
+  "coordinate_tolerance": {
+    "absolute_m": 1e-07,
+    "relative": 1e-10
+  },
+  "effects": {
+    "f2cpp": {
+      "bottom_bounce_total": 2830,
+      "family_blocks": {
+        "i8_eigenray_geometric_gaussian": 1418,
+        "i8_eigenray_geometric_hat": 316,
+        "i8_eigenray_geometric_hat_ray_centered": 466,
+        "i8_eigenray_zero": 0
+      },
+      "multi_source_header_count": 2,
+      "nonzero_blocks": 2200,
+      "ordinary_control_point_maximum": 816,
+      "point_total": 876191,
+      "prefix_point_maximum": 1804,
+      "prefix_point_minimum": 2,
+      "repeated_launch_angle_blocks": 1684,
+      "shorter_than_full_ray": true,
+      "top_bounce_total": 2830,
+      "zero_blocks": 0
+    },
+    "origin": {
+      "bottom_bounce_total": 2830,
+      "family_blocks": {
+        "i8_eigenray_geometric_gaussian": 1418,
+        "i8_eigenray_geometric_hat": 316,
+        "i8_eigenray_geometric_hat_ray_centered": 466,
+        "i8_eigenray_zero": 0
+      },
+      "multi_source_header_count": 2,
+      "nonzero_blocks": 2200,
+      "ordinary_control_point_maximum": 816,
+      "point_total": 876191,
+      "prefix_point_maximum": 1804,
+      "prefix_point_minimum": 2,
+      "repeated_launch_angle_blocks": 1684,
+      "shorter_than_full_ray": true,
+      "top_bounce_total": 2830,
+      "zero_blocks": 0
+    }
+  },
+  "provenance": {
+    "f2cpp": {
+      "executable": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "executable_mtime_ns": 1786705294810000000,
+      "executable_sha256": "1c8edd6ebce9a52f5fc9eda969c6600a4ff07bbd01ad60803069028b181cd5b1",
+      "i8_eigenray_geometric_gaussian": {
+        "blocks": 1418,
+        "environment_sha256": "1e2d8942cf54d4db702dd41a5ebd71d941fd1f5ba6914df5a047d8205b70c692",
+        "product_sha256": "a8d122ccb5a4a1252dee88d94eb2120675eff1c67a7c4d77d4b2a8c717537ca3",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoGaussianCart ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "i8_eigenray_geometric_hat": {
+        "blocks": 316,
+        "environment_sha256": "0b3b2708a6572ed10e81468630616e0fc02ad127bbade8f86859ce4e6e8ade20",
+        "product_sha256": "ff7bca3d07490aa2a90eed82c41e59a5b79894a0d1ae1f66eabf17b849b84a1e",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "i8_eigenray_geometric_hat_ray_centered": {
+        "blocks": 466,
+        "environment_sha256": "9190a1e220793d5d7a1183aad722e18bd63dfb64ebf4e5013e2da9e9a2d1a099",
+        "product_sha256": "49a90b624b386895c11614ef80eaa503ddf18af2720365a8f6314d9421ec0671",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatRayCen ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "i8_eigenray_zero": {
+        "blocks": 0,
+        "environment_sha256": "69ae16c978200d8311f9452c6f1ea6b0b67683de6de8d50e3f1c41d46de4c93b",
+        "product_sha256": "f3937e9130e4820f8fd7d5b65d225bd83486ece89253b3e9434d14cb1eb0cecf",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "ray_trace_vacuum_rigid": {
+        "fixed_blocks": 10,
+        "product_sha256": "04a966cadd65e298d4f2cb910948f8b5f96169807d53cdd103f0e26b7c877ce8"
+      }
+    },
+    "origin": {
+      "executable": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_origin/bin/bellhop",
+      "executable_mtime_ns": 1786424159320000000,
+      "executable_sha256": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+      "i8_eigenray_geometric_gaussian": {
+        "blocks": 1418,
+        "environment_sha256": "1e2d8942cf54d4db702dd41a5ebd71d941fd1f5ba6914df5a047d8205b70c692",
+        "product_sha256": "b55db917178c584f79885d1e08b11f34acec7debdd70cfe72ef31d4a70a1c7d1",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoGaussianCart ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "i8_eigenray_geometric_hat": {
+        "blocks": 316,
+        "environment_sha256": "0b3b2708a6572ed10e81468630616e0fc02ad127bbade8f86859ce4e6e8ade20",
+        "product_sha256": "a7de58f5c77329f63509ee59183ae8c608bcb215188e1d2fbec0bb8027618f71",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "i8_eigenray_geometric_hat_ray_centered": {
+        "blocks": 466,
+        "environment_sha256": "9190a1e220793d5d7a1183aad722e18bd63dfb64ebf4e5013e2da9e9a2d1a099",
+        "product_sha256": "a0410c58d4038327604ecdd4fb6ebd589bfe2180c142975397ea0b431b3d6075",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatRayCen ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "i8_eigenray_zero": {
+        "blocks": 0,
+        "environment_sha256": "69ae16c978200d8311f9452c6f1ea6b0b67683de6de8d50e3f1c41d46de4c93b",
+        "product_sha256": "3cc322f5e541a336e2b57cbb210571a5c72c3657fc1d2a3a0550e812adf65453",
+        "source_references": [
+          "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D",
+          "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"
+        ],
+        "source_sha256": {
+          "Bellhop_origin/Bellhop/WriteRay.f90": "f078e9fad637a2bffbff2e4f39d89e8cfb9be78acbe036b28eb59fcd44c34291",
+          "Bellhop_origin/Bellhop/influence.f90": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe"
+        }
+      },
+      "ray_trace_vacuum_rigid": {
+        "fixed_blocks": 10,
+        "product_sha256": "459897bd807f5349b9fa5d7cc0f456e181ce464ef76114ce6bb945af0bf48091"
+      }
+    }
+  },
+  "schema": "bellhop.i8.eigenray.parity.v1",
+  "status": "passed"
+}

@@ -1,0 +1,23 @@
+id = "i8_eigenray_zero"
+description = "I8 valid zero-hit Cartesian geometric-hat eigenray product"
+output_kind = "eigenray"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 100.0
+minimum_angle_deg = -2.0
+maximum_angle_deg = 2.0
+policy = "shared_fmax"
+
+[validation]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Eigenray trace run", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
+prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

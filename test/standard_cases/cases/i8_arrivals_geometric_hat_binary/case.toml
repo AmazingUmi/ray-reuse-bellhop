@@ -1,0 +1,23 @@
+id = "i8_arrivals_geometric_hat_binary"
+description = "I8 binary arrivals paired byte-layout counterpart of the Cartesian geometric-hat ASCII case"
+output_kind = "arrivals_binary"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ArrMod.f90 WriteArrivalsBinary"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 400.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
+prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

@@ -215,7 +215,7 @@ cmake --build Bellhop_F2CPP/build/release -j 8 --target bellhop_f2cpp_arrival_ac
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -310,10 +310,25 @@ observable.
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-04-T3 arrival-parity checkpoint commit.
+- Tests: all six cases passed independently for Origin and F2CPP; arrival
+  validator unit tests passed 3/3, the parity-checkpoint Python suite passed
+  140/140 (excluding the still-pending T5 output-safety tests), repeated report
+  generation was byte-identical, and `git diff --check` passed.
+- Oracle / parity result: exact source/cell/record order, counts, bounce fields,
+  zero structure and every stored float field agree. All compared float32
+  fields have a maximum error of 0 ULP; the paired ASCII/binary products are
+  semantically identical. The matrix contains 984 reflected arrivals, a
+  123-arrival maximum cell, a three-cell irregular product, two ordered
+  sources, and a valid zero-arrival cell.
+- Notes: the frozen six-case matrix observes multiple arrivals, line-source
+  directional amplitudes, and the corresponding Origin/F2CPP parity, but does
+  not contain otherwise-identical controls that independently isolate all
+  three effects. Duplicate grouping is instead isolated by the accepted real
+  `ArrMod` oracle in T2; point/line and directional behavior retain the
+  independent I7 source-geometry and I6 source-pattern gates. The generated
+  report states this limitation explicitly rather than treating structural
+  observations as isolated proof.
 
 ## I8-04-T4
 
@@ -323,7 +338,7 @@ observable.
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -407,10 +422,18 @@ Parity therefore compares the ordered EOF stream and every written prefix.
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-04-T4 eigenray-parity checkpoint commit.
+- Tests: all four E cases and the ordinary-R control passed independently for
+  Origin and F2CPP; eigenray validator unit tests passed 2/2, repeated report
+  generation was byte-identical, and `git diff --check` passed.
+- Oracle / parity result: all 2200 EOF-terminated blocks and 876191 written
+  points agree exactly in block order, launch angles, prefix point counts,
+  bounce counts, and coordinates (maximum coordinate error `0 m`). Both
+  implementations have 1684 repeated-launch blocks, equal top/bottom bounce
+  totals of 2830, two ordered sources, and a valid header-only zero-hit file.
+- Notes: the validator never sorts, deduplicates, resamples, or derives the E
+  block count from `Nalpha`. The existing ordinary-R case remains on its fixed
+  header-count parser and supplies the frozen full-ray control.
 
 ## I8-04-T5
 

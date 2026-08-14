@@ -1,0 +1,24 @@
+id = "i8_arrivals_line_directional_multisource"
+description = "I8 ASCII arrivals: Cartesian geometric-hat line source with directional pattern and ordered multiple sources"
+output_kind = "arrivals_ascii"
+origin_template = "origin.env.in"
+companion_files = ["origin.sbp"]
+source_references = ["Bellhop_origin/Bellhop/influence.f90 Ratio1 line-source scaling", "Bellhop_origin/misc/beampattern.f90 ReadPat", "Bellhop_origin/Bellhop/ArrMod.f90 AddArr"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 500.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Using source beam pattern file", "Line source", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
+prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

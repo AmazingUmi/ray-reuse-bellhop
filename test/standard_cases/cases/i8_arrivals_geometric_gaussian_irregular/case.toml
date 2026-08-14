@@ -1,0 +1,24 @@
+id = "i8_arrivals_geometric_gaussian_irregular"
+description = "I8 ASCII arrivals: Cartesian geometric-Gaussian beams on paired irregular receivers"
+output_kind = "arrivals_ascii"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoGaussianCart ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 irregular receiver grammar"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 500.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+arrival_receiver_cell_count = 3
+prt_markers = ["VACUUM", "Perfectly RIGID", "Irregular grid", "Geometric gaussian beams in Cartesian coordinates"]
+prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
