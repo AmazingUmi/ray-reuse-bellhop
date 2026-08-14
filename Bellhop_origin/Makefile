@@ -24,6 +24,7 @@ MODFLAGS = -J$(MOD_DIR) -I$(MOD_DIR)
 LDFLAGS =
 
 TARGET = $(BIN_DIR)/bellhop
+ARRIVAL_ACCUMULATOR_PROBE = $(BIN_DIR)/arrival_accumulator_probe
 
 MISC_OBJECTS = \
 	$(OBJ_DIR)/misc_FatalError.o \
@@ -58,14 +59,16 @@ BELLHOP_OBJECTS = \
 
 OBJECTS = $(MISC_OBJECTS) $(BELLHOP_OBJECTS)
 
-.PHONY: all bellhop clean help info runtime-deps
+.PHONY: all bellhop arrival-accumulator-probe clean help info runtime-deps
 
 all: bellhop
 
 bellhop: $(TARGET)
 
+arrival-accumulator-probe: $(ARRIVAL_ACCUMULATOR_PROBE)
+
 help:
-	@echo "$(MAKE) [bellhop|info|runtime-deps|clean]"
+	@echo "$(MAKE) [bellhop|arrival-accumulator-probe|info|runtime-deps|clean]"
 	@echo ""
 	@echo "Default target: $(TARGET)"
 
@@ -79,6 +82,14 @@ $(TARGET): $(OBJECTS) | $(BIN_DIR)
 	$(FC) -o $@ $(OBJECTS) $(LDFLAGS)
 	@echo ""
 	@echo "BELLHOP built: $@"
+
+$(ARRIVAL_ACCUMULATOR_PROBE): \
+	$(OBJ_DIR)/misc_MathConstants.o \
+	$(OBJ_DIR)/bellhop_bellhopMod.o \
+	$(OBJ_DIR)/bellhop_ArrMod.o \
+	$(OBJ_DIR)/bellhop_ArrivalAccumulatorProbe.o | $(BIN_DIR)
+	$(FC) -o $@ $^ $(LDFLAGS)
+	@echo "Arrival accumulator probe built: $@"
 
 # Show linked macOS system and Homebrew runtime libraries.
 runtime-deps: $(TARGET)

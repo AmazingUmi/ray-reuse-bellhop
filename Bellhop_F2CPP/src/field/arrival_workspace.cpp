@@ -54,10 +54,6 @@ void validateCandidate(const ArrivalCandidate& candidate) {
       !std::isfinite(candidate.receiverDeclinationDegrees)) {
     throw ValidationError("arrival candidate fields must all be finite");
   }
-  if (candidate.amplitude < 0.0) {
-    throw ValidationError(
-        "arrival candidate amplitude must be non-negative");
-  }
   if (candidate.topBounceCount < 0 || candidate.bottomBounceCount < 0) {
     throw ValidationError(
         "arrival candidate bounce counts must be non-negative");

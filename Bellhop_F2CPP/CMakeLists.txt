@@ -373,6 +373,16 @@ if(BUILD_TESTING)
       bellhop_f2cpp_core
       bellhop_f2cpp_project_options
   )
+  add_executable(
+    bellhop_f2cpp_arrival_accumulator_probe
+    tests/tools/arrival_accumulator_probe.cpp
+  )
+  target_link_libraries(
+    bellhop_f2cpp_arrival_accumulator_probe
+    PRIVATE
+      bellhop_f2cpp_core
+      bellhop_f2cpp_project_options
+  )
   add_test(NAME f2cpp.cli.help COMMAND bellhop_f2cpp --help)
   set_tests_properties(f2cpp.cli.help PROPERTIES LABELS "unit")
 

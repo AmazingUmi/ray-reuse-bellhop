@@ -1,0 +1,111 @@
+{
+  "metrics": {
+    "arrival_count": 24,
+    "exact_float_field_count": 144,
+    "scenario_count": 15
+  },
+  "provenance_sha256": {
+    "f2cpp_accumulator": "5463dc67942ad9e50f621f5c9bd0fd4e386f541bc80249f94f4696343d6e7418",
+    "f2cpp_probe": "a3058ccf9ca53c5a9941738378b98c336995bea6f97d4eeb1053c29f8a30ffab",
+    "f2cpp_probe_source": "799174714db95582da7792f18b6327fd6097e487436f8d25d2b15fe6d8daba62",
+    "origin_arrmod": "72f2f8975e2d7706656f64be63a705dea9cfb81a48053db78b8e790c06dd691a",
+    "origin_arrmod_object": "6845c1f992d80ad47b780d0989b0fab6c76639d4bc9e3df0a0e64b7c74fc8de0",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_probe": "d1e158a1f63f6477500a524a6645cc97c811d461c1924e2a8b595c725f185e9f",
+    "origin_probe_source": "1b7740752fffde9371af7abcd495f76959ad793253b745dc99bbbb3621a026dc"
+  },
+  "scenarios": [
+    {
+      "expected_branch": "append one arrival",
+      "id": 1,
+      "name": "append",
+      "stored_arrival_count": 1
+    },
+    {
+      "expected_branch": "merge only the last matching record",
+      "id": 2,
+      "name": "last_duplicate_merge",
+      "stored_arrival_count": 1
+    },
+    {
+      "expected_branch": "append when only a non-last record is similar",
+      "id": 3,
+      "name": "non_last_similar",
+      "stored_arrival_count": 3
+    },
+    {
+      "expected_branch": "merge below the delay threshold",
+      "id": 4,
+      "name": "delay_below",
+      "stored_arrival_count": 1
+    },
+    {
+      "expected_branch": "append at the exact delay threshold",
+      "id": 5,
+      "name": "delay_equal",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "append above the delay threshold",
+      "id": 6,
+      "name": "delay_above",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "merge below the phase threshold",
+      "id": 7,
+      "name": "phase_below",
+      "stored_arrival_count": 1
+    },
+    {
+      "expected_branch": "append at the exact phase threshold",
+      "id": 8,
+      "name": "phase_equal",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "append above the phase threshold",
+      "id": 9,
+      "name": "phase_above",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "retain record when weighted amplitude cancels",
+      "id": 10,
+      "name": "axial_cusp",
+      "stored_arrival_count": 1
+    },
+    {
+      "expected_branch": "replace the first equal weakest record",
+      "id": 11,
+      "name": "first_minimum_tie",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "replace weakest record when full",
+      "id": 12,
+      "name": "stronger_replacement",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "discard equal weakest candidate when full",
+      "id": 13,
+      "name": "equal_discard",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "discard weaker candidate when full",
+      "id": 14,
+      "name": "weaker_discard",
+      "stored_arrival_count": 2
+    },
+    {
+      "expected_branch": "retain an empty cell",
+      "id": 15,
+      "name": "zero_arrivals",
+      "stored_arrival_count": 0
+    }
+  ],
+  "status": "passed",
+  "validator": "i8_arrival_accumulator"
+}

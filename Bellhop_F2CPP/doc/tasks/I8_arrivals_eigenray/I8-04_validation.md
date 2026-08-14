@@ -112,7 +112,7 @@ serve as project truth.
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -196,10 +196,16 @@ cmake --build Bellhop_F2CPP/build/release -j 8 --target bellhop_f2cpp_arrival_ac
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-04-T2 oracle checkpoint commit.
+- Tests: Origin and F2CPP probes built independently; validator unit tests
+  passed 4/4 on Python 3.12; production arrival-workspace tests passed on
+  AppleClang Debug sanitizer and GCC 14 Werror; `git diff --check` passed.
+- Oracle / parity result: the actual `ArrMod::AddArr` and production
+  `ArrivalWorkspace` agree for all 15 fixed scenarios, 24 stored arrivals and
+  all 144 float fields bit-for-bit, with exact count/order/bounce parity.
+- Notes: the oracle exposed and closed one real gap: finite signed candidate
+  amplitudes are required for Origin's axial-cusp cancellation guard. The
+  normal Origin `bellhop` executable hash is unchanged by the non-default probe.
 
 ## I8-04-T3
 

@@ -642,6 +642,27 @@ void testCuspGuard(Context& context) {
                     zero.cellAt(0U)[0].amplitude == 0.0F &&
                     zero.cellAt(0U).size() == 1U,
                 "zero-amplitude grouping hits the cusp guard");
+
+  ArrivalWorkspace cancellation = makeSingleCellWorkspace();
+  const ArrivalCandidate positive{
+      .amplitude = 1.0,
+      .phaseRadians = 0.0,
+      .delaySeconds = {0.0, 0.0},
+      .sourceDeclinationDegrees = 10.0,
+      .receiverDeclinationDegrees = 20.0,
+      .topBounceCount = 1,
+      .bottomBounceCount = 2};
+  cancellation.addCandidate(kTestFrequency, positive, 0U, 0U);
+  const Arrival cancellationBefore = cancellation.cellAt(0U).front();
+  ArrivalCandidate negative = positive;
+  negative.amplitude = -1.0;
+  cancellation.addCandidate(kTestFrequency, negative, 0U, 0U);
+  const Arrival cancellationAfter = cancellation.cellAt(0U).front();
+  context.check(cancellationBefore.amplitude == cancellationAfter.amplitude &&
+                    cancellationBefore.delaySeconds ==
+                        cancellationAfter.delaySeconds &&
+                    cancellation.cuspGuardCount() == 1U,
+                "signed cancellation reaches Origin's axial-cusp guard");
 }
 
 void testFullCellRetention(Context& context) {
@@ -829,13 +850,13 @@ void testCandidateValidation(Context& context) {
         workspace.addCandidate(kTestFrequency, invalid, 0U, 0U);
       },
       "non-finite candidate angle is rejected before mutation");
-  context.expectThrows<ValidationError>(
-      [&workspace, &valid] {
-        ArrivalCandidate invalid = valid;
-        invalid.amplitude = -1.0;
-        workspace.addCandidate(kTestFrequency, invalid, 0U, 0U);
-      },
-      "negative candidate amplitude is rejected before mutation");
+  ArrivalCandidate signedCandidate = valid;
+  signedCandidate.amplitude = -1.0;
+  ArrivalWorkspace signedWorkspace = makeSingleCellWorkspace();
+  signedWorkspace.addCandidate(kTestFrequency, signedCandidate, 0U, 0U);
+  context.check(signedWorkspace.cellAt(0U).size() == 1U &&
+                    signedWorkspace.cellAt(0U).front().amplitude == -1.0F,
+                "finite signed candidate amplitude follows ArrMod semantics");
   context.expectThrows<ValidationError>(
       [&workspace, &valid] {
         ArrivalCandidate invalid = valid;
