@@ -15,6 +15,7 @@ schema 版本和三模型中间状态门。
 | 模块 | 冻结类型/入口 | v1 语义与单位 |
 |---|---|---|
 | `numerics` | `Vec2` | 分量顺序固定为 `range/depth`，单位由字段决定 |
+| `model` | `SoundSpeedSample` | 实/虚声速、range/depth 梯度与 Hessian、密度、0-based depth/range segment 索引 |
 | `ray` | `RayState` | 位置 m、慢度 s/m、动态 `p/q`、声速 m/s、实走时 s |
 | `ray` | `StepQuadrature` | 实际步长 `h`、`hw0/hw1` 和 predictor midpoint，长度为 m |
 | `ray` | `ReflectionEvent` | 0-based 内部点/段索引、边界、切/法向、反射前后慢度 |
@@ -28,6 +29,11 @@ schema 版本和三模型中间状态门。
 `RayPath` 禁止保存复走时、逐频吸收、反射幅相、active mask 或压力。
 `FrequencyWorkspace` 禁止降为 complex64。RayReuse 可以增加私有快路径和统计，
 但不得改变上述数值语义或公开状态含义。
+
+`RayFrequencyPoint::amplitude` 在 `active=true` 时必须非负。Origin 的表格反射
+先以 REAL(4) 决定插值区间、再以 REAL(8) 计算权重；零幅值端点附近可能因此
+产生极小负微外推。该值只允许出现在首个 `active=false` 的终止点或其非活动
+后缀，并须原样保留供 legacy 终止段影响计算；不得将其截为零或重新激活。
 
 ## 3. C++ geometry probe schema v1
 
@@ -46,7 +52,7 @@ Manifest 固定字段：
   "contract_version": 1,
   "producer": "f2cpp|rayreuse",
   "status": "complete",
-  "configuration": "direct|flat-boundary-custom|munk",
+  "configuration": "direct|flat-boundary-custom|munk|i3-piecewise|i3-curvilinear",
   "launch_angle_rad": 0.0,
   "points_file": "ray_points.csv",
   "point_count": 0,
@@ -87,6 +93,10 @@ v1 是“中间几何状态”契约，不是完整中间状态 bundle。Fortran
 既有 oracle schema 验证，待 geometry v1 稳定后以新 schema 版本扩展，不能
 静默向 v1 增加列。
 
-当前自动矩阵选择 source 1、launch angle index 150，并覆盖 direct、
-vacuum/rigid 和 Munk。F2CPP 与 RayReuse 的 probe CSV 要求逐字节一致；两者
+当前基础自动矩阵选择 source 1、launch angle index 150，并覆盖 direct、
+vacuum/rigid 和 Munk；I3 的 F2CPP 专用 probe 另提供 `i3-piecewise` 和
+`i3-curvilinear`。前者 497 个、后者 459 个发射角均已通过 gfortran 逐点
+轨迹对照；冻结汇总分别见 `doc/validation/i3_piecewise_oracle_report.json`
+和 `doc/validation/i3_curvilinear_fortran_oracle_report.json`。
+F2CPP 与 RayReuse 的共同 probe CSV 要求逐字节一致；两者
 相对 Fortran 使用 `compare_f2cpp_geometry_oracle.py` 中冻结的逐字段组合容差。

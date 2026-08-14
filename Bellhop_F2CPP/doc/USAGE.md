@@ -3,8 +3,8 @@
 ## 1. 程序用途
 
 `bellhop_f2cpp` 是裁剪后的 C++20 单频二维 Bellhop 实现。它读取一个
-Bellhop `.env` 文件，计算 Cartesian Cerveny coherent complex pressure，
-并写出 PRT 日志和单频 SHD 声场。
+Bellhop `.env` 文件；coherent、incoherent 与 semi-coherent TL 模式计算
+Cartesian Cerveny 声场并写出 PRT/SHD，ray-trace 模式写出 PRT/RAY 射线轨迹。
 
 程序内部始终先生成完整的频率无关射线轨迹，冻结为只读
 `RayPathCache`，再执行单频投影和声场累加：
@@ -14,10 +14,9 @@ Bellhop `.env` 文件，计算 Cartesian Cerveny coherent complex pressure，
   → SimulationCase
   → GeometryTracer
   → frozen RayPathCache
-  → FrequencyProjector
-  → CartesianCervenyInfluence
-  → pressure scaling
-  → .prt + .shd
+  ├─ C/I/S TL  → FrequencyProjector → CartesianCervenyInfluence
+  │            → pressure/intensity scaling → .prt + .shd
+  └─ ray trace    → RayWriter → .prt + .ray
 ```
 
 F2CPP 一次运行只接受一个频率。多频调度、实际轨迹复用和多频 SHD 属于
@@ -135,8 +134,9 @@ ctest --test-dir build/release \
   --output-on-failure
 ```
 
-初始 M2 派生快照的 Debug 和 Release 均为 20/20；增加数值契约测试后的
-当前 H4 基线均为 21/21。
+初始 M2 派生快照的 Debug 和 Release 均为 20/20；I0 通用 SSP evaluator、
+PCHIP、N²-linear、Cubic Spline、二维边界及 ray-trace 输出测试加入后，
+当前基线均为 29/29。
 
 ### 4.2 Python 标准算例基础测试
 
@@ -147,9 +147,9 @@ python3 -m unittest discover \
   -s test/standard_cases/codes/tests -p 'test_*.py'
 ```
 
-当前项目基线为 69/69。
+当前项目基线为 112/112。
 
-### 4.3 六个单频端到端案例
+### 4.3 四十七个单频端到端案例
 
 从仓库根目录运行：
 
@@ -161,8 +161,74 @@ python3 test/standard_cases/codes/standard_cases.py test \
   --executable Bellhop_F2CPP/build/release/bellhop_f2cpp
 ```
 
-该命令依次生成 `.env`、运行 F2CPP，并检查 PRT/SHD 结构、维度、频率和
-复压力有限性。结果写入：
+该命令运行原有六例、三个新增 SSP 插值案例、三个 I3 边界案例、
+`attenuation_unit_n/f/m/w/q/l` 六个 I4-01 衰减单位案例，以及两个 I4-02
+体积衰减案例，依次生成 `.env` 和
+所需的 `.ati/.bty` sidecar、
+运行 F2CPP。46 个场案例检查 PRT/SHD 结构、维度、频率和复压力有限性；
+新增 `ray_trace_vacuum_rigid` 检查 PRT/RAY，明确不把它计作 SHD 声场。
+`i3_piecewise_boundaries` 还另行通过了全部 497 个发射角的 gfortran 逐点
+轨迹矩阵和最终场数值门。
+`i3_curvilinear_oracle` 的 459 条射线也已通过逐点矩阵；最终场最大复声压
+相对误差为 `5.70e-7`，最大 TL 差为 `7.63e-6 dB`。
+`i3_long_format_materials` 覆盖 `LL` 节点材料到活动 segment、反射事件冻结
+和逐频声学投影；其 Origin/F2CPP 最终场最大相对误差为 `4.57e-7`，最大
+TL 差为 `7.63e-6 dB`，冻结结果见
+`doc/validation/i3_long_format_materials_report.json`。
+六个衰减单位案例分别覆盖 `N/F/M/W/Q/L` 的 ENV 解析与最终场；其冻结
+Origin/F2CPP 比较见 `doc/validation/i4_attenuation_units_report.json`。
+Francois–Garrison 与 biological 案例还覆盖多频场和无损 no-op 防伪门，
+冻结结果见 `doc/validation/i4_volume_attenuation_report.json`。
+`elastic_halfspace_flat` 与 `elastic_halfspace_fluid_control` 覆盖普通 ENV
+弹性 P/S 反射、1/2 kHz 逐频投影和 shear 非空操作门，冻结结果见
+`doc/validation/i4_elastic_halfspace_report.json`。
+`grain_size_flat` 与 `grain_size_equivalent_acoustic_control` 覆盖 bottom `G`
+粒径派生、逐事件当地水声速、固定 `L` 损耗和双频冻结轨迹；两种实现内部
+的 `G` 与等价 `A` control 压力逐位一致，冻结结果见
+`doc/validation/i4_grain_size_report.json`。
+`tabulated_reflection_bottom` 与 `tabulated_reflection_rigid_control` 覆盖
+bottom `F`、`.brc` 幅相插值、双频冻结轨迹以及相对刚性底的非空操作门，
+冻结结果见 `doc/validation/i4_tabulated_reflection_report.json`。
+`q_range_dependent_cross_gradient` 与 `q_range_independent_control` 覆盖
+`Q + .ssp`、range/depth 双单元限步、非零交叉梯度、双频冻结几何及范围
+相关 effect guard。715 点代表射线逐点报告和六个最终场切片分别见
+`doc/validation/i5_q_geometry_oracle_report.json` 与
+`doc/validation/i5_quadrilateral_ssp_report.json`。
+`multi_source_depths` 覆盖三个乱序 source depth 的 Origin 排序、逐源独立
+轨迹缓存与 workspace、SHD source-major 记录顺序以及 1/2 kHz 最终场；冻结
+结果见 `doc/validation/i6_multi_source_report.json`。
+`irregular_receiver_pairs` 覆盖 run-type 第 5 字符 `I`、完整 receiver 坐标轴、
+单压力行 SHD 布局和 CC legacy 深度选择；冻结结果见
+`doc/validation/i6_irregular_receivers_report.json`。
+`source_beam_pattern_directional` 与 `source_beam_pattern_omni_control` 覆盖
+`CC* + .sbp`、dB 到线性压力幅度转换、逐角插值/外推、双频冻结轨迹以及
+相对全向源的非空操作门；冻结结果见
+`doc/validation/i6_source_beam_pattern_report.json`。
+`ray_trace_vacuum_rigid` 覆盖 2 source × 5 launch angles 的 R 模式轨迹，
+共 10 条射线、5934 个点、top/bottom bounce 各 19 次；相对 Origin 的坐标
+最大绝对误差为 `0 m`，语义哈希一致。冻结结果见
+`doc/validation/i6_ray_trace_report.json`。
+`cartesian_component_pressure/vertical/horizontal` 冻结 Cartesian P/V/H 的
+Origin legacy no-op；`cerveny_width_space_filling`、`cerveny_width_wkb`、
+`cerveny_curvature_double`、`cerveny_curvature_zero` 与既有 MS control 组成
+I7-02 五例单因素矩阵，覆盖 F/M/W epsilon、WKB KMAH 和 D/S/Z 完整动态
+跳变。报告分别见 `doc/validation/i7_cartesian_components_report.json` 与
+`doc/validation/i7_beam_options_report.json`。
+`source_geometry_point_explicit` 与 `source_geometry_line` 连同默认
+`constant_speed_direct` 冻结 run-type 第 4 字符：空白/`R` 为 point source，
+`X` 为 line source。point/line 共用相同冻结轨迹，只在逐射线 Influence 权重
+和最终压力扩散缩放分支不同；报告见
+`doc/validation/i7_source_geometry_report.json`。
+`incoherent_direct` 与 `semicoherent_direct` 连同默认 coherent control
+组成 I7-04 C/I/S 矩阵。三者共享冻结几何；I 逐 beam 累加强度，S 先在逐频
+投影中施加 Lloyd mirror，再执行同一强度路径。最终 I/S 取累积强度平方根并
+执行 point/line 扩散缩放，写入与 C 相同布局的 SHD，虚部严格为零；报告见
+`doc/validation/i7_coherence_modes_report.json`。
+`ray_centered_component_pressure/vertical/horizontal` 与 Cartesian pressure
+control 组成 I7-05 四例矩阵，覆盖 ray-centered family 的规则网格求交与
+物理 `P/V/H` 分量投影；报告见
+`doc/validation/i7_ray_centered_components_report.json`。
+结果写入：
 
 ```text
 test/standard_cases/results/f2cpp/<case>/single/
@@ -230,15 +296,18 @@ bellhop_f2cpp <file-root>
 <file-root>.env
 ```
 
-并写出：
+当 top option 第 5 字符或 bottom option 第 2 字符为 `~`/`*` 时，还会读取
+同目录、同 file-root 的 `<file-root>.ati` 或 `<file-root>.bty`。
+
+始终写出：
 
 ```text
 <file-root>.prt
-<file-root>.shd
 ```
 
-输出与输入位于同一目录。程序会截断同名 PRT，并重新写入同名 SHD；需要
-保留旧结果时应先复制或更换 file-root。
+`CC`、`IC`、`SC` TL 模式另写 `<file-root>.shd`；`R` ray-trace 模式另写
+`<file-root>.ray`，且不产生 SHD。输出与输入位于同一目录，程序会截断或
+替换同名输出；需要保留旧结果时应先复制或更换 file-root。
 
 ### 5.2 直接运行
 
@@ -292,27 +361,295 @@ python3 test/standard_cases/codes/standard_cases.py validate \
 
 | 项目 | 支持范围 |
 |---|---|
-| 维度与场 | 二维、coherent complex pressure、压力分量 `P` |
-| 运行类型 | Cartesian Cerveny point-source rectilinear `CC` |
-| 频率与声源 | 每次运行恰好一个频率、一个声源深度 |
-| 水体 | 一个水层、C-linear SSP、真空海面 |
-| 海底 | 平坦刚性底 `R`，或无剪切的声学半空间 `A` |
-| 衰减 | dB/波长输入，可选 Thorp 水体衰减 |
-| 接收网格 | 一个或多个接收深度；至少两个、严格递增且等间距的接收距离 |
-| 波束 | minimum-width、standard-curvature `MS`，1～3 个图像源 |
-| 发射角 | 显式数量，或 `0` 表示按设计频率自动规划 |
+| 维度与场 | 二维；coherent complex pressure，incoherent/semi-coherent intensity-derived pressure，或几何射线轨迹 |
+| 运行类型 | Cartesian Cerveny `CC`/`IC`/`SC`，或 ray-centered Cerveny `CR`/`IR`/`SR`；第 4 字符可选 point `R` 或 line `X`；另有安全子集内的 `R`/`RG`/`RGO` ray trace。TL 模式可用第 3 字符 `*` 启用 `.sbp`；仅 Cartesian TL 可用第 5 字符 `I` 启用 irregular SHD |
+| 频率与声源 | 每次运行恰好一个频率；支持一个或多个 source depth |
+| 水体 | 一个水层、C-linear、N²-linear、PCHIP、Cubic Spline 或 Q 型范围相关二维 SSP、真空海面 |
+| 二维边界 | 平坦边界；`.ati/.bty` 的 piecewise-linear `LS`、canonical curvilinear `C` short format；piecewise-linear `LL` fluid long format |
+| 海底 | 刚性底 `R`，普通 ENV 流体/弹性声学半空间 `A`，bottom grain-size `G`，或 bottom tabulated reflection `F + .brc` |
+| 衰减 | `N/F/M/W/Q/L` 输入单位；可选 Thorp、Francois–Garrison 或 biological 体积衰减 |
+| 接收网格 | Cartesian TL：规则 depth×range 笛卡尔积，或等数量 depth/range 轴的 irregular SHD 布局；ray-centered TL：仅规则笛卡尔积；两者均要求至少两个、严格递增且等间距的接收距离。ray trace：允许 Origin 标准输入中的单个 receiver range，轨迹由 range box 截止 |
+| 波束 | Cartesian/ray-centered Cerveny TL：`F/M/W` beam width × `D/S/Z` reflection-curvature condition，1～3 个图像源；ray trace 不读取 beam/image 行 |
+| 发射角 | Cartesian/ray-centered TL 使用既有规划；ray trace 的显式 `Nalpha` 原样使用，`0` 自动取 50 |
 
 不支持的选项会明确报错，而不会静默降级。当前不支持：
 
 - 多频 `.env` 或一次运行多频；
-- arrivals、eigenray、ray plot、速度分量；
-- 弹性海底、非平坦边界、边界粗糙度；
-- PCHIP、Spline、beam shift；
-- incoherent/semi-coherent 和不规则接收网格；
+- arrivals、eigenray；Cartesian P/V/H 仍按 Origin legacy no-op 兼容，物理
+  V/H 仅由 ray-centered Cerveny 计算；
+- ray-centered irregular receiver grid；首个纵切会明确拒绝，不会退化为
+  Cartesian 或静默套用 CC 的 irregular legacy 深度语义；
+- 顶部声学/粒径/表格反射边界、`G+LL`、`F+LL`、弹性 `LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
+- `P/W` reflection-coefficient 路径；当前 Origin 2D 中它们没有完整的实际反射消费/写出链；
+- 小写 `m` 幂律单位；
+- beam shift；
 - 3D 或 N×2D。
 
 输入沿用 Bellhop I/O 单位：接收距离和范围盒使用 km，角度使用 degree，
 密度输入使用 g/cm³；parser 在边界转换为内部 SI 单位。
+
+### 6.1 多 source depth
+
+source depth 记录可给一个或多个值。输入值先按 Origin 语义转换为 REAL4、
+升序排列并保留重复值；当数量至少为 3 时，也支持只给首末深度并自动等间距
+展开。所有 source 共用一个按 1500 m/s 参考声速规划的 D-02 launch fan，
+但每个 source 都独立计算起点声速、epsilon、束窗和压力缩放。
+
+求解器逐 source 建立、冻结、消费并释放 `RayPathCache`；不同 source 的压力
+不会相干相加。PRT 中的 ray/point 数是各 source 总和，cache bytes 是逐源
+峰值。SHD 写真实 source 数和排序后的深度向量，压力记录按 source-major、
+receiver-depth 次序排列。当前安全子集仍要求每个 source 严格位于水体内部。
+
+### 6.2 Irregular receiver grid
+
+在七字符 run type 的第 5 个位置写 `I` 可选择 irregular SHD 布局，例如
+`'CC RI2'`。receiver depth 数必须等于 receiver range 数；SHD 头仍保存两条
+完整坐标轴并标记 `irregular`，但每个 source 只写一条、长度为 range 数的
+压力记录。第 5 个字符留空或写 `R` 时仍是标准 depth×range 笛卡尔积。
+
+需要注意当前 Origin 2D 的 `InfluenceCervenyCart` 遗留行为：虽然输入和 SHD
+声明为 `(Rr(i), Rz(i))` 配对，它在 `CC` 分支实际对所有 range 使用
+`Rz(1)`。F2CPP 为逐场兼容明确复刻这一可观察语义，同时保留完整 depth 轴；
+不能把此模式理解为已经提供修正后的任意配对 CC 场。真正逐 range 使用
+`Rz(i)` 的现代化模式需与后续 beam-family 工作一并设计，不能静默改变同一
+ENV 的 Origin 结果。
+
+### 6.3 Source beam-pattern
+
+在 run type 的第 3 个字符写 `*`（例如 `CC*`）时，CLI 会读取与 `.env`
+同根的 `.sbp`。留空或写 `O` 使用全向源。`.sbp` 格式为：
+
+```text
+N
+angle_1_deg  power_1_dB
+...
+angle_N_deg  power_N_dB
+```
+
+当前安全子集要求 `N >= 2`、角度严格递增，所有角度和 dB 值有限。每个 dB
+值先按 `10^(dB/20)` 转换成线性压力幅度，再在相邻角节点间线性插值；表域外
+沿第一段或最后一段线性外推，不做端值钳制。为保持逐频投影的有限、非负
+契约，配置后的整个 launch fan 上外推/插值结果必须非负。
+
+方向图由所有 source depth 共用，且不依赖频率。它只在频率投影入口乘到
+每条射线的初始幅度，不改射线位置、步长、反射事件或冻结缓存。因此同一
+source 的 1/2 kHz 仍复用相同几何，多个 source 也不会把方向图写回全局
+source amplitude。
+
+### 6.4 Cerveny field component
+
+C/I/S TL 的 image/window 行第三项接受大写 `P`、`V` 或 `H`：
+
+```text
+3  5  'V'
+```
+
+CLI 会保留该选择并在 PRT 的 `Component =` 行回显；未知值、小写值和空值
+会明确拒绝。需要特别注意，本项目当前所复刻的 Origin 2D
+`InfluenceCervenyCart` 虽解析 P/V/H，却完全不读取该字段，SHD 也没有
+component 元数据，因此 Cartesian 下三种选择会产生同一个压力场。这是经
+Origin/F2CPP 三控制例逐字节冻结的 legacy 行为，不代表已经计算了物理垂直/
+水平分量。ray-centered Cerveny 则真实消费该字段：`P` 保留标量压力贡献，
+`V`、`H` 使用局部射线切向/法向与 Origin 相同的梯度投影公式。两组验证报告
+分别见 `doc/validation/i7_cartesian_components_report.json` 与
+`doc/validation/i7_ray_centered_components_report.json`。
+
+### 6.5 Cartesian Cerveny beam width 与反射曲率
+
+CC 的 beam 设置记录为：
+
+```text
+'<width><curvature>'  epsilon_multiplier  loop_range_km
+```
+
+`width` 可为 `F`（space filling）、`M`（minimum width）或 `W`（WKB）；
+`curvature` 可为 `D`（完整反射动态跳变量加倍）、`S`（standard）或 `Z`
+（完整跳变量清零），九种大写组合均支持。`M` 使用 `loop_range_km` 选取
+最小束宽；`F` 由发射角间隔选取束宽；`W` 使用源点声速梯度和每条射线的
+发射角计算实 epsilon，并按 real(q) 过零规则更新 KMAH。WKB 保留 Origin
+可观察的 `cos(alpha**2)` 表达式；不得按 `cos(alpha)**2` 改写。
+
+F/M/W 只影响逐频 influence，不改中心射线；D/S/Z 会改变冻结 RayPath 的
+动态 p/q，但不改变中心位置、走时或镜面反射慢度。因此不同 curvature mode
+的缓存不可混用，同一 mode 下仍可跨频复用。当前安全输入仍要求有限、正的
+epsilon multiplier；loop range 统一要求为正。beam shift 继续明确延期。
+
+### 6.6 R 模式二维射线输出
+
+run type 使用 `R`、`RG` 或 `RGO` 时进入 ray-trace；这三种写法当前等价，
+安全范围限于全向源、真空海面 `V`、刚性海底 `R`、无 beam shift 和无损耗
+前缀。`R*` 方向图会被明确拒绝，避免方向图截断语义被静默忽略。显式
+`Nalpha` 会原样使用；写 `0` 时固定自动生成 50 个发射角。
+
+R 模式在 integrator 的 `step zbox rbox` 记录后结束输入，不读取 TL
+专用的 `MS` beam 和 image/window 两行；若仍提供这些行，会作为尾随输入
+报错。每个 source 使用同一个发射角扇、独立建立并冻结缓存，再按 source-major、
+launch-angle-major 顺序写 RAY。RAY 头包含 title、frequency、`1 1 NSz`、
+`Nalpha 1`、上下边界深度和 `'rz'`；每条射线记录发射角、点数、top/bottom
+bounce 数及 `range depth` 坐标。每次反射保留入射与反射两侧的同坐标重复点，
+以兼容 Origin reader。该模式只输出 PRT/RAY，不执行逐频投影或声场累加，
+也不创建 SHD。
+
+### 6.7 C/I/S 相干模式
+
+TL run type 的第一个字符选择累加方式：`C` coherent、`I` incoherent、
+`S` semi-coherent；第二个字符选择 Cartesian Cerveny `C` 或 ray-centered
+Cerveny `R`，例如 `CC/IC/SC` 或 `CR/IR/SR`。三种相干模式只改变逐频投影、
+Influence 累加和最终场缩放，中心射线、动态射线、反射事件及其冻结缓存完全
+共享。
+
+`C` 逐 beam 累加复压力。`I` 对每条 beam 的图像源合成贡献取模平方，再累加
+实强度；`S` 在逐频 source 投影时先乘
+`sqrt(2) * abs(sin(omega/c * source_depth * sin(alpha)))` Lloyd mirror
+幅度，随后采用与 I 相同的逐 beam 强度累加。I/S 在全部 beam 完成后取
+`sqrt(real(intensity))`，再按 run type 第 4 字符执行 point 或 line 的最终
+扩散缩放。
+
+C/I/S 写出相同 frequency/source/depth/range 布局的 SHD。C 保存复压力；
+I/S 仍占用兼容的复数槽，但虚部严格为零，当前 Origin 兼容负缩放使其非零
+实部为负。三例最终场与效果门见
+`doc/validation/i7_coherence_modes_report.json`。
+
+### 6.8 Ray-centered Cerveny
+
+TL run type 的第二个字符写 `R` 可选择 ray-centered Cerveny，例如 coherent
+pressure 使用 `CR`，incoherent/semi-coherent 分别使用 `IR`/`SR`。该 family
+复用与 Cartesian 相同的中心/动态射线缓存，但用射线局部坐标中的法向距离
+决定 beam window 和接收器命中，沿射线路径插值动态 `p/q`、复走时、KMAH
+及反射状态，再按第 6.4 节的 `P/V/H` 规则累加最终场。`F/M/W` beam width、
+`D/S/Z` curvature、point/line source geometry 和 C/I/S 累加契约继续适用。
+
+首个纵切只支持规则 depth×range 接收网格，并要求至少两个严格递增、等间距
+的 receiver range。run type 第 5 字符若选择 irregular grid 会在 parser 和
+模型边界明确拒绝；这项限制避免把 ray-centered 的逐 range 求交静默替换为
+Cartesian irregular 的 Origin legacy `Rz(1)` 语义。CC/P、CR/P、CR/V、
+CR/H 四例的冻结验证见
+`doc/validation/i7_ray_centered_components_report.json`。
+
+### 6.9 Q 型范围相关 SSP
+
+当 top/SSP option 的第一个字符为 `Q` 时，`.env` 中仍需提供参考 SSP 深度
+节点；这些节点定义二维网格的深度轴，并继续提供密度与原始衰减。实声速
+矩阵放在同根 `.ssp` 文件中：
+
+```text
+3
+0.0  0.35  0.80
+1500.0  1540.0  1580.0
+1500.0  1520.0  1540.0
+```
+
+第一行是 range 节点数，第二行是严格递增的 range 节点（km）；其后必须按
+`.env` 参考 SSP 的深度节点顺序，每个深度恰写一行、每行恰有同样数量的
+实声速（m/s）。当前安全契约要求至少两个 range 和 depth 节点、所有声速
+有限且为正、总网格样本数不超过 2,000,000，并拒绝尾随记录。流式解析没有
+同根 sidecar 位置，因此 Q 输入只能通过文件路径加载。
+
+几何侧按 Origin 顺序先做深度线性、再做 range 线性，返回 `c/cr/cz/crz`
+（`crr=czz=0`）；密度和逐频虚声速仍来自 `.env` 参考 SSP 的深度插值。
+追迹器同时保存 depth/range 单元，步长不会跨过当前 Q range cell。`.ssp`
+的 range 域应比射线空间盒多留至少一个 minimum-step 余量，否则越出 SSP
+域会作为数值失败报告，而不是静默按空间盒正常退出。
+
+体积衰减由 top/SSP option 的第 4 个字符选择。Francois–Garrison 使用 `F`，
+并在 option 后紧跟一行 `temperature_C salinity_psu pH mean_depth_m`；例如：
+
+```text
+'CVWF'
+20.0 35.0 8.0 0.0
+```
+
+Biological 使用 `B`，随后是层数以及每层的
+`top_depth_m bottom_depth_m resonance_frequency_Hz Q coefficient_dB_per_km`：
+
+```text
+'CVWB'
+2
+400.0 600.0 5000.0 10.0 0.01
+500.0 700.0 1000.0  6.0 0.01
+```
+
+普通 `A` 型海床材料记录支持流体或弹性半空间：
+
+```text
+'A' 0.0
+100.0  2000.0  1000.0  2.0  0.5  1.0 /
+```
+
+六列依次为 `depth_m alphaR_mps betaR_mps rho_g_cm3 alphaI betaI`；五列写法
+省略 `betaI` 并按零处理。`betaR>0` 时启用弹性 P/S 反射，P、S 的原始衰减
+都使用 top/SSP option 指定的同一单位和体积衰减模型，并只在逐频投影时
+换算。`betaR=0` 时要求 `betaI=0`。当前安全子集要求材料深度与水层底深
+一致；原版允许二者不同的记录尚未开放。
+
+层深度端点闭合，重叠层按输入顺序累加；允许 0 层，安全上限为 200 层。
+F2CPP 对非有限值和非物理参数采用比原版更严格的显式拒绝策略。
+
+bottom `G` 在 bottom option 后读取 `depth_m Mz_phi`：
+
+```text
+'G' 0.0
+100.0  3.0 /
+```
+
+程序按 UW-APL grain-size 分段公式保存 `vr/rhor/alpha2_f`，在每个冻结反射
+事件处用当地水声速生成有效流体底质。沉积物损耗固定按 Origin 的 `L` loss
+parameter 换算，不叠加 top option 的 Thorp/Francois–Garrison/Biological
+体积衰减；水体自身仍照常应用这些衰减。当前安全子集要求记录深度等于水层
+底深、派生声速比/密度比为正，并拒绝 `G+LL`。上游 2D Fortran 的 `G`
+初始化遗漏已在 oracle 中按其 3D 正确路径修复并单独记录，不复刻未初始化
+NaN 行为。
+
+bottom `F` 不读取材料记录，而是从与 `.env` 同根的 `.brc` 文件读取反射表：
+
+```text
+4
+ 0.0  0.20    0.0
+30.0  0.40   30.0
+60.0  0.70  100.0
+90.0  0.90  160.0
+```
+
+首行是至少为 2 的节点数，随后每行依次为 `grazing_angle_deg magnitude
+phase_deg`。角度必须严格递增，幅值必须非负；相位可超过 `[-180,180]`，
+程序不会自动解缠。反射时以 `abs(atan2(Th,Tg))` 转为度并折叠到
+`[0,90]`，幅值与已展开相位分别线性插值；表域外取零幅值、零相位。即使
+节点幅值为零，其表内相位仍会进入累计相位；`F` 不使用 `A/G` 的 `1e-5`
+小系数抑制，但后续通用 active-amplitude 门仍生效。`.brc` 只影响逐频投影，
+不写回冻结轨迹；可与平坦或 short-format `LS/C` bathymetry 组合，当前拒绝
+`F+LL`。CLI 必须使用文件根路径运行，stream-only 解析无法解析 sibling
+`.brc`。为复刻 Origin，域判断和二分区间先使用单精度舍入后的查询角，
+插值权重仍使用原双精度角；这只影响表端点附近约半个单精度 ULP 的窄区间。
+
+折线边界文件示例：
+
+```text
+LS
+3
+0.0  100.0
+1.0  120.0
+2.0   90.0
+```
+
+第一列为 km，第二列为 m；范围必须严格递增，至少两个节点。程序与原版一样
+在首末节点外作常深水平延拓。顶边界 option 的有效写法如 `'CVW ~'`（内部
+空格不可省略），底边界如 `'R~'` 或 `'A~'`。
+
+`LL` long format 每个节点携带一套流体地声参数：
+
+```text
+LL
+3
+-1.0  1000.0  1600.0  0.0  1.5  0.10  0.0
+ 2.0  1000.0  1800.0  0.0  2.0  0.20  0.0
+ 4.0  1000.0  2000.0  0.0  2.5  0.30  0.0
+```
+
+七列依次为 `range_km depth_m alphaR betaR rho_g_cm3 alphaI betaI`。当前切片
+要求 `betaR=betaI=0`；材料归属于节点右侧的 segment，精确落在节点时保留
+到达侧 segment。声学半空间反射时，活动节点的原始材料随事件写入冻结轨迹，
+各频率再按 ENV 的衰减单位换算；与原版一致，`LL` 的体积衰减求值深度为
+`1e20 m`。真空/刚性边界仍由边界条件优先，忽略 long-format 材料。
 
 可从共享标准案例模板开始修改：
 
@@ -328,14 +665,17 @@ PRT 是文本日志，包含：
 
 - 解析后的主要环境和网格配置；
 - 发射角、射线数、轨迹点数和缓存字节数；
-- Trace、Project、Influence、Scale、SHD 分阶段时间；
+- C/I/S TL 模式的 Trace、Project、Influence、Scale、SHD 分阶段时间，
+  或 ray-trace 模式的 Trace 与 RAY 写出时间；
 - 成功标记或致命错误。
 
-成功文件以以下标记结束：
+C/I/S TL 成功文件以以下标记结束：
 
 ```text
 Bellhop F2CPP completed successfully
 ```
+
+ray-trace 成功文件以 `Bellhop F2CPP ray trace completed successfully` 结束。
 
 ### SHD
 
@@ -346,6 +686,30 @@ SHD 保存单频复压力场：
 - 布局可由仓库的
   [`test/PlotRead/bellhop_io_py`](../../test/PlotRead/README.md) 读取；
 - 维度顺序为 frequency/source depth/receiver depth/range。
+
+SHD 由 C/I/S TL 模式生成，三者使用相同布局；I/S 的复数压力槽虚部为零。
+
+### RAY
+
+RAY 是二维 `rz` 文本轨迹文件，按 source-major、launch-angle-major 顺序保存
+每条射线的发射角、点数、上下边界反射次数与坐标。反射前后的同坐标点会
+同时保留；可用它们重建入射/反射折点。R 模式不会同时生成 SHD。
+
+### 输出安全与资源上限
+
+C/I/S TL 在分配场工作区和打开 SHD 前，先检查接收器场值总数、
+source × workspace 总量、SHD record words/bytes、最终 record 号及总文件
+字节是否可由 Origin 兼容整数和本机流偏移安全表达。当前项目上限为每次
+TL 求解保留不超过 2,000,000 个复数场值、总射线数不超过
+2,000,000；R 模式不分配压力工作区，因此不受未使用的接收器笛卡尔积上限
+误伤，但仍执行总射线数门。
+
+SHD 和 RAY 都先写同目录临时文件，完整关闭成功后才发布为最终产品。发布
+失败时旧的有效文件保持不变，临时文件会清理。同一 file-root 从 CC 切换到
+R 或从 R 切回 CC 时，成功后会删除另一模式的陈旧产品；启动时也会清除
+陈旧 `.shd.tmp/.ray.tmp`。PRT 仍会在失败时写出 `FATAL ERROR` 诊断。
+标准案例的 `run/test` 阶段同样先删除旧 manifest、PRT、SHD、RAY 和临时
+文件，避免失败执行被上一轮结果伪装为通过。
 
 ## 8. 常见问题
 
@@ -370,7 +734,7 @@ SHD 保存单频复压力场：
 ### PRT 中出现 `FATAL ERROR`
 
 读取该行后的具体原因。常见情况是 `.env` 使用了未支持的 Bellhop 模式、
-非等距接收距离、多个声源或弹性海底。
+非等距规则接收距离、顶部声学半空间或弹性 `LL` 海底。
 
 ### 5 kHz 标准案例占用较多内存
 
