@@ -365,13 +365,13 @@ python3 test/standard_cases/codes/standard_cases.py validate \
 | 项目 | 支持范围 |
 |---|---|
 | 维度与场 | 二维；coherent complex pressure，incoherent/semi-coherent intensity-derived pressure，普通射线，arrivals 或 eigenray prefixes |
-| 运行类型 | Cartesian Cerveny `CC`/`IC`/`SC`，或 ray-centered Cerveny `CR`/`IR`/`SR`；安全子集内的 `R`/`RG`/`RGO` ray trace；`A/a` arrivals；`E` eigenray。A/a/E 的 beam family 支持 Cartesian geometric hat `G`、ray-centered geometric hat `g` 和 Cartesian geometric Gaussian `B` |
+| 运行类型 | Cartesian Cerveny `CC`/`IC`/`SC`，或 ray-centered Cerveny `CR`/`IR`/`SR`；非 beam-shift `R`/`RG`/`RGO` ray trace；`A/a` arrivals；`E` eigenray。A/a/E 的 beam family 支持 Cartesian geometric hat `G`、ray-centered geometric hat `g` 和 Cartesian geometric Gaussian `B` |
 | 频率与声源 | 每次运行恰好一个频率；支持一个或多个 source depth |
 | 水体 | 一个水层、C-linear、N²-linear、PCHIP、Cubic Spline 或 Q 型范围相关二维 SSP |
-| 二维边界 | top/bottom 均支持 `V/R/A/G/F`；top `F + .trc`、bottom `F + .brc`；平坦边界及 `.ati/.bty` 的 piecewise-linear `LS`、canonical curvilinear `C` short format；piecewise-linear `LL` fluid long format |
+| 二维边界 | top/bottom 均支持 `V/R/A/G/F`；top `F + .trc`、bottom `F + .brc`；平坦边界及 `.ati/.bty` 的 piecewise-linear `LS`、canonical curvilinear `C` short format；piecewise-linear `LL` fluid/elastic P/S long format |
 | 衰减 | `N/F/M/W/Q/L` 输入单位；可选 Thorp、Francois–Garrison 或 biological 体积衰减 |
 | 接收网格 | Cartesian TL：规则 depth×range 笛卡尔积，或等数量 depth/range 轴的 irregular SHD；ray-centered TL：仅规则网格。A/a/E 的 Cartesian G/B 支持规则及 Origin 配对 irregular 接收器，ray-centered g 仅规则、等间距 range；R 允许单个 receiver range |
-| 波束 | Cartesian/ray-centered Cerveny TL：`F/M/W` beam width × `D/S/Z` reflection-curvature condition，1～3 个图像源；A/a/E 仅 G/g/B，不读取 TL 的 beam/image 两行；R 同样不读取 |
+| 波束 | Cartesian/ray-centered Cerveny TL：`F/M/W` beam width × `D/S/Z` reflection-curvature condition，1～3 个图像源；A/a/E 仅 G/g/B，不读取 TL 的 beam/image 两行；R 同样不读取，并支持 `.sbp` 与显式 `Nalpha=1` |
 | 发射角 | TL 与 A/a/E 使用既有自动规划；R 的显式 `Nalpha` 原样使用，`0` 自动取 50 |
 
 不支持的选项会明确报错，而不会静默降级。当前不支持：
@@ -382,7 +382,7 @@ python3 test/standard_cases/codes/standard_cases.py validate \
   仅由 ray-centered Cerveny 计算；
 - ray-centered irregular receiver grid；首个纵切会明确拒绝，不会退化为
   Cartesian 或静默套用 CC 的 irregular legacy 深度语义；
-- `G+LL`、`F+LL`、弹性 `LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
+- `G+LL`、`F+LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
 - `P/W` reflection-coefficient 路径；当前 Origin 2D 中它们没有完整的实际反射消费/写出链；
 - 小写 `m` 幂律单位；
 - beam shift；
@@ -657,7 +657,7 @@ LS
 在首末节点外作常深水平延拓。顶边界 option 的有效写法如 `'CVW ~'`（内部
 空格不可省略），底边界如 `'R~'` 或 `'A~'`。
 
-`LL` long format 每个节点携带一套流体地声参数：
+`LL` long format 每个节点携带一套流体或弹性 P/S 地声参数：
 
 ```text
 LL
@@ -667,8 +667,8 @@ LL
  4.0  1000.0  2000.0  0.0  2.5  0.30  0.0
 ```
 
-七列依次为 `range_km depth_m alphaR betaR rho_g_cm3 alphaI betaI`。当前切片
-要求 `betaR=betaI=0`；材料归属于节点右侧的 segment，精确落在节点时保留
+七列依次为 `range_km depth_m alphaR betaR rho_g_cm3 alphaI betaI`；
+`betaR=betaI=0` 表示流体材料，非零值表示 elastic shear 参数。材料归属于节点右侧的 segment，精确落在节点时保留
 到达侧 segment。声学半空间反射时，活动节点的原始材料随事件写入冻结轨迹，
 各频率再按 ENV 的衰减单位换算；与原版一致，`LL` 的体积衰减求值深度为
 `1e20 m`。真空/刚性边界仍由边界条件优先，忽略 long-format 材料。
@@ -770,7 +770,7 @@ R/A/a/E 或切回 CC 时，成功后会删除其他模式的陈旧产品；启�
 ### PRT 中出现 `FATAL ERROR`
 
 读取该行后的具体原因。常见情况是 `.env` 使用了未支持的 Bellhop 模式、
-非等距规则接收距离、顶部声学半空间或弹性 `LL` 海底。
+非等距规则接收距离或缺失 `.ati/.bty/.trc/.brc/.sbp` 附属文件。
 
 ### 5 kHz 标准案例占用较多内存
 

@@ -553,11 +553,11 @@ I0～I8 保持冻结，不重新拆分或修改其数值语义。剩余工作按
      `ReflectionEvent` 和逐频投影；
    - 运行相关 parser/boundary/projector 测试、一个 top-boundary Origin 对照、
      `f2cpp-regression` 和 `f2cpp-full`。
-2. **B2 — General R products（TODO）**
+2. **B2 — General R products（ACCEPTED）**
    - 在 B1 接口稳定后支持方向性 source pattern、已支持有损边界、逐频活动
      prefix 和显式单 ray；
    - 不加入 beam shift，不改变冻结轨迹的频率无关契约。
-3. **B3 — Elastic LL materials（TODO）**
+3. **B3 — Elastic LL materials（ACCEPTED）**
    - 在 B1 接口稳定后支持 top/bottom acoustic `LL` 的沿程 elastic P/S 材料；
    - B2 与 B3 并行实现，batch 完成后统一 review 和集成。
 4. **B4 — Replication closure（TODO）**
@@ -576,6 +576,16 @@ bottom `V`，top `F` 解析同根 `.trc`，上下边界共用既有反射事件�
 分别为 `1.73985413e-8`/`1.40428056e-5`，最大 TL 差
 `1.14440918e-4 dB`；`f2cpp-regression`、145 项 Python 测试、37 项 CTest
 及 63 个 F2CPP 单频案例全部通过。B1 接口已稳定，B2/B3 可以并行启动。
+
+B2 与 B3 于 2026-08-14 并行完成。B2 的 R writer 使用临时逐频投影决定
+Origin-compatible terminal prefix，支持方向性 `.sbp`、已验收的非
+beam-shift 边界和显式单 ray，且不改写 `RayPathCache`；新案例与 Origin 的
+1 条射线、1107 点、3/3 次上下反射及全部坐标精确一致。B3 允许 top/bottom
+acoustic `LL` 保存 elastic P/S 材料，继续在几何事件处冻结单个 segment
+material，并按 `1e20 m` 深度逐频换算；新案例最大复压力绝对/相对误差为
+`4.38070691e-11`/`4.26289063e-7`，最大 TL 差 `1.52587891e-5 dB`。
+最终 regression 为 CTest 37/37、案例 14/14；full 为 Python 145/145、
+CTest 37/37、F2CPP 单频 65/65。B4 的前置条件已经满足，但尚未启动。
 
 ## 6. 每项功能的统一验收门
 
@@ -606,7 +616,7 @@ bottom `V`，top `F` 解析同根 `.trc`，上下边界共用既有反射事件�
 | 收口 | I9-B4 | 形成可声明的二维兼容范围和新派生基线 |
 
 I0～I2、I3-01～I3-06、I4-01～I4-05、I5-01～I5-05、I6-01～I6-05 和
-I7-01～I7-06、I8-01～I8-04 已按纵切完成并冻结，当前执行 I9-B1。
+I7-01～I7-06、I8-01～I8-04 及 I9-B1～B3 已完成并冻结，当前暂停在 B4 前。
 每个阶段开始前仍应根据实际
 算例需求复核优先级；该复核只能调整尚未开始阶段的先后，不能绕过依赖门。
 

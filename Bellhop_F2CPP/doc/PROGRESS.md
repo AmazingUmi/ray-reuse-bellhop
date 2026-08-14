@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-14
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I0～I8 已完成并冻结；I9-B1 Boundary symmetry 已完成，B2/B3 可并行启动。
+> 当前施工状态：I0～I8 已完成并冻结；I9-B1～B3 已完成，暂停在 B4 closure 前。
 
 ## 1. 已完成范围
 
@@ -40,6 +40,8 @@
 | I8-03 | 完成 | G/g/B eigenray 命中、冻结 ray prefix、EOF `.ray` writer 与 E-mode CLI |
 | I8-04 | 完成 | 独立 ARR/E reader、真实 ArrMod oracle、Origin/F2CPP 矩阵、输出安全与全回归报告 |
 | I9-B1 | 完成 | top `R/A/G/F`、top `.trc`、bottom `V` 与方向无关的共享边界声学/事件投影 |
+| I9-B2 | 完成 | General R 的方向性 `.sbp`、有损边界逐频 terminal prefix 与显式单 ray |
+| I9-B3 | 完成 | top/bottom acoustic `LL` elastic P/S、事件材料冻结与 `1e20 m` 逐频换算 |
 
 ## 2. 当前验证基线
 
@@ -47,7 +49,7 @@
 - AppleClang Release：37/37 CTest；
 - GCC 14 Release/Werror：37/37 CTest，项目 C++ 源码无 GCC warning/error；
 - Python 标准算例工具：145/145；
-- F2CPP 单频端到端案例：63/63，其中包含 6 个 ARR、4 个 E 和 B1 top-F/bottom-V，既有 SHD/RAY
+- F2CPP 单频端到端案例：65/65，其中包含 6 个 ARR、4 个 E，以及 B1～B3 三个收口案例；既有 SHD/RAY
   案例全部保持通过；
 - I3-06 `LL` 最终场：最大复压力绝对误差 `4.66e-11`、最大相对误差
   `4.57e-7`、最大 TL 差 `7.63e-6 dB`。
@@ -149,6 +151,13 @@
   端到端消费；最大复压力绝对误差 `1.73985413e-8`、最大相对误差
   `1.40428056e-5`、最大 TL 差 `1.14440918e-4 dB`。B1 checkpoint 的
   `f2cpp-regression`、Python 145/145、CTest 37/37 和单频案例 63/63 均通过。
+- I9-B2 General R 对照：方向性 `.sbp`、top `.trc`、bottom rigid 与显式
+  `Nalpha=1` 组合产生 1 条射线、1107 个写出点和 3/3 次 top/bottom bounce；
+  Origin/F2CPP 的结构、terminal prefix 和坐标精确一致。
+- I9-B3 elastic LL 对照：top/bottom acoustic `LL` 同时使用非零 P/S 参数；
+  最大复压力绝对误差 `4.38070691e-11`、最大相对误差 `4.26289063e-7`、
+  最大 TL 差 `1.52587891e-5 dB`。最终 regression 为 CTest 37/37、案例
+  14/14；full 为 Python 145/145、CTest 37/37、单频案例 65/65。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 [`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
@@ -182,8 +191,8 @@ I8 arrivals/eigenray 已完成并冻结，正式任务与验收记录位于
 materials 并行 → B4 Replication closure 的顺序执行；不重新打开 I0～I8，
 也不向 `Bellhop_RayReuse` 同步。
 
-B1 已补齐 top `R/A/G/F`、top `F + .trc` 和 bottom `V`，并统一
-`BoundaryModel` 的上下方向逻辑。B2 General R products 与 B3 Elastic LL
-materials 的共同边界接口前置条件已经满足，可按计划并行启动。
+B1～B3 已完成：上下边界共享同一类型/方向契约，普通 R 可消费方向图与
+逐频边界损失，top/bottom `LL` 可冻结 elastic P/S 材料。B4 Replication
+closure 的前置条件已经满足，但尚未启动。
 `P/W`、`CS/CL`、`G/F + LL`、ray-centered irregular receiver、3D、N×2D、
 beam shift 和 analytic SSP 继续延期，范围以 [`USAGE.md`](./USAGE.md) 为准。
