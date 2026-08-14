@@ -221,7 +221,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wo
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -309,10 +309,18 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.geometric_
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-01-T3 checkpoint commit.
+- Tests: AppleClang Debug ASan/UBSan and GCC 14 Release/Werror component
+  builds; complete Debug and GCC CTest 33/33 each; focused arrival/geometric-
+  hat tests; F2CPP single-frequency geometric-hat Cartesian and ray-centered
+  cases; `git diff --check` passed.
+- Oracle / parity result: fresh Origin/F2CPP I7 geometric-hat and Gaussian-
+  family matrices passed `validate_i7_geometric_hat.py` and
+  `validate_i7_gaussian_beams.py`; no frozen pressure drift was observed.
+- Notes: the accepted sink shares the existing G/g traversal and preserves
+  every prior pressure/intensity branch. Arrival records use Origin endpoint
+  (`ray2D(iS)`) bounce prefixes, Cartesian segment or ray-centered endpoint
+  declination, binary64 candidate math, and the accepted AddArr boundary.
 
 ## I8-01-T4
 

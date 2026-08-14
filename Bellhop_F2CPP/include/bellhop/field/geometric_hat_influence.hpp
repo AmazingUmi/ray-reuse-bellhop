@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <optional>
 
+#include "bellhop/field/arrival_workspace.hpp"
 #include "bellhop/field/frequency_workspace.hpp"
 #include "bellhop/model/simulation_case.hpp"
 #include "bellhop/ray/ray_path.hpp"
@@ -59,10 +60,18 @@ class GeometricHatInfluence {
       std::optional<GeometricHatDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
+  [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulateArrivals(
+      ArrivalWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      double launchAngleSpacingRadians,
+      std::optional<GeometricHatDiagnosticRequest> diagnosticRequest =
+          std::nullopt) const;
+
  private:
   [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulateImpl(
       FrequencyWorkspace* pressureWorkspace,
-      IntensityWorkspace* intensityWorkspace, const RayPath& path,
+      IntensityWorkspace* intensityWorkspace,
+      ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState,
       double launchAngleSpacingRadians,
       std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const;

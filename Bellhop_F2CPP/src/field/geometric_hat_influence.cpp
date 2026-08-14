@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <string>
@@ -94,13 +95,18 @@ void validateUniformRanges(const ReceiverGrid& receivers, double delta) {
 
 void validateInput(const FrequencyWorkspace* pressureWorkspace,
                    const IntensityWorkspace* intensityWorkspace,
+                   const ArrivalWorkspace* arrivalWorkspace,
                    const RayPath& path,
                    const RayFrequencyState& frequencyState,
                    const ReceiverGrid& receivers,
                    double launchAngleSpacingRadians,
                    const std::optional<GeometricHatDiagnosticRequest>&
                        diagnosticRequest) {
-  if ((pressureWorkspace == nullptr) == (intensityWorkspace == nullptr)) {
+  const unsigned sinkCount =
+      static_cast<unsigned>(pressureWorkspace != nullptr) +
+      static_cast<unsigned>(intensityWorkspace != nullptr) +
+      static_cast<unsigned>(arrivalWorkspace != nullptr);
+  if (sinkCount != 1U) {
     throw ValidationError(
         "geometric hat influence requires exactly one workspace");
   }
@@ -117,15 +123,21 @@ void validateInput(const FrequencyWorkspace* pressureWorkspace,
   if (!frequencyState.points.front().active) {
     throw ValidationError("geometric hat source point must be active");
   }
-  const double workspaceFrequency =
-      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
-                                   : intensityWorkspace->frequency();
+  const double workspaceFrequency = pressureWorkspace != nullptr
+                                        ? pressureWorkspace->frequency()
+                                    : intensityWorkspace != nullptr
+                                        ? intensityWorkspace->frequency()
+                                        : arrivalWorkspace->frequency();
   const std::size_t workspaceDepthCount =
-      pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
-                                   : intensityWorkspace->depthCount();
+      pressureWorkspace != nullptr
+          ? pressureWorkspace->depthCount()
+      : intensityWorkspace != nullptr ? intensityWorkspace->depthCount()
+                                      : arrivalWorkspace->depthCount();
   const std::size_t workspaceRangeCount =
-      pressureWorkspace != nullptr ? pressureWorkspace->rangeCount()
-                                   : intensityWorkspace->rangeCount();
+      pressureWorkspace != nullptr
+          ? pressureWorkspace->rangeCount()
+      : intensityWorkspace != nullptr ? intensityWorkspace->rangeCount()
+                                      : arrivalWorkspace->rangeCount();
   if (workspaceFrequency != frequencyState.frequency ||
       workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
@@ -201,9 +213,9 @@ GeometricHatInfluence::GeometricHatInfluence(
     default:
       throw ValidationError("geometric hat source geometry is invalid");
   }
-  if (!isTransmissionLossMode(runMode_)) {
+  if (!isTransmissionLossMode(runMode_) && !isArrivalMode(runMode_)) {
     throw ValidationError(
-        "geometric hat influence requires a transmission-loss mode");
+        "geometric hat influence requires a field or arrival mode");
   }
 }
 
@@ -216,7 +228,7 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulate(
     throw ValidationError(
         "geometric hat complex pressure requires coherent TL mode");
   }
-  return accumulateImpl(&workspace, nullptr, path, frequencyState,
+  return accumulateImpl(&workspace, nullptr, nullptr, path, frequencyState,
                         launchAngleSpacingRadians, diagnosticRequest);
 }
 
@@ -232,18 +244,34 @@ GeometricHatInfluence::accumulateIntensity(
         "geometric hat intensity requires incoherent or semi-coherent TL "
         "mode");
   }
-  return accumulateImpl(nullptr, &workspace, path, frequencyState,
+  return accumulateImpl(nullptr, &workspace, nullptr, path, frequencyState,
+                        launchAngleSpacingRadians, diagnosticRequest);
+}
+
+std::optional<GeometricHatDiagnostic>
+GeometricHatInfluence::accumulateArrivals(
+    ArrivalWorkspace& workspace, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    double launchAngleSpacingRadians,
+    std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const {
+  if (!isArrivalMode(runMode_)) {
+    throw ValidationError(
+        "geometric hat arrivals require ASCII or binary arrival mode");
+  }
+  return accumulateImpl(nullptr, nullptr, &workspace, path, frequencyState,
                         launchAngleSpacingRadians, diagnosticRequest);
 }
 
 std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
     FrequencyWorkspace* pressureWorkspace,
-    IntensityWorkspace* intensityWorkspace, const RayPath& path,
+    IntensityWorkspace* intensityWorkspace,
+    ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState,
     double launchAngleSpacingRadians,
     std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const {
-  validateInput(pressureWorkspace, intensityWorkspace, path, frequencyState,
-                receivers_, launchAngleSpacingRadians, diagnosticRequest);
+  validateInput(pressureWorkspace, intensityWorkspace, arrivalWorkspace, path,
+                frequencyState, receivers_, launchAngleSpacingRadians,
+                diagnosticRequest);
   std::optional<GeometricHatDiagnostic> diagnostic;
   if (diagnosticRequest.has_value()) {
     diagnostic.emplace();
@@ -265,13 +293,44 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
   requireFinite(q0, "geometric hat q0");
   requireFinite(ratio, "geometric hat source ratio");
 
+  std::vector<std::int32_t> prefixTopBounces;
+  std::vector<std::int32_t> prefixBottomBounces;
+  if (arrivalWorkspace != nullptr) {
+    prefixTopBounces.assign(pointCount, 0);
+    prefixBottomBounces.assign(pointCount, 0);
+    for (const ReflectionEvent& event : path.events) {
+      if (event.reflectedRayPointIndex != event.rayPointIndex + 1U ||
+          event.reflectedRayPointIndex >= path.points.size()) {
+        throw ValidationError(
+            "geometric hat reflection event has invalid point indices");
+      }
+      if (event.reflectedRayPointIndex >= pointCount) {
+        continue;
+      }
+      std::vector<std::int32_t>& prefix =
+          event.boundary == ReflectionBoundary::SeaSurface
+              ? prefixTopBounces
+              : prefixBottomBounces;
+      if (prefix[event.reflectedRayPointIndex] ==
+          std::numeric_limits<std::int32_t>::max()) {
+        throw ValidationError("geometric hat bounce count exceeds int32");
+      }
+      ++prefix[event.reflectedRayPointIndex];
+    }
+    for (std::size_t index = 1U; index < pointCount; ++index) {
+      prefixTopBounces[index] += prefixTopBounces[index - 1U];
+      prefixBottomBounces[index] += prefixBottomBounces[index - 1U];
+    }
+  }
+
   const auto applyContribution =
       [&](std::size_t depthIndex, std::size_t rangeIndex,
           std::size_t leftIndex, std::size_t rightIndex,
           double interpolationWeight, double normalOffset,
           double qInterpolated, double hatWeight,
           double amplitudeConstant, double causticPhase,
-          std::complex<double> delay) {
+          std::complex<double> delay,
+          double receiverDeclinationDegrees) {
         requireFinite(qInterpolated, "geometric hat interpolated q");
         requireFinite(hatWeight, "geometric hat weight");
         requireFinite(amplitudeConstant,
@@ -294,7 +353,7 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
           requireFiniteComplex(updated,
                                "geometric hat accumulated pressure");
           pressureWorkspace->at(depthIndex, rangeIndex) = updated;
-        } else {
+        } else if (intensityWorkspace != nullptr) {
           // ApplyContribution forms the attenuated real constant, squares it,
           // and only then applies the hat weight once.
           const double attenuatedConstant =
@@ -310,6 +369,20 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
           }
           intensityWorkspace->add(depthIndex, rangeIndex,
                                   intensityIncrement);
+        } else {
+          arrivalWorkspace->addCandidate(
+              frequencyState.frequency,
+              ArrivalCandidate{
+                  .amplitude = amplitudeConstant * hatWeight,
+                  .phaseRadians = causticPhase,
+                  .delaySeconds = delay,
+                  .sourceDeclinationDegrees =
+                      path.launchAngle * (180.0 / std::numbers::pi),
+                  .receiverDeclinationDegrees =
+                      receiverDeclinationDegrees,
+                  .topBounceCount = prefixTopBounces[rightIndex],
+                  .bottomBounceCount = prefixBottomBounces[rightIndex]},
+              depthIndex, rangeIndex);
         }
 
         if (diagnosticRequest.has_value() &&
@@ -422,7 +495,9 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
               applyContribution(
                   depthIndex, receiverIndex, leftIndex, rightIndex,
                   interpolationWeight, normalOffset, q, hatWeight,
-                  amplitudeConstant, phaseAtReceiver, delay);
+                  amplitudeConstant, phaseAtReceiver, delay,
+                  std::atan2(tangent.depth, tangent.range) *
+                      (180.0 / std::numbers::pi));
             }
           }
         }
@@ -555,7 +630,10 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateImpl(
         applyContribution(
             depthIndex, rangeIndex, rightIndex - 1U, rightIndex,
             interpolationWeight, interpolatedNormal, q, hatWeight,
-            amplitudeConstant, phaseAtReceiver, delay);
+            amplitudeConstant, phaseAtReceiver, delay,
+            std::atan2(path.points[rightIndex].slowness.depth,
+                       path.points[rightIndex].slowness.range) *
+                (180.0 / std::numbers::pi));
       };
 
       if (receiverIndex1Based > previousReceiverIndex1Based) {

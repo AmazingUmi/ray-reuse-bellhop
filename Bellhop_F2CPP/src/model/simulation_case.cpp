@@ -49,6 +49,22 @@ bool isTransmissionLossMode(SimulationRunMode mode) {
     case SimulationRunMode::IncoherentTransmissionLoss:
     case SimulationRunMode::SemiCoherentTransmissionLoss:
       return true;
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::RayTrace:
+      return false;
+  }
+  throw ValidationError("simulation run mode is invalid");
+}
+
+bool isArrivalMode(SimulationRunMode mode) {
+  switch (mode) {
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
+      return true;
+    case SimulationRunMode::CoherentTransmissionLoss:
+    case SimulationRunMode::IncoherentTransmissionLoss:
+    case SimulationRunMode::SemiCoherentTransmissionLoss:
     case SimulationRunMode::RayTrace:
       return false;
   }
@@ -62,6 +78,8 @@ FieldAccumulationKind fieldAccumulationKind(SimulationRunMode mode) {
     case SimulationRunMode::IncoherentTransmissionLoss:
     case SimulationRunMode::SemiCoherentTransmissionLoss:
       return FieldAccumulationKind::Intensity;
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
     case SimulationRunMode::RayTrace:
       return FieldAccumulationKind::None;
   }
@@ -72,6 +90,8 @@ bool usesLloydMirror(SimulationRunMode mode) {
   switch (mode) {
     case SimulationRunMode::CoherentTransmissionLoss:
     case SimulationRunMode::IncoherentTransmissionLoss:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
     case SimulationRunMode::RayTrace:
       return false;
     case SimulationRunMode::SemiCoherentTransmissionLoss:
@@ -273,6 +293,8 @@ SimulationCase::SimulationCase(Environment environment,
     case SimulationRunMode::CoherentTransmissionLoss:
     case SimulationRunMode::IncoherentTransmissionLoss:
     case SimulationRunMode::SemiCoherentTransmissionLoss:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
     case SimulationRunMode::RayTrace:
       break;
     default:

@@ -21,6 +21,8 @@ enum class SimulationRunMode {
   CoherentTransmissionLoss,
   IncoherentTransmissionLoss,
   SemiCoherentTransmissionLoss,
+  AsciiArrivals,
+  BinaryArrivals,
   RayTrace,
 };
 
@@ -31,6 +33,7 @@ enum class FieldAccumulationKind {
 };
 
 [[nodiscard]] bool isTransmissionLossMode(SimulationRunMode mode);
+[[nodiscard]] bool isArrivalMode(SimulationRunMode mode);
 [[nodiscard]] FieldAccumulationKind fieldAccumulationKind(
     SimulationRunMode mode);
 [[nodiscard]] bool usesLloydMirror(SimulationRunMode mode);
