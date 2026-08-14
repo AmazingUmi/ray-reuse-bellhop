@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 
@@ -11,6 +12,8 @@
 
 namespace bellhop {
 namespace {
+
+constexpr double kArrivalPhaseTolerance = static_cast<double>(0.05F);
 
 std::size_t checkedMultiply(std::size_t left, std::size_t right,
                             const char* label) {
@@ -24,6 +27,40 @@ void requireOriginInt32(std::size_t value, const char* label) {
   if (value > static_cast<std::size_t>(
                   std::numeric_limits<std::int32_t>::max())) {
     throw ValidationError(std::string(label) + " exceeds the ARR int32 limit");
+  }
+}
+
+// Origin stores every appended or replaced record with SNGL/CMPLX.
+Arrival storedFromCandidate(const ArrivalCandidate& candidate) {
+  return Arrival{
+      .amplitude = static_cast<float>(candidate.amplitude),
+      .phaseRadians = static_cast<float>(candidate.phaseRadians),
+      .delaySeconds =
+          static_cast<std::complex<float>>(candidate.delaySeconds),
+      .sourceDeclinationDegrees =
+          static_cast<float>(candidate.sourceDeclinationDegrees),
+      .receiverDeclinationDegrees =
+          static_cast<float>(candidate.receiverDeclinationDegrees),
+      .topBounceCount = candidate.topBounceCount,
+      .bottomBounceCount = candidate.bottomBounceCount};
+}
+
+void validateCandidate(const ArrivalCandidate& candidate) {
+  if (!std::isfinite(candidate.amplitude) ||
+      !std::isfinite(candidate.phaseRadians) ||
+      !std::isfinite(candidate.delaySeconds.real()) ||
+      !std::isfinite(candidate.delaySeconds.imag()) ||
+      !std::isfinite(candidate.sourceDeclinationDegrees) ||
+      !std::isfinite(candidate.receiverDeclinationDegrees)) {
+    throw ValidationError("arrival candidate fields must all be finite");
+  }
+  if (candidate.amplitude < 0.0) {
+    throw ValidationError(
+        "arrival candidate amplitude must be non-negative");
+  }
+  if (candidate.topBounceCount < 0 || candidate.bottomBounceCount < 0) {
+    throw ValidationError(
+        "arrival candidate bounce counts must be non-negative");
   }
 }
 
@@ -80,6 +117,10 @@ ArrivalWorkspace::ArrivalWorkspace(double frequency,
 
 double ArrivalWorkspace::frequency() const noexcept { return frequency_; }
 
+double ArrivalWorkspace::omega() const noexcept {
+  return 2.0 * std::numbers::pi * frequency_;
+}
+
 std::size_t ArrivalWorkspace::depthCount() const noexcept {
   return depthCount_;
 }
@@ -117,6 +158,113 @@ std::span<const Arrival> ArrivalWorkspace::arrivalsAt(
 std::size_t ArrivalWorkspace::arrivalCountAt(std::size_t depthIndex,
                                              std::size_t rangeIndex) const {
   return arrivalsAt(depthIndex, rangeIndex).size();
+}
+
+void ArrivalWorkspace::addCandidate(double frequency,
+                                    const ArrivalCandidate& candidate,
+                                    std::size_t depthIndex,
+                                    std::size_t rangeIndex) {
+  if (frequency != frequency_) {
+    throw ValidationError(
+        "arrival candidate frequency does not match the workspace");
+  }
+  validateCandidate(candidate);
+  std::vector<Arrival>& cell = cells_.at(flatIndex(depthIndex, rangeIndex));
+  const std::size_t capacity = capacity_.arrivalsPerCell;
+  const std::size_t count = cell.size();
+
+  // Origin tests only the most recently stored record and both strict
+  // comparisons must hold for the candidate to group.
+  bool groupsWithLast = false;
+  if (count > 0U) {
+    const Arrival& last = cell.back();
+    const std::complex<double> delayDifference =
+        candidate.delaySeconds -
+        static_cast<std::complex<double>>(last.delaySeconds);
+    const double phaseDifference =
+        std::abs(static_cast<double>(last.phaseRadians) -
+                 candidate.phaseRadians);
+    groupsWithLast =
+        omega() * std::abs(delayDifference) < kArrivalPhaseTolerance &&
+        phaseDifference < kArrivalPhaseTolerance;
+  }
+
+  ++candidateCount_;
+
+  if (groupsWithLast) {
+    Arrival& record = cell.back();
+    const float candidateAmplitude = static_cast<float>(candidate.amplitude);
+    const float ampTot = record.amplitude + candidateAmplitude;
+    if (std::abs(ampTot) <= std::numeric_limits<float>::epsilon()) {
+      ++cuspGuardCount_;
+      return;
+    }
+    ++mergeCount_;
+    const float w1 = record.amplitude / ampTot;
+    const float w2 = candidateAmplitude / ampTot;
+    const std::complex<float> candidateDelay =
+        static_cast<std::complex<float>>(candidate.delaySeconds);
+    record.delaySeconds =
+        w1 * record.delaySeconds + w2 * candidateDelay;
+    record.amplitude = ampTot;
+    record.sourceDeclinationDegrees =
+        w1 * record.sourceDeclinationDegrees +
+        w2 * static_cast<float>(candidate.sourceDeclinationDegrees);
+    record.receiverDeclinationDegrees =
+        w1 * record.receiverDeclinationDegrees +
+        w2 * static_cast<float>(candidate.receiverDeclinationDegrees);
+    return;
+  }
+
+  if (count >= capacity) {
+    std::size_t minimumIndex = 0U;
+    for (std::size_t index = 1U; index < count; ++index) {
+      if (cell[index].amplitude < cell[minimumIndex].amplitude) {
+        minimumIndex = index;
+      }
+    }
+    if (candidate.amplitude > cell[minimumIndex].amplitude) {
+      cell[minimumIndex] = storedFromCandidate(candidate);
+      ++weakestReplacementCount_;
+    } else {
+      ++capacityDiscardCount_;
+    }
+    return;
+  }
+
+  cell.push_back(storedFromCandidate(candidate));
+  ++appendCount_;
+  if (cell.size() == capacity) {
+    ++saturatedCellCount_;
+  }
+}
+
+std::size_t ArrivalWorkspace::candidateCount() const noexcept {
+  return candidateCount_;
+}
+
+std::size_t ArrivalWorkspace::appendCount() const noexcept {
+  return appendCount_;
+}
+
+std::size_t ArrivalWorkspace::mergeCount() const noexcept {
+  return mergeCount_;
+}
+
+std::size_t ArrivalWorkspace::cuspGuardCount() const noexcept {
+  return cuspGuardCount_;
+}
+
+std::size_t ArrivalWorkspace::weakestReplacementCount() const noexcept {
+  return weakestReplacementCount_;
+}
+
+std::size_t ArrivalWorkspace::capacityDiscardCount() const noexcept {
+  return capacityDiscardCount_;
+}
+
+std::size_t ArrivalWorkspace::saturatedCellCount() const noexcept {
+  return saturatedCellCount_;
 }
 
 }  // namespace bellhop

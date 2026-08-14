@@ -515,8 +515,9 @@ G/B/S 三例使用相同 300 条发射射线与场布局，Origin/F2CPP 最大�
 `doc/validation/i7_gaussian_beams_report.json`。最终 AppleClang Debug
 ASan/UBSan、AppleClang Release 与 GCC14 Werror CTest 均为 32/32，Python
 标准工具 123/123，单频案例 52/52（51 SHD + 1 RAY）。I8 架构审查与任务
-拆分已经完成；I8-01-T1 已验收并新增 Arrival 类型、checked capacity planner
-和 lazy source-local workspace，当前暂停在 I8-01-T2 之前。
+拆分已经完成；I8-01-T1/T2 已验收并冻结 Arrival 类型、checked capacity
+planner、lazy source-local workspace，以及 Origin-compatible `AddArr`
+grouping/merge/capacity 语义，当前暂停在 I8-01-T3 之前。
 
 ### I8：arrivals 与 eigenray
 
@@ -535,7 +536,7 @@ I8 的冻结架构、支持/拒绝矩阵、阶段依赖和 18 个 OpenCode 原�
 [`tasks/I8_arrivals_eigenray/README.md`](./tasks/I8_arrivals_eigenray/README.md)。
 任务文档是后续实现的唯一正式定义；OpenCode 每次只执行一个 T、不提交，
 Codex 检查实际 working tree、运行对应测试和 Fortran oracle，验收后更新任务
-状态并创建 checkpoint。当前 I8-01-T1 为 ACCEPTED，I8-01 阶段为
+状态并创建 checkpoint。当前 I8-01-T1/T2 为 ACCEPTED，I8-01 阶段为
 IN_PROGRESS，其余任务均为 TODO。
 
 出口：arrivals/eigenray 与 TL 模式共享已验收 tracer，但拥有独立的数据和
@@ -578,8 +579,8 @@ writer；任何容量截断都必须在 PRT 中可见。
 | 收口 | I9 | 形成可声明的二维兼容范围和新派生基线 |
 
 I0～I2、I3-01～I3-06、I4-01～I4-05、I5-01～I5-05、I6-01～I6-05 和
-I7-01～I7-06 已按纵切完成。I8 已完成架构设计和任务文档创建，I8-01-T1
-已验收，当前尚未开始 I8-01-T2。
+I7-01～I7-06 已按纵切完成。I8 已完成架构设计和任务文档创建，I8-01-T1/T2
+已验收，当前尚未开始 I8-01-T3。
 每个阶段开始前仍应根据实际
 算例需求复核优先级；该复核只能调整尚未开始阶段的先后，不能绕过依赖门。
 

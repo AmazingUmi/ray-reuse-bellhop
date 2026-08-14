@@ -119,7 +119,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wo
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -201,10 +201,17 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wo
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-01-T2 checkpoint commit.
+- Tests: clean AppleClang Debug ASan/UBSan and GCC 14 Release/Werror builds;
+  AppleClang Debug, AppleClang Release, and GCC 14 CTest 33/33 each; Python
+  tests 123/123; F2CPP single-frequency cases 52/52; `git diff --check` passed.
+- Oracle / parity result: implementation and all branch/precision boundaries
+  were source-audited against `ArrMod.f90::AddArr`; the executable component
+  oracle remains assigned to I8-04-T2 and was not pulled forward.
+- Notes: requirements 1–7 and every acceptance criterion passed. The accepted
+  API adds only candidate insertion and read-only statistics to the T1
+  workspace; no T1 type/capacity, I0–I7, solver, writer, or RayReuse path was
+  changed.
 
 ## I8-01-T3
 
