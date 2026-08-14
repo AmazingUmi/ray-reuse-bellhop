@@ -216,7 +216,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wr
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -300,7 +300,14 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release --output-on-failure
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this A/a/E CLI lifecycle checkpoint commit.
+- Tests: parser, arrival/eigenray components and the complete SHD/RAY/ARR CLI
+  lifecycle passed on AppleClang Debug ASan/UBSan, AppleClang Release and GCC
+  14 Werror; ASCII/binary signatures, stale-temp cleanup, parse/publish failure
+  preservation and `git diff --check` passed.
+- Oracle / parity result: user-visible ARR products are independently parsed
+  by the accepted I8-04-T1 readers; full Origin/F2CPP arrival parity remains
+  recorded by I8-04-T3.
+- Notes: successful publication removes incompatible final products only after
+  finalize; PRT records logical/per-cell capacity, accumulator actions, memory
+  sizes and trace/project/influence/write timings.

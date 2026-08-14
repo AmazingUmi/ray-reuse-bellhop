@@ -380,7 +380,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R 'f2cpp.component.(eigenray
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -456,7 +456,13 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release --output-on-failure
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: same A/a/E CLI lifecycle checkpoint as I8-02-T3.
+- Tests: `EG`, `Eg` and `EB` parser coverage plus Gaussian nonzero-hit and
+  geometric zero-hit CLI products passed on Debug sanitizer, Release and GCC
+  14 Werror; EOF products, PRT totals, incompatible-product cleanup and atomic
+  failure preservation are exercised.
+- Oracle / parity result: the accepted EOF reader validates the product
+  grammar; ordered Origin/F2CPP prefix parity remains recorded by I8-04-T4.
+- Notes: E is distinct from ordinary R in mode, PRT and block-count lifecycle;
+  unsupported/incomplete families, irregular ray-centered grids and shifted/
+  non-2D forms fail at the parser boundary.

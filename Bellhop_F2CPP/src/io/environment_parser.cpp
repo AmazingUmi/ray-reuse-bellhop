@@ -404,6 +404,18 @@ struct ParsedRunType {
       runType[0U] == 'R' &&
       (runType[1U] == ' ' || runType[1U] == 'G') &&
       (runType[4U] == ' ' || runType[4U] == 'R');
+  const bool arrivals =
+      (runType[0U] == 'A' || runType[0U] == 'a') &&
+      (runType[1U] == 'G' || runType[1U] == '^' ||
+       runType[1U] == 'g' || runType[1U] == 'B') &&
+      (runType[4U] == ' ' || runType[4U] == 'R' ||
+       runType[4U] == 'I');
+  const bool eigenray =
+      runType[0U] == 'E' &&
+      (runType[1U] == 'G' || runType[1U] == '^' ||
+       runType[1U] == 'g' || runType[1U] == 'B') &&
+      (runType[4U] == ' ' || runType[4U] == 'R' ||
+       runType[4U] == 'I');
   if ((runType[0U] == 'C' || runType[0U] == 'I' ||
        runType[0U] == 'S') &&
       runType[1U] == 'b') {
@@ -411,18 +423,30 @@ struct ParsedRunType {
          "ray-centered geometric Gaussian beams are not implemented in "
          "Bellhop 2-D");
   }
-  if (!commonOptionsValid || (!transmissionLoss && !rayTrace)) {
+  if ((runType[0U] == 'A' || runType[0U] == 'a' || runType[0U] == 'E') &&
+      !(runType[1U] == 'G' || runType[1U] == '^' ||
+        runType[1U] == 'g' || runType[1U] == 'B')) {
+    fail(sourceName, record.lineNumber,
+         "arrival and eigenray run types require a complete G, g, or B beam family");
+  }
+  if (!commonOptionsValid ||
+      (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
          "only supported 2-D Cerveny, geometric-hat, geometric-Gaussian, "
-         "or simple-Gaussian TL and "
-         "unshifted geometric 2-D ray-trace run types are supported");
+         "or simple-Gaussian TL, unshifted geometric 2-D ray-trace, "
+         "geometric arrival, and geometric eigenray run types are supported");
   }
   if (runType[3U] == ' ') {
     runType[3U] = 'R';
   }
   runType[5U] = '2';
   SimulationRunMode mode = SimulationRunMode::RayTrace;
-  if (!rayTrace) {
+  if (arrivals) {
+    mode = runType[0U] == 'A' ? SimulationRunMode::AsciiArrivals
+                              : SimulationRunMode::BinaryArrivals;
+  } else if (eigenray) {
+    mode = SimulationRunMode::Eigenray;
+  } else if (!rayTrace) {
     switch (runType[0U]) {
       case 'C':
         mode = SimulationRunMode::CoherentTransmissionLoss;
@@ -460,11 +484,17 @@ struct ParsedRunType {
       case 'S':
         beamFamily = BeamFamily::SimpleGaussian;
         break;
-      case ' ':
       case 'G':
       case '^':
         beamFamily = BeamFamily::GeometricHat;
         break;
+      case ' ':
+        if (transmissionLoss) {
+          beamFamily = BeamFamily::GeometricHat;
+          break;
+        }
+        fail(sourceName, record.lineNumber,
+             "arrival and eigenray run types require a complete G, g, or B beam family");
       default:
         fail(sourceName, record.lineNumber, "unknown beam family");
     }
@@ -1199,10 +1229,10 @@ struct ParsedBoundaryFile {
 
   const Record runTypeRecord = reader.require("run type");
   const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
-  if (isTransmissionLossMode(runType.runMode) &&
-      (runType.beamFamily == BeamFamily::CervenyGaussian ||
-       runType.cervenyCoordinateSystem ==
-           CervenyCoordinateSystem::RayCentered)) {
+  if ((isTransmissionLossMode(runType.runMode) &&
+       runType.beamFamily == BeamFamily::CervenyGaussian) ||
+      runType.cervenyCoordinateSystem ==
+          CervenyCoordinateSystem::RayCentered) {
     requireUniformRanges(
         receiverRanges, receiverRangeCountRecord, source);
   }

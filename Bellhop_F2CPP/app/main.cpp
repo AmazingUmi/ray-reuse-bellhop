@@ -9,11 +9,15 @@
 #include <string_view>
 
 #include "bellhop/error.hpp"
+#include "bellhop/io/arrival_writer.hpp"
 #include "bellhop/io/environment_parser.hpp"
+#include "bellhop/io/eigenray_writer.hpp"
 #include "bellhop/io/output_layout.hpp"
 #include "bellhop/io/ray_writer.hpp"
 #include "bellhop/io/shd_writer.hpp"
 #include "bellhop/model/sound_speed_evaluator.hpp"
+#include "bellhop/solver/arrival_solver.hpp"
+#include "bellhop/solver/eigenray_solver.hpp"
 #include "bellhop/solver/ray_trace_solver.hpp"
 #include "bellhop/solver/single_frequency_solver.hpp"
 
@@ -36,7 +40,7 @@ void printUsage(std::ostream& stream) {
          << "\n"
          << "Reads <file-root>.env and writes <file-root>.prt plus "
             "<file-root>.shd for coherent-TL runs or <file-root>.ray "
-            "for ray-trace runs.\n";
+            "for ray-trace/eigenray runs or <file-root>.arr for arrivals.\n";
 }
 
 std::string_view attenuationUnitLabel(bellhop::AttenuationUnit unit) {
@@ -132,6 +136,21 @@ void writeConfigurationSummary(
   if (simulation.runMode() == bellhop::SimulationRunMode::RayTrace) {
     stream << "Ray trace run\n"
            << "Geometric hat beams in Cartesian coordinates\n";
+  } else if (bellhop::isArrivalMode(simulation.runMode())) {
+    stream << (simulation.runMode() ==
+                       bellhop::SimulationRunMode::AsciiArrivals
+                   ? "Arrivals calculation, ASCII  file output\n"
+                   : "Arrivals calculation, binary file output\n")
+           << beamFamilyLabel(
+                  simulation.beamFamily(),
+                  simulation.cervenyCoordinateSystem())
+           << '\n';
+  } else if (bellhop::isEigenrayMode(simulation.runMode())) {
+    stream << "Eigenray trace run\n"
+           << beamFamilyLabel(
+                  simulation.beamFamily(),
+                  simulation.cervenyCoordinateSystem())
+           << '\n';
   } else {
     switch (simulation.runMode()) {
       case bellhop::SimulationRunMode::CoherentTransmissionLoss:
@@ -143,6 +162,9 @@ void writeConfigurationSummary(
       case bellhop::SimulationRunMode::SemiCoherentTransmissionLoss:
         stream << "Semi-coherent TL calculation\n";
         break;
+      case bellhop::SimulationRunMode::AsciiArrivals:
+      case bellhop::SimulationRunMode::BinaryArrivals:
+      case bellhop::SimulationRunMode::Eigenray:
       case bellhop::SimulationRunMode::RayTrace:
         break;
       default:
@@ -320,8 +342,13 @@ void writeConfigurationSummary(
            << "SHD pressure records = " << layout.pressureRecordCount << '\n'
            << "SHD total records = " << layout.totalRecordCount << '\n'
            << "SHD expected bytes = " << layout.fileBytes << '\n';
-  } else {
+  } else if (simulation.runMode() == bellhop::SimulationRunMode::RayTrace) {
     stream << "planned ray blocks = "
+           << simulation.sourceCount() *
+                  simulation.launchFanPlan().launchAngleCount
+           << '\n';
+  } else {
+    stream << "configured launch rays = "
            << simulation.sourceCount() *
                   simulation.launchFanPlan().launchAngleCount
            << '\n';
@@ -361,6 +388,7 @@ int main(int argumentCount, char* arguments[]) {
   const std::filesystem::path shadePath(
       fileRoot + ".shd");
   const std::filesystem::path rayPath(fileRoot + ".ray");
+  const std::filesystem::path arrivalPath(fileRoot + ".arr");
 
   std::ofstream printLog(
       printPath, std::ios::out | std::ios::trunc);
@@ -374,6 +402,8 @@ int main(int argumentCount, char* arguments[]) {
   try {
     removeStaleProduct(std::filesystem::path(shadePath.string() + ".tmp"));
     removeStaleProduct(std::filesystem::path(rayPath.string() + ".tmp"));
+    removeStaleProduct(
+        std::filesystem::path(arrivalPath.string() + ".tmp"));
     const bellhop::ParsedEnvironment parsed =
         bellhop::EnvironmentParser::parseFile(
             environmentPath);
@@ -392,6 +422,7 @@ int main(int argumentCount, char* arguments[]) {
               });
       writer.finalize();
       removeStaleProduct(shadePath);
+      removeStaleProduct(arrivalPath);
       printLog << "ray count = " << statistics.rayCount << '\n'
                << "ray point count = "
                << statistics.totalRayPointCount << '\n'
@@ -400,6 +431,98 @@ int main(int argumentCount, char* arguments[]) {
                << "Trace seconds = " << statistics.traceSeconds << '\n'
                << "RAY seconds = " << statistics.writeSeconds << '\n'
                << "Bellhop F2CPP ray trace completed successfully\n";
+      printLog.close();
+      if (!printLog) {
+        throw bellhop::BellhopError(
+            "failed to finalize print output: " + printPath.string());
+      }
+      return 0;
+    }
+
+    if (bellhop::isArrivalMode(parsed.simulationCase.runMode())) {
+      bellhop::ArrivalWriter writer(arrivalPath, parsed.simulationCase);
+      std::size_t appendCount = 0U;
+      std::size_t mergeCount = 0U;
+      std::size_t cuspGuardCount = 0U;
+      std::size_t replacementCount = 0U;
+      std::size_t discardCount = 0U;
+      const bellhop::ArrivalSolverStatistics statistics =
+          bellhop::ArrivalSolver::solve(
+              parsed.simulationCase,
+              [&writer, &appendCount, &mergeCount, &cuspGuardCount,
+               &replacementCount, &discardCount](
+                  std::size_t sourceIndex, const bellhop::RayPathCache&,
+                  const bellhop::ArrivalWorkspace& workspace) {
+                writer.appendSource(sourceIndex, workspace);
+                appendCount += workspace.appendCount();
+                mergeCount += workspace.mergeCount();
+                cuspGuardCount += workspace.cuspGuardCount();
+                replacementCount += workspace.weakestReplacementCount();
+                discardCount += workspace.capacityDiscardCount();
+              });
+      writer.finalize();
+      removeStaleProduct(shadePath);
+      removeStaleProduct(rayPath);
+      printLog
+          << "ray count = " << statistics.rayCount << '\n'
+          << "ray point count = " << statistics.totalRayPointCount << '\n'
+          << "ray cache bytes = " << statistics.peakRayCacheBytes << '\n'
+          << "arrival workspace bytes = "
+          << statistics.peakArrivalWorkspaceBytes << '\n'
+          << "arrival capacity per cell = "
+          << writer.layout().perCellCapacity << '\n'
+          << "arrival logical capacity = "
+          << writer.layout().actualCellsPerSource *
+                 writer.layout().perCellCapacity
+          << '\n'
+          << "arrival candidates = " << statistics.candidateCount << '\n'
+          << "arrival appends = " << appendCount << '\n'
+          << "arrival merges = " << mergeCount << '\n'
+          << "arrival axial-cusp guards = " << cuspGuardCount << '\n'
+          << "arrival replacements = " << replacementCount << '\n'
+          << "arrival capacity discards = " << discardCount << '\n'
+          << "arrival saturated cells = " << statistics.saturatedCellCount
+          << '\n'
+          << "Trace seconds = " << statistics.traceSeconds << '\n'
+          << "Project seconds = " << statistics.projectSeconds << '\n'
+          << "Influence seconds = " << statistics.influenceSeconds << '\n'
+          << "ARR seconds = " << statistics.consumeSeconds << '\n'
+          << "Bellhop F2CPP arrivals completed successfully\n";
+      printLog.close();
+      if (!printLog) {
+        throw bellhop::BellhopError(
+            "failed to finalize print output: " + printPath.string());
+      }
+      return 0;
+    }
+
+    if (bellhop::isEigenrayMode(parsed.simulationCase.runMode())) {
+      bellhop::EigenrayWriter writer(
+          rayPath, parsed.title, parsed.simulationCase);
+      const bellhop::EigenraySolverStatistics statistics =
+          bellhop::EigenraySolver::solve(
+              parsed.simulationCase,
+              [&writer](std::size_t sourceIndex, std::size_t launchIndex,
+                        const bellhop::RayPathCache& cache,
+                        const bellhop::RayPath& path,
+                        const bellhop::EigenrayHit& hit) {
+                writer.appendHit(sourceIndex, launchIndex, cache, path, hit);
+              });
+      writer.finalize();
+      removeStaleProduct(shadePath);
+      removeStaleProduct(arrivalPath);
+      printLog
+          << "configured launch rays = " << statistics.rayCount << '\n'
+          << "eigenray hit blocks = " << statistics.totalHitCount << '\n'
+          << "eigenray prefix points = "
+          << statistics.totalPrefixPointCount << '\n'
+          << "ray point count = " << statistics.totalRayPointCount << '\n'
+          << "ray cache bytes = " << statistics.peakRayCacheBytes << '\n'
+          << "Trace seconds = " << statistics.traceSeconds << '\n'
+          << "Project seconds = " << statistics.projectSeconds << '\n'
+          << "Influence seconds = " << statistics.influenceSeconds << '\n'
+          << "RAY seconds = " << statistics.consumeSeconds << '\n'
+          << "Bellhop F2CPP eigenray completed successfully\n";
       printLog.close();
       if (!printLog) {
         throw bellhop::BellhopError(
@@ -423,6 +546,7 @@ int main(int argumentCount, char* arguments[]) {
         parsed.simulationCase, result.workspace,
         result.additionalSourceWorkspaces);
     removeStaleProduct(rayPath);
+    removeStaleProduct(arrivalPath);
     const Clock::time_point writeEnd = Clock::now();
     const double writeSeconds =
         std::chrono::duration<double>(

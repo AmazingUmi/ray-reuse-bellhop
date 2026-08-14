@@ -476,6 +476,79 @@ void testBeamFamilies(Context& context) {
       parseText(nonuniform, "geometric_nonuniform.env")
               .simulationCase.receivers().rangeCount() == 3U,
       "Cartesian geometric hat accepts increasing nonuniform ranges");
+
+  struct ProductFamilyCase {
+    const char* token;
+    SimulationRunMode mode;
+    BeamFamily family;
+    CervenyCoordinateSystem coordinates;
+  };
+  const std::array productCases{
+      ProductFamilyCase{"AG", SimulationRunMode::AsciiArrivals,
+                        BeamFamily::GeometricHat,
+                        CervenyCoordinateSystem::Cartesian},
+      ProductFamilyCase{"aG", SimulationRunMode::BinaryArrivals,
+                        BeamFamily::GeometricHat,
+                        CervenyCoordinateSystem::Cartesian},
+      ProductFamilyCase{"Ag", SimulationRunMode::AsciiArrivals,
+                        BeamFamily::GeometricHat,
+                        CervenyCoordinateSystem::RayCentered},
+      ProductFamilyCase{"aB", SimulationRunMode::BinaryArrivals,
+                        BeamFamily::GeometricGaussian,
+                        CervenyCoordinateSystem::Cartesian},
+      ProductFamilyCase{"EG", SimulationRunMode::Eigenray,
+                        BeamFamily::GeometricHat,
+                        CervenyCoordinateSystem::Cartesian},
+      ProductFamilyCase{"Eg", SimulationRunMode::Eigenray,
+                        BeamFamily::GeometricHat,
+                        CervenyCoordinateSystem::RayCentered},
+      ProductFamilyCase{"EB", SimulationRunMode::Eigenray,
+                        BeamFamily::GeometricGaussian,
+                        CervenyCoordinateSystem::Cartesian}};
+  for (const ProductFamilyCase& productCase : productCases) {
+    std::string contents = withoutCervenyTail(cerveny);
+    replaceFirst(contents, "'CC'", "'" + std::string(productCase.token) + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, std::string(productCase.token) + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == productCase.mode &&
+            parsed.simulationCase.beamFamily() == productCase.family &&
+            parsed.simulationCase.cervenyCoordinateSystem() ==
+                productCase.coordinates,
+        "arrival/eigenray run types select only complete geometric families");
+  }
+  {
+    std::string lineContents = withoutCervenyTail(cerveny);
+    replaceFirst(lineContents, "'CC'", "'AGOX'");
+    context.check(
+        parseText(lineContents, "arrival_line.env").simulationCase.sourceGeometry() ==
+            SourceGeometry::Line,
+        "arrival run types retain the existing line-source option");
+  }
+  for (const std::string token : {"A", "aC", "AR", "AS", "E", "EC",
+                                  "ER", "ES"}) {
+    context.expectThrows<ValidationError>(
+        [&cerveny, &token] {
+          std::string contents = withoutCervenyTail(cerveny);
+          replaceFirst(contents, "'CC'", "'" + token + "'");
+          static_cast<void>(parseText(contents, token + ".env"));
+        },
+        "arrival/eigenray parser rejects incomplete or unsupported families");
+  }
+  context.expectThrows<ValidationError>(
+      [&nonuniform] {
+        std::string contents = nonuniform;
+        replaceFirst(contents, "'CG'", "'Ag'");
+        static_cast<void>(parseText(contents, "arrival_g_nonuniform.env"));
+      },
+      "ray-centered geometric arrival ranges must remain uniform");
+  context.expectThrows<ValidationError>(
+      [&nonuniform] {
+        std::string contents = nonuniform;
+        replaceFirst(contents, "'CG'", "'Eg  I'");
+        static_cast<void>(parseText(contents, "eigenray_g_irregular.env"));
+      },
+      "ray-centered geometric eigenrays reject irregular receiver layouts");
 }
 
 void testFieldComponents(Context& context) {
