@@ -1,6 +1,7 @@
 # Bellhop Ray-Reuse
 
-本仓库包含 Acoustic Toolbox Bellhop 的 Fortran 参考实现、可重复标准算例，以及正在建设的宽带射线复用实现。
+本仓库包含 Acoustic Toolbox Bellhop 的 Fortran 参考实现、已封板的 C++20
+二维单频复刻、独立宽带射线复用实现及可重复标准算例。
 
 ## 项目结构
 
@@ -57,3 +58,6 @@ make -C test/PlotRead test
 标准 Bellhop 算例的运行方法见 [test/standard_cases/README.md](test/standard_cases/README.md)。
 
 三套求解器的工程演示和结果绘图见 [demo/README.md](demo/README.md)。
+
+F2CPP 复刻封板后的 supported、intentional divergence 与 deferred 范围见
+[二维单频支持矩阵](Bellhop_F2CPP/doc/FEATURE_SUPPORT_MATRIX.md)。

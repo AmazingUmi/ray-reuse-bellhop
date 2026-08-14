@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-14
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I0～I8 已完成并冻结；I9-B1～B3 已完成，暂停在 B4 closure 前。
+> 当前施工状态：I0～I8 与 I9-B1～B4 已完成并冻结；二维单频复刻正式封板。
 
 ## 1. 已完成范围
 
@@ -42,6 +42,7 @@
 | I9-B1 | 完成 | top `R/A/G/F`、top `.trc`、bottom `V` 与方向无关的共享边界声学/事件投影 |
 | I9-B2 | 完成 | General R 的方向性 `.sbp`、有损边界逐频 terminal prefix 与显式单 ray |
 | I9-B3 | 完成 | top/bottom acoustic `LL` elastic P/S、事件材料冻结与 `1e20 m` 逐频换算 |
+| I9-B4 | 完成 | supported/divergence/deferred 矩阵、文档统一、双编译器与隔离构建封板 |
 
 ## 2. 当前验证基线
 
@@ -158,6 +159,12 @@
   最大复压力绝对误差 `4.38070691e-11`、最大相对误差 `4.26289063e-7`、
   最大 TL 差 `1.52587891e-5 dB`。最终 regression 为 CTest 37/37、案例
   14/14；full 为 Python 145/145、CTest 37/37、单频案例 65/65。
+- I9-B4 closure：AppleClang Debug ASan/UBSan、AppleClang Release 与 GNU
+  C++ 14.2 Release/Werror 均为 37/37；`f2cpp-full` 为 Python 145/145、
+  Release CTest 37/37、单频案例 65/65。排除既有 build 与 RayReuse 后的
+  AppleClang clean Release 完整编译通过；补入仓库级共享标准案例 fixture
+  后隔离 CTest 37/37。生产源码无 TODO/FIXME，未支持输入在 parser/model/
+  solver 边界显式报错，未发现 correctness blocker 或 silent fallback。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 [`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
@@ -179,20 +186,19 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 - [`FURTHER_REPLICATION_PLAN.md`](./FURTHER_REPLICATION_PLAN.md) 记录后续二维
   功能的依赖顺序和逐项完成证据；
 - [`USAGE.md`](./USAGE.md) 记录当前可实际使用的输入范围；
+- [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 是复刻封板后的
+  supported、intentional divergence 与 deferred/out-of-scope 唯一分类表；
 - [`DERIVATION_MANIFEST.md`](./DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
   历史派生快照，继续用于追溯当时批准 RayReuse 的源码和性能门，不代表当前
   I0～I8 扩展树的哈希。
 
 ## 5. 下一步
 
-I8 arrivals/eigenray 已完成并冻结，正式任务与验收记录位于
-[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)。剩余二维
-复刻按 B1 Boundary symmetry → B2 General R products 与 B3 Elastic LL
-materials 并行 → B4 Replication closure 的顺序执行；不重新打开 I0～I8，
-也不向 `Bellhop_RayReuse` 同步。
-
-B1～B3 已完成：上下边界共享同一类型/方向契约，普通 R 可消费方向图与
-逐频边界损失，top/bottom `LL` 可冻结 elastic P/S 材料。B4 Replication
-closure 的前置条件已经满足，但尚未启动。
+I0～I8 与 B1～B4 已全部冻结，不再以“剩余复刻功能”继续扩张。支持范围和
+延期项以 [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 为准；
 `P/W`、`CS/CL`、`G/F + LL`、ray-centered irregular receiver、3D、N×2D、
-beam shift 和 analytic SSP 继续延期，范围以 [`USAGE.md`](./USAGE.md) 为准。
+beam shift、analytic SSP 和 F2CPP 多频调度均不属于本次 closure。
+
+下一阶段只在代表性 workload 上先做 profile，再依据证据处理运行时间、
+peak RSS/cache locality 和 receiver/Influence 遍历复杂度。除非发现真实
+correctness bug，不重新打开已验收 iteration，也不自动同步 RayReuse。

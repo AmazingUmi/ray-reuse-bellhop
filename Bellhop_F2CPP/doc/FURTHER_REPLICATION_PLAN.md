@@ -3,7 +3,7 @@
 > 初始规划日期：2026-08-07
 > 最近更新：2026-08-14
 > 状态依据：本文件、`PROGRESS.md`、`tasks/`、测试和验证报告，以 Git 内容为准
-> 当前基线：F2CPP 已完成并冻结 I0～I8；正在执行剩余二维复刻 B1
+> 当前基线：F2CPP 已完成并冻结 I0～I8 与 I9-B1～B4；二维单频复刻已封板
 > 默认前提：不实现 3D，也不把 N×2D 作为二维功能纳入
 
 ## 1. 目标
@@ -560,9 +560,10 @@ I0～I8 保持冻结，不重新拆分或修改其数值语义。剩余工作按
 3. **B3 — Elastic LL materials（ACCEPTED）**
    - 在 B1 接口稳定后支持 top/bottom acoustic `LL` 的沿程 elastic P/S 材料；
    - B2 与 B3 并行实现，batch 完成后统一 review 和集成。
-4. **B4 — Replication closure（TODO）**
-   - 发布 `supported/rejected/deferred` feature matrix；
-   - 更新 `PROGRESS.md`、`USAGE.md` 和派生清单；
+4. **B4 — Replication closure（ACCEPTED）**
+   - 发布 `supported/intentional-divergence/deferred` feature matrix；
+   - 更新 `PROGRESS.md`、`USAGE.md` 和文档入口；M2 历史派生清单保持只读，
+     由 closure commit/tag 形成新的复刻基线；
    - 检查 F2CPP 与 RayReuse 的构建独立性，并执行最终 AppleClang/GCC、
      `f2cpp-full` 和 release/checkpoint 验收。
 
@@ -585,7 +586,18 @@ acoustic `LL` 保存 elastic P/S 材料，继续在几何事件处冻结单个 s
 material，并按 `1e20 m` 深度逐频换算；新案例最大复压力绝对/相对误差为
 `4.38070691e-11`/`4.26289063e-7`，最大 TL 差 `1.52587891e-5 dB`。
 最终 regression 为 CTest 37/37、案例 14/14；full 为 Python 145/145、
-CTest 37/37、F2CPP 单频 65/65。B4 的前置条件已经满足，但尚未启动。
+CTest 37/37、F2CPP 单频 65/65。
+
+B4 于 2026-08-14 完成。closure 发布
+[`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md)，明确区分 supported、
+intentional divergence 与 deferred/out-of-scope；同步更新首页、使用说明、
+进度和项目级入口。生产源码扫描无 TODO/FIXME，未支持组合均在 parser、model
+或 solver 边界显式拒绝，未发现 silent fallback。AppleClang Debug
+ASan/UBSan、AppleClang Release 与 GNU C++ 14.2 Release/Werror 均为 37/37；
+`f2cpp-full` 为 Python 145/145、Release CTest 37/37、单频案例 65/65。
+不含既有 build/RayReuse 的隔离 AppleClang clean Release 编译通过，加入
+仓库级共享标准案例 fixture 后 CTest 37/37。I0～I8 与 B1～B4 至此全部冻结，
+没有未解决 correctness blocker。
 
 ## 6. 每项功能的统一验收门
 
@@ -616,9 +628,8 @@ CTest 37/37、F2CPP 单频 65/65。B4 的前置条件已经满足，但尚未启
 | 收口 | I9-B4 | 形成可声明的二维兼容范围和新派生基线 |
 
 I0～I2、I3-01～I3-06、I4-01～I4-05、I5-01～I5-05、I6-01～I6-05 和
-I7-01～I7-06、I8-01～I8-04 及 I9-B1～B3 已完成并冻结，当前暂停在 B4 前。
-每个阶段开始前仍应根据实际
-算例需求复核优先级；该复核只能调整尚未开始阶段的先后，不能绕过依赖门。
+I7-01～I7-06、I8-01～I8-04 及 I9-B1～B4 已完成并冻结。后续性能工作不得
+借机改变已声明兼容语义；新的功能 scope 必须作为独立 iteration 重新立项。
 
 ## 8. 已完成施工批的建议提交拆分
 
@@ -635,6 +646,5 @@ I7-01～I7-06、I8-01～I8-04 及 I9-B1～B3 已完成并冻结，当前暂停�
 10. docs: record I2 results and advance the main route to I3
 ```
 
-I0～I7-06 当前施工期间未修改 RayReuse。I8 也明确禁止修改 RayReuse；后续
-同步仍是独立任务。F2CPP 主路线现处于 I8 设计完成、实现未开始状态，不顺带
-并入 3D、N×2D 或 beam shift。
+I0～I8 与 I9 施工期间未修改 RayReuse；后续同步仍是独立任务。F2CPP
+二维单频复刻现已封板，不顺带并入 3D、N×2D、beam shift 或多频调度。

@@ -136,9 +136,8 @@ ctest --test-dir build/release \
   --output-on-failure
 ```
 
-初始 M2 派生快照的 Debug 和 Release 均为 20/20；I0 通用 SSP evaluator、
-PCHIP、N²-linear、Cubic Spline、二维边界及 ray-trace 输出测试加入后，
-当前基线均为 29/29。
+复刻封板基线的 AppleClang Debug ASan/UBSan、AppleClang Release 与 GCC 14
+Release/Werror 均为 37/37 CTest。
 
 ### 4.2 Python 标准算例基础测试
 
@@ -149,9 +148,9 @@ python3 -m unittest discover \
   -s test/standard_cases/codes/tests -p 'test_*.py'
 ```
 
-当前项目基线为 112/112。
+当前项目基线为 145/145。
 
-### 4.3 四十七个单频端到端案例
+### 4.3 六十五个单频端到端案例
 
 从仓库根目录运行：
 
@@ -163,73 +162,11 @@ python3 test/standard_cases/codes/standard_cases.py test \
   --executable Bellhop_F2CPP/build/release/bellhop_f2cpp
 ```
 
-该命令运行原有六例、三个新增 SSP 插值案例、三个 I3 边界案例、
-`attenuation_unit_n/f/m/w/q/l` 六个 I4-01 衰减单位案例，以及两个 I4-02
-体积衰减案例，依次生成 `.env` 和
-所需的 `.ati/.bty` sidecar、
-运行 F2CPP。46 个场案例检查 PRT/SHD 结构、维度、频率和复压力有限性；
-新增 `ray_trace_vacuum_rigid` 检查 PRT/RAY，明确不把它计作 SHD 声场。
-`i3_piecewise_boundaries` 还另行通过了全部 497 个发射角的 gfortran 逐点
-轨迹矩阵和最终场数值门。
-`i3_curvilinear_oracle` 的 459 条射线也已通过逐点矩阵；最终场最大复声压
-相对误差为 `5.70e-7`，最大 TL 差为 `7.63e-6 dB`。
-`i3_long_format_materials` 覆盖 `LL` 节点材料到活动 segment、反射事件冻结
-和逐频声学投影；其 Origin/F2CPP 最终场最大相对误差为 `4.57e-7`，最大
-TL 差为 `7.63e-6 dB`，冻结结果见
-`doc/validation/i3_long_format_materials_report.json`。
-六个衰减单位案例分别覆盖 `N/F/M/W/Q/L` 的 ENV 解析与最终场；其冻结
-Origin/F2CPP 比较见 `doc/validation/i4_attenuation_units_report.json`。
-Francois–Garrison 与 biological 案例还覆盖多频场和无损 no-op 防伪门，
-冻结结果见 `doc/validation/i4_volume_attenuation_report.json`。
-`elastic_halfspace_flat` 与 `elastic_halfspace_fluid_control` 覆盖普通 ENV
-弹性 P/S 反射、1/2 kHz 逐频投影和 shear 非空操作门，冻结结果见
-`doc/validation/i4_elastic_halfspace_report.json`。
-`grain_size_flat` 与 `grain_size_equivalent_acoustic_control` 覆盖 bottom `G`
-粒径派生、逐事件当地水声速、固定 `L` 损耗和双频冻结轨迹；两种实现内部
-的 `G` 与等价 `A` control 压力逐位一致，冻结结果见
-`doc/validation/i4_grain_size_report.json`。
-`tabulated_reflection_bottom` 与 `tabulated_reflection_rigid_control` 覆盖
-bottom `F`、`.brc` 幅相插值、双频冻结轨迹以及相对刚性底的非空操作门，
-冻结结果见 `doc/validation/i4_tabulated_reflection_report.json`。
-`q_range_dependent_cross_gradient` 与 `q_range_independent_control` 覆盖
-`Q + .ssp`、range/depth 双单元限步、非零交叉梯度、双频冻结几何及范围
-相关 effect guard。715 点代表射线逐点报告和六个最终场切片分别见
-`doc/validation/i5_q_geometry_oracle_report.json` 与
-`doc/validation/i5_quadrilateral_ssp_report.json`。
-`multi_source_depths` 覆盖三个乱序 source depth 的 Origin 排序、逐源独立
-轨迹缓存与 workspace、SHD source-major 记录顺序以及 1/2 kHz 最终场；冻结
-结果见 `doc/validation/i6_multi_source_report.json`。
-`irregular_receiver_pairs` 覆盖 run-type 第 5 字符 `I`、完整 receiver 坐标轴、
-单压力行 SHD 布局和 CC legacy 深度选择；冻结结果见
-`doc/validation/i6_irregular_receivers_report.json`。
-`source_beam_pattern_directional` 与 `source_beam_pattern_omni_control` 覆盖
-`CC* + .sbp`、dB 到线性压力幅度转换、逐角插值/外推、双频冻结轨迹以及
-相对全向源的非空操作门；冻结结果见
-`doc/validation/i6_source_beam_pattern_report.json`。
-`ray_trace_vacuum_rigid` 覆盖 2 source × 5 launch angles 的 R 模式轨迹，
-共 10 条射线、5934 个点、top/bottom bounce 各 19 次；相对 Origin 的坐标
-最大绝对误差为 `0 m`，语义哈希一致。冻结结果见
-`doc/validation/i6_ray_trace_report.json`。
-`cartesian_component_pressure/vertical/horizontal` 冻结 Cartesian P/V/H 的
-Origin legacy no-op；`cerveny_width_space_filling`、`cerveny_width_wkb`、
-`cerveny_curvature_double`、`cerveny_curvature_zero` 与既有 MS control 组成
-I7-02 五例单因素矩阵，覆盖 F/M/W epsilon、WKB KMAH 和 D/S/Z 完整动态
-跳变。报告分别见 `doc/validation/i7_cartesian_components_report.json` 与
-`doc/validation/i7_beam_options_report.json`。
-`source_geometry_point_explicit` 与 `source_geometry_line` 连同默认
-`constant_speed_direct` 冻结 run-type 第 4 字符：空白/`R` 为 point source，
-`X` 为 line source。point/line 共用相同冻结轨迹，只在逐射线 Influence 权重
-和最终压力扩散缩放分支不同；报告见
-`doc/validation/i7_source_geometry_report.json`。
-`incoherent_direct` 与 `semicoherent_direct` 连同默认 coherent control
-组成 I7-04 C/I/S 矩阵。三者共享冻结几何；I 逐 beam 累加强度，S 先在逐频
-投影中施加 Lloyd mirror，再执行同一强度路径。最终 I/S 取累积强度平方根并
-执行 point/line 扩散缩放，写入与 C 相同布局的 SHD，虚部严格为零；报告见
-`doc/validation/i7_coherence_modes_report.json`。
-`ray_centered_component_pressure/vertical/horizontal` 与 Cartesian pressure
-control 组成 I7-05 四例矩阵，覆盖 ray-centered family 的规则网格求交与
-物理 `P/V/H` 分量投影；报告见
-`doc/validation/i7_ray_centered_components_report.json`。
+该命令运行当前 65 个单频案例，覆盖 SHD、RAY、ASCII/binary ARR 与 eigenray
+产品，以及 I0～I8 和 B1～B3 的代表性输入。案例定义与 profile 的唯一清单
+位于 `test/standard_cases/cases/` 和 `coverage.toml`；逐 iteration 的数值误差、
+Origin oracle 与冻结哈希见 [`PROGRESS.md`](./PROGRESS.md) 和
+[`validation/`](./validation/)，不在本使用文档重复维护案例枚举。
 结果写入：
 
 ```text
@@ -360,7 +297,9 @@ python3 test/standard_cases/codes/standard_cases.py validate \
 
 ## 6. 支持的输入范围
 
-当前 parser 有意只支持标准案例所需子集：
+复刻封板的 supported / intentional divergence / deferred 分类以
+[`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 为准。下表给出
+实际可输入范围：
 
 | 项目 | 支持范围 |
 |---|---|
@@ -385,6 +324,7 @@ python3 test/standard_cases/codes/standard_cases.py validate \
 - `G+LL`、`F+LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
 - `P/W` reflection-coefficient 路径；当前 Origin 2D 中它们没有完整的实际反射消费/写出链；
 - 小写 `m` 幂律单位；
+- analytic SSP、多个水体介质或水体 shear 参数；
 - beam shift；
 - 3D 或 N×2D。
 
