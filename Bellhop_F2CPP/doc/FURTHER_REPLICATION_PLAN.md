@@ -1,9 +1,9 @@
 # Bellhop F2CPP 二维功能进一步复刻计划
 
-> 规划日期：2026-08-07  
-> 参考：会话 `019fb20a-5efc-7c60-aa72-32d4cd270224` 的最新计划  
-> 基线：F2CPP 已完成 C-linear、平边界、Cartesian Cerveny coherent
-> pressure 单频链和本地双 C++ 编译器验证  
+> 初始规划日期：2026-08-07
+> 最近更新：2026-08-14
+> 状态依据：本文件、`PROGRESS.md`、`tasks/`、测试和验证报告，以 Git 内容为准
+> 当前基线：F2CPP 已完成并冻结 I7；I8 架构与任务拆分已完成，功能实现未开始
 > 默认前提：不实现 3D，也不把 N×2D 作为二维功能纳入
 
 ## 1. 目标
@@ -421,7 +421,7 @@ CC→R→CC 会移除异类产品和陈旧临时文件，标准案例的单频/�
 复用旧 manifest 或输出。最终 AppleClang Debug/Release 与 GCC14 Werror
 均为 28/28 CTest，Python 标准工具 86/86，单频端到端案例保持 33/33；
 冻结摘要为 `doc/validation/i6_output_safety_report.json`。随后 I7-01～I7-06
-也已完成；当前按任务要求暂停，尚未进入 I8。
+也已完成；I8 架构审查与任务拆分已完成，功能实现尚未开始。
 
 ### I7：场分量、相干类型与 beam family
 
@@ -515,17 +515,26 @@ G/B/S 三例使用相同 300 条发射射线与场布局，Origin/F2CPP 最大�
 `doc/validation/i7_gaussian_beams_report.json`。最终 AppleClang Debug
 ASan/UBSan、AppleClang Release 与 GCC14 Werror CTest 均为 32/32，Python
 标准工具 123/123，单频案例 52/52（51 SHD + 1 RAY）。当前按任务要求暂停，
-尚未进入 I8。
+I8 架构审查与任务拆分已经完成，但尚未执行首个实现任务。
 
 ### I8：arrivals 与 eigenray
 
-- [ ] I8-01 定义独立的 `Arrival` 数据结构和 receiver 有界存储策略；不得把
-  arrival 状态塞入 `FrequencyWorkspace::pressure`。
-- [ ] I8-02 实现 ASCII `A` 和 binary `a` writer，并用独立 reader 对照头、
-  数量、走时、幅相、出射/入射角和反射次数。
-- [ ] I8-03 建立 eigenray receiver 命中/插值规则，再实现 `E` 模式和
-  `.ray` 输出。
-- [ ] I8-04 覆盖直达、多径、焦散、重复到达、arrival 上限和零到达案例。
+- [ ] I8-01 Arrival data model & accumulation：`ArrivalCandidate`/`Arrival`
+  精度边界、每 source/频率独立 workspace、Origin 容量公式、last-only
+  duplicate merge、最弱到达替换，以及 G/g/B contribution sink 与流式 solver。
+- [ ] I8-02 Arrival writers：checked layout、ASCII `A`、GNU Fortran sequential
+  unformatted binary `a`、多 source 写出、PRT 统计和 SHD/RAY/ARR 原子生命周期。
+- [ ] I8-03 Eigenray mode：复用 G/g/B receiver contribution 命中，保留每个
+  命中的 ray prefix，按 EOF 解释变长 `.ray` block，不和 arrival 去重/容量混用。
+- [ ] I8-04 Validation & documentation：独立 ARR/E reader、直接 `ArrMod`
+  组件 oracle、直达/多径/焦散/重复/容量/零到达矩阵、Origin↔F2CPP 报告和
+  全回归收口。
+
+I8 的冻结架构、支持/拒绝矩阵、阶段依赖和 18 个 OpenCode 原子任务见
+[`tasks/I8_arrivals_eigenray/README.md`](./tasks/I8_arrivals_eigenray/README.md)。
+任务文档是后续实现的唯一正式定义；OpenCode 每次只执行一个 T、不提交，
+Codex 检查实际 working tree、运行对应测试和 Fortran oracle，验收后更新任务
+状态并创建 checkpoint。当前所有任务均为 TODO。
 
 出口：arrivals/eigenray 与 TL 模式共享已验收 tracer，但拥有独立的数据和
 writer；任何容量截断都必须在 PRT 中可见。
@@ -567,7 +576,8 @@ writer；任何容量截断都必须在 PRT 中可见。
 | 收口 | I9 | 形成可声明的二维兼容范围和新派生基线 |
 
 I0～I2、I3-01～I3-06、I4-01～I4-05、I5-01～I5-05、I6-01～I6-05 和
-I7-01～I7-06 已按纵切完成。当前按任务要求暂停，尚未进入 I8。
+I7-01～I7-06 已按纵切完成。I8 已完成架构设计和任务文档创建，但尚未开始
+I8-01-T1 的功能实现。
 每个阶段开始前仍应根据实际
 算例需求复核优先级；该复核只能调整尚未开始阶段的先后，不能绕过依赖门。
 
@@ -586,5 +596,6 @@ I7-01～I7-06 已按纵切完成。当前按任务要求暂停，尚未进入 I8
 10. docs: record I2 results and advance the main route to I3
 ```
 
-I0～I7-06 当前施工期间未修改 RayReuse。后续同步仍是独立任务；F2CPP 主路线
-现暂停在 I8 之前，不顺带并入 3D、N×2D 或 beam shift。
+I0～I7-06 当前施工期间未修改 RayReuse。I8 也明确禁止修改 RayReuse；后续
+同步仍是独立任务。F2CPP 主路线现处于 I8 设计完成、实现未开始状态，不顺带
+并入 3D、N×2D 或 beam shift。
