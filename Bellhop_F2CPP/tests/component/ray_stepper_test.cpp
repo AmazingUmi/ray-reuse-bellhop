@@ -3,10 +3,11 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "bellhop/error.hpp"
-#include "bellhop/model/c_linear_ssp.hpp"
+#include "bellhop/model/sound_speed_evaluator.hpp"
 #include "bellhop/model/environment.hpp"
 #include "bellhop/ray/ray_equations.hpp"
 #include "bellhop/ray/ray_stepper.hpp"
@@ -14,7 +15,8 @@
 
 namespace {
 
-using bellhop::CLinearSsp;
+using bellhop::GeometrySspEvaluator;
+using bellhop::QuadrilateralSspGrid;
 using bellhop::RayState;
 using bellhop::SoundSpeedHessian;
 using bellhop::SoundSpeedPoint;
@@ -39,6 +41,36 @@ SoundSpeedProfile makePiecewiseLinearProfile() {
       {{.depth = 0.0, .soundSpeed = 1480.0, .density = 1000.0},
        {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
        {.depth = 300.0, .soundSpeed = 1460.0, .density = 1000.0}});
+}
+
+SoundSpeedProfile makeRangeJumpProfile() {
+  const auto grid = std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{
+          .rangesMeters = {0.0, 100.0, 200.0},
+          .speedsDepthMajor = {1500.0, 1510.0, 1490.0,
+                               1500.0, 1510.0, 1490.0},
+          .depthCount = 2U,
+          .rangeCount = 3U});
+  return SoundSpeedProfile(
+      {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0}},
+      bellhop::SspInterpolationKind::Quadrilateral, grid);
+}
+
+SoundSpeedProfile makeDoubleJumpProfile() {
+  const auto grid = std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{
+          .rangesMeters = {0.0, 100.0, 200.0},
+          .speedsDepthMajor = {1500.0, 1510.0, 1490.0,
+                               1520.0, 1540.0, 1500.0,
+                               1510.0, 1550.0, 1480.0},
+          .depthCount = 3U,
+          .rangeCount = 3U});
+  return SoundSpeedProfile(
+      {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 200.0, .soundSpeed = 1500.0, .density = 1000.0}},
+      bellhop::SspInterpolationKind::Quadrilateral, grid);
 }
 
 RayState makeRayState(double angleRadians) {
@@ -69,7 +101,7 @@ void testNormalCurvatureFormula(Context& context) {
 }
 
 void testConstantSpeedAnalyticStep(Context& context) {
-  const CLinearSsp ssp(makeConstantProfile());
+  const GeometrySspEvaluator ssp(makeConstantProfile());
   constexpr double angle = 37.0 * kPi / 180.0;
   constexpr double stepLength = 120.0;
   const RayState initial = makeRayState(angle);
@@ -97,6 +129,8 @@ void testConstantSpeedAnalyticStep(Context& context) {
                     "constant-speed step stores endpoint sound speed");
   context.check(result.segmentIndex == 0U,
                 "constant profile retains its segment");
+  context.check(result.rangeSegmentIndex == 0U,
+                "range-independent step retains the zero range segment");
 
   for (std::size_t index = 0; index < initial.dynamicP.size(); ++index) {
     context.checkNear(result.endState.dynamicP[index],
@@ -126,7 +160,7 @@ void testConstantSpeedAnalyticStep(Context& context) {
 }
 
 void testSecondLimiterCanFurtherShortenStep(Context& context) {
-  const CLinearSsp ssp(makeConstantProfile());
+  const GeometrySspEvaluator ssp(makeConstantProfile());
   const RayState initial = makeRayState(0.0);
   std::vector<StepLimitRequest> requests;
   const auto limiter = [&requests](const StepLimitRequest& request) {
@@ -139,6 +173,9 @@ void testSecondLimiterCanFurtherShortenStep(Context& context) {
   context.check(requests.size() == 2U, "step limiter is invoked twice");
   context.check(requests[0].phase == StepLimitPhase::InitialTangent,
                 "first limiter call uses the initial tangent");
+  context.check(requests[0].initialRangeSegmentIndex == 0U &&
+                    requests[1].initialRangeSegmentIndex == 0U,
+                "range-independent limiter calls keep a zero range hint");
   context.checkNear(requests[0].proposedStepLength, 10.0, 0.0,
                     "first limiter sees nominal step");
   context.check(requests[1].phase ==
@@ -161,8 +198,114 @@ void testSecondLimiterCanFurtherShortenStep(Context& context) {
                     "limited step integrates actual travel time");
 }
 
+double jumpCorrection(const RayState& endState,
+                      const bellhop::SoundSpeedSample& initialSample,
+                      const bellhop::SoundSpeedSample& endSample,
+                      bool depthPriority) {
+  const Vec2 jump = endSample.soundSpeedGradient -
+                    initialSample.soundSpeedGradient;
+  const Vec2 normal{.range = -endState.slowness.depth,
+                    .depth = endState.slowness.range};
+  const double rm = depthPriority
+      ? endState.slowness.range / endState.slowness.depth
+      : -endState.slowness.depth / endState.slowness.range;
+  return rm * (2.0 * bellhop::dot(jump, normal) -
+               rm * bellhop::dot(jump, endState.slowness)) /
+         endSample.soundSpeed;
+}
+
+void testQuadrilateralRangeGradientJump(Context& context) {
+  const GeometrySspEvaluator ssp(makeRangeJumpProfile());
+  constexpr Vec2 direction{.range = 0.8, .depth = 0.6};
+  const Vec2 position{.range = 90.0, .depth = 500.0};
+  const auto initialSample = ssp.evaluate(position, 0U, 0U);
+  const RayState initial{
+      .position = position,
+      .slowness = direction / initialSample.soundSpeed,
+      .dynamicP = {1.25, -0.5},
+      .dynamicQ = {2.0, 4.0},
+      .soundSpeed = initialSample.soundSpeed,
+      .realTravelTime = 0.0};
+
+  const auto result = stepRay(ssp, initial, 0U, 0U, 20.0);
+  const auto endSample = ssp.evaluate(result.endState.position, 0U, 0U);
+  const double correction =
+      jumpCorrection(result.endState, initialSample, endSample, false);
+
+  context.check(result.segmentIndex == 0U &&
+                    result.rangeSegmentIndex == 1U,
+                "Q range crossing changes only the range segment");
+  for (std::size_t index = 0U; index < initial.dynamicP.size(); ++index) {
+    context.checkNear(
+        result.endState.dynamicP[index],
+        initial.dynamicP[index] -
+            result.endState.dynamicQ[index] * correction,
+        2.0e-15,
+        "Q range crossing uses the Step.f90 range-normal jump formula");
+  }
+}
+
+void testQuadrilateralDoubleCrossingUsesDepthPriority(Context& context) {
+  const GeometrySspEvaluator ssp(makeDoubleJumpProfile());
+  constexpr double inverseRootTwo = 0.70710678118654752440;
+  constexpr Vec2 direction{.range = inverseRootTwo,
+                           .depth = inverseRootTwo};
+  const Vec2 position{.range = 90.0, .depth = 90.0};
+  const auto initialSample = ssp.evaluate(position, 0U, 0U);
+  const RayState initial{
+      .position = position,
+      .slowness = direction / initialSample.soundSpeed,
+      .dynamicP = {1.0, -0.25},
+      .dynamicQ = {2.0, 3.0},
+      .soundSpeed = initialSample.soundSpeed,
+      .realTravelTime = 0.0};
+  constexpr double step = 20.0;
+  constexpr double halfStep = 0.5 * step;
+
+  const Vec2 midpointPosition =
+      position + halfStep * initialSample.soundSpeed * initial.slowness;
+  const Vec2 midpointSlowness =
+      initial.slowness -
+      (halfStep /
+       (initialSample.soundSpeed * initialSample.soundSpeed)) *
+          initialSample.soundSpeedGradient;
+  const auto midpointSample = ssp.evaluate(midpointPosition, 0U, 0U);
+  const double midpointCurvature =
+      bellhop::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          midpointSample.soundSpeedHessian, midpointSlowness);
+
+  const auto result = stepRay(ssp, initial, 0U, 0U, step);
+  const auto endSample = ssp.evaluate(result.endState.position, 0U, 0U);
+  const double depthCorrection =
+      jumpCorrection(result.endState, initialSample, endSample, true);
+  const double rangeCorrection =
+      jumpCorrection(result.endState, initialSample, endSample, false);
+
+  context.check(result.segmentIndex == 1U &&
+                    result.rangeSegmentIndex == 1U,
+                "Q diagonal step changes both segment hints");
+  for (std::size_t index = 0U; index < initial.dynamicP.size(); ++index) {
+    const double midpointQ =
+        initial.dynamicQ[index] +
+        halfStep * initialSample.soundSpeed * initial.dynamicP[index];
+    const double rawP = initial.dynamicP[index] -
+                        step * midpointCurvature * midpointQ;
+    const double expectedDepth =
+        rawP - result.endState.dynamicQ[index] * depthCorrection;
+    const double expectedRange =
+        rawP - result.endState.dynamicQ[index] * rangeCorrection;
+    context.checkNear(
+        result.endState.dynamicP[index], expectedDepth, 3.0e-15,
+        "simultaneous Q crossing gives the depth jump formula priority");
+    context.check(
+        std::abs(result.endState.dynamicP[index] - expectedDepth) <
+            std::abs(result.endState.dynamicP[index] - expectedRange),
+        "simultaneous Q crossing does not use the range jump formula");
+  }
+}
+
 void testCLinearSegmentJump(Context& context) {
-  const CLinearSsp ssp(makePiecewiseLinearProfile());
+  const GeometrySspEvaluator ssp(makePiecewiseLinearProfile());
   RayState initial{
       .position = Vec2{.range = 0.0, .depth = 90.0},
       .slowness = Vec2{.range = 0.8 / 1498.0,
@@ -199,7 +342,7 @@ void testCLinearSegmentJump(Context& context) {
 }
 
 void testValidation(Context& context) {
-  const CLinearSsp ssp(makeConstantProfile());
+  const GeometrySspEvaluator ssp(makeConstantProfile());
   const RayState valid = makeRayState(0.0);
 
   context.expectThrows<ValidationError>(
@@ -255,6 +398,8 @@ int main() {
   testConstantSpeedAnalyticStep(context);
   testSecondLimiterCanFurtherShortenStep(context);
   testCLinearSegmentJump(context);
+  testQuadrilateralRangeGradientJump(context);
+  testQuadrilateralDoubleCrossingUsesDepthPriority(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

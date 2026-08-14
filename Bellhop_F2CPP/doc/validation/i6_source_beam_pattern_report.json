@@ -1,0 +1,136 @@
+{
+  "cases": {
+    "directional": "source_beam_pattern_directional",
+    "omnidirectional_control": "source_beam_pattern_omni_control",
+    "profiles": {
+      "broadband_smoke": [
+        1000.0,
+        2000.0
+      ],
+      "single": [
+        1000.0
+      ]
+    }
+  },
+  "component_guards": {
+    "db_converted_to_linear_amplitude_before_interpolation": true,
+    "interpolation_amplitude_anchors": {
+      "-200deg": 0.09568457647009723,
+      "-37.5deg": 0.4169191627817773,
+      "-60deg": 0.12589254117941673,
+      "0deg": 0.8331118767909359,
+      "200deg": 0.07480189280817366,
+      "60deg": 0.251188643150958
+    },
+    "origin_strict_lower_bracket_and_first_last_segment_extrapolation": true,
+    "strictly_increasing_angle_table": true
+  },
+  "directional_effect_guards": {
+    "f2cpp/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_omni_control": 0.021412473171949387,
+      "passed": true
+    },
+    "f2cpp/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_omni_control": 0.024407973513007164,
+      "passed": true
+    },
+    "f2cpp/single/1000Hz": {
+      "max_pressure_absolute_vs_omni_control": 0.021412473171949387,
+      "passed": true
+    },
+    "origin/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_omni_control": 0.021412471309304237,
+      "passed": true
+    },
+    "origin/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_omni_control": 0.024407971650362015,
+      "passed": true
+    },
+    "origin/single/1000Hz": {
+      "max_pressure_absolute_vs_omni_control": 0.021412471309304237,
+      "passed": true
+    }
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case source_beam_pattern_directional --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case source_beam_pattern_directional --profile broadband_smoke --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case source_beam_pattern_omni_control --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case source_beam_pattern_omni_control --profile broadband_smoke --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case source_beam_pattern_directional --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case source_beam_pattern_directional --profile broadband_smoke --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case source_beam_pattern_omni_control --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case source_beam_pattern_omni_control --profile broadband_smoke --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i6_source_beam_pattern.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i6_source_beam_pattern_report.json"
+  },
+  "origin_f2cpp_field_comparisons": {
+    "source_beam_pattern_directional/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 8.49752090914535e-09,
+      "max_pressure_relative": 3.3288204122072784e-06,
+      "max_tl_difference_db": 2.288818359375e-05,
+      "passed": true
+    },
+    "source_beam_pattern_directional/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 9.497663988611293e-09,
+      "max_pressure_relative": 1.1524973615451017e-06,
+      "max_tl_difference_db": 1.1444091796875e-05,
+      "passed": true
+    },
+    "source_beam_pattern_directional/single/1000Hz": {
+      "max_pressure_absolute": 8.49752090914535e-09,
+      "max_pressure_relative": 3.3288204122072784e-06,
+      "max_tl_difference_db": 2.288818359375e-05,
+      "passed": true
+    },
+    "source_beam_pattern_omni_control/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.6786527723411382e-08,
+      "max_pressure_relative": 3.286877017671941e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "source_beam_pattern_omni_control/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.3170890156288806e-08,
+      "max_pressure_relative": 4.050485586049035e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "source_beam_pattern_omni_control/single/1000Hz": {
+      "max_pressure_absolute": 1.6786527723411382e-08,
+      "max_pressure_relative": 3.286877017671941e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    }
+  },
+  "provenance_guards": {
+    "directional_effect_guard_count": 6,
+    "distinct_executable_hashes": true,
+    "distinct_executable_paths": true,
+    "field_comparison_slice_count": 6,
+    "omni_control_has_no_sbp_sidecar": true,
+    "origin_f2cpp_rendered_env_sbp_inputs_equal": true,
+    "results_not_older_than_executables": true,
+    "single_broadband_1000hz_repeatable": true,
+    "staged_sbp_sidecars_equal_canonical_source": true
+  },
+  "schema": "bellhop.f2cpp.i6_source_beam_pattern_validation",
+  "schema_version": 1,
+  "sha256": {
+    "canonical_sbp": "b967a1a6439a444a0ec0c1ebbebb044c3661cb6879e0fffb2b415a8fb758edc9",
+    "f2cpp_executable": "f724a2464e4b0d2eec23b0dcbca1e57de7c9a15d311f4d09b675f52b36eb6547",
+    "f2cpp_field_aggregate": "828db2b7ed27d7067b7340ad41454ab71e03d75fbf94bf42e802c546ce6cd882",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_field_aggregate": "d2be25d8ba66671d189f20cb5e256b77ee4a02b80f821712a59a7f30087f147e",
+    "rendered_env_sbp_aggregates": {
+      "source_beam_pattern_directional/broadband_smoke": "68f68fcd7564c789acc3fe5635193fd9813813a50d91babf7bc136bf0c23abb3",
+      "source_beam_pattern_directional/single": "caea1cfa587a6099f95e1d350e5118bfa98616e4d593d39821dd8a35a16e87ff",
+      "source_beam_pattern_omni_control/broadband_smoke": "21fd832eaaa2f8f11d0b2185755158ad786a6b5e8651f7ca994545a245403f66",
+      "source_beam_pattern_omni_control/single": "467e00c981f3e5f363f9022f8e7fe64ef9bd9402fa34aa39d98c294754ae2f6f"
+    },
+    "staged_sbp_aggregates": {
+      "broadband_smoke": "68d564cc23954e3115222f384a48de472b102ecf270ea2bf8fe6446ca281b17f",
+      "single": "b967a1a6439a444a0ec0c1ebbebb044c3661cb6879e0fffb2b415a8fb758edc9"
+    }
+  },
+  "status": "passed"
+}

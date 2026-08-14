@@ -23,6 +23,7 @@ namespace {
 
 using bellhop::AcousticMaterial;
 using bellhop::BoundaryModel;
+using bellhop::BeamWidthMode;
 using bellhop::CartesianCervenyDiagnostic;
 using bellhop::CartesianCervenyDiagnosticRequest;
 using bellhop::CartesianCervenyInfluence;
@@ -33,6 +34,7 @@ using bellhop::FrequencyProjector;
 using bellhop::FrequencyWorkspace;
 using bellhop::GeometryTracer;
 using bellhop::IntegratorSettings;
+using bellhop::IntensityWorkspace;
 using bellhop::RayFrequencyPoint;
 using bellhop::RayFrequencyState;
 using bellhop::RayPath;
@@ -40,6 +42,8 @@ using bellhop::RayState;
 using bellhop::ReceiverGrid;
 using bellhop::SoundSpeedProfile;
 using bellhop::Source;
+using bellhop::SourceGeometry;
+using bellhop::SimulationRunMode;
 using bellhop::Vec2;
 using bellhop::ValidationError;
 using bellhop::cervenyHermiteTaper;
@@ -133,7 +137,8 @@ void checkImage(Context& context,
 }
 
 CartesianCervenyDiagnostic runDirectOracle(
-    Context& context, FrequencyWorkspace& workspace) {
+    Context& context, FrequencyWorkspace& workspace,
+    SourceGeometry sourceGeometry = SourceGeometry::Point) {
   const Environment environment = makeDirectEnvironment();
   const ReceiverGrid receivers(
       linearGrid(400.0, 600.0, 21U),
@@ -153,7 +158,8 @@ CartesianCervenyDiagnostic runDirectOracle(
       pickMinimumWidthEpsilon(50.0, 1500.0, 2500.0, 1.0);
   const CartesianCervenyInfluence influence(
       environment, receivers,
-      CartesianCervenySettings{.imageCount = 3U, .beamWindow = 5});
+      CartesianCervenySettings{.imageCount = 3U, .beamWindow = 5},
+      BeamWidthMode::MinimumWidth, sourceGeometry);
   const auto diagnostic = influence.accumulate(
       workspace, path, frequencyState, epsilon.value,
       CartesianCervenyDiagnosticRequest{
@@ -162,6 +168,161 @@ CartesianCervenyDiagnostic runDirectOracle(
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "direct oracle receiver is evaluated");
   return diagnostic.value();
+}
+
+CartesianCervenyDiagnostic runDirectIntensityOracle(
+    Context& context, IntensityWorkspace& workspace,
+    SimulationRunMode runMode) {
+  const Environment environment = makeDirectEnvironment();
+  const ReceiverGrid receivers(
+      linearGrid(400.0, 600.0, 21U),
+      linearGrid(100.0, 5000.0, 51U));
+  const RayPath path =
+      GeometryTracer(
+          environment,
+          IntegratorSettings{
+              .stepLength = 10.0,
+              .rangeLimit = 5100.0,
+              .depthLimit = 1100.0,
+              .maximumRayPoints = 10000U})
+          .trace(Source{.depth = 500.0}, kDirectLaunchAngle);
+  const RayFrequencyState frequencyState =
+      FrequencyProjector(environment).project(path, 50.0, 1.0);
+  const auto epsilon =
+      pickMinimumWidthEpsilon(50.0, 1500.0, 2500.0, 1.0);
+  const CartesianCervenyInfluence influence(
+      environment, receivers,
+      CartesianCervenySettings{.imageCount = 3U, .beamWindow = 5},
+      BeamWidthMode::MinimumWidth, SourceGeometry::Point, runMode);
+  const auto diagnostic = influence.accumulateIntensity(
+      workspace, path, frequencyState, epsilon.value,
+      CartesianCervenyDiagnosticRequest{
+          .receiverRangeIndex = 10U,
+          .receiverDepthIndex = 10U});
+  context.check(diagnostic.has_value() && diagnostic->evaluated,
+                "direct intensity oracle receiver is evaluated");
+  return diagnostic.value();
+}
+
+void testIntensityAccumulation(Context& context) {
+  const ReceiverGrid receivers(
+      linearGrid(400.0, 600.0, 21U),
+      linearGrid(100.0, 5000.0, 51U));
+  FrequencyWorkspace coherentWorkspace(50.0, receivers);
+  IntensityWorkspace incoherentWorkspace(50.0, receivers);
+  IntensityWorkspace semiCoherentWorkspace(50.0, receivers);
+  const CartesianCervenyDiagnostic coherent =
+      runDirectOracle(context, coherentWorkspace);
+  const CartesianCervenyDiagnostic incoherent =
+      runDirectIntensityOracle(
+          context, incoherentWorkspace,
+          SimulationRunMode::IncoherentTransmissionLoss);
+  const CartesianCervenyDiagnostic semiCoherent =
+      runDirectIntensityOracle(
+          context, semiCoherentWorkspace,
+          SimulationRunMode::SemiCoherentTransmissionLoss);
+
+  const double magnitude = std::abs(coherent.finalContribution);
+  const double expectedIncrement = magnitude * magnitude;
+  context.checkNear(
+      incoherent.intensityIncrement, expectedIncrement, 2.0e-10,
+      "incoherent beam forms abs(z) squared after coherent image sum");
+  context.checkNear(
+      incoherentWorkspace.at(10U, 10U), expectedIncrement, 2.0e-10,
+      "incoherent workspace receives the non-negative beam intensity");
+  context.checkNear(
+      semiCoherent.intensityIncrement, expectedIncrement, 2.0e-10,
+      "semi-coherent influence uses the same intensity accumulation law");
+
+  std::complex<double> diagnosticImageSum{};
+  for (const auto& image : incoherent.images) {
+    diagnosticImageSum += image.contribution;
+  }
+  context.checkNear(
+      diagnosticImageSum.real(), incoherent.rawImageSum.real(), 0.0,
+      "diagnostic images are summed coherently before intensity real");
+  context.checkNear(
+      diagnosticImageSum.imag(), incoherent.rawImageSum.imag(), 0.0,
+      "diagnostic images are summed coherently before intensity imaginary");
+  context.check(incoherent.intensityIncrement >= 0.0,
+                "incoherent intensity increment is non-negative");
+}
+
+void testAccumulationModeContracts(Context& context) {
+  const Environment environment = makeDirectEnvironment();
+  const ReceiverGrid receivers(
+      linearGrid(400.0, 600.0, 21U),
+      linearGrid(100.0, 5000.0, 51U));
+  const RayPath path =
+      GeometryTracer(
+          environment,
+          IntegratorSettings{
+              .stepLength = 10.0,
+              .rangeLimit = 5100.0,
+              .depthLimit = 1100.0,
+              .maximumRayPoints = 10000U})
+          .trace(Source{.depth = 500.0}, kDirectLaunchAngle);
+  const RayFrequencyState frequencyState =
+      FrequencyProjector(environment).project(path, 50.0, 1.0);
+  const auto epsilon =
+      pickMinimumWidthEpsilon(50.0, 1500.0, 2500.0, 1.0);
+  const CartesianCervenyInfluence coherent(environment, receivers);
+  const CartesianCervenyInfluence incoherent(
+      environment, receivers, {}, BeamWidthMode::MinimumWidth,
+      SourceGeometry::Point,
+      SimulationRunMode::IncoherentTransmissionLoss);
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        IntensityWorkspace workspace(50.0, receivers);
+        static_cast<void>(coherent.accumulateIntensity(
+            workspace, path, frequencyState, epsilon.value));
+      },
+      "coherent influence rejects intensity accumulation");
+  context.expectThrows<ValidationError>(
+      [&] {
+        FrequencyWorkspace workspace(50.0, receivers);
+        static_cast<void>(incoherent.accumulate(
+            workspace, path, frequencyState, epsilon.value));
+      },
+      "incoherent influence rejects complex-pressure accumulation");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(CartesianCervenyInfluence(
+            environment, receivers, {}, BeamWidthMode::MinimumWidth,
+            SourceGeometry::Point, SimulationRunMode::RayTrace));
+      },
+      "ray-trace mode is rejected by Cartesian Cerveny influence");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(CartesianCervenyInfluence(
+            environment, receivers, {}, BeamWidthMode::MinimumWidth,
+            SourceGeometry::Point,
+            static_cast<SimulationRunMode>(999)));
+      },
+      "invalid run mode is rejected by Cartesian Cerveny influence");
+}
+
+void testLineSourceInfluenceRatio(Context& context) {
+  const ReceiverGrid receivers(
+      linearGrid(400.0, 600.0, 21U),
+      linearGrid(100.0, 5000.0, 51U));
+  FrequencyWorkspace pointWorkspace(50.0, receivers);
+  FrequencyWorkspace lineWorkspace(50.0, receivers);
+  const CartesianCervenyDiagnostic point =
+      runDirectOracle(context, pointWorkspace, SourceGeometry::Point);
+  const CartesianCervenyDiagnostic line =
+      runDirectOracle(context, lineWorkspace, SourceGeometry::Line);
+  const double expectedRatio =
+      1.0 / std::sqrt(std::abs(std::cos(kDirectLaunchAngle)));
+  checkComplexNear(
+      context, line.constantPrincipal,
+      point.constantPrincipal * expectedRatio, 3.0e-12,
+      "line-source principal removes the point-source cosine factor");
+  checkComplexNear(
+      context, line.finalContribution,
+      point.finalContribution * expectedRatio, 5.0e-11,
+      "line-source ray contribution removes the point-source cosine factor");
 }
 
 void testDirectOracle(Context& context) {
@@ -408,6 +569,36 @@ void testRigidReflectionOracle(Context& context) {
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "rigid reflection oracle receiver is evaluated");
   const CartesianCervenyDiagnostic& value = diagnostic.value();
+  IntensityWorkspace intensityWorkspace(250.0, receivers);
+  const auto intensityDiagnostic =
+      CartesianCervenyInfluence(
+          environment, receivers, {}, BeamWidthMode::MinimumWidth,
+          SourceGeometry::Point,
+          SimulationRunMode::IncoherentTransmissionLoss)
+          .accumulateIntensity(
+              intensityWorkspace, path, frequencyState, epsilon.value,
+              CartesianCervenyDiagnosticRequest{
+                  .receiverRangeIndex = 110U,
+                  .receiverDepthIndex = 48U});
+  context.check(
+      intensityDiagnostic.has_value() && intensityDiagnostic->evaluated,
+      "rigid reflection intensity receiver is evaluated");
+  const double coherentMagnitude = std::abs(value.finalContribution);
+  const double coherentImageSumIntensity =
+      coherentMagnitude * coherentMagnitude;
+  context.checkNear(
+      intensityDiagnostic->intensityIncrement,
+      coherentImageSumIntensity, 2.0e-10,
+      "rigid images sum coherently before intensity is formed");
+  double separateImageIntensity = 0.0;
+  for (const auto& image : value.images) {
+    const double imageMagnitude =
+        std::abs(value.constantCorrected * image.contribution);
+    separateImageIntensity += imageMagnitude * imageMagnitude;
+  }
+  context.check(
+      std::abs(separateImageIntensity - coherentImageSumIntensity) > 1.0,
+      "rigid fixture distinguishes coherent image sum from per-image power");
   context.check(value.evaluationCount == 1U &&
                     value.leftPointIndex == 429U &&
                     value.rightPointIndex == 430U,
@@ -522,6 +713,13 @@ void testTerminalInactivePointIsRetained(Context& context) {
   context.check(retained.at(0U, 1U) != std::complex<double>{},
                 "segment ending at first inactive point is retained");
 
+  state.points[2U].amplitude = -1.0e-9;
+  FrequencyWorkspace extrapolated(50.0, receivers);
+  static_cast<void>(influence.accumulate(
+      extrapolated, path, state, {0.0, 100.0}));
+  context.check(extrapolated.at(0U, 1U) != std::complex<double>{},
+                "inactive terminal point retains REAL4 table extrapolation");
+
   state.points[1U].active = false;
   FrequencyWorkspace suppressed(50.0, receivers);
   static_cast<void>(influence.accumulate(
@@ -543,6 +741,16 @@ void testBranchCutAndHermitePrimitives(Context& context) {
           {-6.7817106255825528e5, -3.8184300925539017e7},
           1) == 1,
       "real-q sign change without imaginary crossing does not flip");
+  context.check(
+      updateCervenyKmah(
+          {-2.0, 7.0}, {0.0, 9.0}, 1,
+          BeamWidthMode::Wkb) == -1,
+      "WKB real-q negative-to-zero crossing flips KMAH");
+  context.check(
+      updateCervenyKmah(
+          {2.0, -7.0}, {-1.0, -9.0}, -1,
+          BeamWidthMode::Wkb) == 1,
+      "WKB real-q positive-to-negative crossing flips KMAH");
   context.expectThrows<ValidationError>(
       [] {
         static_cast<void>(
@@ -605,6 +813,14 @@ void testValidationContracts(Context& context) {
             ReceiverGrid({50.0}, {0.0, 10.0, 21.0})));
       },
       "nonuniform receiver ranges are rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(CartesianCervenyInfluence(
+            environment, ReceiverGrid({50.0}, {0.0, 10.0}), {},
+            BeamWidthMode::MinimumWidth,
+            static_cast<SourceGeometry>(999)));
+      },
+      "invalid source geometry is rejected by influence");
 
   const ReceiverGrid receivers({50.0}, {0.0, 10.0});
   const CartesianCervenyInfluence influence(
@@ -667,12 +883,12 @@ void testValidationContracts(Context& context) {
   context.expectThrows<ValidationError>(
       [&] {
         RayFrequencyState state = makeState();
-        state.points[2U].amplitude = -1.0;
+        state.points[1U].amplitude = -1.0;
         FrequencyWorkspace workspace(50.0, receivers);
         static_cast<void>(influence.accumulate(
             workspace, path, state, {0.0, 100.0}));
       },
-      "negative frequency-point amplitude is rejected");
+      "negative active frequency-point amplitude is rejected");
   context.expectThrows<ValidationError>(
       [&] {
         RayFrequencyState state = makeState();
@@ -708,6 +924,25 @@ void testValidationContracts(Context& context) {
             workspace, path, state, {1.0, 100.0}));
       },
       "epsilon must remain purely positive imaginary");
+  {
+    RayFrequencyState state = makeState();
+    FrequencyWorkspace workspace(50.0, receivers);
+    const CartesianCervenyInfluence wkbInfluence(
+        environment, receivers, {}, BeamWidthMode::Wkb);
+    static_cast<void>(wkbInfluence.accumulate(
+        workspace, path, state, {1.0e10, 0.0}));
+    context.check(true, "WKB influence accepts a finite real epsilon");
+  }
+  context.expectThrows<ValidationError>(
+      [&] {
+        RayFrequencyState state = makeState();
+        FrequencyWorkspace workspace(50.0, receivers);
+        const CartesianCervenyInfluence wkbInfluence(
+            environment, receivers, {}, BeamWidthMode::Wkb);
+        static_cast<void>(wkbInfluence.accumulate(
+            workspace, path, state, {1.0e10, 1.0}));
+      },
+      "WKB epsilon rejects a nonzero imaginary part");
   context.expectThrows<ValidationError>(
       [&] {
         RayFrequencyState state = makeState();
@@ -726,6 +961,9 @@ int main() {
   Context context;
   testBranchCutAndHermitePrimitives(context);
   testDirectOracle(context);
+  testIntensityAccumulation(context);
+  testAccumulationModeContracts(context);
+  testLineSourceInfluenceRatio(context);
   testMunkOracles(context);
   testRigidReflectionOracle(context);
   testTerminalInactivePointIsRetained(context);

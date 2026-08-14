@@ -30,6 +30,7 @@ PROGRAM BELLHOP
   USE FatalError
   USE OracleDiagnostics
   USE InfluenceOracleDiagnostics
+  USE SspOracleDiagnostics
 
   IMPLICIT NONE
   
@@ -188,6 +189,8 @@ SUBROUTINE BellhopCore
   ScaleSeconds = 0.0
 
   omega = 2.0 * pi * freq
+
+  CALL SspOracleRun( freq )
 
   IF ( Beam%deltas == 0.0 ) THEN
      Beam%deltas = ( Bdry%Bot%HS%Depth - Bdry%Top%HS%Depth ) / 10.0   ! Automatic step size selection

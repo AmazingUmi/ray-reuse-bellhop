@@ -1,0 +1,41 @@
+id = "geometric_hat_ray_centered"
+description = "Ray-centered geometric hat on the I3 piecewise boundary geometry"
+origin_template = "origin.env.in"
+companion_files = ["origin.ati", "origin.bty"]
+source_references = [
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 geometric-hat run types",
+  "Bellhop_origin/Bellhop/bellhop.f90 geometric-hat influence dispatch",
+  "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatRayCen",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 120.0
+maximum_range_m = 1900.0
+minimum_angle_deg = -40.0
+maximum_angle_deg = 40.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 2, 3]
+prt_markers = [
+  "VACUUM",
+  "Perfectly RIGID",
+  "Geometric hat beams in ray-centered coordinates",
+  "Geometric hat beams",
+]
+prt_forbidden_markers = [
+  "THORP volume attenuation added",
+  "Geometric hat beams in Cartesian coordinates",
+  "Cartesian beams",
+  "Ray centered beams",
+  "Type of beam =",
+  "Component",
+  "Number of images",
+]
+
+[profiles.single]
+frequencies_hz = [100.0]

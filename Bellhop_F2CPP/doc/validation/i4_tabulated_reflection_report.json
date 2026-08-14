@@ -1,0 +1,111 @@
+{
+  "cases": {
+    "profiles": {
+      "broadband_smoke": [
+        1000.0,
+        2000.0
+      ],
+      "single": [
+        1000.0
+      ]
+    },
+    "rigid_control": "tabulated_reflection_rigid_control",
+    "tabulated_reflection": "tabulated_reflection_bottom"
+  },
+  "component_guards": {
+    "inactive_terminal_negative_amplitude_is_retained": true,
+    "knot_midpoint_and_outside_domain_interpolation_anchors": true,
+    "phase_degrees_converted_to_radians": true,
+    "real4_domain_and_bracket_decision_anchors": true,
+    "real4_internal_right_bracket_anchor": true,
+    "strictly_increasing_angle_table": true,
+    "two_frequency_projection_preserves_frozen_path": true
+  },
+  "generation": {
+    "case_command": "python3 test/standard_cases/codes/standard_cases.py test --version <origin|f2cpp> --case <tabulated_reflection_bottom|tabulated_reflection_rigid_control> --profile <single|broadband_smoke> --executable <matching-executable> --results-root <results-root>",
+    "validator_command": "python3 test/standard_cases/codes/validate_i4_tabulated_reflection.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
+  },
+  "origin_f2cpp_field_comparisons": {
+    "tabulated_reflection_bottom/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.5160832589344864e-08,
+      "max_pressure_relative": 6.344295798044186e-06,
+      "max_tl_difference_db": 3.814697265625e-05,
+      "passed": true
+    },
+    "tabulated_reflection_bottom/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.5359765015432458e-08,
+      "max_pressure_relative": 1.7750621736922767e-06,
+      "max_tl_difference_db": 7.62939453125e-06,
+      "passed": true
+    },
+    "tabulated_reflection_bottom/single/1000Hz": {
+      "max_pressure_absolute": 1.5160832589344864e-08,
+      "max_pressure_relative": 6.344295798044186e-06,
+      "max_tl_difference_db": 3.814697265625e-05,
+      "passed": true
+    },
+    "tabulated_reflection_rigid_control/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.6786527723411382e-08,
+      "max_pressure_relative": 3.286877017671941e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "tabulated_reflection_rigid_control/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.3170890156288806e-08,
+      "max_pressure_relative": 4.050485586049035e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "tabulated_reflection_rigid_control/single/1000Hz": {
+      "max_pressure_absolute": 1.6786527723411382e-08,
+      "max_pressure_relative": 3.286877017671941e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    }
+  },
+  "schema": "bellhop.f2cpp.i4_tabulated_reflection_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_executable": "75d161912f030779ea0d09f341693e8984a6fba97fa6f99b10b496d4b62b2e86",
+    "f2cpp_field_aggregate": "2d4dd8a83da697885dc3552b9451ae088ccf9fb06ef675a0cbf3cb5741902dd1",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_field_aggregate": "fc35f7a119309334057774a68d5332e48e0bb498318aa52746fe3d3d831a66f0",
+    "rendered_input_aggregates": {
+      "tabulated_reflection_bottom/broadband_smoke": "59a4e8f423015ebbe8060169193c9c5688e4bd063c2b2429ec6b734753e1ce3a",
+      "tabulated_reflection_bottom/single": "908f83d6725f661fc4c6082d44761f00c79209e3cf2120ba9a5b89ea31a02b88",
+      "tabulated_reflection_rigid_control/broadband_smoke": "a167153991bdd3a9c410960227523c726c21d17867a1a4f341ad66282d64f051",
+      "tabulated_reflection_rigid_control/single": "c0d45086cdf99ff385c08fbe496535355511beaf2789997c89bc791ed1de6676"
+    },
+    "staged_brc_aggregates": {
+      "broadband_smoke": "77df90885530d150e8d3a6784f9ab7878b945a1052544053e417290642b61584",
+      "single": "bb546499de5b2b1812208d6a397f37b338c6e234aff7ce150fd4b5dd2294d0dd"
+    }
+  },
+  "status": "passed",
+  "tabulated_reflection_effect_guards": {
+    "f2cpp/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_rigid_control": 0.019703790545463562,
+      "passed": true
+    },
+    "f2cpp/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_rigid_control": 0.024083640426397324,
+      "passed": true
+    },
+    "f2cpp/single/1000Hz": {
+      "max_pressure_absolute_vs_rigid_control": 0.019703790545463562,
+      "passed": true
+    },
+    "origin/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_rigid_control": 0.019703788682818413,
+      "passed": true
+    },
+    "origin/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_rigid_control": 0.024083638563752174,
+      "passed": true
+    },
+    "origin/single/1000Hz": {
+      "max_pressure_absolute_vs_rigid_control": 0.019703788682818413,
+      "passed": true
+    }
+  }
+}

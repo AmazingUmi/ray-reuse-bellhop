@@ -182,6 +182,34 @@ void testExplicitCountIsIgnored(Context& context) {
                 "D-02 policy A ignores an oversized explicit count");
 }
 
+void testRayTraceCountPolicy(Context& context) {
+  LaunchFanPlanningInput input = directCaseInput();
+  input.rayTraceMode = true;
+  input.explicitLaunchAngleCount = 5U;
+  const LaunchFanPlan explicitPlan = LaunchFanPlanner::plan(input);
+
+  context.check(explicitPlan.launchAngleCount == 5U,
+                "ray-trace mode preserves an explicit launch count");
+  context.check(explicitPlan.launchAngles.size() == 5U,
+                "ray-trace mode emits the requested number of angles");
+  context.check(explicitPlan.launchAngles.front() ==
+                    input.minimumLaunchAngle,
+                "ray-trace explicit fan preserves the lower endpoint");
+  context.check(explicitPlan.launchAngles.back() ==
+                    input.maximumLaunchAngle,
+                "ray-trace explicit fan preserves the upper endpoint");
+
+  input.explicitLaunchAngleCount = std::nullopt;
+  const LaunchFanPlan defaultPlan = LaunchFanPlanner::plan(input);
+  context.check(defaultPlan.launchAngleCount == 50U,
+                "ray-trace mode defaults to 50 launch angles");
+
+  input.explicitLaunchAngleCount = 1U;
+  context.expectThrows<ValidationError>(
+      [&input]() { static_cast<void>(LaunchFanPlanner::plan(input)); },
+      "ray-trace mode rejects a one-angle fan");
+}
+
 void testFortranDegreeSubtabulationBits(Context& context) {
   LaunchFanPlanningInput input{
       .frequencies = {250.0},
@@ -318,6 +346,7 @@ int main() {
   testStandardCaseCounts(context);
   testHighestFrequencyAndAngles(context);
   testExplicitCountIsIgnored(context);
+  testRayTraceCountPolicy(context);
   testFortranDegreeSubtabulationBits(context);
   testInvalidInputs(context);
 

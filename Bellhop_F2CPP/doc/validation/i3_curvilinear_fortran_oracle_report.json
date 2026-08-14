@@ -1,0 +1,130 @@
+{
+  "schema": "bellhop.f2cpp.fortran_oracle_fixture",
+  "schema_version": 1,
+  "date": "2026-08-09",
+  "status": "passed",
+  "case": "i3_curvilinear_oracle",
+  "profile": "single",
+  "frequency_hz": 100.0,
+  "launch_angle_index": 150,
+  "launch_angle_rad": -0.2438888037721334,
+  "shared_launch_angle_count": 459,
+  "oracle": {
+    "schema_version": 2,
+    "point_count": 29,
+    "integrated_step_count": 22,
+    "reflection_event_count": 6,
+    "top_reflection_count": 3,
+    "bottom_reflection_count": 3,
+    "termination_reason": "spatial_box_range",
+    "all_numeric_fields_finite": true,
+    "all_events_on_physical_segment_interiors": true,
+    "all_events_have_nonzero_curvature": true
+  },
+  "full_launch_fan_geometry_comparison": {
+    "launch_angle_count": 459,
+    "passed": 459,
+    "failed": 0,
+    "total_point_count": 19056,
+    "total_integrated_step_count": 14600,
+    "total_reflection_event_count": 3997,
+    "worst_comparison": {
+      "launch_angle_index": 455,
+      "point_index": 41,
+      "field": "p1",
+      "absolute_error": 3.3306690738754696e-16,
+      "scaled_error": 0.0003238853732589808
+    },
+    "accepted_termination_reasons": [
+      "spatial_box_range",
+      "spatial_box_depth",
+      "two_points_outside_top",
+      "two_points_outside_bottom"
+    ]
+  },
+  "final_field_comparison": {
+    "receiver_shape": [1, 1, 2, 3],
+    "max_pressure_absolute": 8.33406899e-10,
+    "max_pressure_relative": 5.70499651e-7,
+    "max_tl_difference_db": 7.62939453e-6,
+    "passed": true
+  },
+  "semantic_note": "Original Bellhop linearly interpolates C-boundary node tangent/normal vectors without renormalizing them. The resulting frame is orthogonal and equal-length but generally non-unit; this is intentional oracle behavior.",
+  "representative_anchors": [
+    {
+      "event_index": 1,
+      "boundary": "sea_surface",
+      "boundary_segment_index": 2,
+      "physical_segment_fraction": 0.35885553954594346,
+      "pre_position_m": [161.4882321836457, 7.814890518004077],
+      "post_position_m": [161.4882321836457, 7.814890518004077],
+      "interpolated_tangent": [0.9998085833338034, 0.008331882787290048],
+      "interpolated_normal": [0.008331882787290048, -0.9998085833338034],
+      "curvature_per_m": -0.0001023773616463405,
+      "incident_slowness_s_per_m": [0.0006469375024322842, -0.0001609854415502305],
+      "reflected_slowness_s_per_m": [0.0006441655711190538, 0.00017164054349210126],
+      "incident_p": [1.0, 0.0],
+      "incident_q": [249619.52518829107, 1.0],
+      "reflected_p": [1.1365591001486675, 5.470689844701022e-7],
+      "reflected_q": [249619.52518829107, 1.0]
+    },
+    {
+      "event_index": 2,
+      "boundary": "seabed",
+      "boundary_segment_index": 2,
+      "physical_segment_fraction": 0.8894418965930795,
+      "pre_position_m": [489.19776852203154, 95.13443295637096],
+      "post_position_m": [489.19776852203154, 95.13443295637096],
+      "interpolated_tangent": [0.9991572645683603, 0.006256177145108277],
+      "interpolated_normal": [-0.006256177145108277, 0.9991572645683603],
+      "curvature_per_m": 0.0001518221312076167,
+      "incident_slowness_s_per_m": [0.0006441655711190538, 0.00017164054349210126],
+      "reflected_slowness_s_per_m": [0.0006462609635661726, -0.00016300896164498068],
+      "incident_p": [1.1365591001486675, 5.470689844701022e-7],
+      "incident_q": [827826.8563932914, 1.2783131096782485],
+      "reflected_p": [1.803666459473942, 1.577202370941432e-6],
+      "reflected_q": [827826.8563932914, 1.2783131096782485]
+    }
+  ],
+  "sha256": {
+    "case_manifest": "d0ed041063e647a834f99e6c5e473642bf506637acf3fa8aaeec05b892d367b3",
+    "environment_template": "84d7c3f8a207cbbc8361a8513c32d805b3f6d9b0a2de6636717268859a3e9bb4",
+    "rendered_environment": "8bf50502bc256b25f7134fa0edf0c5e6bf77f3315a3aca2182c5bc01339a5bb7",
+    "altimetry": "6db2ffcb63119b95a187a171a2fda82d40e7fef63b29e37cda6586c44ad8a3fb",
+    "bathymetry": "5490e2087bba9f429579a96b72474f1bfff2eae8b6a6302b647df428ea3af7b3",
+    "fortran_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "ray_points": "9012988b51f4e56eea35d487f42ca72c4b07c007ddb9307770b41521a7c4e5c3",
+    "reflection_events": "1938c1e0050d24e4c7f37e6bda4935899dacdf70e73c441a2f36ccb5f8cce8a6",
+    "full_fan_fortran_oracle_aggregate": "9968e8e426a478006c3893237ab33e173d68611e99e1504992efa678de5bb532",
+    "origin_field": "be6c93558b920fbcdda3362a5750ea8363c32ae9fba8109d402422ac8f1e6a4f",
+    "f2cpp_field": "fe69276adffd34190db265f90ccf8f50cd3e4edc53983b32715ba6eab6f2d740",
+    "origin_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "f2cpp_executable_debug": "0dbd3c7dda57bcd5c9d5800a7cd31531281a48fd79e64d3ff776febf18599627",
+    "f2cpp_executable_release": "d8edc992089efdf0046a7285455e860e22bbe957eaba620748a0660afddcecc9",
+    "f2cpp_geometry_probe": "e658524a9e5dd198c756a135d3166c4a4bf4a9d28451757c20017b618df88ef8"
+  },
+  "generation": {
+    "representative_oracle_script": "test/standard_cases/codes/generate_i3_curvilinear_oracle.py",
+    "representative_alpha_index": 150,
+    "representative_output_files": [
+      "fortran-oracle/manifest.json",
+      "fortran-oracle/ray_points.csv",
+      "fortran-oracle/reflection_events.csv"
+    ],
+    "full_fan_generation": {
+      "alpha_index_range": [1, 459],
+      "script": "test/standard_cases/codes/generate_i3_curvilinear_oracle.py",
+      "required_option": "--all-alpha-indices",
+      "output_layout": "a001..a459, each containing fortran-oracle and a per-ray summary",
+      "note": "The full-fan option automatically permits valid rays that do not reflect from both boundaries."
+    },
+    "closure_validation_script": "test/standard_cases/codes/validate_i3_curvilinear_closure.py",
+    "closure_validation_inputs": [
+      "the a001..a459 Fortran oracle directory root",
+      "the F2CPP geometry oracle probe executable",
+      "the Origin Bellhop SHD field",
+      "the F2CPP SHD field"
+    ],
+    "closure_validation_output_schema": "bellhop.f2cpp.i3_curvilinear_closure_validation"
+  }
+}

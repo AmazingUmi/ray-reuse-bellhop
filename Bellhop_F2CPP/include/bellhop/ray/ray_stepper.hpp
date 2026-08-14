@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <functional>
 
-#include "bellhop/model/c_linear_ssp.hpp"
+#include "bellhop/model/sound_speed_evaluator.hpp"
 #include "bellhop/numerics/vec2.hpp"
 #include "bellhop/ray/ray_path.hpp"
 
@@ -19,6 +19,7 @@ struct StepLimitRequest {
   Vec2 initialPosition;
   Vec2 unitTangent;
   std::size_t initialSegmentIndex{};
+  std::size_t initialRangeSegmentIndex{};
   double nominalStepLength{};
   double proposedStepLength{};
 };
@@ -29,6 +30,7 @@ struct RayStepResult {
   RayState endState;
   StepQuadrature quadrature;
   std::size_t segmentIndex{};
+  std::size_t rangeSegmentIndex{};
 };
 
 // Advances one modified-Heun/box step.
@@ -40,7 +42,16 @@ struct RayStepResult {
 //
 // This layer contains no reflection, absorption, or complex-time behavior.
 [[nodiscard]] RayStepResult stepRay(
-    const CLinearSsp& soundSpeedProfile, const RayState& initialState,
+    const GeometrySspEvaluator& soundSpeedProfile,
+    const RayState& initialState,
+    std::size_t initialSegmentIndex,
+    std::size_t initialRangeSegmentIndex, double nominalStepLength,
+    const StepLimiter& limiter = {});
+
+// Range-independent compatibility overload. Its range hint is always zero.
+[[nodiscard]] RayStepResult stepRay(
+    const GeometrySspEvaluator& soundSpeedProfile,
+    const RayState& initialState,
     std::size_t initialSegmentIndex, double nominalStepLength,
     const StepLimiter& limiter = {});
 

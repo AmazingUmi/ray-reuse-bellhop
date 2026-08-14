@@ -9,6 +9,7 @@
 namespace {
 
 using bellhop::BoundaryCurvatureMode;
+using bellhop::BoundaryReflectionGeometry;
 using bellhop::FlatBoundaryGeometry;
 using bellhop::FlatBoundaryReflection;
 using bellhop::RayState;
@@ -160,8 +161,8 @@ void testSeabedDynamicJump(Context& context) {
 
 void testSurfaceSignAndCurvatureModes(Context& context) {
   const RayState incident = makeState(-kPi / 4.0, {40.0, 0.0});
-  const FlatBoundaryGeometry geometry =
-      makeSurface({0.25, 1.75});
+  FlatBoundaryGeometry geometry = makeSurface({0.25, 1.75});
+  geometry.curvature = 2.5e-3;
   const FlatBoundaryReflection standard =
       bellhop::reflectAtFlatBoundary(
           incident, ReflectionBoundary::SeaSurface, geometry, 2U,
@@ -194,6 +195,8 @@ void testSurfaceSignAndCurvatureModes(Context& context) {
       bellhop::dot(incident.slowness, geometry.outwardNormal);
   const double ratio = tangent / normal;
   const double expectedStandardJump =
+      -2.0 * geometry.curvature /
+          (kSoundSpeed * kSoundSpeed * normal) +
       ratio * (2.0 * topCnJump - ratio * csJump) /
       (kSoundSpeed * kSoundSpeed);
 
@@ -217,6 +220,74 @@ void testSurfaceSignAndCurvatureModes(Context& context) {
   }
 }
 
+void testLegacyCurvilinearFrame(Context& context) {
+  const RayState incident = makeState(kPi / 4.0, {40.0, 100.0});
+  const Vec2 reflectionTangent{0.8, 0.1};
+  const Vec2 reflectionNormal{-0.1, 0.8};
+  constexpr double curvature = 2.0e-3;
+  const BoundaryReflectionGeometry geometry{
+      .collisionPlanePoint = {0.0, 100.0},
+      .collisionPlaneOutwardNormal = {0.0, 1.0},
+      .reflectionTangent = reflectionTangent,
+      .reflectionOutwardNormal = reflectionNormal,
+      .soundSpeedGradient = {},
+      .segmentIndex = 6U,
+      .curvature = curvature,
+      .maximumIncidentPlaneDistance = 1.0e-8};
+
+  const FlatBoundaryReflection standard = bellhop::reflectAtBoundary(
+      incident, ReflectionBoundary::Seabed, geometry, 8U,
+      BoundaryCurvatureMode::Standard);
+  const FlatBoundaryReflection doubled = bellhop::reflectAtBoundary(
+      incident, ReflectionBoundary::Seabed, geometry, 8U,
+      BoundaryCurvatureMode::Double);
+  const FlatBoundaryReflection zeroed = bellhop::reflectAtBoundary(
+      incident, ReflectionBoundary::Seabed, geometry, 8U,
+      BoundaryCurvatureMode::Zero);
+
+  const double normalSlowness = bellhop::fortranDotProduct2D(
+      incident.slowness, reflectionNormal);
+  const double twiceNormalSlowness = 2.0 * normalSlowness;
+  const Vec2 expectedSlowness{
+      .range = std::fma(-twiceNormalSlowness,
+                        reflectionNormal.range,
+                        incident.slowness.range),
+      .depth = std::fma(-twiceNormalSlowness,
+                        reflectionNormal.depth,
+                        incident.slowness.depth)};
+  checkVectorNear(context, standard.reflectedState.slowness,
+                  expectedSlowness, 0.0,
+                  "legacy frame uses the exact unnormalized mirror formula");
+  context.check(
+      kSoundSpeed * bellhop::norm(standard.reflectedState.slowness) != 1.0,
+      "legacy non-unit frame intentionally changes the slowness norm");
+  context.check(standard.event.boundaryTangent == reflectionTangent &&
+                    standard.event.outwardNormal == reflectionNormal,
+                "event retains the unnormalized interpolated frame");
+  context.check(standard.event.boundarySegmentIndex == 6U &&
+                    standard.event.boundaryCurvature == curvature,
+                "event retains curvilinear segment metadata");
+
+  const double expectedJump =
+      2.0 * curvature /
+      (kSoundSpeed * kSoundSpeed * normalSlowness);
+  for (std::size_t index = 0U; index < incident.dynamicP.size(); ++index) {
+    const double standardDelta =
+        standard.reflectedState.dynamicP[index] -
+        incident.dynamicP[index];
+    context.checkNear(
+        standardDelta, incident.dynamicQ[index] * expectedJump, 1.0e-14,
+        "bottom curvilinear reflection adds the Fortran curvature term");
+    context.checkNear(
+        doubled.reflectedState.dynamicP[index] - incident.dynamicP[index],
+        2.0 * standardDelta, 1.0e-14,
+        "Double mode applies after the curvilinear curvature term");
+    context.checkNear(zeroed.reflectedState.dynamicP[index],
+                      incident.dynamicP[index], 0.0,
+                      "Zero mode clears the complete curvilinear jump");
+  }
+}
+
 void testInvalidGeometry(Context& context) {
   const RayState surfaceIncident =
       makeState(-kPi / 6.0, {25.0, 0.0});
@@ -229,7 +300,7 @@ void testInvalidGeometry(Context& context) {
             surfaceIncident, ReflectionBoundary::SeaSurface, nonUnit,
             0U, BoundaryCurvatureMode::Standard);
       },
-      "non-unit boundary tangent is rejected");
+      "unequal reflection-frame norms are rejected");
 
   FlatBoundaryGeometry nonOrthogonal = makeSurface();
   nonOrthogonal.outwardNormal = {
@@ -320,6 +391,7 @@ int main() {
   testSeaSurfaceMirrorAndEvent(context);
   testSeabedDynamicJump(context);
   testSurfaceSignAndCurvatureModes(context);
+  testLegacyCurvilinearFrame(context);
   testInvalidGeometry(context);
   return context.failureCount() == 0 ? 0 : 1;
 }

@@ -2,9 +2,12 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "bellhop/numerics/vec2.hpp"
+#include "bellhop/model/environment.hpp"
 
 namespace bellhop {
 
@@ -29,10 +32,20 @@ enum class ReflectionBoundary {
   Seabed,
 };
 
+struct FrozenBoundaryMaterial {
+  AcousticMaterial material;
+  double attenuationEvaluationDepth{};
+};
+
 struct ReflectionEvent {
+  // The incident and reflected states are distinct same-position points.
+  // Keeping both indices explicit prevents consumers from reconstructing the
+  // D-10 transition from vector adjacency.
   std::size_t rayPointIndex{};
+  std::size_t reflectedRayPointIndex{};
   ReflectionBoundary boundary{ReflectionBoundary::SeaSurface};
   std::size_t boundarySegmentIndex{};
+  double boundaryCurvature{};
   Vec2 position;
   Vec2 boundaryTangent;
   Vec2 outwardNormal;
@@ -40,6 +53,7 @@ struct ReflectionEvent {
   Vec2 reflectedSlowness;
   double tangentSlowness{};
   double normalSlowness{};
+  std::optional<FrozenBoundaryMaterial> longMaterialOverride;
 };
 
 enum class RayTerminationReason {
@@ -54,6 +68,7 @@ struct RayPath {
   std::vector<StepQuadrature> steps;
   std::vector<ReflectionEvent> events;
   RayTerminationReason terminationReason{RayTerminationReason::ExitedDomain};
+  std::string terminationDetail;
 };
 
 }  // namespace bellhop

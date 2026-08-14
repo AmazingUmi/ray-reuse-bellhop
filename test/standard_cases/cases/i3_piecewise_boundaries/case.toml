@@ -1,0 +1,24 @@
+id = "i3_piecewise_boundaries"
+description = "Constant-speed water with piecewise-linear altimetry and bathymetry"
+origin_template = "origin.env.in"
+companion_files = ["origin.ati", "origin.bty"]
+source_references = ["Acoustic Toolbox Bellhop 2-D boundary LS format"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 120.0
+maximum_range_m = 1900.0
+minimum_angle_deg = -40.0
+maximum_angle_deg = 40.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 2, 3]
+prt_markers = ["VACUUM", "Perfectly RIGID"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [100.0]

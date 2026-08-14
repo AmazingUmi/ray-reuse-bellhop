@@ -1,0 +1,24 @@
+id = "ray_trace_vacuum_rigid"
+description = "Two-source 2-D ray trace with vacuum surface and rigid bottom"
+output_kind = "ray"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D", "Bellhop_origin/Bellhop/bellhop.f90 SourceDepth and DeclinationAngle loops"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 400.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "explicit"
+count = 5
+
+[validation]
+prt_markers = ["VACUUM", "Perfectly RIGID"]
+prt_forbidden_markers = ["Coherent TL calculation", "THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [250.0]

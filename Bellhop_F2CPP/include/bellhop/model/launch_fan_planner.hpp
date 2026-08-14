@@ -19,14 +19,16 @@ struct LaunchFanPlanningInput {
   double minimumLaunchAngle{};
   double maximumLaunchAngle{};
 
-  // D-02 policy A keeps this parser-facing value for compatibility but always
-  // derives the actual count from the highest design frequency.
+  // D-02 policy A ignores this value for coherent-field runs. Ray-trace mode
+  // follows the legacy contract: an explicit count is used as-is and a
+  // missing count selects the 50-ray default.
   std::optional<std::size_t> explicitLaunchAngleCount{};
 
   // The parser preserves the original degree endpoints so legacy Bellhop's
   // degree-domain SubTab operation can be reproduced without converting the
   // radian-domain core inputs back to degrees.
   std::optional<LaunchAngleDegreeBounds> inputDegreeBounds{};
+  bool rayTraceMode{};
 };
 
 struct LaunchFanPlan {

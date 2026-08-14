@@ -19,6 +19,7 @@ constexpr double kReferenceSoundSpeed = 1500.0;
 constexpr double kDepthRangeFactor = 10.0;
 constexpr double kSufficiencyFactor = 6.0;
 constexpr std::size_t kMinimumPhaseCriterionCount = 300U;
+constexpr std::size_t kDefaultRayTraceCount = 50U;
 constexpr double kRadiansPerDegree = std::numbers::pi / 180.0;
 
 void requireFinite(double value, std::string_view name) {
@@ -117,9 +118,13 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
                           "minimum recommended angle count"),
       "minimum recommended angle count");
 
-  const std::size_t launchAngleCount =
-      std::max({phaseCriterionCount, depthCriterionCount,
-                minimumRecommendedAngleCount});
+  const std::size_t launchAngleCount = input.rayTraceMode
+      ? input.explicitLaunchAngleCount.value_or(kDefaultRayTraceCount)
+      : std::max({phaseCriterionCount, depthCriterionCount,
+                  minimumRecommendedAngleCount});
+  if (launchAngleCount < 2U) {
+    throw ValidationError("launch angle count must be at least two");
+  }
 
   std::vector<double> launchAngles;
   if (launchAngleCount > launchAngles.max_size()) {

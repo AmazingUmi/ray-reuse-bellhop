@@ -1,7 +1,13 @@
 #pragma once
 
+#include <cstddef>
+#include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
+
+#include "bellhop/model/boundary_geometry.hpp"
+#include "bellhop/model/sound_speed_types.hpp"
 
 namespace bellhop {
 
@@ -22,13 +28,40 @@ enum class VolumeAttenuationModel {
   Biological,
 };
 
+struct FrancoisGarrisonParameters {
+  double temperatureCelsius{20.0};
+  double salinityPsu{35.0};
+  double pH{8.0};
+  double meanDepthMeters{};
+};
+
+struct BiologicalAttenuationLayer {
+  double minimumDepth{};
+  double maximumDepth{};
+  double resonanceFrequency{};
+  double qualityFactor{};
+  double attenuationCoefficientDecibelsPerKilometer{};
+};
+
+using BiologicalAttenuationLayers =
+    std::vector<BiologicalAttenuationLayer>;
+using SharedBiologicalAttenuationLayers =
+    std::shared_ptr<const BiologicalAttenuationLayers>;
+using VolumeAttenuationParameters =
+    std::variant<std::monostate, FrancoisGarrisonParameters,
+                 SharedBiologicalAttenuationLayers>;
+
+struct VolumeAttenuation {
+  VolumeAttenuationModel model{VolumeAttenuationModel::None};
+  VolumeAttenuationParameters parameters{};
+};
+
 struct RawAttenuation {
   double value{};
   AttenuationUnit unit{AttenuationUnit::DecibelsPerWavelength};
   double referenceFrequency{1.0};
   double powerLawExponent{1.0};
   double transitionFrequency{1.0};
-  VolumeAttenuationModel volumeModel{VolumeAttenuationModel::None};
 };
 
 struct SoundSpeedPoint {
@@ -38,22 +71,47 @@ struct SoundSpeedPoint {
   RawAttenuation attenuation{};
 };
 
+// Range-dependent real sound-speed samples for the Origin 2-D `Q` option.
+// Storage is depth-major: speedAtDepthMajor[depthIndex * rangeCount +
+// rangeIndex].  The reference SoundSpeedProfile still owns depths, density,
+// and raw attenuation.
+struct QuadrilateralSspGrid {
+  std::vector<double> rangesMeters;
+  std::vector<double> speedsDepthMajor;
+  std::size_t depthCount{};
+  std::size_t rangeCount{};
+};
+
+using SharedQuadrilateralSspGrid =
+    std::shared_ptr<const QuadrilateralSspGrid>;
+
 class SoundSpeedProfile {
  public:
-  explicit SoundSpeedProfile(std::vector<SoundSpeedPoint> points);
+  explicit SoundSpeedProfile(
+      std::vector<SoundSpeedPoint> points,
+      SspInterpolationKind interpolationKind = SspInterpolationKind::CLinear,
+      SharedQuadrilateralSspGrid quadrilateralGrid = {});
 
   [[nodiscard]] const std::vector<SoundSpeedPoint>& points() const noexcept;
   [[nodiscard]] double minimumDepth() const noexcept;
   [[nodiscard]] double maximumDepth() const noexcept;
+  [[nodiscard]] SspInterpolationKind interpolationKind() const noexcept;
+  [[nodiscard]] const SharedQuadrilateralSspGrid& quadrilateralGrid()
+      const noexcept;
+  [[nodiscard]] double quadrilateralRealSoundSpeedAt(Vec2 position) const;
 
  private:
   std::vector<SoundSpeedPoint> points_;
+  SspInterpolationKind interpolationKind_;
+  SharedQuadrilateralSspGrid quadrilateralGrid_;
 };
 
 enum class BoundaryKind {
   Vacuum,
   Rigid,
   AcousticHalfSpace,
+  GrainSizeHalfSpace,
+  TabulatedReflection,
 };
 
 struct AcousticMaterial {
@@ -64,40 +122,97 @@ struct AcousticMaterial {
   RawAttenuation shearAttenuation{};
 };
 
+// The bottom `G` option retains its input grain size and the three
+// geoacoustic coefficients derived by Origin's GrainSize_to_Geoacoustic.
+// Its effective fluid material is deliberately formed at reflection time:
+// the P-wave speed depends on the local water sound speed.
+struct GrainSizeMaterial {
+  double meanGrainSize{};
+  double soundSpeedRatio{};
+  double densityRatio{};
+  double attenuationCoefficient{};
+};
+
+struct TabulatedReflectionPoint {
+  double angleDegrees{};
+  double magnitude{};
+  double phaseRadians{};
+};
+
+using TabulatedReflectionTable = std::vector<TabulatedReflectionPoint>;
+using SharedTabulatedReflectionTable =
+    std::shared_ptr<const TabulatedReflectionTable>;
+
+using SharedLongBoundaryMaterials =
+    std::shared_ptr<const std::vector<AcousticMaterial>>;
+inline constexpr double kLegacyLongBoundaryAttenuationDepth = 1.0e20;
+
 class BoundaryModel {
  public:
   [[nodiscard]] static BoundaryModel vacuum(double depth);
+  [[nodiscard]] static BoundaryModel vacuum(BoundaryGeometry geometry);
   [[nodiscard]] static BoundaryModel rigid(double depth);
+  [[nodiscard]] static BoundaryModel rigid(BoundaryGeometry geometry);
   [[nodiscard]] static BoundaryModel acousticHalfSpace(
       double depth, AcousticMaterial material);
+  [[nodiscard]] static BoundaryModel acousticHalfSpace(
+      BoundaryGeometry geometry, AcousticMaterial material);
+  [[nodiscard]] static BoundaryModel acousticHalfSpace(
+      BoundaryGeometry geometry, AcousticMaterial material,
+      SharedLongBoundaryMaterials longMaterials);
+  [[nodiscard]] static BoundaryModel grainSizeHalfSpace(
+      double depth, double meanGrainSize);
+  [[nodiscard]] static BoundaryModel grainSizeHalfSpace(
+      BoundaryGeometry geometry, double meanGrainSize);
+  [[nodiscard]] static BoundaryModel tabulatedReflection(
+      BoundaryGeometry geometry, SharedTabulatedReflectionTable table);
 
   [[nodiscard]] BoundaryKind kind() const noexcept;
   [[nodiscard]] double depth() const noexcept;
+  [[nodiscard]] const BoundaryGeometry& geometry() const noexcept;
   [[nodiscard]] const std::optional<AcousticMaterial>& material() const noexcept;
+  [[nodiscard]] const std::optional<GrainSizeMaterial>& grainSizeMaterial()
+      const noexcept;
+  [[nodiscard]] const SharedTabulatedReflectionTable& reflectionTable()
+      const noexcept;
+  [[nodiscard]] bool hasRangeDependentMaterials() const noexcept;
+  [[nodiscard]] const AcousticMaterial& materialAtSegment(
+      std::size_t segmentIndex) const;
+  [[nodiscard]] double materialAttenuationDepthAtSegment(
+      std::size_t segmentIndex) const;
 
  private:
-  BoundaryModel(BoundaryKind kind, double depth,
-                std::optional<AcousticMaterial> material);
+  BoundaryModel(BoundaryKind kind, BoundaryGeometry geometry,
+                std::optional<AcousticMaterial> material,
+                SharedLongBoundaryMaterials longMaterials = {},
+                std::optional<GrainSizeMaterial> grainSizeMaterial = {},
+                SharedTabulatedReflectionTable reflectionTable = {});
 
   BoundaryKind kind_;
-  double depth_;
+  BoundaryGeometry geometry_;
   std::optional<AcousticMaterial> material_;
+  SharedLongBoundaryMaterials longMaterials_;
+  std::optional<GrainSizeMaterial> grainSizeMaterial_;
+  SharedTabulatedReflectionTable reflectionTable_;
 };
 
 class Environment {
  public:
   Environment(SoundSpeedProfile soundSpeedProfile, BoundaryModel seaSurface,
-              BoundaryModel seabed);
+              BoundaryModel seabed,
+              VolumeAttenuation volumeAttenuation = {});
 
   [[nodiscard]] const SoundSpeedProfile& soundSpeedProfile() const noexcept;
   [[nodiscard]] const BoundaryModel& seaSurface() const noexcept;
   [[nodiscard]] const BoundaryModel& seabed() const noexcept;
+  [[nodiscard]] const VolumeAttenuation& volumeAttenuation() const noexcept;
   [[nodiscard]] double waterDepth() const noexcept;
 
  private:
   SoundSpeedProfile soundSpeedProfile_;
   BoundaryModel seaSurface_;
   BoundaryModel seabed_;
+  VolumeAttenuation volumeAttenuation_;
 };
 
 }  // namespace bellhop

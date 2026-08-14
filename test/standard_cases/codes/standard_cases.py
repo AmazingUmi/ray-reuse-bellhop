@@ -27,6 +27,14 @@ from compare_fields import compare_files
 VERSIONS = ("origin", "f2cpp", "rayreuse")
 STAGES = ("generate", "run", "validate", "test")
 RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse", "parallel")
+DECLARABLE_BEAM_FAMILY_MARKERS = (
+    "Ray centered beams",
+    "Geometric hat beams in Cartesian coordinates",
+    "Geometric hat beams in ray-centered coordinates",
+    "Geometric gaussian beams in Cartesian coordinates",
+    "Geometric gaussian beams in ray-centered coordinates",
+    "Simple gaussian beams",
+)
 
 
 @dataclass(frozen=True)
@@ -85,7 +93,26 @@ class RunRecord:
     environment_file: str
     print_file: str | None
     shade_file: str | None
+    ray_file: str | None
     status: str
+
+
+def stage_companion_files(
+    definition: CaseDefinition, run_directory: Path, file_root: str
+) -> None:
+    seen_suffixes: set[str] = set()
+    for source in definition.companion_files:
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"case companion file does not exist: {source}"
+            )
+        suffix = source.suffix
+        if not suffix or suffix in seen_suffixes:
+            raise ValueError(
+                f"{definition.case_id}: companion files require unique suffixes"
+            )
+        seen_suffixes.add(suffix)
+        shutil.copyfile(source, run_directory / f"{file_root}{suffix}")
 
 
 def default_adapters(executable_override: Path | None) -> dict[str, VersionAdapter]:
@@ -151,6 +178,19 @@ def require_rayreuse_execution_mode(execution_mode: str) -> None:
         )
 
 
+def declared_beam_family_marker(definition: CaseDefinition) -> str:
+    declared = tuple(
+        marker
+        for marker in DECLARABLE_BEAM_FAMILY_MARKERS
+        if marker in definition.prt_markers
+    )
+    if len(declared) > 1:
+        raise ValueError(
+            f"{definition.case_id}: multiple beam-family PRT markers declared"
+        )
+    return declared[0] if declared else "Cartesian beams"
+
+
 def validate_print_output(
     definition: CaseDefinition,
     print_path: Path,
@@ -159,10 +199,22 @@ def validate_print_output(
         raise RuntimeError(f"missing print output: {print_path}")
 
     print_contents = print_path.read_text(errors="replace")
+    receiver_grid_marker = (
+        "Irregular grid"
+        if "Irregular grid" in definition.prt_markers
+        else "Rectilinear receiver grid"
+    )
+    if "Semi-coherent TL calculation" in definition.prt_markers:
+        field_mode_marker = "Semi-coherent TL calculation"
+    elif "Incoherent TL calculation" in definition.prt_markers:
+        field_mode_marker = "Incoherent TL calculation"
+    else:
+        field_mode_marker = "Coherent TL calculation"
+    beam_family_marker = declared_beam_family_marker(definition)
     common_markers = (
-        "Coherent TL calculation",
-        "Cartesian beams",
-        "Rectilinear receiver grid",
+        (field_mode_marker, beam_family_marker, receiver_grid_marker)
+        if definition.output_kind == "shd"
+        else ("Ray trace run", receiver_grid_marker)
     )
     for marker in common_markers + definition.prt_markers:
         if marker not in print_contents:
@@ -200,13 +252,32 @@ def validate_output(
     definition: CaseDefinition,
     frequency_hz: float,
     print_path: Path,
-    shade_path: Path,
+    output_path: Path,
 ) -> None:
     validate_print_output(definition, print_path)
+    if definition.output_kind == "ray":
+        if not output_path.is_file() or output_path.stat().st_size == 0:
+            raise RuntimeError(f"missing ray output: {output_path}")
+        unexpected_shade = output_path.with_suffix(".shd")
+        if unexpected_shade.exists():
+            raise RuntimeError(
+                f"ray run unexpectedly produced shade output: {unexpected_shade}"
+            )
+        return
+    shade_path = output_path
+    unexpected_ray = output_path.with_suffix(".ray")
+    if unexpected_ray.exists():
+        raise RuntimeError(
+            f"shade run unexpectedly retained ray output: {unexpected_ray}"
+        )
     if not shade_path.is_file() or shade_path.stat().st_size == 0:
         raise RuntimeError(f"missing shade output: {shade_path}")
 
     reader = ShdReader(shade_path)
+    if definition.expected_dimensions is None:
+        raise RuntimeError(
+            f"{definition.case_id}: SHD dimensions are not configured"
+        )
     if reader.header.dimensions != definition.expected_dimensions:
         raise RuntimeError(
             f"{definition.case_id}: SHD dimensions "
@@ -286,6 +357,8 @@ def process_rayreuse_broadband(
     launch_angle_counts: dict[str, int],
     execution_mode: str,
 ) -> Path:
+    if definition.output_kind != "shd":
+        raise ValueError("RayReuse broadband runner requires SHD output")
     require_rayreuse_execution_mode(execution_mode)
     if len(frequencies) < 2:
         raise ValueError(
@@ -302,6 +375,10 @@ def process_rayreuse_broadband(
     environment_path = run_directory / f"{file_root}.env"
     print_path = run_directory / f"{file_root}.prt"
     shade_path = run_directory / f"{file_root}.shd"
+    ray_path = run_directory / f"{file_root}.ray"
+    manifest_path = case_result_root / "run_manifest.json"
+    if stage in ("run", "test"):
+        manifest_path.unlink(missing_ok=True)
 
     if stage in ("generate", "test"):
         if run_directory.exists():
@@ -313,6 +390,7 @@ def process_rayreuse_broadband(
             ),
             encoding="utf-8",
         )
+        stage_companion_files(definition, run_directory, file_root)
         status = "generated"
     else:
         if not environment_path.is_file():
@@ -322,6 +400,14 @@ def process_rayreuse_broadband(
         status = "existing"
 
     if stage in ("run", "test"):
+        for stale_output in (
+            print_path,
+            shade_path,
+            ray_path,
+            Path(str(shade_path) + ".tmp"),
+            Path(str(ray_path) + ".tmp"),
+        ):
+            stale_output.unlink(missing_ok=True)
         adapter.run_broadband(
             run_directory,
             file_root,
@@ -361,6 +447,7 @@ def process_rayreuse_broadband(
             environment_file=relative_environment,
             print_file=relative_print,
             shade_file=relative_shade,
+            ray_file=None,
             status=status,
         )
         for index, frequency_hz in enumerate(frequencies)
@@ -378,6 +465,7 @@ def process_rayreuse_broadband(
         "profile": profile_name,
         "last_stage": stage,
         "description": definition.description,
+        "output_kind": definition.output_kind,
         "source_references": definition.source_references,
         "frequencies_hz": frequencies,
         "design_frequency_hz": max(frequencies),
@@ -399,7 +487,6 @@ def process_rayreuse_broadband(
         },
         "runs": [asdict(record) for record in records],
     }
-    manifest_path = case_result_root / "run_manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -438,6 +525,9 @@ def process_case(
         results_root / adapter.name / definition.case_id / profile_name
     )
     case_result_root.mkdir(parents=True, exist_ok=True)
+    manifest_path = case_result_root / "run_manifest.json"
+    if stage in ("run", "test"):
+        manifest_path.unlink(missing_ok=True)
 
     records: list[RunRecord] = []
     for index, frequency_hz in enumerate(frequencies):
@@ -447,6 +537,10 @@ def process_case(
         environment_path = run_directory / f"{file_root}.env"
         print_path = run_directory / f"{file_root}.prt"
         shade_path = run_directory / f"{file_root}.shd"
+        ray_path = run_directory / f"{file_root}.ray"
+        output_path = (
+            shade_path if definition.output_kind == "shd" else ray_path
+        )
 
         if stage in ("generate", "test"):
             if run_directory.exists():
@@ -458,6 +552,7 @@ def process_case(
                 ),
                 encoding="utf-8",
             )
+            stage_companion_files(definition, run_directory, file_root)
             status = "generated"
         else:
             if not environment_path.is_file():
@@ -467,12 +562,20 @@ def process_case(
             status = "existing"
 
         if stage in ("run", "test"):
+            for stale_output in (
+                print_path,
+                shade_path,
+                ray_path,
+                Path(str(shade_path) + ".tmp"),
+                Path(str(ray_path) + ".tmp"),
+            ):
+                stale_output.unlink(missing_ok=True)
             adapter.run_single(run_directory, file_root)
             status = "completed"
 
         if stage in ("validate", "test"):
             validate_output(
-                definition, frequency_hz, print_path, shade_path
+                definition, frequency_hz, print_path, output_path
             )
             status = "passed"
 
@@ -491,7 +594,12 @@ def process_case(
                 ),
                 shade_file=(
                     str(shade_path.relative_to(case_result_root))
-                    if shade_path.exists()
+                    if definition.output_kind == "shd" and shade_path.exists()
+                    else None
+                ),
+                ray_file=(
+                    str(ray_path.relative_to(case_result_root))
+                    if definition.output_kind == "ray" and ray_path.exists()
                     else None
                 ),
                 status=status,
@@ -510,6 +618,7 @@ def process_case(
         "profile": profile_name,
         "last_stage": stage,
         "description": definition.description,
+        "output_kind": definition.output_kind,
         "source_references": definition.source_references,
         "frequencies_hz": frequencies,
         "design_frequency_hz": max(frequencies),
@@ -521,7 +630,6 @@ def process_case(
         ],
         "runs": [asdict(record) for record in records],
     }
-    manifest_path = case_result_root / "run_manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -567,6 +675,16 @@ def run_selection(
 
     completed = 0
     for definition in selected:
+        if version not in definition.supported_versions:
+            if explicit:
+                raise ValueError(
+                    f"{definition.case_id}: version {version!r} is not supported"
+                )
+            print(
+                f"{version}/{definition.case_id}/{profile}: "
+                "SKIP (version not supported)"
+            )
+            continue
         if profile not in definition.profiles:
             if explicit:
                 raise ValueError(

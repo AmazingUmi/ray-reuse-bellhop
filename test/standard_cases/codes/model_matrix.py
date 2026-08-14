@@ -46,6 +46,8 @@ def load_manifest_slices(manifest_path: Path) -> dict[float, OutputSlice]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema_version") != 1:
         raise ValueError(f"{manifest_path}: unsupported manifest schema")
+    if manifest.get("output_kind", "shd") != "shd":
+        raise ValueError(f"{manifest_path}: model matrix requires SHD output")
     broadband = (
         manifest.get("execution_model") == "single_broadband_invocation"
     )
@@ -372,7 +374,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
-        selected, _ = select_cases(definitions, args.cases)
+        selected, explicit = select_cases(definitions, args.cases)
+        fully_supported = [
+            definition
+            for definition in selected
+            if definition.output_kind == "shd" and all(
+                version in definition.supported_versions
+                for version in ("origin", "f2cpp", "rayreuse")
+            )
+        ]
+        if explicit and len(fully_supported) != len(selected):
+            unsupported = sorted(
+                definition.case_id
+                for definition in selected
+                if definition not in fully_supported
+            )
+            raise ValueError(
+                "model matrix requires SHD output and "
+                "origin/f2cpp/rayreuse support: "
+                + ", ".join(unsupported)
+            )
+        selected = fully_supported
         adapters = default_adapters(None)
         overrides = {
             "origin": args.origin_executable,

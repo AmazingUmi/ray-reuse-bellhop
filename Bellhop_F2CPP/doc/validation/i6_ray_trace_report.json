@@ -1,0 +1,57 @@
+{
+  "case": {
+    "frequency_hz": 250.0,
+    "id": "ray_trace_vacuum_rigid",
+    "launch_angles_deg": [
+      -60.0,
+      -30.0,
+      0.0,
+      30.0,
+      60.0
+    ],
+    "ordering": "source-major then launch-angle-major",
+    "source_count": 2
+  },
+  "comparison": {
+    "absolute_tolerance_m": 1e-07,
+    "bottom_bounce_count": 19,
+    "max_absolute_coordinate_error_m": 0.0,
+    "passed": true,
+    "point_count": 5934,
+    "ray_count": 10,
+    "relative_tolerance": 1e-10,
+    "top_bounce_count": 19
+  },
+  "executables": {
+    "f2cpp": {
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "sha256": "f724a2464e4b0d2eec23b0dcbca1e57de7c9a15d311f4d09b675f52b36eb6547"
+    },
+    "origin": {
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_origin/bin/bellhop",
+      "sha256": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537"
+    }
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case ray_trace_vacuum_rigid --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case ray_trace_vacuum_rigid --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i6_ray_trace.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
+  },
+  "provenance_guards": {
+    "distinct_executable_hashes": true,
+    "distinct_executable_paths": true,
+    "no_shd_artifacts": true,
+    "origin_f2cpp_rendered_env_inputs_equal": true,
+    "ray_files_and_print_logs_present": true,
+    "results_not_older_than_executables": true
+  },
+  "schema": "bellhop.f2cpp.i6_ray_trace_validation",
+  "schema_version": 1,
+  "semantic_sha256": {
+    "f2cpp": "4f6878eba090ee190b1c1d8132f2a00e59e06bf9c19fb3111f5df80923fd5714",
+    "origin": "4f6878eba090ee190b1c1d8132f2a00e59e06bf9c19fb3111f5df80923fd5714"
+  },
+  "status": "passed"
+}

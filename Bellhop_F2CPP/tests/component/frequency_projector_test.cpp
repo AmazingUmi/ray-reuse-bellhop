@@ -1,15 +1,20 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <numbers>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "bellhop/acoustics/attenuation.hpp"
+#include "bellhop/acoustics/boundary_acoustics.hpp"
+#include "bellhop/cache/ray_path_cache.hpp"
 #include "bellhop/error.hpp"
 #include "bellhop/field/frequency_projector.hpp"
 #include "bellhop/model/c_linear_frequency_ssp.hpp"
@@ -22,29 +27,41 @@ namespace {
 
 using bellhop::AcousticMaterial;
 using bellhop::AttenuationUnit;
+using bellhop::BiologicalAttenuationLayer;
+using bellhop::BiologicalAttenuationLayers;
 using bellhop::BoundaryKind;
 using bellhop::BoundaryModel;
 using bellhop::CLinearFrequencySsp;
 using bellhop::Environment;
 using bellhop::FrequencyProjector;
+using bellhop::FrozenBoundaryMaterial;
 using bellhop::FrequencyWorkspace;
 using bellhop::GeometryTracer;
 using bellhop::IntegratorSettings;
 using bellhop::RayFrequencyState;
 using bellhop::RayPath;
+using bellhop::RayPathCache;
 using bellhop::RayState;
 using bellhop::RawAttenuation;
 using bellhop::ReflectionBoundary;
 using bellhop::ReflectionEvent;
 using bellhop::ReceiverGrid;
+using bellhop::QuadrilateralSspGrid;
 using bellhop::SoundSpeedPoint;
 using bellhop::SoundSpeedProfile;
 using bellhop::Source;
+using bellhop::SspInterpolationKind;
 using bellhop::StepQuadrature;
+using bellhop::TabulatedReflectionTable;
 using bellhop::ValidationError;
 using bellhop::Vec2;
+using bellhop::VolumeAttenuation;
 using bellhop::VolumeAttenuationModel;
 using bellhop::convertAttenuation;
+using bellhop::evaluateAcousticHalfSpaceAcoustics;
+using bellhop::evaluateFluidHalfSpaceAcoustics;
+using bellhop::evaluateGrainSizeHalfSpaceAcoustics;
+using bellhop::evaluateTabulatedReflectionAcoustics;
 using bellhop::test::Context;
 
 constexpr double kSoundSpeed = 1500.0;
@@ -52,16 +69,31 @@ constexpr double kWaterDensity = 1000.0;
 constexpr double kLegacyActiveThreshold =
     static_cast<double>(0.005F);
 
-RawAttenuation thorpAttenuation() {
-  return RawAttenuation{
-      .value = 0.0,
-      .unit = AttenuationUnit::DecibelsPerWavelength,
-      .volumeModel = VolumeAttenuationModel::Thorp};
+VolumeAttenuation thorpVolumeAttenuation() {
+  return VolumeAttenuation{
+      .model = VolumeAttenuationModel::Thorp};
+}
+
+VolumeAttenuation biologicalVolumeAttenuation() {
+  return VolumeAttenuation{
+      .model = VolumeAttenuationModel::Biological,
+      .parameters =
+          std::make_shared<const BiologicalAttenuationLayers>(
+              BiologicalAttenuationLayers{
+                  BiologicalAttenuationLayer{
+                      .minimumDepth = 0.0,
+                      .maximumDepth = 100.0,
+                      .resonanceFrequency = 5000.0,
+                      .qualityFactor = 10.0,
+                      .attenuationCoefficientDecibelsPerKilometer =
+                          0.25}}),
+  };
 }
 
 Environment makeConstantEnvironment(
     RawAttenuation waterAttenuation = {},
-    BoundaryModel seabed = BoundaryModel::rigid(100.0)) {
+    BoundaryModel seabed = BoundaryModel::rigid(100.0),
+    VolumeAttenuation volumeAttenuation = {}) {
   return Environment(
       SoundSpeedProfile(
           {{.depth = 0.0,
@@ -72,7 +104,8 @@ Environment makeConstantEnvironment(
             .soundSpeed = kSoundSpeed,
             .density = kWaterDensity,
             .attenuation = waterAttenuation}}),
-      BoundaryModel::vacuum(0.0), std::move(seabed));
+      BoundaryModel::vacuum(0.0), std::move(seabed),
+      std::move(volumeAttenuation));
 }
 
 RayState makeRayState(Vec2 position, Vec2 slowness,
@@ -118,15 +151,18 @@ ReflectionEvent makeReflectionEvent(
       tangentSlowness * tangent - normalSlowness * normal;
   return ReflectionEvent{
       .rayPointIndex = pointIndex,
+      .reflectedRayPointIndex = pointIndex + 1U,
       .boundary = boundary,
       .boundarySegmentIndex = 0U,
+      .boundaryCurvature = 0.0,
       .position = position,
       .boundaryTangent = tangent,
       .outwardNormal = normal,
       .incidentSlowness = incident,
       .reflectedSlowness = reflected,
       .tangentSlowness = tangentSlowness,
-      .normalSlowness = normalSlowness};
+      .normalSlowness = normalSlowness,
+      .longMaterialOverride = std::nullopt};
 }
 
 void checkComplexNear(Context& context, std::complex<double> actual,
@@ -167,9 +203,12 @@ void testLosslessAndThorpPropagation(Context& context) {
                 "ordinary direct ray remains active");
 
   const Environment thorpEnvironment =
-      makeConstantEnvironment(thorpAttenuation());
+      makeConstantEnvironment(
+          {}, BoundaryModel::rigid(100.0),
+          thorpVolumeAttenuation());
   const CLinearFrequencySsp thorpProfile(
-      thorpEnvironment.soundSpeedProfile(), 5000.0);
+      thorpEnvironment.soundSpeedProfile(), 5000.0,
+      thorpEnvironment.volumeAttenuation());
   context.check(!thorpProfile.isLossless(),
                 "Thorp frequency SSP remains lossy");
   context.check(
@@ -195,12 +234,13 @@ void testNodeConversionPrecedesInterpolation(Context& context) {
       {{.depth = 0.0,
         .soundSpeed = 1400.0,
         .density = 1000.0,
-        .attenuation = thorpAttenuation()},
+        .attenuation = {}},
        {.depth = 1000.0,
         .soundSpeed = 1800.0,
         .density = 1200.0,
-        .attenuation = thorpAttenuation()}});
-  const CLinearFrequencySsp frequencyProfile(profile, 5000.0);
+        .attenuation = {}}});
+  const CLinearFrequencySsp frequencyProfile(
+      profile, 5000.0, thorpVolumeAttenuation());
   context.check(
       !frequencyProfile.uniformComplexSoundSpeed().has_value(),
       "nonuniform frequency SSP retains the general interpolation path");
@@ -208,16 +248,19 @@ void testNodeConversionPrecedesInterpolation(Context& context) {
       {.range = 0.0, .depth = 250.0}, 0U);
   const double nodeFirst =
       0.75 *
-          convertAttenuation(profile.points()[0U].attenuation, 5000.0,
-                             1400.0)
+          convertAttenuation(
+              profile.points()[0U].attenuation,
+              thorpVolumeAttenuation(), 5000.0, 1400.0, 0.0)
               .imaginarySoundSpeed +
       0.25 *
-          convertAttenuation(profile.points()[1U].attenuation, 5000.0,
-                             1800.0)
+          convertAttenuation(
+              profile.points()[1U].attenuation,
+              thorpVolumeAttenuation(), 5000.0, 1800.0, 1000.0)
               .imaginarySoundSpeed;
   const double convertAfterInterpolation =
-      convertAttenuation(profile.points()[0U].attenuation, 5000.0,
-                         1500.0)
+      convertAttenuation(
+          profile.points()[0U].attenuation,
+          thorpVolumeAttenuation(), 5000.0, 1500.0, 250.0)
           .imaginarySoundSpeed;
   context.checkNear(sample.soundSpeed, 1500.0, 0.0,
                     "frequency SSP preserves C-linear real speed");
@@ -232,7 +275,7 @@ void testNodeConversionPrecedesInterpolation(Context& context) {
 
   Environment environment(
       std::move(profile), BoundaryModel::vacuum(0.0),
-      BoundaryModel::rigid(1000.0));
+      BoundaryModel::rigid(1000.0), thorpVolumeAttenuation());
   RayPath path;
   path.points = {
       makeRayState({.range = 0.0, .depth = 0.0},
@@ -252,6 +295,127 @@ void testNodeConversionPrecedesInterpolation(Context& context) {
       {6.8571428571135828e-1, -1.4156716454626132e-6},
       2.0e-16,
       "projector consumes node-first C-linear complex sound speed");
+}
+
+void testQuadrilateralFrequencyProjection(Context& context) {
+  const auto grid = std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{
+          .rangesMeters = {0.0, 350.0, 750.0},
+          .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
+                               1500.0, 1520.0, 1540.0},
+          .depthCount = 2U,
+          .rangeCount = 3U});
+  const SoundSpeedProfile profile(
+      {{.depth = 0.0,
+        .soundSpeed = 1400.0,
+        .density = 1000.0,
+        .attenuation = {
+            .value = 0.05,
+            .unit = AttenuationUnit::DecibelsPerWavelength}},
+       {.depth = 100.0,
+        .soundSpeed = 1800.0,
+        .density = 1200.0,
+        .attenuation = {
+            .value = 0.10,
+            .unit = AttenuationUnit::DecibelsPerWavelength}}},
+      SspInterpolationKind::Quadrilateral, grid);
+  const VolumeAttenuation thorp = thorpVolumeAttenuation();
+  const Environment environment(
+      profile, BoundaryModel::vacuum(0.0),
+      BoundaryModel::rigid(100.0), thorp);
+  RayPathCache cache;
+  cache.append(makeSingleStepPath(350.0, 50.0));
+  cache.freeze();
+  const RayPath& path = cache.at(0U);
+  const RayPath before = path;
+  const FrequencyProjector projector(environment);
+
+  std::array<std::complex<double>, 2U> projected{};
+  std::size_t frequencyIndex = 0U;
+  for (const double frequency : {1000.0, 5000.0}) {
+    const double topImaginary =
+        convertAttenuation(profile.points()[0U].attenuation, thorp,
+                           frequency, 1400.0, 0.0)
+            .imaginarySoundSpeed;
+    const double bottomImaginary =
+        convertAttenuation(profile.points()[1U].attenuation, thorp,
+                           frequency, 1800.0, 100.0)
+            .imaginarySoundSpeed;
+    const double midpointImaginary =
+        0.5 * topImaginary + 0.5 * bottomImaginary;
+    const std::complex<double> expected =
+        350.0 / std::complex<double>{1515.0, midpointImaginary};
+    projected[frequencyIndex] =
+        projector.project(path, frequency, 1.0)
+            .points.back()
+            .complexTravelTime;
+    checkComplexNear(context, projected[frequencyIndex], expected, 2.0e-16,
+                     "projector consumes Q real matrix and ENV-node loss");
+    ++frequencyIndex;
+  }
+  context.check(projected[0U] != projected[1U],
+                "Q projection reconstructs attenuation per frequency");
+  context.check(
+      cache.frozen() && path.points.size() == before.points.size() &&
+          path.steps.size() == before.steps.size() &&
+          path.events.size() == before.events.size() &&
+          path.points.front().position == before.points.front().position &&
+          path.points.back().position == before.points.back().position &&
+          path.steps.front().midpoint == before.steps.front().midpoint &&
+          path.terminationReason == before.terminationReason &&
+          path.terminationDetail == before.terminationDetail,
+      "two-frequency Q projection preserves the frozen geometry cache");
+}
+
+void testAttenuationUnitFrequencyProjection(Context& context) {
+  struct UnitFixture {
+    AttenuationUnit unit;
+    double value;
+  };
+  constexpr std::array fixtures{
+      UnitFixture{AttenuationUnit::NepersPerMeter, 1.0e-5},
+      UnitFixture{AttenuationUnit::DecibelsPerMeterKilohertz,
+                  8.6858896e-5},
+      UnitFixture{AttenuationUnit::DecibelsPerMeter, 8.6858896e-5},
+      UnitFixture{AttenuationUnit::DecibelsPerWavelength,
+                  1.30288344e-4},
+      UnitFixture{AttenuationUnit::QualityFactor,
+                  209439.5102393195},
+      UnitFixture{AttenuationUnit::LossParameter,
+                  2.3873241463784303e-6},
+  };
+  const RayPath path = makeSingleStepPath(1000.0, 50.0);
+  std::array<std::complex<double>, fixtures.size()> atOneKilohertz{};
+  std::array<std::complex<double>, fixtures.size()> atTwoKilohertz{};
+  for (std::size_t index = 0U; index < fixtures.size(); ++index) {
+    const RawAttenuation raw{
+        .value = fixtures[index].value,
+        .unit = fixtures[index].unit,
+    };
+    const FrequencyProjector projector(makeConstantEnvironment(raw));
+    atOneKilohertz[index] =
+        projector.project(path, 1000.0, 1.0)
+            .points.back()
+            .complexTravelTime;
+    atTwoKilohertz[index] =
+        projector.project(path, 2000.0, 1.0)
+            .points.back()
+            .complexTravelTime;
+    checkComplexNear(context, atOneKilohertz[index], atOneKilohertz[0U],
+                     2.0e-18,
+                     "six units agree at their 1 kHz reference anchor");
+  }
+
+  checkComplexNear(context, atTwoKilohertz[2U], atTwoKilohertz[0U],
+                   2.0e-18, "N and M remain frequency independent");
+  for (const std::size_t index : {1U, 3U, 4U, 5U}) {
+    checkComplexNear(context, atTwoKilohertz[index], atTwoKilohertz[1U],
+                     2.0e-18,
+                     "F, W, Q, and L retain linear frequency scaling");
+  }
+  context.check(
+      std::abs(atTwoKilohertz[0U] - atTwoKilohertz[1U]) > 1.0e-8,
+      "2 kHz projection distinguishes frequency-independent and linear units");
 }
 
 void testVacuumRigidPhaseIsUnwrapped(Context& context) {
@@ -386,6 +550,234 @@ Environment makeAcousticBottomEnvironment() {
                        AttenuationUnit::DecibelsPerWavelength}}));
 }
 
+Environment makeElasticBottomEnvironment() {
+  return makeConstantEnvironment(
+      {},
+      BoundaryModel::acousticHalfSpace(
+          100.0,
+          AcousticMaterial{
+              .compressionalSoundSpeed = 2000.0,
+              .shearSoundSpeed = 1000.0,
+              .density = 2000.0,
+              .compressionalAttenuation = {
+                  .value = 0.5,
+                  .unit = AttenuationUnit::DecibelsPerWavelength},
+              .shearAttenuation = {
+                  .value = 1.0,
+                  .unit = AttenuationUnit::DecibelsPerWavelength}}),
+      thorpVolumeAttenuation());
+}
+
+void testElasticEnvironmentProjection(Context& context) {
+  const Environment environment = makeElasticBottomEnvironment();
+  RayPathCache cache;
+  cache.append(makeAcousticReflectionPath());
+  cache.freeze();
+  const RayPath& path = cache.at(0U);
+  const RayPath before = path;
+  const ReflectionEvent& event = path.events.front();
+  context.check(!event.longMaterialOverride.has_value(),
+                "ordinary elastic bottom remains an Environment material");
+
+  const FrequencyProjector projector(environment);
+  std::array<RayFrequencyState, 2U> projected{
+      projector.project(path, 1000.0, 1.0),
+      projector.project(path, 2000.0, 1.0)};
+  for (std::size_t index = 0U; index < projected.size(); ++index) {
+    const double frequency = index == 0U ? 1000.0 : 2000.0;
+    const auto expected = evaluateAcousticHalfSpaceAcoustics(
+        *environment.seabed().material(), environment.seabed().depth(),
+        environment.volumeAttenuation(), frequency, kWaterDensity,
+        event.tangentSlowness, event.normalSlowness);
+    context.checkNear(projected[index].points.back().amplitude,
+                      expected.amplitudeMultiplier, 2.0e-15,
+                      "projector applies ordinary elastic amplitude");
+    context.checkNear(projected[index].points.back().reflectionPhase,
+                      expected.phaseIncrement, 2.0e-15,
+                      "projector applies ordinary elastic phase");
+  }
+  context.check(
+      projected[0U].points.back().amplitude !=
+              projected[1U].points.back().amplitude ||
+          projected[0U].points.back().reflectionPhase !=
+              projected[1U].points.back().reflectionPhase,
+      "elastic P/S attenuation is evaluated independently per frequency");
+  context.check(
+      path.points.size() == before.points.size() && path.steps.empty() &&
+          path.events.size() == before.events.size() &&
+          path.points.front().position == before.points.front().position &&
+          path.points.back().slowness == before.points.back().slowness &&
+          path.events.front().incidentSlowness ==
+              before.events.front().incidentSlowness &&
+          path.events.front().reflectedSlowness ==
+              before.events.front().reflectedSlowness &&
+          !path.events.front().longMaterialOverride.has_value() &&
+          !before.events.front().longMaterialOverride.has_value() &&
+          path.terminationReason == before.terminationReason,
+      "two-frequency elastic projection preserves the frozen path");
+}
+
+void testGrainSizeEnvironmentProjection(Context& context) {
+  const Environment environment = makeConstantEnvironment(
+      {}, BoundaryModel::grainSizeHalfSpace(100.0, 3.0),
+      thorpVolumeAttenuation());
+  RayPathCache cache;
+  cache.append(makeAcousticReflectionPath());
+  cache.freeze();
+  const RayPath& path = cache.at(0U);
+  const RayPath before = path;
+  const ReflectionEvent& event = path.events.front();
+  const auto& grain = *environment.seabed().grainSizeMaterial();
+  const FrequencyProjector projector(environment);
+  const auto first = projector.project(path, 1000.0, 1.0);
+  const auto second = projector.project(path, 2000.0, 1.0);
+  const auto expected = evaluateGrainSizeHalfSpaceAcoustics(
+      grain, 1000.0, kSoundSpeed, kWaterDensity,
+      event.tangentSlowness, event.normalSlowness);
+  context.checkNear(first.points.back().amplitude,
+                    expected.amplitudeMultiplier, 2.0e-15,
+                    "projector applies grain-size amplitude");
+  context.checkNear(first.points.back().reflectionPhase,
+                    expected.phaseIncrement, 2.0e-15,
+                    "projector applies grain-size phase");
+  context.check(first.points.back().amplitude ==
+                    second.points.back().amplitude &&
+                first.points.back().reflectionPhase ==
+                    second.points.back().reflectionPhase,
+                "G sediment ignores ENV Thorp and stays frequency invariant");
+  context.check(path.points.size() == before.points.size() &&
+                    path.steps.size() == before.steps.size() &&
+                    path.events.size() == before.events.size() &&
+                    path.points.front().position ==
+                        before.points.front().position &&
+                    path.points.back().slowness ==
+                        before.points.back().slowness &&
+                    path.events.front().incidentSlowness ==
+                        before.events.front().incidentSlowness &&
+                    path.events.front().reflectedSlowness ==
+                        before.events.front().reflectedSlowness &&
+                    path.terminationReason == before.terminationReason &&
+                    cache.frozen(),
+                "two-frequency G projection preserves the frozen cache");
+
+  const Environment varyingEnvironment(
+      SoundSpeedProfile({
+          {.depth = 0.0, .soundSpeed = 1400.0, .density = kWaterDensity},
+          {.depth = 100.0, .soundSpeed = 1500.0, .density = kWaterDensity}}),
+      BoundaryModel::vacuum(0.0),
+      BoundaryModel::grainSizeHalfSpace(100.0, 3.0));
+  const auto varying = FrequencyProjector(varyingEnvironment)
+                           .project(path, 1000.0, 1.0);
+  const auto localExpected = evaluateGrainSizeHalfSpaceAcoustics(
+      *varyingEnvironment.seabed().grainSizeMaterial(), 1000.0, 1500.0,
+      kWaterDensity, event.tangentSlowness, event.normalSlowness);
+  const auto wrongSurfaceValue = evaluateGrainSizeHalfSpaceAcoustics(
+      *varyingEnvironment.seabed().grainSizeMaterial(), 1000.0, 1400.0,
+      kWaterDensity, event.tangentSlowness, event.normalSlowness);
+  context.checkNear(varying.points.back().amplitude,
+                    localExpected.amplitudeMultiplier, 2.0e-15,
+                    "G projector uses water sound speed at the event");
+  context.check(
+      varying.points.back().amplitude !=
+          wrongSurfaceValue.amplitudeMultiplier,
+      "G projector does not freeze the source-depth water sound speed");
+}
+
+void testTabulatedReflectionProjection(Context& context) {
+  const auto table = std::make_shared<const TabulatedReflectionTable>(
+      TabulatedReflectionTable{
+          {.angleDegrees = 0.0, .magnitude = 0.2,
+           .phaseRadians = 0.0},
+          {.angleDegrees = 45.0, .magnitude = 0.5,
+           .phaseRadians = 4.0},
+          {.angleDegrees = 90.0, .magnitude = 0.8,
+           .phaseRadians = 7.0}});
+  const Environment environment = makeConstantEnvironment(
+      {}, BoundaryModel::tabulatedReflection(
+              bellhop::BoundaryGeometry::flat(
+                  100.0, bellhop::BoundaryOrientation::Lower),
+              table),
+      thorpVolumeAttenuation());
+  RayPathCache cache;
+  cache.append(makeAcousticReflectionPath());
+  cache.freeze();
+  const RayPath& path = cache.at(0U);
+  const RayPath before = path;
+  const ReflectionEvent& event = path.events.front();
+  const auto expected = evaluateTabulatedReflectionAcoustics(
+      *table, event.tangentSlowness, event.normalSlowness);
+  const FrequencyProjector projector(environment);
+  const auto first = projector.project(path, 1000.0, 1.0);
+  const auto second = projector.project(path, 2000.0, 1.0);
+  for (const RayFrequencyState* state : {&first, &second}) {
+    context.checkNear(state->points.back().amplitude,
+                      expected.amplitudeMultiplier, 2.0e-15,
+                      "projector applies tabulated magnitude");
+    context.checkNear(state->points.back().reflectionPhase,
+                      expected.phaseIncrement, 3.0e-15,
+                      "projector applies explicit tabulated phase");
+  }
+  context.check(first.points.back().amplitude ==
+                    second.points.back().amplitude &&
+                first.points.back().reflectionPhase ==
+                    second.points.back().reflectionPhase,
+                "tabulated coefficients are frequency independent");
+  context.check(path.points.size() == before.points.size() &&
+                    path.steps.size() == before.steps.size() &&
+                    path.events.size() == before.events.size() &&
+                    path.points.front().position ==
+                        before.points.front().position &&
+                    path.points.back().slowness ==
+                        before.points.back().slowness &&
+                    path.events.front().incidentSlowness ==
+                        before.events.front().incidentSlowness &&
+                    path.events.front().reflectedSlowness ==
+                        before.events.front().reflectedSlowness &&
+                    path.terminationReason == before.terminationReason &&
+                    cache.frozen(),
+                "two-frequency table projection preserves frozen geometry");
+
+  const auto zeroEndpointTable =
+      std::make_shared<const TabulatedReflectionTable>(
+          TabulatedReflectionTable{
+              {.angleDegrees = 10.0, .magnitude = 0.0,
+               .phaseRadians = 1.0},
+              {.angleDegrees = 80.0, .magnitude = 1.0,
+               .phaseRadians = 2.0}});
+  const Environment zeroEndpointEnvironment = makeConstantEnvironment(
+      {}, BoundaryModel::tabulatedReflection(
+              bellhop::BoundaryGeometry::flat(
+                  100.0, bellhop::BoundaryOrientation::Lower),
+              zeroEndpointTable));
+  constexpr double kNearEndpointDegrees = 9.9999999;
+  const double nearEndpointRadians =
+      kNearEndpointDegrees * std::numbers::pi / 180.0;
+  const double tangentSlowness =
+      std::cos(nearEndpointRadians) / kSoundSpeed;
+  const double normalSlowness =
+      std::sin(nearEndpointRadians) / kSoundSpeed;
+  const Vec2 position{.range = 25.0, .depth = 100.0};
+  const ReflectionEvent nearEndpointEvent = makeReflectionEvent(
+      0U, ReflectionBoundary::Seabed, position,
+      tangentSlowness, normalSlowness);
+  RayPath nearEndpointPath;
+  nearEndpointPath.points = {
+      makeRayState(position, nearEndpointEvent.incidentSlowness),
+      makeRayState(position, nearEndpointEvent.reflectedSlowness)};
+  nearEndpointPath.events = {nearEndpointEvent};
+  const RayFrequencyState nearEndpoint =
+      FrequencyProjector(zeroEndpointEnvironment)
+          .project(nearEndpointPath, 1000.0, 1.0);
+  context.checkNear(nearEndpoint.points.back().amplitude,
+                    -1.4285714233383277e-9, 3.0e-16,
+                    "REAL4 endpoint decision retains tiny negative amplitude");
+  context.checkNear(nearEndpoint.points.back().reflectionPhase,
+                    9.9999999857142863e-1, 3.0e-16,
+                    "REAL4 endpoint decision retains extrapolated phase");
+  context.check(!nearEndpoint.points.back().active,
+                "tiny negative tabulated amplitude terminates the ray");
+}
+
 void testAcousticReflectionAndActiveCutoff(Context& context) {
   const auto& fixture =
       bellhop::test::kHalfSpaceCoefficientFixtures[1U];
@@ -458,6 +850,72 @@ void testAcousticReflectionAndActiveCutoff(Context& context) {
                 "inactive state is sticky across the geometry suffix");
 }
 
+void testFrozenLongMaterialOverridesEnvironmentFallback(Context& context) {
+  RayPath path = makeAcousticReflectionPath();
+  const AcousticMaterial longMaterial{
+      .compressionalSoundSpeed = 1800.0,
+      .shearSoundSpeed = 0.0,
+      .density = 2000.0,
+      .compressionalAttenuation = {
+          .value = 0.20,
+          .unit = AttenuationUnit::DecibelsPerWavelength},
+  };
+  path.events.front().longMaterialOverride = FrozenBoundaryMaterial{
+      .material = longMaterial,
+      .attenuationEvaluationDepth = 1.0e20};
+  const RayPath before = path;
+  const Environment environment = makeAcousticBottomEnvironment();
+  const FrequencyProjector projector(environment);
+  for (const double frequency : {1000.0, 2000.0}) {
+    const RayFrequencyState state = projector.project(path, frequency, 1.0);
+    const ReflectionEvent& event = path.events.front();
+    const auto expected = evaluateFluidHalfSpaceAcoustics(
+        longMaterial, 1.0e20, environment.volumeAttenuation(), frequency,
+        kWaterDensity, event.tangentSlowness, event.normalSlowness);
+    context.checkNear(state.points.back().amplitude,
+                      expected.amplitudeMultiplier, 2.0e-15,
+                      "projector uses the frozen LL material amplitude");
+    context.checkNear(state.points.back().reflectionPhase,
+                      expected.phaseIncrement, 2.0e-15,
+                      "projector uses the frozen LL material phase");
+  }
+  const RayFrequencyState fallback = FrequencyProjector(environment).project(
+      makeAcousticReflectionPath(), 1000.0, 1.0);
+  const RayFrequencyState overridden = projector.project(path, 1000.0, 1.0);
+  context.check(
+      overridden.points.back().amplitude != fallback.points.back().amplitude,
+      "frozen LL material is observably distinct from the ENV fallback");
+  context.check(
+      path.events.front().longMaterialOverride->material
+              .compressionalAttenuation.value ==
+          before.events.front().longMaterialOverride->material
+              .compressionalAttenuation.value &&
+          path.events.front().longMaterialOverride->attenuationEvaluationDepth ==
+              before.events.front()
+                  .longMaterialOverride->attenuationEvaluationDepth,
+      "multi-frequency projection does not mutate frozen LL material");
+
+  RayPath elasticLongOverride = path;
+  elasticLongOverride.events.front()
+      .longMaterialOverride->material.shearSoundSpeed = 900.0;
+  context.expectThrows<ValidationError>(
+      [&projector, &elasticLongOverride] {
+        static_cast<void>(
+            projector.project(elasticLongOverride, 1000.0, 1.0));
+      },
+      "projector keeps elastic LL material explicitly unsupported");
+
+  const RayFrequencyState rigid =
+      FrequencyProjector(makeConstantEnvironment())
+          .project(path, 1000.0, 1.0);
+  context.checkNear(
+      rigid.points.back().amplitude, 1.0, 0.0,
+      "rigid boundary condition takes priority over a frozen LL material");
+  context.checkNear(
+      rigid.points.back().reflectionPhase, 0.0, 0.0,
+      "rigid boundary ignores the frozen LL material phase");
+}
+
 void testMunkReflectionOracle(Context& context) {
   const Environment environment = bellhop::test::makeMunkEnvironment();
   const RayPath path =
@@ -503,7 +961,9 @@ void testMunkReflectionOracle(Context& context) {
 
 void testProjectionDoesNotMutateGeometry(Context& context) {
   const Environment environment =
-      makeConstantEnvironment(thorpAttenuation());
+      makeConstantEnvironment(
+          {}, BoundaryModel::rigid(100.0),
+          biologicalVolumeAttenuation());
   const GeometryTracer tracer(
       environment,
       IntegratorSettings{
@@ -511,7 +971,10 @@ void testProjectionDoesNotMutateGeometry(Context& context) {
           .rangeLimit = 35.0,
           .depthLimit = 200.0,
           .maximumRayPoints = 100U});
-  const RayPath path = tracer.trace(Source{.depth = 50.0}, 0.0);
+  RayPathCache cache;
+  cache.append(tracer.trace(Source{.depth = 50.0}, 0.0));
+  cache.freeze();
+  const RayPath& path = cache.at(0U);
   const RayPath before = path;
   const FrequencyProjector projector(environment);
   RayFrequencyState low =
@@ -538,6 +1001,20 @@ void testProjectionDoesNotMutateGeometry(Context& context) {
                 before.points[index].realTravelTime,
         "projection leaves every geometry point unchanged");
   }
+  for (std::size_t index = 0U; index < path.steps.size(); ++index) {
+    context.check(
+        path.steps[index].stepLength == before.steps[index].stepLength &&
+            path.steps[index].startWeight == before.steps[index].startWeight &&
+            path.steps[index].midpointWeight ==
+                before.steps[index].midpointWeight &&
+            path.steps[index].midpoint == before.steps[index].midpoint,
+        "projection leaves every frozen quadrature step unchanged");
+  }
+  context.check(path.events.empty() == before.events.empty() &&
+                    path.terminationReason == before.terminationReason &&
+                    path.terminationDetail == before.terminationDetail &&
+                    cache.frozen(),
+                "projection preserves frozen events and termination state");
   context.check(
       low.points.back().complexTravelTime !=
           high.points.back().complexTravelTime,
@@ -586,8 +1063,14 @@ int main() {
   Context context;
   testLosslessAndThorpPropagation(context);
   testNodeConversionPrecedesInterpolation(context);
+  testQuadrilateralFrequencyProjection(context);
+  testAttenuationUnitFrequencyProjection(context);
   testVacuumRigidPhaseIsUnwrapped(context);
   testAcousticReflectionAndActiveCutoff(context);
+  testElasticEnvironmentProjection(context);
+  testGrainSizeEnvironmentProjection(context);
+  testTabulatedReflectionProjection(context);
+  testFrozenLongMaterialOverridesEnvironmentFallback(context);
   testMunkReflectionOracle(context);
   testProjectionDoesNotMutateGeometry(context);
   testInvalidInputs(context);

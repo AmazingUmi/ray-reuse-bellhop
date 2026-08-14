@@ -1,0 +1,74 @@
+{
+  "schema": "bellhop.f2cpp.i4_volume_attenuation_validation",
+  "schema_version": 1,
+  "date": "2026-08-09",
+  "status": "passed",
+  "models": ["FrancoisGarrison", "Biological"],
+  "environment_contract": {
+    "single_environment_level_source": true,
+    "biological_layers_immutable_shared_storage": true,
+    "biological_layer_limit": 200,
+    "overlapping_layers_preserve_input_order": true,
+    "layer_depth_endpoints_inclusive": true,
+    "ssp_conversion_policy": "Convert attenuation at every SSP node depth before complex C/N/P/S interpolation.",
+    "flat_acoustic_halfspace_depth_policy": "Use the ordinary ENV half-space material-record depth, matching ReadEnvironmentBell.f90; long ATI/BTY material records remain I3-06 scope.",
+    "ray_path_cache_mutated": false
+  },
+  "floating_point_contract": {
+    "francois_garrison": "Origin REAL(4) constants are promoted explicitly; A3/P2/P3 use fixed nested FMA order; Clang pow builtin replacement is disabled only for attenuation.cpp.",
+    "biological": "Each matching layer is converted from dB/km to Np/m before ordered accumulation, matching AttenMod.f90.",
+    "francois_garrison_gfortran_anchor_count": 7,
+    "biological_gfortran_anchors": {
+      "depth_100m_np_per_m": 0.0028782313628054482,
+      "depth_200m_overlap_np_per_m": 0.002973774312608119,
+      "depth_300m_np_per_m": 0.00009554294980267047,
+      "single_layer_resonance_cimag_m_per_s": 1.0306906846933712
+    }
+  },
+  "cases": {
+    "volume_attenuation_francois_garrison": {
+      "single_hz": [5000.0],
+      "broadband_smoke_hz": [5000.0, 10000.0]
+    },
+    "volume_attenuation_biological": {
+      "single_hz": [5000.0],
+      "broadband_smoke_hz": [2500.0, 5000.0]
+    }
+  },
+  "final_field_comparison": {
+    "origin_f2cpp_slices_passed": 6,
+    "max_pressure_absolute": 1.0098760583332478e-7,
+    "max_pressure_relative": 9.9831166153308e-5,
+    "max_tl_difference_db": 0.00055694580078125,
+    "lossless_noop_guards_passed": 4,
+    "minimum_required_pressure_difference_vs_lossless": 1.0e-6,
+    "minimum_observed_pressure_difference_vs_lossless": 3.734466008609161e-5
+  },
+  "intentional_validation_differences": [
+    "F2CPP rejects non-finite Francois-Garrison and biological parameters.",
+    "F2CPP requires temperature greater than -273 C, non-negative salinity/mean depth/coefficient, positive f0/Q, ordered depth bounds, and at most 200 biological layers."
+  ],
+  "sha256": {
+    "origin_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "f2cpp_executable": "f1d1d1dd20dc08cd18eb87b282ebc385c29485168760b67fee5d2db3857843d0",
+    "rendered_environment_aggregate": "58a276ae6b85eca6ccea51677df5a5cc02e0bffdf8df2cd97ec40961b6fa174d",
+    "origin_field_aggregate": "8765ac46a6be34a62186271490e66bc78389f8aebcb295ca61d8db8d0a449721",
+    "f2cpp_field_aggregate": "06a816cd84ce289b072e95723ab6b058287f9c5f7846043b14f77ddab4fa45f5"
+  },
+  "generation": {
+    "case_profiles": ["single", "broadband_smoke"],
+    "case_ids": [
+      "volume_attenuation_francois_garrison",
+      "volume_attenuation_biological"
+    ],
+    "lossless_control_case": "constant_speed_no_attenuation_5khz",
+    "validation_script": "test/standard_cases/codes/validate_i4_volume_attenuation.py",
+    "standard_case_commands": [
+      "standard_cases.py test --version origin --case <two I4-02 cases> --profile <single or broadband_smoke> --executable <origin executable> --results-root <results root>",
+      "standard_cases.py test --version f2cpp --case <two I4-02 cases> --profile <single or broadband_smoke> --executable <f2cpp executable> --results-root <results root>",
+      "standard_cases.py test --version <origin or f2cpp> --case constant_speed_no_attenuation_5khz --profile single --executable <matching executable> --results-root <results root>"
+    ],
+    "validation_command": "validate_i4_volume_attenuation.py --results-root <results root> --origin-executable <origin executable> --f2cpp-executable <f2cpp executable>",
+    "report_assembly": "Curated summary of validator output plus exact component-oracle and ownership contracts; all executable and output hashes are copied verbatim from the validator."
+  }
+}

@@ -1,0 +1,26 @@
+id = "multi_source_depths"
+description = "Three sorted source-depth slices in a nonuniform C-linear SSP"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 ReadSzRz", "Bellhop_origin/Bellhop/bellhop.f90 SourceDepth loop"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 750.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 3, 11, 51]
+prt_markers = ["VACUUM", "Perfectly RIGID"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -68,29 +69,79 @@ void writeManifest(const std::filesystem::path& csvPath,
   }
 }
 
+bellhop::Environment makeI5QuadrilateralEnvironment() {
+  const auto grid = std::make_shared<const bellhop::QuadrilateralSspGrid>(
+      bellhop::QuadrilateralSspGrid{
+          .rangesMeters = {0.0, 350.0, 800.0},
+          .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
+                               1500.0, 1520.0, 1540.0},
+          .depthCount = 2U,
+          .rangeCount = 3U});
+  return bellhop::Environment(
+      bellhop::SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 100.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0}},
+          bellhop::SspInterpolationKind::Quadrilateral, grid),
+      bellhop::BoundaryModel::vacuum(0.0),
+      bellhop::BoundaryModel::rigid(100.0));
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
   if (argc != 3 && argc != 4 && argc != 7) {
     std::cerr << "usage: geometry_oracle_probe OUTPUT_CSV "
                  "LAUNCH_ANGLE_RAD "
-                 "[munk | BOTTOM_DEPTH SOURCE_DEPTH DEPTH_LIMIT "
+                 "[munk | munk-n2 | munk-pchip | munk-spline | "
+                 "i3-piecewise | i3-curvilinear | "
+                 "i5-quadrilateral | "
+                 "BOTTOM_DEPTH SOURCE_DEPTH "
+                 "DEPTH_LIMIT "
                  "MAX_POINTS]\n";
     return 2;
   }
 
+  const std::string namedConfiguration = argc == 4 ? argv[3] : "";
   const bool useMunkConfiguration =
-      argc == 4 && std::string(argv[3]) == "munk";
-  if (argc == 4 && !useMunkConfiguration) {
+      namedConfiguration == "munk" || namedConfiguration == "munk-n2" ||
+      namedConfiguration == "munk-pchip" ||
+      namedConfiguration == "munk-spline";
+  const bool usePiecewise = namedConfiguration == "i3-piecewise";
+  const bool useCurvilinear =
+      namedConfiguration == "i3-curvilinear";
+  const bool useI3BoundaryConfiguration =
+      usePiecewise || useCurvilinear;
+  const bool useI5Quadrilateral =
+      namedConfiguration == "i5-quadrilateral";
+  const bool useN2 = namedConfiguration == "munk-n2";
+  const bool usePchip = namedConfiguration == "munk-pchip";
+  const bool useSpline = namedConfiguration == "munk-spline";
+  if (argc == 4 && !useMunkConfiguration &&
+      !useI3BoundaryConfiguration && !useI5Quadrilateral) {
     std::cerr << "unknown probe configuration: " << argv[3] << '\n';
     return 2;
   }
   double launchAngle = 0.0;
-  double bottomDepth = useMunkConfiguration ? 5000.0 : 1000.0;
-  double sourceDepth = useMunkConfiguration ? 1000.0 : 500.0;
-  double depthLimit = useMunkConfiguration ? 5500.0 : 1100.0;
-  double stepLength = useMunkConfiguration ? 500.0 : 10.0;
-  double rangeLimit = useMunkConfiguration ? 101000.0 : 5100.0;
+  double bottomDepth = useMunkConfiguration ? 5000.0 :
+                       (useI5Quadrilateral ? 100.0 :
+                       (usePiecewise ? 120.0 :
+                        (useCurvilinear ? 130.0 : 1000.0)));
+  double sourceDepth = useMunkConfiguration ? 1000.0 :
+                       (useI5Quadrilateral ? 50.0 :
+                       (usePiecewise ? 50.0 :
+                        (useCurvilinear ? 48.0 : 500.0)));
+  double depthLimit = useMunkConfiguration ? 5500.0 :
+                      (useI5Quadrilateral ? 101.0 :
+                      (usePiecewise ? 121.0 :
+                       (useCurvilinear ? 131.0 : 1100.0)));
+  double stepLength = useMunkConfiguration ? 500.0 :
+                      (useI3BoundaryConfiguration ? 500.0 :
+                       (useI5Quadrilateral ? 1.0 : 10.0));
+  double rangeLimit = useMunkConfiguration ? 101000.0 :
+                      (useI3BoundaryConfiguration ? 2100.0 :
+                       (useI5Quadrilateral ? 710.0 : 5100.0));
   std::size_t maximumRayPoints = 10000U;
   try {
     std::size_t parsedCharacters = 0U;
@@ -117,8 +168,58 @@ int main(int argc, char* argv[]) {
 
   const bellhop::Environment environment =
       useMunkConfiguration
-          ? bellhop::test::makeMunkEnvironment()
-          : bellhop::Environment(
+          ? bellhop::test::makeMunkEnvironment(
+                usePchip
+                    ? bellhop::SspInterpolationKind::Pchip
+                    : (useN2
+                           ? bellhop::SspInterpolationKind::N2Linear
+                           : (useSpline
+                                  ? bellhop::SspInterpolationKind::CubicSpline
+                                  : bellhop::SspInterpolationKind::CLinear)))
+          : (useI5Quadrilateral
+                 ? makeI5QuadrilateralEnvironment()
+                 : (useI3BoundaryConfiguration
+                 ? bellhop::Environment(
+                       bellhop::SoundSpeedProfile(
+                           {{.depth = 0.0,
+                             .soundSpeed = 1500.0,
+                             .density = 1000.0},
+                            {.depth = bottomDepth,
+                             .soundSpeed = 1500.0,
+                             .density = 1000.0}}),
+                       bellhop::BoundaryModel::vacuum(
+                           usePiecewise
+                               ? bellhop::BoundaryGeometry::piecewiseLinear(
+                                     {{.range = 0.0, .depth = 0.0},
+                                      {.range = 1000.0, .depth = 20.0},
+                                      {.range = 2000.0, .depth = 0.0}},
+                                     0.0,
+                                     bellhop::BoundaryOrientation::Upper)
+                               : bellhop::BoundaryGeometry::curvilinear(
+                                     {{.range = 0.0, .depth = 4.0},
+                                      {.range = 450.0, .depth = 15.0},
+                                      {.range = 1050.0, .depth = 2.0},
+                                      {.range = 1650.0, .depth = 19.0},
+                                      {.range = 2300.0, .depth = 7.0}},
+                                     0.0,
+                                     bellhop::BoundaryOrientation::Upper)),
+                       bellhop::BoundaryModel::rigid(
+                           usePiecewise
+                               ? bellhop::BoundaryGeometry::piecewiseLinear(
+                                     {{.range = 0.0, .depth = 100.0},
+                                      {.range = 1000.0, .depth = 120.0},
+                                      {.range = 2000.0, .depth = 90.0}},
+                                     120.0,
+                                     bellhop::BoundaryOrientation::Lower)
+                               : bellhop::BoundaryGeometry::curvilinear(
+                                     {{.range = 0.0, .depth = 111.0},
+                                      {.range = 550.0, .depth = 93.0},
+                                      {.range = 1100.0, .depth = 121.0},
+                                      {.range = 1750.0, .depth = 98.0},
+                                      {.range = 2300.0, .depth = 114.0}},
+                                     130.0,
+                                     bellhop::BoundaryOrientation::Lower)))
+                 : bellhop::Environment(
                 bellhop::SoundSpeedProfile(
                     {{.depth = 0.0,
                       .soundSpeed = 1500.0,
@@ -127,7 +228,7 @@ int main(int argc, char* argv[]) {
                       .soundSpeed = 1500.0,
                       .density = 1000.0}}),
                 bellhop::BoundaryModel::vacuum(0.0),
-                bellhop::BoundaryModel::rigid(bottomDepth));
+                bellhop::BoundaryModel::rigid(bottomDepth))));
   const bellhop::GeometryTracer tracer(
       environment,
       bellhop::IntegratorSettings{.stepLength = stepLength,
@@ -194,8 +295,9 @@ int main(int argc, char* argv[]) {
   output.close();
   try {
     writeManifest(argv[1], launchAngle,
-                  useMunkConfiguration
-                      ? "munk"
+                  useMunkConfiguration || useI3BoundaryConfiguration ||
+                          useI5Quadrilateral
+                      ? namedConfiguration
                       : (argc == 7 ? "flat-boundary-custom" : "direct"),
                   path);
   } catch (const std::exception& error) {

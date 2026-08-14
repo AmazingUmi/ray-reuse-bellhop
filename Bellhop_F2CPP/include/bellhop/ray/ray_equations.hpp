@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bellhop/model/c_linear_ssp.hpp"
+#include "bellhop/model/sound_speed_types.hpp"
 #include "bellhop/numerics/vec2.hpp"
 
 namespace bellhop {

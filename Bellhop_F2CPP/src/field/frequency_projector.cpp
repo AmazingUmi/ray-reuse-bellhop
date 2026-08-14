@@ -8,7 +8,7 @@
 
 #include "bellhop/acoustics/boundary_acoustics.hpp"
 #include "bellhop/error.hpp"
-#include "bellhop/model/c_linear_frequency_ssp.hpp"
+#include "bellhop/model/sound_speed_evaluator.hpp"
 
 namespace bellhop {
 namespace {
@@ -101,8 +101,9 @@ RayFrequencyState FrequencyProjector::project(
     double sourceAmplitude) const {
   validateProjectionInput(path, frequency, sourceAmplitude);
 
-  CLinearFrequencySsp soundSpeedProfile(
-      environment_.soundSpeedProfile(), frequency);
+  FrequencySspEvaluator soundSpeedProfile(
+      environment_.soundSpeedProfile(), frequency,
+      environment_.volumeAttenuation());
   const bool losslessProfile = soundSpeedProfile.isLossless();
   const std::optional<std::complex<double>> uniformComplexSoundSpeed =
       soundSpeedProfile.uniformComplexSoundSpeed();
@@ -138,10 +139,27 @@ RayFrequencyState FrequencyProjector::project(
       segmentIndex = waterSample.segmentIndex;
       const BoundaryModel& boundary =
           boundaryForEvent(environment_, event.boundary);
+      const bool useFrozenLongMaterial =
+          boundary.kind() == BoundaryKind::AcousticHalfSpace &&
+          event.longMaterialOverride.has_value();
       const BoundaryAcousticsResult acoustics =
-          evaluateBoundaryAcoustics(
-              boundary, frequency, waterSample.density,
-              event.tangentSlowness, event.normalSlowness);
+          boundary.kind() == BoundaryKind::GrainSizeHalfSpace
+              ? evaluateGrainSizeHalfSpaceAcoustics(
+                    *boundary.grainSizeMaterial(), frequency,
+                    waterSample.soundSpeed, waterSample.density,
+                    event.tangentSlowness, event.normalSlowness)
+          : useFrozenLongMaterial
+              ? evaluateFluidHalfSpaceAcoustics(
+                    event.longMaterialOverride->material,
+                    event.longMaterialOverride->attenuationEvaluationDepth,
+                    environment_.volumeAttenuation(), frequency,
+                    waterSample.density, event.tangentSlowness,
+                    event.normalSlowness)
+              : evaluateBoundaryAcoustics(
+                    boundary, event.boundarySegmentIndex,
+                    environment_.volumeAttenuation(), frequency,
+                    waterSample.density, event.tangentSlowness,
+                    event.normalSlowness);
       next.amplitude *= acoustics.amplitudeMultiplier;
       next.reflectionPhase += acoustics.phaseIncrement;
       next.active =

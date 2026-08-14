@@ -15,7 +15,9 @@
 namespace {
 
 using bellhop::BoundaryCurvatureMode;
+using bellhop::BoundaryGeometry;
 using bellhop::BoundaryModel;
+using bellhop::BoundaryOrientation;
 using bellhop::Environment;
 using bellhop::FlatBoundaryGeometry;
 using bellhop::GeometryTracer;
@@ -57,6 +59,69 @@ Environment makeSurfaceGradientEnvironment() {
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
 }
 
+Environment makePiecewiseBottomEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = kSoundSpeed,
+            .density = 1000.0},
+           {.depth = 120.0,
+            .soundSpeed = kSoundSpeed,
+            .density = 1000.0}}),
+      BoundaryModel::vacuum(0.0),
+      BoundaryModel::rigid(BoundaryGeometry::piecewiseLinear(
+          {{.range = 0.0, .depth = 100.0},
+           {.range = 1000.0, .depth = 120.0},
+           {.range = 2000.0, .depth = 90.0}},
+          120.0, BoundaryOrientation::Lower)));
+}
+
+Environment makePiecewiseSurfaceAndBottomEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = kSoundSpeed,
+            .density = 1000.0},
+           {.depth = 120.0,
+            .soundSpeed = kSoundSpeed,
+            .density = 1000.0}}),
+      BoundaryModel::vacuum(BoundaryGeometry::piecewiseLinear(
+          {{.range = 0.0, .depth = 0.0},
+           {.range = 1000.0, .depth = 20.0},
+           {.range = 2000.0, .depth = 0.0}},
+          0.0, BoundaryOrientation::Upper)),
+      BoundaryModel::rigid(BoundaryGeometry::piecewiseLinear(
+          {{.range = 0.0, .depth = 100.0},
+           {.range = 1000.0, .depth = 120.0},
+           {.range = 2000.0, .depth = 90.0}},
+          120.0, BoundaryOrientation::Lower)));
+}
+
+Environment makeCurvilinearSurfaceAndBottomEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = kSoundSpeed,
+            .density = 1000.0},
+           {.depth = 130.0,
+            .soundSpeed = kSoundSpeed,
+            .density = 1000.0}}),
+      BoundaryModel::vacuum(BoundaryGeometry::curvilinear(
+          {{.range = 0.0, .depth = 4.0},
+           {.range = 450.0, .depth = 15.0},
+           {.range = 1050.0, .depth = 2.0},
+           {.range = 1650.0, .depth = 19.0},
+           {.range = 2300.0, .depth = 7.0}},
+          0.0, BoundaryOrientation::Upper)),
+      BoundaryModel::rigid(BoundaryGeometry::curvilinear(
+          {{.range = 0.0, .depth = 111.0},
+           {.range = 550.0, .depth = 93.0},
+           {.range = 1100.0, .depth = 121.0},
+           {.range = 1750.0, .depth = 98.0},
+           {.range = 2300.0, .depth = 114.0}},
+          130.0, BoundaryOrientation::Lower)));
+}
+
 IntegratorSettings makeSettings(double stepLength,
                                 std::size_t maximumRayPoints,
                                 double rangeLimit = 10000.0,
@@ -92,6 +157,8 @@ void checkEventPair(Context& context, const RayPath& path,
                     "D-10 pre/post states retain the same travel time");
   context.check(event.position == incident.position,
                 "reflection event references its actual incident position");
+  context.check(event.reflectedRayPointIndex == event.rayPointIndex + 1U,
+                "reflection event explicitly references its post state");
   context.check(event.incidentSlowness == incident.slowness,
                 "reflection event retains incident slowness");
   context.check(event.reflectedSlowness == reflected.slowness,
@@ -198,6 +265,69 @@ void testSingleSeabedReflection(Context& context) {
   context.check(event.outwardNormal == Vec2{0.0, 1.0},
                 "seabed normal points out of the water");
   checkEventPair(context, path, 0U);
+}
+
+void testPiecewiseLinearSeabedReflection(Context& context) {
+  constexpr double angle = 20.0 * kPi / 180.0;
+  constexpr double stepLength = 500.0;
+  const GeometryTracer tracer(
+      makePiecewiseBottomEnvironment(),
+      makeSettings(stepLength, 5U, 5000.0, 500.0));
+  const RayPath path = tracer.trace(Source{.depth = 50.0}, angle);
+
+  context.check(path.terminationReason == RayTerminationReason::PointLimit,
+                "piecewise seabed trace fills the bounded test path");
+  context.check(path.events.size() == 1U,
+                "piecewise seabed produces one reflection event");
+  context.check(path.steps.size() == 3U && path.points.size() == 5U,
+                "segment endpoint and boundary crossings retain the "
+                "Fortran minimum-step transitions");
+  if (path.events.empty()) {
+    return;
+  }
+
+  const auto& event = path.events.front();
+  const double segmentLength = std::hypot(1000.0, 20.0);
+  context.check(event.boundary == ReflectionBoundary::Seabed,
+                "sloping event records the seabed");
+  context.check(event.boundarySegmentIndex == 1U,
+                "sloping event records the active physical segment");
+  context.checkNear(event.boundaryTangent.range,
+                    1000.0 / segmentLength, 1.0e-15,
+                    "sloping reflection uses the segment tangent");
+  context.checkNear(event.boundaryTangent.depth,
+                    20.0 / segmentLength, 1.0e-15,
+                    "sloping reflection retains the tangent slope");
+  context.checkNear(event.outwardNormal.range,
+                    -20.0 / segmentLength, 1.0e-15,
+                    "sloping reflection uses the lower outward normal");
+  context.checkNear(event.outwardNormal.depth,
+                    1000.0 / segmentLength, 1.0e-15,
+                    "sloping lower normal points out of the water");
+  context.check(path.steps.front().stepLength == 0.5,
+                "source at a boundary node advances by the minimum step");
+  checkEventPair(context, path, 0U);
+  checkPathInvariant(
+      context, path,
+      "piecewise reflection satisfies P = 1 + S + E");
+}
+
+void testRayParallelToSlopeCrossesSegmentWithoutReflection(Context& context) {
+  const double slopeAngle = std::atan2(20.0, 1000.0);
+  const GeometryTracer tracer(
+      makePiecewiseBottomEnvironment(),
+      makeSettings(750.0, 5U, 3000.0, 500.0));
+  const RayPath path =
+      tracer.trace(Source{.depth = 50.0}, slopeAngle);
+
+  context.check(path.events.empty(),
+                "ray parallel to the first bottom slope does not reflect");
+  context.check(path.points.size() == 5U && path.steps.size() == 4U,
+                "parallel ray still resolves the cached segment endpoint");
+  context.checkNear(path.points[3U].position.range, 1000.0, 1.0e-12,
+                    "parallel ray lands on the shared segment endpoint");
+  context.checkNear(path.steps[3U].stepLength, 0.75, 1.0e-15,
+                    "endpoint landing is followed by the minimum step");
 }
 
 void testMinimumStepOvershootIsNotProjected(Context& context) {
@@ -326,6 +456,192 @@ void testFusedBoundaryResidualMatchesFortran(Context& context) {
       "30-degree standard-case path satisfies P = 1 + S + E");
 }
 
+void testPiecewiseMultiBounceMatchesFortran(Context& context) {
+  constexpr double launchAngle = -6.98131700797731804e-1;
+  const GeometryTracer tracer(
+      makePiecewiseSurfaceAndBottomEnvironment(),
+      makeSettings(500.0, 10000U, 2100.0, 121.0));
+  const RayPath path =
+      tracer.trace(Source{.depth = 50.0}, launchAngle);
+
+  const std::size_t topBounceCount = static_cast<std::size_t>(
+      std::count_if(path.events.begin(), path.events.end(),
+                    [](const auto& event) {
+                      return event.boundary ==
+                             ReflectionBoundary::SeaSurface;
+                    }));
+  context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
+                "piecewise oracle ray exits through the range box");
+  context.check(path.points.size() == 84U &&
+                    path.steps.size() == 62U &&
+                    path.events.size() == 21U,
+                "piecewise multi-bounce shape matches the Fortran oracle");
+  context.check(topBounceCount == 11U &&
+                    path.events.size() - topBounceCount == 10U,
+                "piecewise oracle preserves every top/bottom bounce");
+  if (!path.events.empty()) {
+    context.check(path.events.front().rayPointIndex == 2U,
+                  "first sloping-top landing reflects without an extra step");
+  }
+  checkPathInvariant(
+      context, path,
+      "piecewise oracle path satisfies P = 1 + S + E");
+}
+
+void testCurvilinearMultiBounceMatchesFortran(Context& context) {
+  constexpr double launchAngle = -2.438888037721334e-1;
+  const GeometryTracer tracer(
+      makeCurvilinearSurfaceAndBottomEnvironment(),
+      makeSettings(500.0, 10000U, 2100.0, 131.0));
+  const RayPath path =
+      tracer.trace(Source{.depth = 48.0}, launchAngle);
+
+  const std::size_t topBounceCount = static_cast<std::size_t>(
+      std::count_if(path.events.begin(), path.events.end(),
+                    [](const auto& event) {
+                      return event.boundary ==
+                             ReflectionBoundary::SeaSurface;
+                    }));
+  context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
+                "curvilinear oracle ray exits through the range box");
+  context.check(path.points.size() == 29U && path.steps.size() == 22U &&
+                    path.events.size() == 6U,
+                "curvilinear multi-bounce shape matches the Fortran oracle");
+  context.check(topBounceCount == 3U &&
+                    path.events.size() - topBounceCount == 3U,
+                "curvilinear oracle preserves every top/bottom bounce");
+  for (const auto& event : path.events) {
+    context.check(event.boundaryCurvature != 0.0,
+                  "curvilinear physical-segment reflections retain kappa");
+    context.check(bellhop::norm(event.boundaryTangent) < 1.0,
+                  "curvilinear reflection frame is not renormalized");
+  }
+  if (path.events.size() >= 2U) {
+    const auto& top = path.events[0U];
+    context.check(top.boundary == ReflectionBoundary::SeaSurface &&
+                      top.boundarySegmentIndex == 1U,
+                  "first curvilinear oracle event uses top physical segment");
+    context.checkNear(top.position.range, 161.4882321836457, 1.0e-10,
+                      "first curvilinear reflection range matches oracle");
+    context.checkNear(top.position.depth, 7.814890518004077, 1.0e-12,
+                      "first curvilinear reflection depth matches oracle");
+    context.checkNear(top.boundaryTangent.range, 0.9998085833338034,
+                      1.0e-15,
+                      "first interpolated tangent range matches oracle");
+    context.checkNear(top.boundaryTangent.depth, 0.008331882787290048,
+                      1.0e-15,
+                      "first interpolated tangent depth matches oracle");
+    context.checkNear(top.boundaryCurvature, -0.0001023773616463405,
+                      1.0e-18,
+                      "first top curvature matches oracle");
+    context.checkNear(top.reflectedSlowness.range,
+                      0.0006441655711190538, 1.0e-18,
+                      "first reflected range slowness matches oracle");
+    context.checkNear(top.reflectedSlowness.depth,
+                      0.00017164054349210126, 1.0e-18,
+                      "first reflected depth slowness matches oracle");
+    context.checkNear(path.points[top.reflectedRayPointIndex].dynamicP[0],
+                      1.1365591001486675, 1.0e-14,
+                      "first curvature jump p1 matches oracle");
+
+    const auto& bottom = path.events[1U];
+    context.check(bottom.boundary == ReflectionBoundary::Seabed &&
+                      bottom.boundarySegmentIndex == 1U,
+                  "second curvilinear oracle event uses bottom segment");
+    context.checkNear(bottom.boundaryTangent.range, 0.9991572645683603,
+                      1.0e-15,
+                      "second interpolated tangent range matches oracle");
+    context.checkNear(bottom.boundaryTangent.depth, 0.006256177145108277,
+                      1.0e-15,
+                      "second interpolated tangent depth matches oracle");
+    context.checkNear(bottom.boundaryCurvature, 0.0001518221312076167,
+                      1.0e-18,
+                      "second bottom curvature matches oracle");
+    context.checkNear(path.points[bottom.reflectedRayPointIndex].dynamicP[0],
+                      1.803666459473942, 1.0e-13,
+                      "second curvature jump p1 matches oracle");
+  }
+
+  RayPathCache cache;
+  cache.append(path);
+  cache.freeze();
+  context.check(cache.frozen(),
+                "curvilinear legacy reflection frames freeze in cache");
+  checkPathInvariant(
+      context, path,
+      "curvilinear oracle path satisfies P = 1 + S + E");
+}
+
+void testTracerPropagatesCurvatureMode(Context& context) {
+  constexpr double launchAngle = -2.438888037721334e-1;
+  const Environment environment =
+      makeCurvilinearSurfaceAndBottomEnvironment();
+  const IntegratorSettings settings =
+      makeSettings(500.0, 10000U, 2100.0, 131.0);
+  const RayPath standard =
+      GeometryTracer(environment, settings, BoundaryCurvatureMode::Standard)
+          .trace(Source{.depth = 48.0}, launchAngle);
+  const RayPath doubled =
+      GeometryTracer(environment, settings, BoundaryCurvatureMode::Double)
+          .trace(Source{.depth = 48.0}, launchAngle);
+  const RayPath zeroed =
+      GeometryTracer(environment, settings, BoundaryCurvatureMode::Zero)
+          .trace(Source{.depth = 48.0}, launchAngle);
+  context.check(!standard.events.empty() && !doubled.events.empty() &&
+                    !zeroed.events.empty(),
+                "all curvature modes retain the same reflection sequence");
+  const std::size_t standardPoint =
+      standard.events.front().reflectedRayPointIndex;
+  const std::size_t doubledPoint =
+      doubled.events.front().reflectedRayPointIndex;
+  const std::size_t zeroedPoint =
+      zeroed.events.front().reflectedRayPointIndex;
+  context.checkNear(standard.points[standardPoint].dynamicP[0U],
+                    1.1365591001486675, 1.0e-14,
+                    "standard tracer curvature jump matches Origin");
+  context.checkNear(doubled.points[doubledPoint].dynamicP[0U],
+                    1.2731182002973349, 1.0e-14,
+                    "double tracer curvature jump doubles the full RN");
+  context.checkNear(zeroed.points[zeroedPoint].dynamicP[0U],
+                    1.0, 0.0,
+                    "zero tracer curvature mode suppresses the full RN");
+  context.check(standard.points.size() == doubled.points.size() &&
+                    standard.points.size() == zeroed.points.size() &&
+                    standard.events.size() == doubled.events.size() &&
+                    standard.events.size() == zeroed.events.size(),
+                "curvature mode changes dynamics without retracing centers");
+  context.check(standard.points[standardPoint].position ==
+                    doubled.points[doubledPoint].position &&
+                    standard.points[standardPoint].position ==
+                    zeroed.points[zeroedPoint].position &&
+                    standard.points[standardPoint].slowness ==
+                    doubled.points[doubledPoint].slowness &&
+                    standard.points[standardPoint].slowness ==
+                    zeroed.points[zeroedPoint].slowness,
+                "curvature modes preserve reflected center position/slowness");
+}
+
+void testCurvilinearTwoPointsOutsideTermination(Context& context) {
+  constexpr double launchAngle = -6.097220094303335e-1;
+  const GeometryTracer tracer(
+      makeCurvilinearSurfaceAndBottomEnvironment(),
+      makeSettings(500.0, 10000U, 2100.0, 131.0));
+  const RayPath path =
+      tracer.trace(Source{.depth = 48.0}, launchAngle);
+
+  context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
+                "curvilinear outside-boundary escape is a normal exit");
+  context.check(path.terminationDetail ==
+                    "two consecutive points outside sea surface",
+                "curvilinear escape records the legacy top-boundary cause");
+  context.check(path.points.size() == 56U && path.steps.size() == 42U &&
+                    path.events.size() == 13U,
+                "curvilinear outside escape matches the Fortran oracle");
+  checkPathInvariant(
+      context, path,
+      "curvilinear outside termination satisfies P = 1 + S + E");
+}
+
 void testUnreflectedDirectRayDoesNotDrift(Context& context) {
   constexpr std::size_t oneBasedAlphaIndex = 150U;
   constexpr std::size_t angleCount = 300U;
@@ -367,11 +683,17 @@ int main() {
   Context context;
   testSingleSeaSurfaceReflectionAndArrivalGradient(context);
   testSingleSeabedReflection(context);
+  testPiecewiseLinearSeabedReflection(context);
+  testRayParallelToSlopeCrossesSegmentWithoutReflection(context);
   testMinimumStepOvershootIsNotProjected(context);
   testContinuousMultipleReflections(context);
   testPointLimitDoesNotLeaveHalfReflection(context);
   testReflectedPathFreezesInCache(context);
   testFusedBoundaryResidualMatchesFortran(context);
+  testPiecewiseMultiBounceMatchesFortran(context);
+  testCurvilinearMultiBounceMatchesFortran(context);
+  testTracerPropagatesCurvatureMode(context);
+  testCurvilinearTwoPointsOutsideTermination(context);
   testUnreflectedDirectRayDoesNotDrift(context);
 
   if (context.failureCount() != 0) {

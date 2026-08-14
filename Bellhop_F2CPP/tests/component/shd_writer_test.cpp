@@ -13,19 +13,23 @@
 
 #include "bellhop/error.hpp"
 #include "bellhop/io/shd_writer.hpp"
+#include "bellhop/io/output_layout.hpp"
 #include "bellhop/model/simulation_case.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
 
 using bellhop::BoundaryModel;
+using bellhop::BellhopError;
 using bellhop::Environment;
 using bellhop::FrequencyGrid;
 using bellhop::FrequencyWorkspace;
 using bellhop::IntegratorSettings;
 using bellhop::LaunchFan;
 using bellhop::ReceiverGrid;
+using bellhop::ReceiverGridLayout;
 using bellhop::ShdWriter;
+using bellhop::planShd2DLayout;
 using bellhop::SimulationCase;
 using bellhop::SoundSpeedPoint;
 using bellhop::SoundSpeedProfile;
@@ -106,8 +110,9 @@ std::vector<std::byte> readBytes(
   return bytes;
 }
 
-SimulationCase makeSimulation(const ReceiverGrid& receivers,
-                              double frequency = 50.0) {
+SimulationCase makeSimulationWithSources(
+    const ReceiverGrid& receivers, std::vector<Source> sources,
+    double frequency = 50.0) {
   return SimulationCase(
       Environment(
           SoundSpeedProfile(
@@ -121,7 +126,7 @@ SimulationCase makeSimulation(const ReceiverGrid& receivers,
                    .density = 1000.0}}),
           BoundaryModel::vacuum(0.0),
           BoundaryModel::rigid(100.0)),
-      Source{.depth = 50.0, .amplitude = 1.0},
+      std::move(sources),
       receivers, FrequencyGrid({frequency}),
       LaunchFan{
           .minimumAngle =
@@ -134,6 +139,12 @@ SimulationCase makeSimulation(const ReceiverGrid& receivers,
           .rangeLimit = 3100.0,
           .depthLimit = 110.0,
           .maximumRayPoints = 1000U});
+}
+
+SimulationCase makeSimulation(const ReceiverGrid& receivers,
+                              double frequency = 50.0) {
+  return makeSimulationWithSources(
+      receivers, {Source{.depth = 50.0, .amplitude = 1.0}}, frequency);
 }
 
 void testBinaryLayout(Context& context) {
@@ -227,6 +238,91 @@ void testBinaryLayout(Context& context) {
       "writer does not modify the double workspace");
 }
 
+void testMultipleSourceBinaryLayout(Context& context) {
+  TemporaryDirectory directory;
+  const std::filesystem::path path =
+      directory.path() / "multi_source.shd";
+  const ReceiverGrid receivers(
+      {20.0, 30.0}, {1000.0, 2000.0, 3000.0});
+  const SimulationCase simulation = makeSimulationWithSources(
+      receivers,
+      {Source{.depth = 80.0, .amplitude = 1.0},
+       Source{.depth = 20.0, .amplitude = 1.0}});
+  FrequencyWorkspace first(50.0, receivers);
+  FrequencyWorkspace second(50.0, receivers);
+  first.at(0U, 0U) = {0.11, -0.01};
+  first.at(1U, 2U) = {0.12, -0.02};
+  second.at(0U, 0U) = {0.21, -0.03};
+  second.at(1U, 2U) = {0.22, -0.04};
+  const std::vector<FrequencyWorkspace> additional{second};
+
+  ShdWriter::writeSingleFrequency(
+      path, "Synthetic multi-source SHD fixture", simulation, first,
+      additional);
+  const std::vector<std::byte> bytes = readBytes(path);
+  constexpr std::size_t recordBytes = 164U;
+  context.check(
+      bytes.size() == 14U * recordBytes,
+      "multi-source SHD has ten headers plus source-major depth records");
+  const std::size_t dimensions = 2U * recordBytes;
+  context.check(
+      loadInt32(bytes, dimensions + 16U) == 2,
+      "multi-source SHD record three stores NSz");
+  context.check(
+      loadFloat32(bytes, 7U * recordBytes) == 20.0F &&
+          loadFloat32(bytes, 7U * recordBytes + 4U) == 80.0F,
+      "multi-source SHD record eight stores sorted float32 source depths");
+  context.check(
+      loadFloat32(bytes, 10U * recordBytes) == 0.11F &&
+          loadFloat32(bytes, 11U * recordBytes + 16U) == 0.12F &&
+          loadFloat32(bytes, 12U * recordBytes) == 0.21F &&
+          loadFloat32(bytes, 13U * recordBytes + 16U) == 0.22F,
+      "multi-source SHD fields use source-major then receiver-depth order");
+  context.expectThrows<ValidationError>(
+      [&] {
+        ShdWriter::writeSingleFrequency(
+            directory.path() / "missing_slice.shd", "missing slice",
+            simulation, first);
+      },
+      "multi-source writer rejects a missing source workspace");
+}
+
+void testIrregularBinaryLayout(Context& context) {
+  TemporaryDirectory directory;
+  const std::filesystem::path path =
+      directory.path() / "irregular.shd";
+  const ReceiverGrid receivers(
+      {20.0, 40.0, 70.0}, {1000.0, 2000.0, 3000.0},
+      ReceiverGridLayout::Irregular);
+  const SimulationCase simulation = makeSimulation(receivers);
+  FrequencyWorkspace workspace(50.0, receivers);
+  workspace.at(0U, 0U) = {0.11, -0.01};
+  workspace.at(0U, 1U) = {0.22, -0.02};
+  workspace.at(0U, 2U) = {0.33, -0.03};
+
+  ShdWriter::writeSingleFrequency(
+      path, "Synthetic irregular SHD fixture", simulation, workspace);
+  const std::vector<std::byte> bytes = readBytes(path);
+  constexpr std::size_t recordBytes = 164U;
+  context.check(
+      bytes.size() == 11U * recordBytes,
+      "irregular SHD stores one pressure record per source");
+  const std::string plotType(
+      reinterpret_cast<const char*>(bytes.data() + recordBytes), 10U);
+  context.check(
+      plotType == "irregular ",
+      "irregular SHD marks the paired receiver layout");
+  const std::size_t dimensions = 2U * recordBytes;
+  context.check(
+      loadInt32(bytes, dimensions + 20U) == 3 &&
+          loadInt32(bytes, dimensions + 24U) == 3,
+      "irregular SHD retains full paired depth and range axes");
+  context.check(
+      loadFloat32(bytes, 8U * recordBytes + 8U) == 70.0F &&
+          loadFloat32(bytes, 10U * recordBytes + 16U) == 0.33F,
+      "irregular SHD writes the paired depth vector and one range record");
+}
+
 void testValidation(Context& context) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers(
@@ -281,12 +377,91 @@ void testValidation(Context& context) {
       "writer rejects non-ASCII-control title");
 }
 
+void testAtomicPublicationFailurePreservesTheDestination(Context& context) {
+  TemporaryDirectory directory;
+  const std::filesystem::path destination =
+      directory.path() / "existing.shd";
+  std::filesystem::create_directory(destination);
+  const std::filesystem::path sentinel = destination / "keep.txt";
+  {
+    std::ofstream output(sentinel);
+    output << "keep";
+  }
+  const ReceiverGrid receivers({20.0}, {1000.0});
+  const SimulationCase simulation = makeSimulation(receivers);
+  const FrequencyWorkspace workspace(50.0, receivers);
+
+  context.expectThrows<BellhopError>(
+      [&] {
+        ShdWriter::writeSingleFrequency(
+            destination, "atomic publication", simulation, workspace);
+      },
+      "SHD writer reports a failed final publish");
+  context.check(
+      std::filesystem::is_directory(destination) &&
+          std::filesystem::is_regular_file(sentinel) &&
+          !std::filesystem::exists(destination.string() + ".tmp"),
+      "failed SHD publication preserves the destination and removes temp");
+}
+
+void testCheckedShdLayoutPlanning(Context& context) {
+  const auto rectilinear = planShd2DLayout(2U, 3U, 4U, false);
+  context.check(
+      rectilinear.recordWords == 41U && rectilinear.recordBytes == 164U &&
+          rectilinear.recordsPerSource == 3U &&
+          rectilinear.pressureRecordCount == 6U &&
+          rectilinear.totalRecordCount == 16U &&
+          rectilinear.fileBytes == 2624U &&
+          rectilinear.pressureRecordNumber1Based(0U, 0U) == 11U &&
+          rectilinear.pressureRecordNumber1Based(1U, 0U) == 14U &&
+          rectilinear.pressureRecordNumber1Based(1U, 2U) == 16U,
+      "rectilinear SHD layout freezes record counts and offsets");
+
+  const auto irregular = planShd2DLayout(2U, 4U, 4U, true);
+  context.check(
+      irregular.recordWords == 41U && irregular.recordBytes == 164U &&
+          irregular.recordsPerSource == 1U &&
+          irregular.pressureRecordCount == 2U &&
+          irregular.totalRecordCount == 12U &&
+          irregular.fileBytes == 1968U,
+      "irregular SHD layout keeps the full header axis but one record/source");
+
+  const auto multiSource = planShd2DLayout(3U, 11U, 51U, false);
+  context.check(
+      multiSource.recordWords == 102U &&
+          multiSource.recordBytes == 408U &&
+          multiSource.pressureRecordCount == 33U &&
+          multiSource.totalRecordCount == 43U &&
+          multiSource.fileBytes == 17544U,
+      "multi-source standard layout matches its frozen SHD dimensions");
+
+  const std::size_t aboveInt32 =
+      static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()) +
+      1U;
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(planShd2DLayout(aboveInt32, 1U, 1U, false));
+      },
+      "SHD planner rejects dimensions beyond Origin int32");
+  context.expectThrows<ValidationError>(
+      [] {
+        const std::size_t largeDepth = static_cast<std::size_t>(
+            std::numeric_limits<std::int32_t>::max() - 10);
+        static_cast<void>(planShd2DLayout(1U, largeDepth, 1U, false));
+      },
+      "SHD planner rejects a total file offset beyond stream capacity");
+}
+
 }  // namespace
 
 int main() {
   Context context;
   testBinaryLayout(context);
+  testMultipleSourceBinaryLayout(context);
+  testIrregularBinaryLayout(context);
   testValidation(context);
+  testAtomicPublicationFailurePreservesTheDestination(context);
+  testCheckedShdLayoutPlanning(context);
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

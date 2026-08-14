@@ -1,0 +1,36 @@
+{
+  "case": {
+    "frequencies_hz": [
+      1000.0
+    ],
+    "id": "i3_long_format_materials",
+    "profile": "single"
+  },
+  "component_guards": {
+    "frozen_material_overrides_environment_fallback": true,
+    "long_format_attenuation_depth_is_1e20": true,
+    "reflection_event_freezes_raw_material": true,
+    "segment_to_left_node_material": true
+  },
+  "generation": {
+    "f2cpp_command": "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case i3_long_format_materials --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+    "origin_command": "python3 test/standard_cases/codes/standard_cases.py test --version origin --case i3_long_format_materials --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+    "validator_command": "python3 test/standard_cases/codes/validate_i3_long_format_materials.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
+  },
+  "origin_f2cpp_field_comparison": {
+    "max_pressure_absolute": 4.6588861241092516e-11,
+    "max_pressure_relative": 4.5655565372726414e-07,
+    "max_tl_difference_db": 7.62939453125e-06,
+    "passed": true
+  },
+  "schema": "bellhop.f2cpp.i3_long_format_materials_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_executable": "b41839f50c6d0e4d67a00cac346178d22ed47cc99d050e399df30c37c1c71af6",
+    "f2cpp_field": "0acd00731f36e0b026b782a654f082d8a8ced0c2bb537077e8fbb83d0a69ca43",
+    "origin_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "origin_field": "a19e90609b954f086d2bd0b621585443d366abdfaaff4bb394ab51e5d9d4eb96",
+    "rendered_input_aggregate": "706c9f237b7f27ad2aea5136c019b12e4a512c5514caf6218502aae7171aa6d6"
+  },
+  "status": "passed"
+}

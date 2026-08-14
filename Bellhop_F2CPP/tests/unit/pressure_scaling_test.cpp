@@ -14,9 +14,16 @@
 namespace {
 
 using bellhop::FrequencyWorkspace;
+using bellhop::IntensityWorkspace;
+using bellhop::PressureNormalization;
 using bellhop::ReceiverGrid;
+using bellhop::SourceGeometry;
 using bellhop::ValidationError;
+using bellhop::scaleCoherentCartesianPressure;
 using bellhop::scaleCoherentCartesianPointPressure;
+using bellhop::scaleCoherentPressure;
+using bellhop::scaleCartesianIntensityToPressure;
+using bellhop::scaleIntensityToPressure;
 using bellhop::test::Context;
 
 void checkComplexNear(Context& context, std::complex<double> actual,
@@ -125,6 +132,146 @@ void testO1ContributionAnchors(Context& context) {
       "Munk branch legacy SNGL factor bits");
 }
 
+void testLineSourceScaling(Context& context) {
+  const ReceiverGrid receivers({10.0}, {0.0, 1000.0, 4000.0});
+  FrequencyWorkspace workspace(100.0, receivers);
+  workspace.at(0U, 0U) = {1.0, 2.0};
+  workspace.at(0U, 1U) = {3.0, 4.0};
+  workspace.at(0U, 2U) = {-5.0, 6.0};
+
+  scaleCoherentCartesianPressure(
+      workspace, receivers, 0.001, 1500.0, SourceGeometry::Line);
+
+  const double beamScale = -0.001 * std::sqrt(100.0) / 1500.0;
+  constexpr float legacyPi = 3.14159265F;
+  const float linePrefix = -4.0F * std::sqrt(legacyPi);
+  const double factor = static_cast<double>(linePrefix) * beamScale;
+  context.check(std::bit_cast<std::uint32_t>(legacyPi) == 0x40490fdbU,
+                "line-source legacy pi bits");
+  context.check(std::bit_cast<std::uint32_t>(linePrefix) == 0xc0e2dfc5U,
+                "line-source legacy prefix bits");
+  context.checkNear(factor, 4.7265437444051105e-5, 0.0,
+                    "line-source mixed-precision scale anchor");
+  checkComplexNear(
+      context, workspace.at(0U, 0U), factor * std::complex{1.0, 2.0},
+      1.0e-20, "line source retains the zero-range field");
+  checkComplexNear(
+      context, workspace.at(0U, 1U), factor * std::complex{3.0, 4.0},
+      1.0e-20, "line-source scaling is range independent");
+  checkComplexNear(
+      context, workspace.at(0U, 2U), factor * std::complex{-5.0, 6.0},
+      1.0e-20,
+      "line-source scaling uses the same factor at all ranges");
+}
+
+void testIntensityToPressureScaling(Context& context) {
+  const ReceiverGrid receivers({10.0}, {0.0, 1000.0, 4000.0});
+  IntensityWorkspace intensity(100.0, receivers);
+  intensity.add(0U, 0U, 4.0);
+  intensity.add(0U, 1U, 9.0);
+  intensity.add(0U, 2U, 25.0);
+
+  const FrequencyWorkspace point = scaleCartesianIntensityToPressure(
+      intensity, receivers, 0.001, 1500.0, SourceGeometry::Point);
+  const double beamScale = -0.001 * std::sqrt(100.0) / 1500.0;
+  checkComplexNear(context, point.at(0U, 0U), {}, 0.0,
+                   "point intensity conversion preserves zero-range rule");
+  checkComplexNear(
+      context, point.at(0U, 1U),
+      {3.0 * beamScale / std::sqrt(1000.0), -0.0}, 1.0e-21,
+      "point intensity is square-rooted exactly once before scaling");
+  checkComplexNear(
+      context, point.at(0U, 2U),
+      {5.0 * beamScale / std::sqrt(4000.0), -0.0}, 1.0e-21,
+      "point intensity conversion keeps the range spreading factor");
+
+  const FrequencyWorkspace line = scaleCartesianIntensityToPressure(
+      intensity, receivers, 0.001, 1500.0, SourceGeometry::Line);
+  constexpr float legacyPi = 3.14159265F;
+  const float linePrefix = -4.0F * std::sqrt(legacyPi);
+  const double lineFactor = static_cast<double>(linePrefix) * beamScale;
+  checkComplexNear(
+      context, line.at(0U, 0U), {2.0 * lineFactor, 0.0}, 1.0e-20,
+      "line intensity conversion retains zero range");
+  checkComplexNear(
+      context, line.at(0U, 1U), {3.0 * lineFactor, 0.0}, 1.0e-20,
+      "line intensity conversion preserves mixed-precision factor");
+  checkComplexNear(
+      context, line.at(0U, 2U), {5.0 * lineFactor, 0.0}, 1.0e-20,
+      "line intensity conversion is range independent");
+
+  context.check(intensity.at(0U, 0U) == 4.0 &&
+                    intensity.at(0U, 1U) == 9.0 &&
+                    intensity.at(0U, 2U) == 25.0,
+                "intensity-to-pressure conversion does not consume input");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(scaleCartesianIntensityToPressure(
+            intensity, receivers, 0.001, 1500.0,
+            static_cast<SourceGeometry>(999)));
+      },
+      "intensity conversion rejects an invalid source geometry");
+  context.check(intensity.at(0U, 1U) == 9.0,
+                "failed intensity conversion leaves input unchanged");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(scaleCartesianIntensityToPressure(
+            intensity, ReceiverGrid({10.0, 20.0},
+                                    {0.0, 1000.0, 4000.0}),
+            0.001, 1500.0, SourceGeometry::Point));
+      },
+      "intensity conversion rejects receiver-grid shape mismatch");
+}
+
+void testGeometricBeamScaling(Context& context) {
+  const ReceiverGrid receivers({10.0}, {0.0, 1000.0});
+  FrequencyWorkspace point(100.0, receivers);
+  point.at(0U, 0U) = {2.0, -3.0};
+  point.at(0U, 1U) = {4.0, 5.0};
+  scaleCoherentPressure(
+      point, receivers, 0.001, 1500.0, SourceGeometry::Point,
+      PressureNormalization::Geometric);
+  checkComplexNear(context, point.at(0U, 0U), {}, 0.0,
+                   "geometric point source remains zero at zero range");
+  checkComplexNear(
+      context, point.at(0U, 1U),
+      {-4.0 / std::sqrt(1000.0), -5.0 / std::sqrt(1000.0)},
+      1.0e-15, "geometric point normalization uses const=-1");
+
+  FrequencyWorkspace line(100.0, receivers);
+  line.at(0U, 0U) = {2.0, -3.0};
+  line.at(0U, 1U) = {4.0, 5.0};
+  scaleCoherentPressure(
+      line, receivers, 0.001, 1500.0, SourceGeometry::Line,
+      PressureNormalization::Geometric);
+  constexpr float legacyPi = 3.14159265F;
+  const double lineFactor =
+      static_cast<double>(-4.0F * std::sqrt(legacyPi)) * -1.0;
+  context.checkNear(lineFactor, 7.089815616607666, 0.0,
+                    "geometric line normalization mixed-precision anchor");
+  checkComplexNear(
+      context, line.at(0U, 0U), lineFactor * std::complex{2.0, -3.0},
+      1.0e-14, "geometric line normalization retains zero range");
+  checkComplexNear(
+      context, line.at(0U, 1U), lineFactor * std::complex{4.0, 5.0},
+      1.0e-14, "geometric line normalization is range independent");
+
+  IntensityWorkspace intensity(100.0, receivers);
+  intensity.add(0U, 0U, 4.0);
+  intensity.add(0U, 1U, 9.0);
+  const FrequencyWorkspace intensityPoint = scaleIntensityToPressure(
+      intensity, receivers, 0.001, 1500.0, SourceGeometry::Point,
+      PressureNormalization::Geometric);
+  checkComplexNear(context, intensityPoint.at(0U, 0U), {}, 0.0,
+                   "geometric point intensity preserves zero-range rule");
+  checkComplexNear(
+      context, intensityPoint.at(0U, 1U),
+      {-3.0 / std::sqrt(1000.0), -0.0}, 1.0e-15,
+      "geometric intensity is square-rooted before const=-1 scaling");
+}
+
 void testValidation(Context& context) {
   const ReceiverGrid receivers({10.0}, {0.0, 1000.0});
 
@@ -167,6 +314,23 @@ void testValidation(Context& context) {
             workspace, receivers, 0.001, 1500.0);
       },
       "non-finite input pressure is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        FrequencyWorkspace workspace(50.0, receivers);
+        scaleCoherentCartesianPressure(
+            workspace, receivers, 0.001, 1500.0,
+            static_cast<SourceGeometry>(999));
+      },
+      "invalid source geometry is rejected by pressure scaling");
+  context.expectThrows<ValidationError>(
+      [&] {
+        FrequencyWorkspace workspace(50.0, receivers);
+        scaleCoherentPressure(
+            workspace, receivers, 0.001, 1500.0,
+            SourceGeometry::Point,
+            static_cast<PressureNormalization>(999));
+      },
+      "invalid pressure normalization is rejected");
 
   const ReceiverGrid overflowReceivers({10.0}, {0.0, 1.0});
   FrequencyWorkspace overflow(100.0, overflowReceivers);
@@ -193,6 +357,9 @@ int main() {
   Context context;
   testSmallMatrix(context);
   testO1ContributionAnchors(context);
+  testLineSourceScaling(context);
+  testIntensityToPressureScaling(context);
+  testGeometricBeamScaling(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

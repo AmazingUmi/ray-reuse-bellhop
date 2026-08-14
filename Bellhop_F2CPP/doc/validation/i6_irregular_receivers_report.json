@@ -1,0 +1,123 @@
+{
+  "case": {
+    "id": "irregular_receiver_pairs",
+    "legacy_cc_semantics": "Origin InfluenceCervenyCart uses Rz(1) for every irregular range while retaining the complete paired axes in SHD",
+    "pressure_shape": [
+      1,
+      1,
+      1,
+      5
+    ],
+    "profiles": {
+      "broadband_smoke": [
+        1000.0,
+        2000.0
+      ],
+      "single": [
+        1000.0
+      ]
+    },
+    "receiver_depths_m": [
+      20.0,
+      35.0,
+      50.0,
+      65.0,
+      80.0
+    ],
+    "receiver_ranges_m": [
+      50.0,
+      200.0,
+      350.0,
+      500.0,
+      650.0
+    ]
+  },
+  "executables": {
+    "f2cpp": {
+      "mtime_ns": 1786440724370000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "sha256": "f724a2464e4b0d2eec23b0dcbca1e57de7c9a15d311f4d09b675f52b36eb6547"
+    },
+    "origin": {
+      "mtime_ns": 1786424159320000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_origin/bin/bellhop",
+      "sha256": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537"
+    }
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case irregular_receiver_pairs --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case irregular_receiver_pairs --profile broadband_smoke --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case irregular_receiver_pairs --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case irregular_receiver_pairs --profile broadband_smoke --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i6_irregular_receivers.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i6_irregular_receivers_report.json"
+  },
+  "irregular_layout_nonempty_guards": {
+    "f2cpp/broadband_smoke/1000Hz": {
+      "maximum_pressure_magnitude": 0.011129994876682758,
+      "passed": true
+    },
+    "f2cpp/broadband_smoke/2000Hz": {
+      "maximum_pressure_magnitude": 0.007487981114536524,
+      "passed": true
+    },
+    "f2cpp/single/1000Hz": {
+      "maximum_pressure_magnitude": 0.011129994876682758,
+      "passed": true
+    },
+    "origin/broadband_smoke/1000Hz": {
+      "maximum_pressure_magnitude": 0.011129990220069885,
+      "passed": true
+    },
+    "origin/broadband_smoke/2000Hz": {
+      "maximum_pressure_magnitude": 0.007487980183213949,
+      "passed": true
+    },
+    "origin/single/1000Hz": {
+      "maximum_pressure_magnitude": 0.011129990220069885,
+      "passed": true
+    }
+  },
+  "origin_f2cpp_field_comparisons": {
+    "broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 3.790208147336216e-09,
+      "max_pressure_relative": 5.022028517487342e-07,
+      "max_tl_difference_db": 3.814697265625e-06,
+      "passed": true
+    },
+    "broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.7770027671559774e-09,
+      "max_pressure_relative": 2.8465129275900836e-07,
+      "max_tl_difference_db": 3.814697265625e-06,
+      "passed": true
+    },
+    "single/1000Hz": {
+      "max_pressure_absolute": 3.790208147336216e-09,
+      "max_pressure_relative": 5.022028517487342e-07,
+      "max_tl_difference_db": 3.814697265625e-06,
+      "passed": true
+    }
+  },
+  "provenance_guards": {
+    "distinct_executable_paths_and_hashes": true,
+    "field_comparison_slice_count": 3,
+    "irregular_header_axes_and_record_shape_exact": true,
+    "rendered_env_inputs_equal": true,
+    "results_not_older_than_executables": true,
+    "single_broadband_1000hz_repeatable": true
+  },
+  "schema": "bellhop.f2cpp.i6_irregular_receiver_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_executable": "f724a2464e4b0d2eec23b0dcbca1e57de7c9a15d311f4d09b675f52b36eb6547",
+    "f2cpp_field_aggregate": "d40e4cb0ca0c2d4848d737d8a970d0b65deb9cae1d89fc4ac96e03af5341cc47",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_field_aggregate": "cbc377484d1a99a6102d9aa178f904592d90e86a784a275991fc2f7550843e0f",
+    "rendered_env_aggregates": {
+      "broadband_smoke": "214be9d5252830b485c533b546970adf3e800d89940910d8683ca28bf302df9c",
+      "single": "26ff0e4f4405befc457a07b54aec4d2f22b0625604459caf971d6e2d24350dc9"
+    }
+  },
+  "status": "passed"
+}

@@ -1,0 +1,23 @@
+id = "i3_long_format_materials"
+description = "Piecewise-linear LL boundaries with range-dependent fluid seabed materials"
+origin_template = "origin.env.in"
+companion_files = ["origin.ati", "origin.bty"]
+source_references = ["Bellhop_origin/Bellhop/bdryMod.f90 long boundary format"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 1000.0
+maximum_range_m = 3000.0
+minimum_angle_deg = 40.0
+maximum_angle_deg = 50.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 3, 31]
+prt_markers = ["VACUUM", "ACOUSTO-ELASTIC half-space", "Piecewise linear interpolation", "Long format (bathymetry and geoacoustics)"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

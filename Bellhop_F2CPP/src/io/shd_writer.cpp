@@ -8,17 +8,67 @@
 #include <cstdint>
 #include <fstream>
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <vector>
 
 #include "bellhop/error.hpp"
+#include "bellhop/io/output_layout.hpp"
 
 namespace bellhop {
 namespace {
 
-constexpr std::size_t kMinimumRecordWords = 41U;
+class AtomicBinaryOutput {
+ public:
+  explicit AtomicBinaryOutput(std::filesystem::path finalPath)
+      : finalPath_(std::move(finalPath)),
+        temporaryPath_(finalPath_.string() + ".tmp"),
+        output_(temporaryPath_, std::ios::binary | std::ios::trunc) {
+    if (!output_.is_open()) {
+      throw BellhopError(
+          "unable to open temporary SHD output: " +
+          temporaryPath_.string());
+    }
+  }
+
+  AtomicBinaryOutput(const AtomicBinaryOutput&) = delete;
+  AtomicBinaryOutput& operator=(const AtomicBinaryOutput&) = delete;
+
+  ~AtomicBinaryOutput() {
+    if (!committed_) {
+      output_.close();
+      std::error_code ignored;
+      std::filesystem::remove(temporaryPath_, ignored);
+    }
+  }
+
+  [[nodiscard]] std::ofstream& stream() noexcept { return output_; }
+
+  void commit() {
+    output_.close();
+    if (!output_) {
+      throw BellhopError(
+          "failed to finalize temporary SHD output: " +
+          temporaryPath_.string());
+    }
+    std::error_code error;
+    std::filesystem::rename(temporaryPath_, finalPath_, error);
+    if (error) {
+      throw BellhopError(
+          "unable to publish SHD output: " + error.message());
+    }
+    committed_ = true;
+  }
+
+ private:
+  std::filesystem::path finalPath_;
+  std::filesystem::path temporaryPath_;
+  std::ofstream output_;
+  bool committed_{};
+};
 
 void requireFinite(double value, std::string_view name) {
   if (!std::isfinite(value)) {
@@ -133,6 +183,15 @@ void ShdWriter::writeSingleFrequency(
     std::string_view title,
     const SimulationCase& simulation,
     const FrequencyWorkspace& workspace) {
+  writeSingleFrequency(path, title, simulation, workspace, {});
+}
+
+void ShdWriter::writeSingleFrequency(
+    const std::filesystem::path& path,
+    std::string_view title,
+    const SimulationCase& simulation,
+    const FrequencyWorkspace& firstSourceWorkspace,
+    std::span<const FrequencyWorkspace> additionalSourceWorkspaces) {
   if (title.empty() || title.size() > 80U) {
     throw ValidationError(
         "SHD title must contain between 1 and 80 characters");
@@ -147,16 +206,40 @@ void ShdWriter::writeSingleFrequency(
   }
 
   const ReceiverGrid& receivers = simulation.receivers();
+  if (!isTransmissionLossMode(simulation.runMode())) {
+    throw ValidationError("SHD writer requires a transmission-loss run mode");
+  }
   const double frequency =
       simulation.frequencies().values().front();
-  if (workspace.frequency() != frequency) {
+  if (additionalSourceWorkspaces.size() != simulation.sourceCount() - 1U) {
     throw ValidationError(
-        "SHD workspace frequency must match the simulation");
+        "SHD source workspace count must match the simulation sources");
   }
-  if (workspace.depthCount() != receivers.depthCount() ||
-      workspace.rangeCount() != receivers.rangeCount()) {
-    throw ValidationError(
-        "SHD workspace dimensions must match the receiver grid");
+  const auto workspaceForSource =
+      [&](std::size_t sourceIndex) -> const FrequencyWorkspace& {
+    return sourceIndex == 0U
+               ? firstSourceWorkspace
+               : additionalSourceWorkspaces[sourceIndex - 1U];
+  };
+  for (std::size_t sourceIndex = 0U;
+       sourceIndex < simulation.sourceCount(); ++sourceIndex) {
+    const FrequencyWorkspace& workspace = workspaceForSource(sourceIndex);
+    if (workspace.frequency() != frequency) {
+      throw ValidationError(
+          "SHD workspace frequency must match the simulation");
+    }
+    if (workspace.depthCount() != receivers.receiversPerRange() ||
+        workspace.rangeCount() != receivers.rangeCount()) {
+      throw ValidationError(
+          "SHD workspace dimensions must match the receiver grid");
+    }
+    for (const std::complex<double> pressure : workspace.pressure()) {
+      requireFiniteComplex(pressure, "SHD pressure");
+      static_cast<void>(
+          checkedFloat32(pressure.real(), "SHD pressure real part"));
+      static_cast<void>(
+          checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
+    }
   }
 
   for (const double depth : receivers.depths()) {
@@ -166,52 +249,23 @@ void ShdWriter::writeSingleFrequency(
   for (const double range : receivers.ranges()) {
     requireFinite(range, "SHD receiver range");
   }
-  static_cast<void>(checkedFloat32(
-      simulation.source().depth, "SHD source depth"));
-  for (const std::complex<double> pressure :
-       workspace.pressure()) {
-    requireFiniteComplex(pressure, "SHD pressure");
+  for (const Source& source : simulation.sources()) {
     static_cast<void>(
-        checkedFloat32(pressure.real(), "SHD pressure real part"));
-    static_cast<void>(
-        checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
+        checkedFloat32(source.depth, "SHD source depth"));
   }
 
-  constexpr std::size_t frequencyCount = 1U;
-  constexpr std::size_t bearingCount = 1U;
-  constexpr std::size_t sourceXCount = 1U;
-  constexpr std::size_t sourceYCount = 1U;
-  constexpr std::size_t sourceDepthCount = 1U;
+  const std::size_t sourceDepthCount = simulation.sourceCount();
   const std::size_t receiverDepthCount =
       receivers.depthCount();
+  const std::size_t receiverRecordsPerRange =
+      receivers.receiversPerRange();
   const std::size_t receiverRangeCount =
       receivers.rangeCount();
-  if (receiverRangeCount >
-      std::numeric_limits<std::size_t>::max() / 2U) {
-    throw ValidationError(
-        "SHD receiver-range count overflow");
-  }
-
-  const std::size_t recordWords = std::max(
-      {kMinimumRecordWords,
-       2U * frequencyCount,
-       2U * bearingCount,
-       2U * sourceXCount,
-       2U * sourceYCount,
-       sourceDepthCount,
-       receiverDepthCount,
-       2U * receiverRangeCount});
-  if (recordWords >
-      std::numeric_limits<std::size_t>::max() / 4U) {
-    throw ValidationError("SHD record byte count overflow");
-  }
-  const std::size_t recordBytes = 4U * recordWords;
-  if (recordBytes >
-      static_cast<std::size_t>(
-          std::numeric_limits<std::streamsize>::max())) {
-    throw ValidationError(
-        "SHD record exceeds streamsize capacity");
-  }
+  const Shd2DLayout layout = planShd2DLayout(
+      sourceDepthCount, receiverDepthCount, receiverRangeCount,
+      receivers.isIrregular());
+  const std::size_t recordWords = layout.recordWords;
+  const std::size_t recordBytes = layout.recordBytes;
 
   const std::int32_t recordWords32 =
       checkedInt32(recordWords, "SHD record word count");
@@ -221,13 +275,11 @@ void ShdWriter::writeSingleFrequency(
   const std::int32_t receiverRangeCount32 =
       checkedInt32(
           receiverRangeCount, "SHD receiver-range count");
+  const std::int32_t sourceDepthCount32 =
+      checkedInt32(sourceDepthCount, "SHD source-depth count");
 
-  std::ofstream output(
-      path, std::ios::binary | std::ios::trunc);
-  if (!output.is_open()) {
-    throw BellhopError(
-        "unable to open SHD output: " + path.string());
-  }
+  AtomicBinaryOutput atomicOutput(path);
+  std::ofstream& output = atomicOutput.stream();
 
   std::vector<std::byte> record(recordBytes);
   const auto clearRecord = [&] {
@@ -241,7 +293,8 @@ void ShdWriter::writeSingleFrequency(
   writeRecord(output, record);
 
   clearRecord();
-  storeText(record, 0U, 10U, "rectilin  ");
+  storeText(record, 0U, 10U,
+            receivers.isIrregular() ? "irregular " : "rectilin  ");
   writeRecord(output, record);
 
   clearRecord();
@@ -249,7 +302,7 @@ void ShdWriter::writeSingleFrequency(
   storeInt32(record, 4U, 1);
   storeInt32(record, 8U, 1);
   storeInt32(record, 12U, 1);
-  storeInt32(record, 16U, 1);
+  storeInt32(record, 16U, sourceDepthCount32);
   storeInt32(record, 20U, receiverDepthCount32);
   storeInt32(record, 24U, receiverRangeCount32);
   storeFloat64(record, 28U, frequency);
@@ -273,10 +326,13 @@ void ShdWriter::writeSingleFrequency(
   writeRecord(output, record);
 
   clearRecord();
-  storeFloat32(
-      record, 0U,
-      checkedFloat32(
-          simulation.source().depth, "SHD source depth"));
+  for (std::size_t sourceIndex = 0U;
+       sourceIndex < sourceDepthCount; ++sourceIndex) {
+    storeFloat32(
+        record, 4U * sourceIndex,
+        checkedFloat32(
+            simulation.sources()[sourceIndex].depth, "SHD source depth"));
+  }
   writeRecord(output, record);
 
   clearRecord();
@@ -299,30 +355,30 @@ void ShdWriter::writeSingleFrequency(
   }
   writeRecord(output, record);
 
-  for (std::size_t depthIndex = 0U;
-       depthIndex < receiverDepthCount; ++depthIndex) {
-    clearRecord();
-    for (std::size_t rangeIndex = 0U;
-         rangeIndex < receiverRangeCount; ++rangeIndex) {
-      const std::complex<double> pressure =
-          workspace.at(depthIndex, rangeIndex);
-      storeFloat32(
-          record, 8U * rangeIndex,
-          checkedFloat32(
-              pressure.real(), "SHD pressure real part"));
-      storeFloat32(
-          record, 8U * rangeIndex + 4U,
-          checkedFloat32(
-              pressure.imag(), "SHD pressure imaginary part"));
+  for (std::size_t sourceIndex = 0U;
+       sourceIndex < sourceDepthCount; ++sourceIndex) {
+    const FrequencyWorkspace& workspace = workspaceForSource(sourceIndex);
+    for (std::size_t depthIndex = 0U;
+         depthIndex < receiverRecordsPerRange; ++depthIndex) {
+      clearRecord();
+      for (std::size_t rangeIndex = 0U;
+           rangeIndex < receiverRangeCount; ++rangeIndex) {
+        const std::complex<double> pressure =
+            workspace.at(depthIndex, rangeIndex);
+        storeFloat32(
+            record, 8U * rangeIndex,
+            checkedFloat32(
+                pressure.real(), "SHD pressure real part"));
+        storeFloat32(
+            record, 8U * rangeIndex + 4U,
+            checkedFloat32(
+                pressure.imag(), "SHD pressure imaginary part"));
+      }
+      writeRecord(output, record);
     }
-    writeRecord(output, record);
   }
 
-  output.close();
-  if (!output) {
-    throw BellhopError(
-        "failed to finalize SHD output: " + path.string());
-  }
+  atomicOutput.commit();
 }
 
 }  // namespace bellhop

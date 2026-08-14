@@ -1,0 +1,26 @@
+id = "grain_size_equivalent_acoustic_control"
+description = "Equivalent ordinary acoustic half-space control for grain size Mz=3"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/misc/AttenMod.f90 GrainSize_to_Geoacoustic", "Bellhop_origin/Bellhop/ReflectMod.f90 grain-size half-space"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 750.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 11, 51]
+prt_markers = ["VACUUM", "ACOUSTO-ELASTIC half-space"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

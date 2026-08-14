@@ -29,6 +29,10 @@ static_assert(
 static_assert(same<decltype(bellhop::StepQuadrature::stepLength), double>);
 static_assert(
     same<decltype(bellhop::ReflectionEvent::rayPointIndex), std::size_t>);
+static_assert(same<decltype(bellhop::ReflectionEvent::reflectedRayPointIndex),
+                   std::size_t>);
+static_assert(
+    same<decltype(bellhop::ReflectionEvent::boundaryCurvature), double>);
 static_assert(
     same<decltype(bellhop::RayPath::points), std::vector<bellhop::RayState>>);
 static_assert(same<decltype(bellhop::RayPath::steps),

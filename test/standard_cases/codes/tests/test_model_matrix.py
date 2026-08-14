@@ -18,6 +18,22 @@ from support import write_little_endian_rectilinear_file
 
 
 class ModelMatrixTests(unittest.TestCase):
+    def test_rejects_ray_output_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            manifest = Path(temporary_directory) / "run_manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "output_kind": "ray",
+                        "runs": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "requires SHD"):
+                load_manifest_slices(manifest)
+
     def test_loads_broadband_manifest_frequency_slices(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

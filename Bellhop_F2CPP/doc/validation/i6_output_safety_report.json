@@ -1,0 +1,80 @@
+{
+  "component_guards": {
+    "cli_cc_ray_cc_mode_switch_removes_opposite_product": true,
+    "cli_failed_input_preserves_previous_valid_shd": true,
+    "cli_removes_stale_shd_and_ray_temporary_files": true,
+    "coherent_workspace_pressure_value_limit": 2000000,
+    "failed_broadband_run_removes_stale_manifest_and_outputs": true,
+    "failed_single_run_removes_stale_manifest_and_outputs": true,
+    "ray_trace_is_not_rejected_by_unused_pressure_grid_product": true,
+    "shd_and_ray_publish_from_closed_temporary_files": true,
+    "total_ray_count_limit": 2000000
+  },
+  "executables": {
+    "f2cpp_release": {
+      "path": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "sha256": "3ecbc4ee1c1dc5cd0631b1dbbc0f4a61b163577c94478cc6f69d0701837e4777"
+    }
+  },
+  "layout_anchors": {
+    "irregular_2_sources_4_depths_4_ranges": {
+      "file_bytes": 1968,
+      "pressure_records": 2,
+      "record_bytes": 164,
+      "record_words": 41,
+      "records_per_source": 1,
+      "total_records": 12
+    },
+    "multi_source_3_sources_11_depths_51_ranges": {
+      "file_bytes": 17544,
+      "pressure_records": 33,
+      "record_bytes": 408,
+      "record_words": 102,
+      "total_records": 43
+    },
+    "rectilinear_2_sources_3_depths_4_ranges": {
+      "file_bytes": 2624,
+      "last_pressure_record_1based": 16,
+      "pressure_records": 6,
+      "record_bytes": 164,
+      "record_words": 41,
+      "records_per_source": 3,
+      "total_records": 16
+    }
+  },
+  "provenance": {
+    "curation": "Summary of reproducible CTest, Python unittest, standard-case and executable-hash evidence; no field metrics are synthesized by this report.",
+    "debug_command": "cmake --build --preset debug -j2 && ctest --preset debug --output-on-failure",
+    "gcc14_command": "cmake -S Bellhop_F2CPP -B <fresh-build> -DCMAKE_CXX_COMPILER=/opt/homebrew/bin/g++-14 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DF2CPP_ENABLE_SANITIZERS=OFF -DF2CPP_WARNINGS_AS_ERRORS=ON; cmake --build <fresh-build> --clean-first -j2; ctest --test-dir <fresh-build> --output-on-failure",
+    "python_command": "python -m unittest discover -s test/standard_cases/codes/tests -p test_*.py",
+    "release_command": "cmake --build --preset release -j2 && ctest --preset release --output-on-failure",
+    "standard_case_command": "python test/standard_cases/codes/standard_cases.py test --version f2cpp --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+  },
+  "schema": "bellhop.f2cpp.i6_output_safety_validation",
+  "schema_version": 1,
+  "status": "passed",
+  "validation": {
+    "appleclang_debug_asan_ubsan_ctest": {
+      "passed": 28,
+      "total": 28
+    },
+    "appleclang_release_ctest": {
+      "passed": 28,
+      "total": 28
+    },
+    "f2cpp_single_standard_cases": {
+      "passed": 42,
+      "total": 42
+    },
+    "gcc14_release_werror_ctest": {
+      "compiler": "GNU 14.2.0",
+      "passed": 28,
+      "project_cpp_warnings_or_errors": 0,
+      "total": 28
+    },
+    "python_standard_tool_tests": {
+      "passed": 100,
+      "total": 100
+    }
+  }
+}

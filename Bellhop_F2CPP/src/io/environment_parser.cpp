@@ -8,6 +8,7 @@
 #include <fstream>
 #include <istream>
 #include <limits>
+#include <memory>
 #include <numbers>
 #include <optional>
 #include <sstream>
@@ -330,15 +331,36 @@ void requireUniformRanges(const std::vector<double>& ranges,
   }
 }
 
+[[nodiscard]] AttenuationUnit parseAttenuationUnit(
+    char option, const Record& record, const std::string& sourceName) {
+  switch (option) {
+    case 'N':
+      return AttenuationUnit::NepersPerMeter;
+    case 'F':
+      return AttenuationUnit::DecibelsPerMeterKilohertz;
+    case 'M':
+      return AttenuationUnit::DecibelsPerMeter;
+    case 'W':
+      return AttenuationUnit::DecibelsPerWavelength;
+    case 'Q':
+      return AttenuationUnit::QualityFactor;
+    case 'L':
+      return AttenuationUnit::LossParameter;
+    default:
+      fail(sourceName, record.lineNumber,
+           "unknown attenuation unit '" + std::string(1U, option) +
+               "'; expected N, F, M, W, Q, or L");
+  }
+}
+
 [[nodiscard]] RawAttenuation makeAttenuation(
-    double value, VolumeAttenuationModel volumeModel) {
+    double value, AttenuationUnit unit) {
   return RawAttenuation{
       .value = value,
-      .unit = AttenuationUnit::DecibelsPerWavelength,
+      .unit = unit,
       .referenceFrequency = 1.0,
       .powerLawExponent = 1.0,
-      .transitionFrequency = 1.0,
-      .volumeModel = volumeModel};
+      .transitionFrequency = 1.0};
 }
 
 [[nodiscard]] bool depthMatches(double value, double bottomDepth) {
@@ -347,7 +369,16 @@ void requireUniformRanges(const std::vector<double>& ranges,
                      std::numeric_limits<float>::epsilon());
 }
 
-[[nodiscard]] std::string canonicalRunType(
+struct ParsedRunType {
+  SimulationRunMode runMode{};
+  ReceiverGridLayout receiverLayout{};
+  SourceGeometry sourceGeometry{};
+  CervenyCoordinateSystem cervenyCoordinateSystem{};
+  BeamFamily beamFamily{};
+  bool usesSourceBeamPattern{};
+};
+
+[[nodiscard]] ParsedRunType canonicalRunType(
     const Record& record, const std::string& sourceName) {
   requireTokenCount(record, 1U, sourceName, "run type");
   std::string runType = record.tokens.front();
@@ -356,26 +387,384 @@ void requireUniformRanges(const std::vector<double>& ranges,
          "run type exceeds seven characters");
   }
   runType.resize(7U, ' ');
-  if (runType[0U] != 'C' || runType[1U] != 'C' ||
-      runType[2U] != ' ' ||
-      (runType[3U] != ' ' && runType[3U] != 'R') ||
-      (runType[4U] != ' ' && runType[4U] != 'R') ||
-      (runType[5U] != ' ' && runType[5U] != '2') ||
-      runType[6U] != ' ') {
+  const bool commonOptionsValid =
+      (runType[2U] == ' ' || runType[2U] == 'O' || runType[2U] == '*') &&
+      (runType[3U] == ' ' || runType[3U] == 'R' || runType[3U] == 'X') &&
+      (runType[5U] == ' ' || runType[5U] == '2') &&
+      runType[6U] == ' ';
+  const bool transmissionLoss =
+      (runType[0U] == 'C' || runType[0U] == 'I' ||
+       runType[0U] == 'S') &&
+      (runType[1U] == ' ' || runType[1U] == 'C' ||
+       runType[1U] == 'R' || runType[1U] == 'G' ||
+       runType[1U] == '^' || runType[1U] == 'g' ||
+       runType[1U] == 'B' || runType[1U] == 'S') &&
+      (runType[4U] == ' ' || runType[4U] == 'R' || runType[4U] == 'I');
+  const bool rayTrace =
+      runType[0U] == 'R' &&
+      (runType[1U] == ' ' || runType[1U] == 'G') &&
+      (runType[4U] == ' ' || runType[4U] == 'R');
+  if ((runType[0U] == 'C' || runType[0U] == 'I' ||
+       runType[0U] == 'S') &&
+      runType[1U] == 'b') {
     fail(sourceName, record.lineNumber,
-         "only coherent Cartesian point-source rectilinear 2-D "
-         "run type 'CC' is supported");
+         "ray-centered geometric Gaussian beams are not implemented in "
+         "Bellhop 2-D");
   }
-  runType[3U] = 'R';
-  runType[4U] = 'R';
+  if (!commonOptionsValid || (!transmissionLoss && !rayTrace)) {
+    fail(sourceName, record.lineNumber,
+         "only supported 2-D Cerveny, geometric-hat, geometric-Gaussian, "
+         "or simple-Gaussian TL and "
+         "unshifted geometric 2-D ray-trace run types are supported");
+  }
+  if (runType[3U] == ' ') {
+    runType[3U] = 'R';
+  }
   runType[5U] = '2';
-  return runType;
+  SimulationRunMode mode = SimulationRunMode::RayTrace;
+  if (!rayTrace) {
+    switch (runType[0U]) {
+      case 'C':
+        mode = SimulationRunMode::CoherentTransmissionLoss;
+        break;
+      case 'I':
+        mode = SimulationRunMode::IncoherentTransmissionLoss;
+        break;
+      case 'S':
+        mode = SimulationRunMode::SemiCoherentTransmissionLoss;
+        break;
+      default:
+        fail(sourceName, record.lineNumber,
+             "unknown transmission-loss coherence mode");
+    }
+  }
+  BeamFamily beamFamily = BeamFamily::CervenyGaussian;
+  CervenyCoordinateSystem coordinateSystem =
+      CervenyCoordinateSystem::Cartesian;
+  if (!rayTrace) {
+    switch (runType[1U]) {
+      case 'C':
+        beamFamily = BeamFamily::CervenyGaussian;
+        break;
+      case 'R':
+        beamFamily = BeamFamily::CervenyGaussian;
+        coordinateSystem = CervenyCoordinateSystem::RayCentered;
+        break;
+      case 'g':
+        beamFamily = BeamFamily::GeometricHat;
+        coordinateSystem = CervenyCoordinateSystem::RayCentered;
+        break;
+      case 'B':
+        beamFamily = BeamFamily::GeometricGaussian;
+        break;
+      case 'S':
+        beamFamily = BeamFamily::SimpleGaussian;
+        break;
+      case ' ':
+      case 'G':
+      case '^':
+        beamFamily = BeamFamily::GeometricHat;
+        break;
+      default:
+        fail(sourceName, record.lineNumber, "unknown beam family");
+    }
+  }
+  return ParsedRunType{
+      .runMode = mode,
+      .receiverLayout =
+          runType[4U] == 'I' ? ReceiverGridLayout::Irregular
+                             : ReceiverGridLayout::Rectilinear,
+      .sourceGeometry =
+          runType[3U] == 'X' ? SourceGeometry::Line
+                             : SourceGeometry::Point,
+      .cervenyCoordinateSystem = coordinateSystem,
+      .beamFamily = beamFamily,
+      .usesSourceBeamPattern = runType[2U] == '*'};
 }
 
-}  // namespace
+[[nodiscard]] std::filesystem::path boundaryPath(
+    const std::filesystem::path& environmentPath,
+    std::string_view extension) {
+  std::filesystem::path path = environmentPath;
+  path.replace_extension(extension);
+  return path;
+}
 
-ParsedEnvironment EnvironmentParser::parse(
-    std::istream& input, std::string sourceName) {
+struct ParsedBoundaryFile {
+  BoundaryGeometry geometry;
+  SharedLongBoundaryMaterials longMaterials;
+};
+
+[[nodiscard]] SharedTabulatedReflectionTable readReflectionTable(
+    const std::filesystem::path& path) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    throw BellhopError(
+        "unable to open bottom reflection coefficient file: " +
+        path.string());
+  }
+  RecordReader reader(input, path.string());
+  const std::string& source = reader.sourceName();
+  const Record countRecord = reader.require("reflection coefficient count");
+  requireTokenCount(countRecord, 1U, source, "reflection coefficient count");
+  const std::size_t count = parseCount(
+      countRecord, 0U, source, "reflection coefficient count", false);
+  if (count < 2U) {
+    fail(source, countRecord.lineNumber,
+         "reflection coefficient table requires at least two points");
+  }
+  TabulatedReflectionTable points;
+  points.reserve(count);
+  for (std::size_t index = 0U; index < count; ++index) {
+    const Record pointRecord = reader.require("reflection coefficient point");
+    requireTokenCount(pointRecord, 3U, source, "reflection coefficient point");
+    const double angle = parseDouble(
+        pointRecord, 0U, source, "reflection coefficient angle");
+    const double magnitude = parseDouble(
+        pointRecord, 1U, source, "reflection coefficient magnitude");
+    const double phaseDegrees = parseDouble(
+        pointRecord, 2U, source, "reflection coefficient phase");
+    if (magnitude < 0.0) {
+      fail(source, pointRecord.lineNumber,
+           "reflection coefficient magnitude must be non-negative");
+    }
+    if (!points.empty() && points.back().angleDegrees >= angle) {
+      fail(source, pointRecord.lineNumber,
+           "reflection coefficient angles must be strictly increasing");
+    }
+    points.push_back(TabulatedReflectionPoint{
+        .angleDegrees = angle,
+        .magnitude = magnitude,
+        .phaseRadians =
+            (std::numbers::pi / 180.0) * phaseDegrees});
+  }
+  reader.requireEnd();
+  return std::make_shared<const TabulatedReflectionTable>(std::move(points));
+}
+
+[[nodiscard]] SourceBeamPattern readSourceBeamPattern(
+    const std::filesystem::path& path) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    throw BellhopError("unable to open source beam pattern file: " +
+                       path.string());
+  }
+  RecordReader reader(input, path.string());
+  const std::string& source = reader.sourceName();
+  const Record countRecord = reader.require("source beam pattern count");
+  requireTokenCount(countRecord, 1U, source, "source beam pattern count");
+  const std::size_t count = parseCount(
+      countRecord, 0U, source, "source beam pattern count", false);
+  if (count < 2U) {
+    fail(source, countRecord.lineNumber,
+         "source beam pattern requires at least two points");
+  }
+  std::vector<SourceBeamPatternSample> samples;
+  samples.reserve(count);
+  for (std::size_t index = 0U; index < count; ++index) {
+    const Record pointRecord = reader.require("source beam pattern point");
+    requireTokenCount(pointRecord, 2U, source, "source beam pattern point");
+    samples.push_back(SourceBeamPatternSample{
+        .angleDegrees = parseDouble(
+            pointRecord, 0U, source, "source beam pattern angle"),
+        .powerDecibels = parseDouble(
+            pointRecord, 1U, source, "source beam pattern power")});
+  }
+  reader.requireEnd();
+  return SourceBeamPattern::directional(std::move(samples));
+}
+
+[[nodiscard]] SharedQuadrilateralSspGrid readQuadrilateralSspGrid(
+    const std::filesystem::path& path, std::size_t depthCount) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    throw BellhopError("unable to open quadrilateral SSP file: " +
+                       path.string());
+  }
+  RecordReader reader(input, path.string());
+  const std::string& source = reader.sourceName();
+  const Record countRecord = reader.require("quadrilateral SSP range count");
+  requireTokenCount(countRecord, 1U, source, "quadrilateral SSP range count");
+  const std::size_t rangeCount = parseCount(
+      countRecord, 0U, source, "quadrilateral SSP range count", false);
+  if (rangeCount < 2U) {
+    fail(source, countRecord.lineNumber,
+         "quadrilateral SSP requires at least two range profiles");
+  }
+  if (rangeCount > std::numeric_limits<std::size_t>::max() / depthCount) {
+    fail(source, countRecord.lineNumber,
+         "quadrilateral SSP grid dimensions overflow");
+  }
+  if (rangeCount * depthCount > kMaximumVectorValues) {
+    fail(source, countRecord.lineNumber,
+         "quadrilateral SSP grid exceeds the supported sample limit");
+  }
+  const Record rangesRecord = reader.require("quadrilateral SSP ranges");
+  requireTokenCount(rangesRecord, rangeCount, source, "quadrilateral SSP ranges");
+  std::vector<double> ranges;
+  ranges.reserve(rangeCount);
+  for (std::size_t index = 0U; index < rangeCount; ++index) {
+    const double rangeKilometers = parseDouble(
+        rangesRecord, index, source, "quadrilateral SSP range");
+    const double rangeMeters = rangeKilometers * kKilometersToMeters;
+    if (!std::isfinite(rangeMeters)) {
+      fail(source, rangesRecord.lineNumber,
+           "quadrilateral SSP range conversion produced a non-finite value");
+    }
+    if (!ranges.empty() && ranges.back() >= rangeMeters) {
+      fail(source, rangesRecord.lineNumber,
+           "quadrilateral SSP ranges must be strictly increasing");
+    }
+    ranges.push_back(rangeMeters);
+  }
+  std::vector<double> speeds;
+  speeds.reserve(depthCount * rangeCount);
+  for (std::size_t depthIndex = 0U; depthIndex < depthCount; ++depthIndex) {
+    const Record rowRecord = reader.require("quadrilateral SSP speed row");
+    requireTokenCount(rowRecord, rangeCount, source,
+                      "quadrilateral SSP speed row");
+    for (std::size_t rangeIndex = 0U; rangeIndex < rangeCount; ++rangeIndex) {
+      const double speed = parseDouble(
+          rowRecord, rangeIndex, source, "quadrilateral SSP sound speed");
+      if (speed <= 0.0) {
+        fail(source, rowRecord.lineNumber,
+             "quadrilateral SSP sound speeds must be positive");
+      }
+      speeds.push_back(speed);
+    }
+  }
+  reader.requireEnd();
+  return std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{.rangesMeters = std::move(ranges),
+                           .speedsDepthMajor = std::move(speeds),
+                           .depthCount = depthCount,
+                           .rangeCount = rangeCount});
+}
+
+[[nodiscard]] ParsedBoundaryFile readBoundaryFile(
+    const std::filesystem::path& path, double referenceDepth,
+    BoundaryOrientation orientation, AttenuationUnit attenuationUnit) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    throw BellhopError(
+        "unable to open boundary file: " + path.string());
+  }
+
+  RecordReader reader(input, path.string());
+  const std::string& source = reader.sourceName();
+  const Record formatRecord = reader.require("boundary format");
+  requireTokenCount(formatRecord, 1U, source, "boundary format");
+  const std::string& format = formatRecord.tokens.front();
+  if (format == "CS" || format == "CL") {
+    fail(source, formatRecord.lineNumber,
+         "curvilinear short boundary format must use canonical 'C', not '" +
+             format + "'");
+  }
+  if (format != "LS" && format != "LL" && format != "C") {
+    fail(source, formatRecord.lineNumber,
+         "only piecewise-linear 'LS'/'LL' and canonical curvilinear "
+         "short format 'C' are supported");
+  }
+  const bool longFormat = format == "LL";
+
+  const Record countRecord = reader.require("boundary point count");
+  requireTokenCount(
+      countRecord, 1U, source, "boundary point count");
+  const std::size_t pointCount = parseCount(
+      countRecord, 0U, source, "boundary point count");
+  if (pointCount < 2U) {
+    fail(source, countRecord.lineNumber,
+         "short-format boundary requires at least two points");
+  }
+
+  std::vector<Vec2> nodes;
+  nodes.reserve(pointCount);
+  std::vector<AcousticMaterial> nodeMaterials;
+  if (longFormat) {
+    nodeMaterials.reserve(pointCount);
+  }
+  for (std::size_t index = 0U; index < pointCount; ++index) {
+    const Record pointRecord = reader.require("boundary point");
+    requireTokenCount(pointRecord, longFormat ? 7U : 2U, source,
+                      "boundary point");
+    const double range =
+        parseDouble(pointRecord, 0U, source, "boundary range") *
+        kKilometersToMeters;
+    const double depth =
+        parseDouble(pointRecord, 1U, source, "boundary depth");
+    if (!std::isfinite(range)) {
+      fail(source, pointRecord.lineNumber,
+           "boundary range conversion produced a non-finite value");
+    }
+    if (!nodes.empty() && nodes.back().range >= range) {
+      fail(source, pointRecord.lineNumber,
+           "boundary ranges must be strictly increasing");
+    }
+    if (orientation == BoundaryOrientation::Upper &&
+        depth < referenceDepth) {
+      fail(source, pointRecord.lineNumber,
+           "top boundary depth must not be above the first SSP depth");
+    }
+    if (orientation == BoundaryOrientation::Lower &&
+        depth > referenceDepth) {
+      fail(source, pointRecord.lineNumber,
+           "bottom boundary depth must not be below the last SSP depth");
+    }
+    nodes.push_back(Vec2{.range = range, .depth = depth});
+    if (longFormat) {
+      const double compressionalSoundSpeed = parseDouble(
+          pointRecord, 2U, source,
+          "boundary compressional sound speed");
+      const double shearSoundSpeed = parseDouble(
+          pointRecord, 3U, source, "boundary shear sound speed");
+      const double densityInput = parseDouble(
+          pointRecord, 4U, source, "boundary material density");
+      const double compressionalAttenuation = parseDouble(
+          pointRecord, 5U, source,
+          "boundary compressional attenuation");
+      const double shearAttenuation = parseDouble(
+          pointRecord, 6U, source, "boundary shear attenuation");
+      if (compressionalSoundSpeed <= 0.0 || densityInput <= 0.0 ||
+          compressionalAttenuation < 0.0) {
+        fail(source, pointRecord.lineNumber,
+             "long-format boundary requires positive compressional speed/"
+             "density and non-negative attenuation");
+      }
+      if (shearSoundSpeed != 0.0 || shearAttenuation != 0.0) {
+        fail(source, pointRecord.lineNumber,
+             "elastic long-format boundary materials are not supported");
+      }
+      nodeMaterials.push_back(AcousticMaterial{
+          .compressionalSoundSpeed = compressionalSoundSpeed,
+          .shearSoundSpeed = 0.0,
+          .density = densityInput * kDensityInputToSi,
+          .compressionalAttenuation = makeAttenuation(
+              compressionalAttenuation, attenuationUnit),
+          .shearAttenuation = makeAttenuation(0.0, attenuationUnit)});
+    }
+  }
+  reader.requireEnd();
+  BoundaryGeometry geometry =
+      format == "C"
+          ? BoundaryGeometry::curvilinear(
+                std::move(nodes), referenceDepth, orientation)
+          : BoundaryGeometry::piecewiseLinear(
+                std::move(nodes), referenceDepth, orientation);
+  SharedLongBoundaryMaterials longMaterials;
+  if (longFormat) {
+    longMaterials =
+        std::make_shared<const std::vector<AcousticMaterial>>(
+            std::move(nodeMaterials));
+  }
+  return ParsedBoundaryFile{
+      .geometry = std::move(geometry),
+      .longMaterials = std::move(longMaterials)};
+}
+
+[[nodiscard]] ParsedEnvironment parseEnvironment(
+    std::istream& input, std::string sourceName,
+    const std::optional<std::filesystem::path>& environmentPath) {
+
   RecordReader reader(input, std::move(sourceName));
   const std::string& source = reader.sourceName();
 
@@ -408,17 +797,131 @@ ParsedEnvironment EnvironmentParser::parse(
       reader.require("top/SSP options");
   requireTokenCount(
       topOptionsRecord, 1U, source, "top/SSP options");
-  const std::string& topOptions =
-      topOptionsRecord.tokens.front();
-  if (topOptions != "CVW" && topOptions != "CVWT") {
+  std::string topOptions = topOptionsRecord.tokens.front();
+  if (topOptions.size() < 3U || topOptions.size() > 6U) {
     fail(source, topOptionsRecord.lineNumber,
-         "only C-linear SSP, vacuum surface, dB/wavelength "
-         "attenuation with optional Thorp ('CVW' or 'CVWT') is supported");
+         "top/SSP options must contain between three and six characters");
   }
-  const VolumeAttenuationModel volumeModel =
-      topOptions == "CVWT"
-          ? VolumeAttenuationModel::Thorp
-          : VolumeAttenuationModel::None;
+  topOptions.resize(6U, ' ');
+  SspInterpolationKind interpolationKind{};
+  switch (topOptions.front()) {
+    case 'C':
+      interpolationKind = SspInterpolationKind::CLinear;
+      break;
+    case 'P':
+      interpolationKind = SspInterpolationKind::Pchip;
+      break;
+    case 'N':
+      interpolationKind = SspInterpolationKind::N2Linear;
+      break;
+    case 'S':
+      interpolationKind = SspInterpolationKind::CubicSpline;
+      break;
+    case 'Q':
+      interpolationKind = SspInterpolationKind::Quadrilateral;
+      break;
+    default:
+      fail(source, topOptionsRecord.lineNumber,
+           "unknown SSP interpolation option '" +
+               std::string(1U, topOptions.front()) + "'");
+  }
+  if (topOptions[1U] != 'V' ||
+      (topOptions[3U] != ' ' && topOptions[3U] != 'T' &&
+       topOptions[3U] != 'F' && topOptions[3U] != 'B') ||
+      (topOptions[4U] != ' ' && topOptions[4U] != '~' &&
+       topOptions[4U] != '*') ||
+      topOptions[5U] != ' ') {
+    fail(source, topOptionsRecord.lineNumber,
+         "only a vacuum surface, N/F/M/W/Q/L attenuation units with "
+         "optional T/F/B volume attenuation, and optional boundary "
+         "topography are "
+         "supported");
+  }
+  const AttenuationUnit attenuationUnit = parseAttenuationUnit(
+      topOptions[2U], topOptionsRecord, source);
+  VolumeAttenuation volumeAttenuation;
+  switch (topOptions[3U]) {
+    case ' ':
+      break;
+    case 'T':
+      volumeAttenuation.model = VolumeAttenuationModel::Thorp;
+      break;
+    case 'F': {
+      volumeAttenuation.model =
+          VolumeAttenuationModel::FrancoisGarrison;
+      const Record parametersRecord =
+          reader.require("Francois-Garrison parameters");
+      requireTokenCount(parametersRecord, 4U, source,
+                        "Francois-Garrison parameters");
+      const FrancoisGarrisonParameters parameters{
+          .temperatureCelsius = parseDouble(
+              parametersRecord, 0U, source, "water temperature"),
+          .salinityPsu = parseDouble(
+              parametersRecord, 1U, source, "salinity"),
+          .pH = parseDouble(parametersRecord, 2U, source, "pH"),
+          .meanDepthMeters = parseDouble(
+              parametersRecord, 3U, source, "mean depth"),
+      };
+      if (parameters.temperatureCelsius <= -273.0 ||
+          parameters.salinityPsu < 0.0 ||
+          parameters.meanDepthMeters < 0.0) {
+        fail(source, parametersRecord.lineNumber,
+             "Francois-Garrison temperature must exceed -273 C and "
+             "salinity/mean depth must be non-negative");
+      }
+      volumeAttenuation.parameters = parameters;
+      break;
+    }
+    case 'B': {
+      volumeAttenuation.model = VolumeAttenuationModel::Biological;
+      const Record countRecord =
+          reader.require("biological layer count");
+      requireTokenCount(countRecord, 1U, source,
+                        "biological layer count");
+      const std::size_t layerCount = parseCount(
+          countRecord, 0U, source, "biological layer count", true, 200U);
+      BiologicalAttenuationLayers layers;
+      layers.reserve(layerCount);
+      for (std::size_t index = 0U; index < layerCount; ++index) {
+        const Record layerRecord =
+            reader.require("biological attenuation layer");
+        requireTokenCount(layerRecord, 5U, source,
+                          "biological attenuation layer");
+        BiologicalAttenuationLayer layer{
+            .minimumDepth = parseDouble(
+                layerRecord, 0U, source, "biological layer top depth"),
+            .maximumDepth = parseDouble(
+                layerRecord, 1U, source, "biological layer bottom depth"),
+            .resonanceFrequency = parseDouble(
+                layerRecord, 2U, source,
+                "biological resonance frequency"),
+            .qualityFactor = parseDouble(
+                layerRecord, 3U, source, "biological quality factor"),
+            .attenuationCoefficientDecibelsPerKilometer = parseDouble(
+                layerRecord, 4U, source,
+                "biological attenuation coefficient"),
+        };
+        if (layer.minimumDepth > layer.maximumDepth ||
+            layer.resonanceFrequency <= 0.0 ||
+            layer.qualityFactor <= 0.0 ||
+            layer.attenuationCoefficientDecibelsPerKilometer < 0.0) {
+          fail(source, layerRecord.lineNumber,
+               "biological layer requires top <= bottom, positive f0/Q, "
+               "and non-negative a0");
+        }
+        layers.push_back(layer);
+      }
+      volumeAttenuation.parameters =
+          std::make_shared<const BiologicalAttenuationLayers>(
+              std::move(layers));
+      break;
+    }
+    default:
+      fail(source, topOptionsRecord.lineNumber,
+           "unknown volume attenuation option");
+  }
+  const bool hasTopography =
+      topOptions[4U] == '~' || topOptions[4U] == '*';
 
   const Record waterRecord = reader.require("water-column header");
   requireTokenCount(
@@ -486,7 +989,8 @@ ParsedEnvironment EnvironmentParser::parse(
             .soundSpeed = soundSpeed,
             .density = densityInput * kDensityInputToSi,
             .attenuation =
-                makeAttenuation(attenuationValue, volumeModel)});
+                makeAttenuation(
+                    attenuationValue, attenuationUnit)});
     if (depthMatches(depth, bottomDepth)) {
       break;
     }
@@ -499,24 +1003,75 @@ ParsedEnvironment EnvironmentParser::parse(
     fail(source, waterRecord.lineNumber,
          "sound-speed profile requires at least two points");
   }
+  SharedQuadrilateralSspGrid quadrilateralGrid;
+  if (interpolationKind == SspInterpolationKind::Quadrilateral) {
+    if (!environmentPath.has_value()) {
+      fail(source, topOptionsRecord.lineNumber,
+           "quadrilateral SSP requires parseFile so the sibling .ssp file "
+           "can be resolved");
+    }
+    quadrilateralGrid = readQuadrilateralSspGrid(
+        boundaryPath(*environmentPath, ".ssp"), soundSpeedPoints.size());
+  }
 
   const double surfaceDepth = soundSpeedPoints.front().depth;
+  BoundaryGeometry seaSurfaceGeometry = BoundaryGeometry::flat(
+      surfaceDepth, BoundaryOrientation::Upper);
+  if (hasTopography) {
+    if (!environmentPath.has_value()) {
+      fail(source, topOptionsRecord.lineNumber,
+           "topography requires parseFile so the sibling .ati file can be "
+           "resolved");
+    }
+    seaSurfaceGeometry = readBoundaryFile(
+        boundaryPath(*environmentPath, ".ati"), surfaceDepth,
+        BoundaryOrientation::Upper, attenuationUnit)
+                             .geometry;
+  }
   const BoundaryModel seaSurface =
-      BoundaryModel::vacuum(surfaceDepth);
+      BoundaryModel::vacuum(std::move(seaSurfaceGeometry));
 
   const Record bottomOptionsRecord =
       reader.require("bottom options");
   requireTokenCount(
       bottomOptionsRecord, 2U, source, "bottom options");
-  const std::string& bottomOption =
-      bottomOptionsRecord.tokens.front();
+  std::string bottomOption = bottomOptionsRecord.tokens.front();
+  if (bottomOption.empty() || bottomOption.size() > 2U) {
+    fail(source, bottomOptionsRecord.lineNumber,
+         "bottom options must contain one or two characters");
+  }
+  bottomOption.resize(2U, ' ');
+  if (bottomOption[1U] != ' ' && bottomOption[1U] != '~' &&
+      bottomOption[1U] != '*') {
+    fail(source, bottomOptionsRecord.lineNumber,
+         "only optional bottom topography '~' or '*' is "
+         "supported");
+  }
+  const bool hasBathymetry =
+      bottomOption[1U] == '~' || bottomOption[1U] == '*';
   requireExactlyZero(
       parseDouble(
           bottomOptionsRecord, 1U, source, "bottom RMS roughness"),
       bottomOptionsRecord, source, "bottom RMS roughness");
 
-  BoundaryModel seabed = BoundaryModel::rigid(bottomDepth);
-  if (bottomOption == "A") {
+  BoundaryGeometry seabedGeometry = BoundaryGeometry::flat(
+      bottomDepth, BoundaryOrientation::Lower);
+  SharedLongBoundaryMaterials seabedLongMaterials;
+  if (hasBathymetry) {
+    if (!environmentPath.has_value()) {
+      fail(source, bottomOptionsRecord.lineNumber,
+           "bathymetry requires parseFile so the sibling .bty file can be "
+           "resolved");
+    }
+    ParsedBoundaryFile boundary = readBoundaryFile(
+        boundaryPath(*environmentPath, ".bty"), bottomDepth,
+        BoundaryOrientation::Lower, attenuationUnit);
+    seabedGeometry = std::move(boundary.geometry);
+    seabedLongMaterials = std::move(boundary.longMaterials);
+  }
+
+  BoundaryModel seabed = BoundaryModel::rigid(seabedGeometry);
+  if (bottomOption[0U] == 'A') {
     const Record materialRecord =
         reader.require("bottom acoustic half-space");
     if (materialRecord.tokens.size() != 5U &&
@@ -552,28 +1107,62 @@ ParsedEnvironment EnvironmentParser::parse(
                   materialRecord, 5U, source,
                   "half-space shear attenuation")
             : 0.0;
-    if (shearSoundSpeed != 0.0 || shearAttenuation != 0.0) {
+    if (compressionalSoundSpeed <= 0.0 || shearSoundSpeed < 0.0 ||
+        densityInput <= 0.0 || compressionalAttenuation < 0.0 ||
+        shearAttenuation < 0.0 ||
+        (shearSoundSpeed == 0.0 && shearAttenuation != 0.0)) {
       fail(source, materialRecord.lineNumber,
-           "elastic half-spaces are not supported");
-    }
-    if (densityInput <= 0.0) {
-      fail(source, materialRecord.lineNumber,
-           "half-space density must be positive");
+           "half-space requires positive compressional speed/density, "
+           "non-negative shear speed/attenuation, and zero shear loss "
+           "when shear speed is zero");
     }
     seabed = BoundaryModel::acousticHalfSpace(
-        bottomDepth,
+        std::move(seabedGeometry),
         AcousticMaterial{
             .compressionalSoundSpeed =
                 compressionalSoundSpeed,
-            .shearSoundSpeed = 0.0,
+            .shearSoundSpeed = shearSoundSpeed,
             .density = densityInput * kDensityInputToSi,
             .compressionalAttenuation = makeAttenuation(
-                compressionalAttenuation, volumeModel),
-            .shearAttenuation =
-                makeAttenuation(0.0, volumeModel)});
-  } else if (bottomOption != "R") {
+                compressionalAttenuation, attenuationUnit),
+            .shearAttenuation = makeAttenuation(
+                shearAttenuation, attenuationUnit)},
+        std::move(seabedLongMaterials));
+  } else if (bottomOption[0U] == 'G') {
+    if (seabedLongMaterials) {
+      fail(source, bottomOptionsRecord.lineNumber,
+           "grain-size bottoms do not support long-format bathymetry");
+    }
+    const Record grainSizeRecord = reader.require("bottom grain size");
+    requireTokenCount(grainSizeRecord, 2U, source, "bottom grain size");
+    const double materialDepth = parseDouble(
+        grainSizeRecord, 0U, source, "grain-size half-space depth");
+    if (!depthMatches(materialDepth, bottomDepth)) {
+      fail(source, grainSizeRecord.lineNumber,
+           "grain-size half-space depth must match the declared bottom depth");
+    }
+    const double meanGrainSize = parseDouble(
+        grainSizeRecord, 1U, source, "mean grain size");
+    seabed = BoundaryModel::grainSizeHalfSpace(
+        std::move(seabedGeometry), meanGrainSize);
+  } else if (bottomOption[0U] == 'F') {
+    if (seabedLongMaterials) {
+      fail(source, bottomOptionsRecord.lineNumber,
+           "tabulated-reflection bottoms do not support long-format "
+           "bathymetry");
+    }
+    if (!environmentPath.has_value()) {
+      fail(source, bottomOptionsRecord.lineNumber,
+           "tabulated reflection requires parseFile so the sibling .brc "
+           "file can be resolved");
+    }
+    seabed = BoundaryModel::tabulatedReflection(
+        std::move(seabedGeometry),
+        readReflectionTable(boundaryPath(*environmentPath, ".brc")));
+  } else if (bottomOption[0U] != 'R') {
     fail(source, bottomOptionsRecord.lineNumber,
-         "only rigid ('R') and acoustic ('A') flat bottoms are supported");
+         "only rigid ('R'), acoustic ('A'), grain-size ('G'), and "
+         "tabulated-reflection ('F') bottoms are supported");
   }
 
   const Record sourceCountRecord =
@@ -582,10 +1171,6 @@ ParsedEnvironment EnvironmentParser::parse(
       sourceCountRecord, 1U, source, "source-depth count");
   const std::size_t sourceCount = parseCount(
       sourceCountRecord, 0U, source, "source-depth count");
-  if (sourceCount != 1U) {
-    fail(source, sourceCountRecord.lineNumber,
-         "Bellhop F2CPP supports exactly one source depth");
-  }
   const std::vector<double> sourceDepths = parseVector(
       reader, sourceCount, "source depths", true, 1.0);
 
@@ -611,12 +1196,64 @@ ParsedEnvironment EnvironmentParser::parse(
   std::vector<double> receiverRanges = parseVector(
       reader, receiverRangeCount, "receiver ranges", false,
       kKilometersToMeters);
-  requireUniformRanges(
-      receiverRanges, receiverRangeCountRecord, source);
 
   const Record runTypeRecord = reader.require("run type");
-  static_cast<void>(
-      canonicalRunType(runTypeRecord, source));
+  const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
+  if (isTransmissionLossMode(runType.runMode) &&
+      (runType.beamFamily == BeamFamily::CervenyGaussian ||
+       runType.cervenyCoordinateSystem ==
+           CervenyCoordinateSystem::RayCentered)) {
+    requireUniformRanges(
+        receiverRanges, receiverRangeCountRecord, source);
+  }
+  if (runType.runMode == SimulationRunMode::RayTrace &&
+      runType.usesSourceBeamPattern) {
+    fail(source, runTypeRecord.lineNumber,
+         "directional source beam patterns in ray-trace mode are not yet "
+         "supported because they can change the written terminal prefix");
+  }
+  if (runType.runMode == SimulationRunMode::RayTrace &&
+      (seaSurface.kind() != BoundaryKind::Vacuum ||
+       seabed.kind() != BoundaryKind::Rigid)) {
+    fail(source, runTypeRecord.lineNumber,
+         "the initial ray-trace slice requires vacuum surface and rigid "
+         "seabed boundaries");
+  }
+  const ReceiverGridLayout receiverLayout = runType.receiverLayout;
+  if ((runType.beamFamily == BeamFamily::CervenyGaussian ||
+       runType.beamFamily == BeamFamily::GeometricHat) &&
+      runType.cervenyCoordinateSystem ==
+          CervenyCoordinateSystem::RayCentered &&
+      receiverLayout == ReceiverGridLayout::Irregular) {
+    fail(source, runTypeRecord.lineNumber,
+         "ray-centered beam families do not support irregular receiver "
+         "grids");
+  }
+  if (receiverLayout == ReceiverGridLayout::Irregular &&
+      receiverDepths.size() != receiverRanges.size()) {
+    fail(source, runTypeRecord.lineNumber,
+         "irregular receiver grid requires equal depth and range counts");
+  }
+  if (runType.beamFamily == BeamFamily::SimpleGaussian &&
+      (runType.runMode !=
+           SimulationRunMode::CoherentTransmissionLoss ||
+       runType.sourceGeometry != SourceGeometry::Point ||
+       receiverLayout != ReceiverGridLayout::Rectilinear)) {
+    fail(source, runTypeRecord.lineNumber,
+         "simple Gaussian beams require coherent point-source TL on a "
+         "rectilinear receiver grid");
+  }
+  SourceBeamPattern sourceBeamPattern =
+      SourceBeamPattern::omnidirectional();
+  if (runType.usesSourceBeamPattern) {
+    if (!environmentPath.has_value()) {
+      fail(source, runTypeRecord.lineNumber,
+           "source beam pattern run type requires file parsing with a "
+           "sibling .sbp file");
+    }
+    sourceBeamPattern =
+        readSourceBeamPattern(boundaryPath(*environmentPath, ".sbp"));
+  }
 
   const Record launchCountRecord =
       reader.require("launch-angle count");
@@ -662,52 +1299,97 @@ ParsedEnvironment EnvironmentParser::parse(
     stepLength = (bottomDepth - surfaceDepth) / 10.0;
   }
 
-  const Record beamRecord =
-      reader.require("Cerveny beam settings");
-  requireTokenCount(
-      beamRecord, 3U, source, "Cerveny beam settings");
-  if (beamRecord.tokens.front() != "MS") {
-    fail(source, beamRecord.lineNumber,
-         "only minimum-width, standard-curvature beam type 'MS' "
-         "is supported");
-  }
-  const double epsilonMultiplier =
-      parseDouble(
-          beamRecord, 1U, source, "epsilon multiplier");
-  const double loopRange =
-      parseDouble(
-          beamRecord, 2U, source, "beam loop range") *
-      kKilometersToMeters;
-  if (epsilonMultiplier <= 0.0 || loopRange <= 0.0) {
-    fail(source, beamRecord.lineNumber,
-         "epsilon multiplier and beam loop range must be positive");
-  }
+  double epsilonMultiplier = 1.0;
+  double loopRange = 1.0;
+  BeamWidthMode beamWidthMode =
+      runType.beamFamily == BeamFamily::CervenyGaussian
+          ? BeamWidthMode::MinimumWidth
+          : BeamWidthMode::SpaceFilling;
+  BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard;
+  std::size_t imageCount = 1U;
+  int beamWindow = 1;
+  FieldComponent fieldComponent = FieldComponent::Pressure;
+  if (runType.beamFamily == BeamFamily::CervenyGaussian &&
+      isTransmissionLossMode(runType.runMode)) {
+    const Record beamRecord = reader.require("Cerveny beam settings");
+    requireTokenCount(beamRecord, 3U, source, "Cerveny beam settings");
+    const std::string& beamType = beamRecord.tokens.front();
+    if (beamType.size() != 2U) {
+      fail(source, beamRecord.lineNumber,
+           "Cerveny beam type must contain a width and curvature letter");
+    }
+    switch (beamType[0U]) {
+      case 'F':
+        beamWidthMode = BeamWidthMode::SpaceFilling;
+        break;
+      case 'M':
+        beamWidthMode = BeamWidthMode::MinimumWidth;
+        break;
+      case 'W':
+        beamWidthMode = BeamWidthMode::Wkb;
+        break;
+      default:
+        fail(source, beamRecord.lineNumber,
+             "Cerveny beam width must be one of 'F', 'M', or 'W'");
+    }
+    switch (beamType[1U]) {
+      case 'D':
+        curvatureMode = BoundaryCurvatureMode::Double;
+        break;
+      case 'S':
+        curvatureMode = BoundaryCurvatureMode::Standard;
+        break;
+      case 'Z':
+        curvatureMode = BoundaryCurvatureMode::Zero;
+        break;
+      default:
+        fail(source, beamRecord.lineNumber,
+             "Cerveny curvature condition must be one of 'D', 'S', or 'Z'");
+    }
+    epsilonMultiplier = parseDouble(
+        beamRecord, 1U, source, "epsilon multiplier");
+    loopRange = parseDouble(
+                    beamRecord, 2U, source, "beam loop range") *
+                kKilometersToMeters;
+    if (epsilonMultiplier <= 0.0 || loopRange <= 0.0) {
+      fail(source, beamRecord.lineNumber,
+           "epsilon multiplier and beam loop range must be positive");
+    }
 
-  const Record imageRecord =
-      reader.require("image/window settings");
-  requireTokenCount(
-      imageRecord, 3U, source, "image/window settings");
-  const std::size_t imageCount = parseCount(
-      imageRecord, 0U, source, "image count", false, 3U);
-  const int beamWindow = parsePositiveInt(
-      imageRecord, 1U, source, "beam window");
-  if (imageRecord.tokens[2U] != "P") {
-    fail(source, imageRecord.lineNumber,
-         "only pressure component 'P' is supported");
+    const Record imageRecord = reader.require("image/window settings");
+    requireTokenCount(imageRecord, 3U, source, "image/window settings");
+    imageCount = parseCount(
+        imageRecord, 0U, source, "image count", false, 3U);
+    beamWindow = parsePositiveInt(
+        imageRecord, 1U, source, "beam window");
+    if (imageRecord.tokens[2U] == "P") {
+      fieldComponent = FieldComponent::Pressure;
+    } else if (imageRecord.tokens[2U] == "V") {
+      fieldComponent = FieldComponent::Vertical;
+    } else if (imageRecord.tokens[2U] == "H") {
+      fieldComponent = FieldComponent::Horizontal;
+    } else {
+      fail(source, imageRecord.lineNumber,
+           "field component must be one of 'P', 'V', or 'H'");
+    }
   }
   reader.requireEnd();
 
   Environment environment(
-      SoundSpeedProfile(std::move(soundSpeedPoints)),
-      seaSurface, seabed);
+      SoundSpeedProfile(std::move(soundSpeedPoints), interpolationKind,
+                        std::move(quadrilateralGrid)),
+      seaSurface, seabed, std::move(volumeAttenuation));
   ReceiverGrid receivers(
       std::move(receiverDepths),
-      std::move(receiverRanges));
+      std::move(receiverRanges), receiverLayout);
+  std::vector<Source> sources;
+  sources.reserve(sourceDepths.size());
+  for (const double sourceDepth : sourceDepths) {
+    sources.push_back(Source{.depth = sourceDepth, .amplitude = 1.0});
+  }
   SimulationCase simulationCase(
       std::move(environment),
-      Source{
-          .depth = sourceDepths.front(),
-          .amplitude = 1.0},
+      std::move(sources),
       std::move(receivers),
       FrequencyGrid({frequency}),
       LaunchFan{
@@ -728,19 +1410,33 @@ ParsedEnvironment EnvironmentParser::parse(
           .stepLength = stepLength,
           .rangeLimit = rangeLimit,
           .depthLimit = depthLimit,
-          .maximumRayPoints = kMaximumRayPoints});
+          .maximumRayPoints = kMaximumRayPoints},
+      std::move(sourceBeamPattern), runType.runMode, fieldComponent,
+      runType.sourceGeometry, runType.cervenyCoordinateSystem,
+      runType.beamFamily);
 
   return ParsedEnvironment{
       .title = std::move(title),
       .simulationCase = std::move(simulationCase),
       .beam =
           CartesianCervenyInput{
+              .widthMode = beamWidthMode,
+              .curvatureMode = curvatureMode,
               .epsilonMultiplier = epsilonMultiplier,
               .loopRange = loopRange,
               .influence =
                   CartesianCervenySettings{
                       .imageCount = imageCount,
-                      .beamWindow = beamWindow}}};
+                      .beamWindow = beamWindow},
+              .family = runType.beamFamily}};
+}
+
+}  // namespace
+
+ParsedEnvironment EnvironmentParser::parse(
+    std::istream& input, std::string sourceName) {
+  return parseEnvironment(
+      input, std::move(sourceName), std::nullopt);
 }
 
 ParsedEnvironment EnvironmentParser::parseFile(
@@ -750,7 +1446,7 @@ ParsedEnvironment EnvironmentParser::parseFile(
     throw BellhopError(
         "unable to open environment file: " + path.string());
   }
-  return parse(input, path.string());
+  return parseEnvironment(input, path.string(), path);
 }
 
 }  // namespace bellhop

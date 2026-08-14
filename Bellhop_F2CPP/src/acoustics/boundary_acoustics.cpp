@@ -28,62 +28,138 @@ void requireFinitePositive(double value, std::string_view name) {
   }
 }
 
+void validateRawAttenuation(const RawAttenuation& attenuation,
+                            std::string_view name) {
+  requireFinite(attenuation.value,
+                std::string(name) + ".value");
+  requireFinite(attenuation.referenceFrequency,
+                std::string(name) + ".referenceFrequency");
+  requireFinite(attenuation.powerLawExponent,
+                std::string(name) + ".powerLawExponent");
+  requireFinite(attenuation.transitionFrequency,
+                std::string(name) + ".transitionFrequency");
+  if (attenuation.value < 0.0 || attenuation.referenceFrequency <= 0.0 ||
+      attenuation.transitionFrequency <= 0.0) {
+    throw ValidationError(std::string(name) + " is invalid");
+  }
+  switch (attenuation.unit) {
+    case AttenuationUnit::NepersPerMeter:
+    case AttenuationUnit::DecibelsPerMeter:
+    case AttenuationUnit::DecibelsPerMeterPowerLaw:
+    case AttenuationUnit::DecibelsPerMeterKilohertz:
+    case AttenuationUnit::DecibelsPerWavelength:
+    case AttenuationUnit::QualityFactor:
+    case AttenuationUnit::LossParameter:
+      break;
+    default:
+      throw ValidationError(std::string(name) + ".unit is invalid");
+  }
+}
+
 [[nodiscard]] bool finiteComplex(std::complex<double> value) noexcept {
   return std::isfinite(value.real()) && std::isfinite(value.imag());
 }
 
-[[nodiscard]] std::complex<double> fluidHalfSpaceCoefficient(
-    const AcousticMaterial& material, double frequency,
-    double waterDensity, double tangentSlowness,
+[[nodiscard]] std::complex<double> legacyVerticalRoot(
+    std::complex<double> squaredWavenumber,
+    bool explicitlyCorrectNegativeImaginaryBranch,
+    bool lossless = false) {
+  std::complex<double> root = std::sqrt(squaredWavenumber);
+  if (explicitlyCorrectNegativeImaginaryBranch &&
+      (root.real() == 0.0 || lossless) && root.imag() < 0.0) {
+    root = -root;
+  }
+  return root;
+}
+
+[[nodiscard]] std::complex<double> halfSpaceCoefficient(
+    const AcousticMaterial& material,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double attenuationDepth, double waterDensity, double tangentSlowness,
     double outwardNormalSlowness) {
-  if (material.shearSoundSpeed != 0.0) {
+  if (material.shearSoundSpeed == 0.0 &&
+      material.shearAttenuation.value != 0.0) {
     throw ValidationError(
-        "elastic acoustic half-spaces are not supported by M2-02");
+        "zero shear speed requires zero shear attenuation");
   }
 
   const AttenuationConversion compressionalAttenuation =
-      convertAttenuation(material.compressionalAttenuation, frequency,
-                         material.compressionalSoundSpeed);
+      convertAttenuation(
+          material.compressionalAttenuation, volumeAttenuation,
+          frequency, material.compressionalSoundSpeed,
+          attenuationDepth);
   const std::complex<double> compressionalSoundSpeed{
       material.compressionalSoundSpeed,
       compressionalAttenuation.imaginarySoundSpeed};
 
   const double angularFrequency =
       2.0 * std::numbers::pi * frequency;
-  const double tangentWavenumber =
-      angularFrequency * tangentSlowness;
+  const std::complex<double> tangentWavenumber{
+      angularFrequency * tangentSlowness, 0.0};
   const double normalWavenumber =
       angularFrequency * outwardNormalSlowness;
-  const std::complex<double> materialWavenumber =
-      angularFrequency / compressionalSoundSpeed;
+  const std::complex<double> tangentWavenumberSquared =
+      tangentWavenumber * tangentWavenumber;
 
-  std::complex<double> verticalWavenumber =
-      std::sqrt(tangentWavenumber * tangentWavenumber -
-                materialWavenumber * materialWavenumber);
-  // Retain the explicit correction in ReflectMod.f90 for compiler branch
-  // differences on a negative-real square-root argument. std::complex can
-  // preserve a signed zero and produce a tiny real part for the lossless
-  // form, so the exact-lossless case selects the same positive-imaginary
-  // branch explicitly.
-  if ((verticalWavenumber.real() == 0.0 ||
-       compressionalAttenuation.imaginarySoundSpeed == 0.0) &&
-      verticalWavenumber.imag() < 0.0) {
-    verticalWavenumber = -verticalWavenumber;
+  std::complex<double> f;
+  std::complex<double> g;
+  if (material.shearSoundSpeed > 0.0) {
+    const AttenuationConversion shearAttenuation =
+        convertAttenuation(
+            material.shearAttenuation, volumeAttenuation,
+            frequency, material.shearSoundSpeed, attenuationDepth);
+    const std::complex<double> shearSoundSpeed{
+        material.shearSoundSpeed,
+        shearAttenuation.imaginarySoundSpeed};
+    const std::complex<double> shearWavenumber =
+        angularFrequency / shearSoundSpeed;
+    const std::complex<double> compressionalWavenumber =
+        angularFrequency / compressionalSoundSpeed;
+    const std::complex<double> shearVerticalSquared =
+        tangentWavenumberSquared - shearWavenumber * shearWavenumber;
+    const std::complex<double> compressionalVerticalSquared =
+        tangentWavenumberSquared -
+        compressionalWavenumber * compressionalWavenumber;
+    const std::complex<double> shearVertical =
+        legacyVerticalRoot(shearVerticalSquared, false);
+    const std::complex<double> compressionalVertical =
+        legacyVerticalRoot(compressionalVerticalSquared, false);
+    const std::complex<double> shearModulus =
+        material.density * (shearSoundSpeed * shearSoundSpeed);
+    const std::complex<double> verticalSum =
+        shearVerticalSquared + tangentWavenumberSquared;
+    const std::complex<double> y2 =
+        (verticalSum * verticalSum -
+         4.0 * shearVertical * compressionalVertical *
+             tangentWavenumberSquared) *
+        shearModulus;
+    const std::complex<double> y4 =
+        compressionalVertical *
+        (tangentWavenumberSquared - shearVerticalSquared);
+    f = angularFrequency * angularFrequency * y4;
+    g = y2;
+  } else {
+    const std::complex<double> materialWavenumber =
+        angularFrequency / compressionalSoundSpeed;
+    f = legacyVerticalRoot(
+        tangentWavenumberSquared -
+            materialWavenumber * materialWavenumber,
+        true, compressionalAttenuation.imaginarySoundSpeed == 0.0);
+    g = material.density;
   }
 
-  const std::complex<double> imaginaryNormalImpedance{
-      0.0, normalWavenumber * material.density};
-  const std::complex<double> waterTerm =
-      waterDensity * verticalWavenumber;
-  const std::complex<double> denominator =
-      waterTerm + imaginaryNormalImpedance;
+  const std::complex<double> imaginaryNormalWavenumber{
+      0.0, normalWavenumber};
+  const std::complex<double> waterTerm = waterDensity * f;
+  const std::complex<double> solidTerm = imaginaryNormalWavenumber * g;
+  const std::complex<double> denominator = waterTerm + solidTerm;
   if (denominator == std::complex<double>{}) {
     throw ValidationError(
         "acoustic half-space reflection denominator must not be zero");
   }
 
   const std::complex<double> result =
-      -(waterTerm - imaginaryNormalImpedance) / denominator;
+      -(waterTerm - solidTerm) / denominator;
   if (!finiteComplex(result)) {
     throw ValidationError(
         "acoustic half-space reflection coefficient must be finite");
@@ -121,8 +197,193 @@ BoundaryAcousticsResult classifyBoundaryCoefficient(
       .coefficientSuppressed = false};
 }
 
+BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
+    const AcousticMaterial& material, double attenuationEvaluationDepth,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
+  if (material.shearSoundSpeed != 0.0 ||
+      material.shearAttenuation.value != 0.0) {
+    throw ValidationError(
+        "fluid half-space acoustics requires zero shear properties");
+  }
+  return evaluateAcousticHalfSpaceAcoustics(
+      material, attenuationEvaluationDepth, volumeAttenuation,
+      frequency, waterDensity, tangentSlowness,
+      outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
+    const AcousticMaterial& material, double attenuationEvaluationDepth,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
+  requireFinitePositive(frequency, "frequency");
+  requireFinitePositive(waterDensity, "waterDensity");
+  requireFinitePositive(material.compressionalSoundSpeed,
+                        "material.compressionalSoundSpeed");
+  requireFinite(material.shearSoundSpeed, "material.shearSoundSpeed");
+  if (material.shearSoundSpeed < 0.0) {
+    throw ValidationError("material.shearSoundSpeed must be non-negative");
+  }
+  requireFinitePositive(material.density, "material.density");
+  validateRawAttenuation(material.compressionalAttenuation,
+                         "material.compressionalAttenuation");
+  validateRawAttenuation(material.shearAttenuation,
+                         "material.shearAttenuation");
+  requireFinite(attenuationEvaluationDepth,
+                "attenuationEvaluationDepth");
+  requireFinite(tangentSlowness, "tangentSlowness");
+  requireFinite(outwardNormalSlowness, "outwardNormalSlowness");
+  if (outwardNormalSlowness <= 0.0) {
+    throw ValidationError(
+        "outwardNormalSlowness must be positive at a reflection");
+  }
+  return classifyBoundaryCoefficient(
+      halfSpaceCoefficient(
+          material, volumeAttenuation, frequency,
+          attenuationEvaluationDepth, waterDensity, tangentSlowness,
+          outwardNormalSlowness),
+      true);
+}
+
+BoundaryAcousticsResult evaluateGrainSizeHalfSpaceAcoustics(
+    const GrainSizeMaterial& material, double frequency,
+    double waterSoundSpeed, double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
+  requireFinite(material.meanGrainSize, "material.meanGrainSize");
+  requireFinitePositive(material.soundSpeedRatio,
+                        "material.soundSpeedRatio");
+  requireFinitePositive(material.densityRatio, "material.densityRatio");
+  requireFinite(material.attenuationCoefficient,
+                "material.attenuationCoefficient");
+  if (material.attenuationCoefficient < 0.0) {
+    throw ValidationError(
+        "material.attenuationCoefficient must be non-negative");
+  }
+  requireFinitePositive(waterSoundSpeed, "waterSoundSpeed");
+
+  // ReflectMod evaluates LOG(10.0) in default REAL before the result enters
+  // this binary64 expression.  Keep that promoted REAL(4) value explicit.
+  const double legacyLogTen = static_cast<double>(std::log(10.0F));
+  const double lossParameter =
+      material.attenuationCoefficient *
+      (material.soundSpeedRatio / 1000.0) * 1500.0 * legacyLogTen /
+      (40.0 * std::numbers::pi);
+  const AcousticMaterial effectiveMaterial{
+      .compressionalSoundSpeed =
+          material.soundSpeedRatio * waterSoundSpeed,
+      .shearSoundSpeed = 0.0,
+      // Origin stores the handbook density ratio directly as g/cm^3.
+      .density = 1000.0 * material.densityRatio,
+      .compressionalAttenuation = {
+          .value = lossParameter,
+          .unit = AttenuationUnit::LossParameter},
+      .shearAttenuation = {}};
+  return evaluateFluidHalfSpaceAcoustics(
+      effectiveMaterial, 0.0, VolumeAttenuation{}, frequency,
+      waterDensity, tangentSlowness, outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateTabulatedReflectionAcoustics(
+    const TabulatedReflectionTable& table, double tangentSlowness,
+    double outwardNormalSlowness) {
+  requireFinite(tangentSlowness, "tangentSlowness");
+  requireFinite(outwardNormalSlowness, "outwardNormalSlowness");
+  if (outwardNormalSlowness <= 0.0) {
+    throw ValidationError(
+        "outwardNormalSlowness must be positive at a reflection");
+  }
+  if (table.size() < 2U) {
+    throw ValidationError(
+        "tabulated reflection requires at least two table points");
+  }
+  for (std::size_t index = 0U; index < table.size(); ++index) {
+    const TabulatedReflectionPoint& point = table[index];
+    requireFinite(point.angleDegrees, "reflectionTable.angleDegrees");
+    requireFinite(point.magnitude, "reflectionTable.magnitude");
+    requireFinite(point.phaseRadians, "reflectionTable.phaseRadians");
+    if (point.magnitude < 0.0) {
+      throw ValidationError(
+          "reflectionTable.magnitude must be non-negative");
+    }
+    if (index > 0U &&
+        table[index - 1U].angleDegrees >= point.angleDegrees) {
+      throw ValidationError(
+          "reflectionTable angles must be strictly increasing");
+    }
+  }
+
+  double grazingAngleDegrees =
+      180.0 / std::numbers::pi *
+      std::abs(std::atan2(outwardNormalSlowness, tangentSlowness));
+  if (grazingAngleDegrees > 90.0) {
+    grazingAngleDegrees = 180.0 - grazingAngleDegrees;
+  }
+  // RefCoef.f90 assigns the binary64 query to default REAL before its domain
+  // checks and binary search, then uses the original binary64 theta when it
+  // forms alpha. Preserve that mixed-precision behavior, including the tiny
+  // endpoint extrapolation possible inside half a REAL(4) ULP.
+  const double decisionAngle =
+      static_cast<double>(static_cast<float>(grazingAngleDegrees));
+  if (decisionAngle < table.front().angleDegrees ||
+      decisionAngle > table.back().angleDegrees) {
+    return BoundaryAcousticsResult{
+        .rawCoefficient = {},
+        .amplitudeMultiplier = 0.0,
+        .phaseIncrement = 0.0,
+        .coefficientSuppressed = false};
+  }
+
+  std::size_t leftIndex = 0U;
+  std::size_t rightIndex = table.size() - 1U;
+  while (leftIndex != rightIndex - 1U) {
+    const std::size_t middleIndex = (leftIndex + rightIndex) / 2U;
+    if (table[middleIndex].angleDegrees > decisionAngle) {
+      rightIndex = middleIndex;
+    } else {
+      leftIndex = middleIndex;
+    }
+  }
+  const TabulatedReflectionPoint& left = table[leftIndex];
+  const TabulatedReflectionPoint& right = table[rightIndex];
+  const double weight =
+      (grazingAngleDegrees - left.angleDegrees) /
+      (right.angleDegrees - left.angleDegrees);
+  const double magnitude =
+      (1.0 - weight) * left.magnitude + weight * right.magnitude;
+  const double phase =
+      (1.0 - weight) * left.phaseRadians + weight * right.phaseRadians;
+  return BoundaryAcousticsResult{
+      .rawCoefficient =
+          magnitude * std::complex<double>{std::cos(phase), std::sin(phase)},
+      .amplitudeMultiplier = magnitude,
+      .phaseIncrement = phase,
+      .coefficientSuppressed = false};
+}
+
 BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, double frequency,
+    double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
+  return evaluateBoundaryAcoustics(
+      boundary, 0U, VolumeAttenuation{}, frequency, waterDensity,
+      tangentSlowness, outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
+  return evaluateBoundaryAcoustics(
+      boundary, 0U, volumeAttenuation, frequency, waterDensity,
+      tangentSlowness, outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
     double waterDensity, double tangentSlowness,
     double outwardNormalSlowness) {
   requireFinitePositive(frequency, "frequency");
@@ -144,11 +405,23 @@ BoundaryAcousticsResult evaluateBoundaryAcoustics(
         throw ValidationError(
             "acoustic half-space is missing material properties");
       }
-      return classifyBoundaryCoefficient(
-          fluidHalfSpaceCoefficient(
-              *boundary.material(), frequency, waterDensity,
-              tangentSlowness, outwardNormalSlowness),
-          true);
+      return evaluateAcousticHalfSpaceAcoustics(
+          boundary.materialAtSegment(boundarySegmentIndex),
+          boundary.materialAttenuationDepthAtSegment(
+              boundarySegmentIndex),
+          volumeAttenuation, frequency, waterDensity,
+          tangentSlowness, outwardNormalSlowness);
+    case BoundaryKind::GrainSizeHalfSpace:
+      throw ValidationError(
+          "grain-size acoustics requires the local water sound speed");
+    case BoundaryKind::TabulatedReflection:
+      if (!boundary.reflectionTable()) {
+        throw ValidationError(
+            "tabulated-reflection boundary is missing its table");
+      }
+      return evaluateTabulatedReflectionAcoustics(
+          *boundary.reflectionTable(), tangentSlowness,
+          outwardNormalSlowness);
   }
 
   throw ValidationError("unsupported boundary kind");

@@ -1,0 +1,121 @@
+{
+  "case": "q_range_dependent_cross_gradient",
+  "configuration": {
+    "bottom": "rigid",
+    "depth_limit_m": 101.0,
+    "depths_m": [
+      0.0,
+      100.0
+    ],
+    "range_limit_m": 710.0,
+    "ranges_m": [
+      0.0,
+      350.0,
+      800.0
+    ],
+    "source_depth_m": 50.0,
+    "speeds_depth_major_m_per_s": [
+      [
+        1500.0,
+        1540.0,
+        1580.0
+      ],
+      [
+        1500.0,
+        1520.0,
+        1540.0
+      ]
+    ],
+    "step_m": 1.0,
+    "surface": "vacuum"
+  },
+  "f2cpp_comparison": {
+    "integrated_step_count": 714,
+    "point_count": 715,
+    "probe_csv_sha256": "4e22fd057eeca5dcabca171aeeb9129fba09e7616c0d8fdb5621f26c6029d32f",
+    "probe_manifest": {
+      "columns": [
+        "point_index",
+        "point_kind",
+        "step_valid",
+        "incoming_step_index",
+        "r_m",
+        "z_m",
+        "t_r_s_per_m",
+        "t_z_s_per_m",
+        "p1",
+        "p2",
+        "q1",
+        "q2",
+        "c_m_per_s",
+        "tau_real_s",
+        "num_top_bounces",
+        "num_bottom_bounces",
+        "h_m",
+        "hw0_m",
+        "hw1_m",
+        "mid_r_m",
+        "mid_z_m"
+      ],
+      "configuration": "i5-quadrilateral",
+      "contract_version": 1,
+      "index_base": 1,
+      "integrated_step_count": 714,
+      "launch_angle_rad": -0.002626749710359303,
+      "numeric_precision": "binary64",
+      "point_count": 715,
+      "points_file": "ray_points.csv",
+      "producer": "f2cpp",
+      "reflection_event_count": 0,
+      "schema": "bellhop.cpp.ray_path_probe",
+      "schema_version": 1,
+      "status": "complete",
+      "termination": "ExitedDomain",
+      "units": "SI"
+    },
+    "producer": "f2cpp",
+    "termination": "ExitedDomain",
+    "worst_comparison": {
+      "absolute_error": 1.0587911840678754e-22,
+      "field": "t_z_s_per_m",
+      "point_index": 131,
+      "scaled_error": 1.0583956015444314e-09
+    }
+  },
+  "fortran_oracle": {
+    "all_numeric_fields_finite": true,
+    "integrated_step_count": 714,
+    "point_count": 715,
+    "point_kinds": {
+      "integrated": 714,
+      "source": 1
+    },
+    "reflection_event_count": 0,
+    "schema_version": 2,
+    "termination_reason": "spatial_box_range"
+  },
+  "generation": {
+    "command": "python3 test/standard_cases/codes/generate_i5_q_oracle.py --origin-executable Bellhop_origin/bin/bellhop --f2cpp-probe Bellhop_F2CPP/build/debug/bellhop_f2cpp_geometry_oracle_probe --output-root <temporary-output-root> --report-output Bellhop_F2CPP/doc/validation/i5_q_geometry_oracle_report.json",
+    "oracle_launch_angle_index": 150,
+    "oracle_source_index": 1
+  },
+  "launch_angle_index": 150,
+  "launch_angle_rad": -0.002626749710359303,
+  "passed": true,
+  "probe_configuration": "i5-quadrilateral",
+  "profile": "single",
+  "schema": "bellhop.i5_quadrilateral_geometry_oracle",
+  "schema_version": 1,
+  "sha256": {
+    "case_manifest": "dcbecefa027e2700da1878705268daf968c0f051023416959bccb9b9309438e5",
+    "environment_template": "f641418aa8d0be3c227655576b62281dc7634c657427f84956bc63c7861408fb",
+    "f2cpp_probe": "1c50740f5a961cb87f7ea63e5f0d968ff445c0c3fe962a650ac01b8c1215a509",
+    "f2cpp_ray_points": "4e22fd057eeca5dcabca171aeeb9129fba09e7616c0d8fdb5621f26c6029d32f",
+    "fortran_ray_points": "2a604f4d855b97f346294698ccc923643efa2575cefd633bb8ead1f065035393",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "rendered_environment": "2512caf9bb13d3e54fc0067939b76864d084d4bf1de749661fe09de6c7e765f5",
+    "run_manifest": "c042ab762809bdd0fdcd776eb3cebbefca5b8232086284a0d9540c20d049a484",
+    "ssp_matrix": "81f1e742e36a09cf61bcd465900b353cbfa9cd34065ab7332d80c06c05467ada"
+  },
+  "source_index": 1
+}

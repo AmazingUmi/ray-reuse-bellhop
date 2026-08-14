@@ -129,7 +129,8 @@ SoundSpeedSample CLinearSsp::evaluatePolynomial(
           SoundSpeedHessian{
               .rangeRange = 0.0, .rangeDepth = 0.0, .depthDepth = 0.0},
       .density = density,
-      .segmentIndex = segmentIndex};
+      .segmentIndex = segmentIndex,
+      .rangeSegmentIndex = 0U};
 }
 
 SoundSpeedSample CLinearSsp::evaluate(

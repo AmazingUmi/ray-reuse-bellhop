@@ -1,0 +1,61 @@
+{
+  "schema": "bellhop.f2cpp.i4_attenuation_unit_validation",
+  "schema_version": 1,
+  "date": "2026-08-09",
+  "status": "passed",
+  "units": ["N", "F", "M", "W", "Q", "L"],
+  "parser_contract": {
+    "top_option_position": 3,
+    "applies_to": ["water_column_ssp", "acoustic_half_space"],
+    "lowercase_power_law_m_supported": false,
+    "volume_suffixes_supported_in_i4_01": ["blank", "T"]
+  },
+  "frequency_projection_matrix": {
+    "reference_frequency_hz": 1000.0,
+    "all_units_equivalent_at_reference": true,
+    "probe_frequency_hz": 2000.0,
+    "frequency_independent_group": ["N", "M"],
+    "linear_frequency_group": ["F", "W", "Q", "L"],
+    "groups_observably_distinct": true,
+    "ray_path_cache_mutated": false
+  },
+  "final_field_comparison": {
+    "frequency_hz": 5000.0,
+    "equivalent_attenuation_np_per_m": 1.0e-5,
+    "case_count": 6,
+    "origin_cases_passed": 6,
+    "f2cpp_cases_passed": 6,
+    "origin_f2cpp_comparisons_passed": 6,
+    "origin_cross_unit_fields_bit_identical": true,
+    "f2cpp_cross_unit_fields_bit_identical": true,
+    "max_pressure_absolute": 8.408589380337617e-9,
+    "max_pressure_relative": 2.063490455839201e-6,
+    "max_tl_difference_db": 1.9073486328125e-5
+  },
+  "intentional_validation_difference": "F2CPP rejects negative and non-finite attenuation inputs instead of preserving the original Fortran executable's undefined or non-physical acceptance paths.",
+  "sha256": {
+    "origin_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "f2cpp_executable": "7f09faf755572bd4e3a31c2d36791a09a41e5e8c8a063b45e362c52999475339",
+    "rendered_environment_aggregate": "b28cc9a48db8f00e082c9bb337354f03948f42d396d383c0aef2be8c5a594852",
+    "origin_field_aggregate": "8de8e6c4ee24b44a7f406b52f24905b27f6fbf861eea5d7d9d06ed01ecde923e",
+    "f2cpp_field_aggregate": "4ffd343b3a8736f48e4e4102c84c9b7f60096bc20fcf3418796fb522491a66ee"
+  },
+  "generation": {
+    "case_profile": "single",
+    "case_ids": [
+      "attenuation_unit_n",
+      "attenuation_unit_f",
+      "attenuation_unit_m",
+      "attenuation_unit_w",
+      "attenuation_unit_q",
+      "attenuation_unit_l"
+    ],
+    "validation_script": "test/standard_cases/codes/validate_i4_attenuation_units.py",
+    "standard_case_commands": [
+      "standard_cases.py test --version origin --case <six I4-01 cases> --profile single --executable <origin executable> --results-root <results root>",
+      "standard_cases.py test --version f2cpp --case <six I4-01 cases> --profile single --executable <f2cpp executable> --results-root <results root>"
+    ],
+    "validation_command": "validate_i4_attenuation_units.py --results-root <results root> --origin-executable <origin executable> --f2cpp-executable <f2cpp executable>",
+    "report_assembly": "Curated summary of the validator output plus the parser and projector component matrix; executable and output hashes are copied verbatim from the validator."
+  }
+}

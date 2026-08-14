@@ -1,0 +1,27 @@
+id = "q_range_dependent_cross_gradient"
+description = "Quadrilateral range-dependent SSP with a nonzero cross gradient"
+origin_template = "origin.env.in"
+companion_files = ["origin.ssp"]
+source_references = ["Bellhop_origin/Bellhop/sspMod.f90 Quad", "Bellhop_origin/Bellhop/Step.f90 ReduceStep2D"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 700.0
+minimum_angle_deg = -45.0
+maximum_angle_deg = 45.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 11, 51]
+prt_markers = ["VACUUM", "Using range-dependent sound speed", "Number of SSP ranges"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

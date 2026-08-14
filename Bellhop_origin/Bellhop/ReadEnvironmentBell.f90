@@ -487,6 +487,15 @@ CONTAINS
 
        CALL GrainSize_to_Geoacoustic( Mz, vr, rhor, alpha2_f )
 
+       ! The original 2-D path computed these grain-size properties only in
+       ! local temporaries, leaving ReflectMod to consume uninitialized HS
+       ! members (and a zero density).  The 3-D province path stores the same
+       ! three values explicitly.  Mirror that intended data flow here so the
+       ! 2-D G boundary is deterministic and can serve as an oracle.
+       HS%vr       = vr
+       HS%alpha2_f = alpha2_f
+       HS%rho      = rhor
+
        ! AttenUnit = 'L'   ! loss parameter
        ! the term vr / 1000 converts vr to units of m per ms 
  

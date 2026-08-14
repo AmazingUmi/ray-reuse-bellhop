@@ -1,0 +1,104 @@
+{
+  "cases": {
+    "elastic": "elastic_halfspace_flat",
+    "fluid_control": "elastic_halfspace_fluid_control",
+    "profiles": {
+      "broadband_smoke": [
+        1000.0,
+        2000.0
+      ],
+      "single": [
+        1000.0
+      ]
+    }
+  },
+  "component_guards": {
+    "elastic_long_format_remains_explicitly_rejected": true,
+    "gfortran_lossless_and_lossy_coefficient_anchors": true,
+    "ordinary_env_retains_p_and_s_properties": true,
+    "two_frequency_projection_preserves_frozen_path": true
+  },
+  "generation": {
+    "case_command": "python3 test/standard_cases/codes/standard_cases.py test --version <origin|f2cpp> --case <elastic_halfspace_flat|elastic_halfspace_fluid_control> --profile <single|broadband_smoke> --executable <matching-executable> --results-root <results-root>",
+    "validator_command": "python3 test/standard_cases/codes/validate_i4_elastic_halfspace.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
+  },
+  "origin_f2cpp_field_comparisons": {
+    "elastic_halfspace_flat/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.6866970042883622e-08,
+      "max_pressure_relative": 3.0013725336175412e-05,
+      "max_tl_difference_db": 0.0002593994140625,
+      "passed": true
+    },
+    "elastic_halfspace_flat/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.3560261358236403e-08,
+      "max_pressure_relative": 3.658107061710325e-06,
+      "max_tl_difference_db": 3.0517578125e-05,
+      "passed": true
+    },
+    "elastic_halfspace_flat/single/1000Hz": {
+      "max_pressure_absolute": 1.6866970042883622e-08,
+      "max_pressure_relative": 3.0013725336175412e-05,
+      "max_tl_difference_db": 0.0002593994140625,
+      "passed": true
+    },
+    "elastic_halfspace_fluid_control/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.5359765015432458e-08,
+      "max_pressure_relative": 2.6213172077405034e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "elastic_halfspace_fluid_control/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.3170890156288806e-08,
+      "max_pressure_relative": 1.957801714524976e-06,
+      "max_tl_difference_db": 1.1444091796875e-05,
+      "passed": true
+    },
+    "elastic_halfspace_fluid_control/single/1000Hz": {
+      "max_pressure_absolute": 1.5359765015432458e-08,
+      "max_pressure_relative": 2.6213172077405034e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    }
+  },
+  "schema": "bellhop.f2cpp.i4_elastic_halfspace_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_executable": "68b4c4487a013ce370c13ae877c311b83c87d24691b66459d0f2b19da6ffbc8c",
+    "f2cpp_field_aggregate": "f66d0cdbed62470d5a393c71a0a686fc41e730d5814fe28e48ffb05aca4f4185",
+    "origin_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "origin_field_aggregate": "5daa4fcb951aebac37d13d3f6603b5752cff43b0c8b977714f703c3c60f5315f",
+    "rendered_input_aggregates": {
+      "elastic_halfspace_flat/broadband_smoke": "460573b1aca5f02f70881e5dd49813740b7ae3484581a4b0fb8f8619958c7c1b",
+      "elastic_halfspace_flat/single": "743196e8b97b64ca85722068309d27d0a801590c66486dcc30d85bd7db65a934",
+      "elastic_halfspace_fluid_control/broadband_smoke": "31cf1216ba732dd29a700b9c96ab7fe85a912dcdee8ce8932452f67a7645a5fa",
+      "elastic_halfspace_fluid_control/single": "4647ca57da4776807b6c214c377800198b002b43cd61b334cc18f036de626b22"
+    }
+  },
+  "shear_noop_guards": {
+    "f2cpp/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_fluid_control": 0.011091959662735462,
+      "passed": true
+    },
+    "f2cpp/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_fluid_control": 0.010229392908513546,
+      "passed": true
+    },
+    "f2cpp/single/1000Hz": {
+      "max_pressure_absolute_vs_fluid_control": 0.011091959662735462,
+      "passed": true
+    },
+    "origin/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_fluid_control": 0.011091966181993484,
+      "passed": true
+    },
+    "origin/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_fluid_control": 0.010229396633803844,
+      "passed": true
+    },
+    "origin/single/1000Hz": {
+      "max_pressure_absolute_vs_fluid_control": 0.011091966181993484,
+      "passed": true
+    }
+  },
+  "status": "passed"
+}

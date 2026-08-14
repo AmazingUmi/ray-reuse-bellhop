@@ -1,0 +1,38 @@
+{
+  "schema": "bellhop.f2cpp.validation_summary",
+  "schema_version": 1,
+  "date": "2026-08-09",
+  "case": "i3_piecewise_boundaries",
+  "profile": "single",
+  "frequency_hz": 100.0,
+  "shared_launch_angle_count": 497,
+  "trajectory_matrix": {
+    "passed": 497,
+    "failed": 0,
+    "total_points": 18325,
+    "total_integrated_steps": 13518,
+    "total_reflection_events": 4310,
+    "worst_scaled_error": 0.0,
+    "comparison": "compare_f2cpp_geometry_oracle.py --probe-configuration i3-piecewise"
+  },
+  "final_field": {
+    "max_pressure_absolute": 1.23751187e-9,
+    "max_pressure_relative": 4.31240835e-7,
+    "max_tl_difference_db": 0.0
+  },
+  "toolchain": {
+    "platform": "macOS arm64",
+    "gfortran": "GNU Fortran 14.2.0_1",
+    "apple_clang": "Apple clang 21.0.0 (clang-2100.0.123.102)",
+    "gcc_cpp": "g++-14 14.2.0_1"
+  },
+  "sha256": {
+    "environment": "9060c169dc1d8c6836086e4edf5b92e494991e8daa5ddded2a379aea61c4c041",
+    "altimetry": "bbfd07d73e64d00193dd20fee7a0ef6a8bbcc2f207a16f1abdc27578ec928636",
+    "bathymetry": "d098c274c1345b9cd7010ac911aaa489b4d65aad70c83835048dcd5b9d9fbc2b",
+    "fortran_executable": "06f10df1a8b0293387d71c1a248f9ee92ee4b189a8e9fed1c774625b9bef5133",
+    "f2cpp_probe": "372c3fe395d23d6615c610948d33ce78ec7d4aac8db9b5b7970a4448bfbc824c",
+    "origin_shd": "3ee0ab80689f0d19a9cbb1027311671aa440a91b6c0da9a80cfe0d7a6081ac69",
+    "f2cpp_shd": "b1d451e2ff07fa9cc2f890db031df65f8ebb8f19e6dcaaa88d2b24083e8b0f8a"
+  }
+}

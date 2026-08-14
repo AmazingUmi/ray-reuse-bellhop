@@ -1,0 +1,98 @@
+{
+  "contract": {
+    "behavior": "Origin legacy component selector is parsed but ignored",
+    "component_identity_bound_to_env_and_prt": true,
+    "components": {
+      "H": "cartesian_component_horizontal",
+      "P": "cartesian_component_pressure",
+      "V": "cartesian_component_vertical"
+    },
+    "frequency_hz": 1000.0,
+    "scope": "2-D coherent Cartesian Cerveny",
+    "shd_component_metadata_present": false
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case cartesian_component_pressure --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case cartesian_component_vertical --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case cartesian_component_horizontal --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case cartesian_component_pressure --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case cartesian_component_vertical --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case cartesian_component_horizontal --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i7_cartesian_components.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i7_cartesian_components_report.json"
+  },
+  "legacy_component_equivalence_guards": {
+    "f2cpp": {
+      "maximum_pressure_magnitude": 0.0317193977534771,
+      "p_v_h_shd_sha256": "1ae952cc3e2692f395ff711b646e9cc810f9bceb569041f85936dc32a496ae0e",
+      "passed": true,
+      "semantic_arrays_exactly_equal": true,
+      "shd_files_byte_identical": true
+    },
+    "origin": {
+      "maximum_pressure_magnitude": 0.03171941265463829,
+      "p_v_h_shd_sha256": "cf7042b6f7874aa770a340bd9494160d57241679eca778ba22f7318cdfdfd014",
+      "passed": true,
+      "semantic_arrays_exactly_equal": true,
+      "shd_files_byte_identical": true
+    }
+  },
+  "origin_f2cpp_field_comparisons": {
+    "H": {
+      "max_pressure_absolute": 1.494685086811387e-08,
+      "max_pressure_relative": 2.8521849344542716e-06,
+      "max_tl_difference_db": 7.62939453125e-06,
+      "passed": true
+    },
+    "P": {
+      "max_pressure_absolute": 1.494685086811387e-08,
+      "max_pressure_relative": 2.8521849344542716e-06,
+      "max_tl_difference_db": 7.62939453125e-06,
+      "passed": true
+    },
+    "V": {
+      "max_pressure_absolute": 1.494685086811387e-08,
+      "max_pressure_relative": 2.8521849344542716e-06,
+      "max_tl_difference_db": 7.62939453125e-06,
+      "passed": true
+    }
+  },
+  "origin_source_contract": {
+    "cartesian_influence_ignores_component": true,
+    "component_record_is_parsed": true,
+    "influence_sha256": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe",
+    "ray_centered_influence_has_v_h_branches": true,
+    "read_environment_sha256": "515661a25c4eec7e477bae7e42f0272f3fa38b0e07cdd70bba23ec27c1027083"
+  },
+  "provenance_guards": {
+    "component_env_inputs_otherwise_identical": true,
+    "component_env_inputs_pairwise_distinct": true,
+    "distinct_executable_hashes": true,
+    "distinct_executable_paths": true,
+    "env_component_identity_bound": true,
+    "manifest_executable_identity_bound": true,
+    "manifest_source_references_bound": true,
+    "nonzero_field_guard": true,
+    "origin_f2cpp_comparison_count": 3,
+    "origin_f2cpp_rendered_env_inputs_equal": true,
+    "prt_component_identity_bound": true,
+    "results_not_older_than_executables": true,
+    "staged_env_matches_canonical_fixture": true
+  },
+  "schema": "bellhop.f2cpp.i7_cartesian_component_legacy_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_executable": "f724a2464e4b0d2eec23b0dcbca1e57de7c9a15d311f4d09b675f52b36eb6547",
+    "f2cpp_field_aggregate": "c3693d9e3ecd37dae6abed8182dd7a0453c10e5d03b1f14be5dc15035e81fb07",
+    "normalized_component_env": "064235d1c779e0c79797ee2ac554864458292de352dbfe14152cbddef0f242a3",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_field_aggregate": "fd01aabd7802605ebced6bec10c5930a5dc0c17902534d0cba14053778ff410f",
+    "rendered_component_env": {
+      "H": "bfb89d960ec87a5972f401dac4ee9a18f1fec9e649adc6fdb5e30574a92b7f6a",
+      "P": "443c5bc87bc71dadd3ae5b43511b12fa7d1054090ff6a08e058a003dd48ffd3e",
+      "V": "34f3c7b616ca9cc75ccce9283828a18d87fc78b22f1c37bbcaa309b5be7070c5"
+    }
+  },
+  "status": "passed"
+}

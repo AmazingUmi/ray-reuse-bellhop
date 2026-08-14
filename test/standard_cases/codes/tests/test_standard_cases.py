@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -23,6 +24,8 @@ from standard_cases import (
     default_adapters,
     format_frequency_csv,
     process_case,
+    validate_print_output,
+    validate_output,
     validate_broadband_output,
 )
 from support import write_little_endian_rectilinear_file
@@ -46,6 +49,62 @@ class StandardCasesAdapterTests(unittest.TestCase):
             / "release"
             / "bellhop_rayreuse",
         )
+
+    def test_print_validation_uses_declared_noncoherent_mode(self) -> None:
+        definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
+        for case_id in ("incoherent_direct", "semicoherent_direct"):
+            with self.subTest(case=case_id):
+                definition = definitions[case_id]
+                contents = "\n".join(
+                    (
+                        "Cartesian beams",
+                        "Rectilinear receiver grid",
+                        *definition.prt_markers,
+                    )
+                )
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    print_path = Path(temporary_directory) / "case.prt"
+                    print_path.write_text(contents, encoding="utf-8")
+                    validate_print_output(definition, print_path)
+
+    def test_print_validation_uses_declared_ray_centered_family(self) -> None:
+        definition = discover_cases(
+            STANDARD_CASES_ROOT / "cases"
+        )["ray_centered_component_pressure"]
+        contents = "\n".join(
+            (
+                "Coherent TL calculation",
+                "Rectilinear receiver grid",
+                *definition.prt_markers,
+            )
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            print_path = Path(temporary_directory) / "case.prt"
+            print_path.write_text(contents, encoding="utf-8")
+            validate_print_output(definition, print_path)
+
+    def test_print_validation_uses_declared_non_cerveny_family(self) -> None:
+        definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
+        for case_id in (
+            "geometric_hat_cartesian",
+            "geometric_hat_ray_centered",
+            "geometric_hat_cartesian_safe_control",
+            "geometric_gaussian_cartesian",
+            "simple_gaussian_cartesian",
+        ):
+            with self.subTest(case=case_id):
+                definition = definitions[case_id]
+                contents = "\n".join(
+                    (
+                        "Coherent TL calculation",
+                        "Rectilinear receiver grid",
+                        *definition.prt_markers,
+                    )
+                )
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    print_path = Path(temporary_directory) / "case.prt"
+                    print_path.write_text(contents, encoding="utf-8")
+                    validate_print_output(definition, print_path)
 
     def test_runner_execution_mode_defaults_and_accepts_both_modes(self) -> None:
         parser = build_parser()
@@ -239,6 +298,133 @@ class StandardCasesAdapterTests(unittest.TestCase):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertNotIn("execution_mode", manifest)
             self.assertNotIn("broadband_run", manifest)
+
+    def test_ray_case_generate_records_ray_output_contract(self) -> None:
+        definition = discover_cases(
+            STANDARD_CASES_ROOT / "cases"
+        )["ray_trace_vacuum_rigid"]
+        adapter = default_adapters(None)["origin"]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            results_root = Path(temporary_directory)
+            manifest_path = process_case(
+                definition,
+                "single",
+                adapter,
+                "generate",
+                results_root,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            run = manifest["runs"][0]
+            environment = manifest_path.parent / run["environment_file"]
+            rendered = environment.read_text(encoding="utf-8")
+
+        self.assertEqual(manifest["output_kind"], "ray")
+        self.assertEqual(manifest["shared_launch_angle_count"], 5)
+        self.assertIsNone(run["shade_file"])
+        self.assertIsNone(run["ray_file"])
+        self.assertIn("\n'R'\n5\n-60.0  60.0 /\n", rendered)
+        self.assertNotIn("'MS'", rendered)
+
+    def test_shd_validation_rejects_a_stale_ray_product(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_root = Path(temporary_directory)
+            print_path = output_root / "fixture.prt"
+            shade_path = output_root / "fixture.shd"
+            ray_path = output_root / "fixture.ray"
+            print_path.write_text(
+                "\n".join(
+                    (
+                        "Coherent TL calculation",
+                        "Cartesian beams",
+                        "Rectilinear receiver grid",
+                        *self.definition.prt_markers,
+                    )
+                ),
+                encoding="utf-8",
+            )
+            write_little_endian_rectilinear_file(shade_path, (50.0,))
+            ray_path.write_text("stale", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "retained ray output"):
+                validate_output(
+                    replace(
+                        self.definition,
+                        expected_dimensions=(1, 1, 1, 1, 1, 2, 3),
+                    ),
+                    50.0,
+                    print_path,
+                    shade_path,
+                )
+
+    def test_failed_run_removes_the_old_manifest_and_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            results_root = Path(temporary_directory)
+            executable = results_root / "solver"
+            executable.touch()
+            adapter = VersionAdapter("f2cpp", executable, True)
+            manifest_path = process_case(
+                self.definition, "single", adapter, "generate", results_root
+            )
+            run_root = next(manifest_path.parent.glob("f000_*"))
+            file_root = next(run_root.glob("*.env")).stem
+            for suffix in (".prt", ".shd", ".ray", ".shd.tmp", ".ray.tmp"):
+                (run_root / f"{file_root}{suffix}").write_text(
+                    "stale", encoding="utf-8"
+                )
+            with patch(
+                "standard_cases.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, ["solver"]),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    process_case(
+                        self.definition,
+                        "single",
+                        adapter,
+                        "run",
+                        results_root,
+                    )
+            self.assertFalse(manifest_path.exists())
+            self.assertFalse(any(run_root.glob("*.prt")))
+            self.assertFalse(any(run_root.glob("*.shd")))
+            self.assertFalse(any(run_root.glob("*.ray")))
+            self.assertFalse(any(run_root.glob("*.tmp")))
+
+    def test_failed_broadband_run_removes_old_manifest_and_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            results_root = Path(temporary_directory)
+            executable = results_root / "solver"
+            executable.touch()
+            adapter = VersionAdapter("rayreuse", executable, True)
+            manifest_path = process_case(
+                self.definition,
+                "broadband_smoke",
+                adapter,
+                "generate",
+                results_root,
+            )
+            run_root = manifest_path.parent / "broadband"
+            file_root = next(run_root.glob("*.env")).stem
+            for suffix in (".prt", ".shd", ".ray", ".shd.tmp", ".ray.tmp"):
+                (run_root / f"{file_root}{suffix}").write_text(
+                    "stale", encoding="utf-8"
+                )
+            with patch(
+                "standard_cases.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, ["solver"]),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    process_case(
+                        self.definition,
+                        "broadband_smoke",
+                        adapter,
+                        "run",
+                        results_root,
+                    )
+            self.assertFalse(manifest_path.exists())
+            self.assertFalse(any(run_root.glob("*.prt")))
+            self.assertFalse(any(run_root.glob("*.shd")))
+            self.assertFalse(any(run_root.glob("*.ray")))
+            self.assertFalse(any(run_root.glob("*.tmp")))
 
     def test_broadband_validation_checks_both_execution_modes(self) -> None:
         frequencies = (50.0, 250.0)

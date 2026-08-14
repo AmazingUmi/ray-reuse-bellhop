@@ -35,6 +35,16 @@ struct Vec2 {
   return lhs.range * rhs.range + lhs.depth * rhs.depth;
 }
 
+// Match the locked gfortran 14.2/macOS arm64 oracle: its two-element
+// DOT_PRODUCT is a rounded range product followed by an FMA of the depth
+// product. Keep that operation order explicit where the final bit controls a
+// strict boundary sign test.
+[[nodiscard]] inline double fortranDotProduct2D(Vec2 lhs,
+                                                Vec2 rhs) noexcept {
+  const double rangeProduct = lhs.range * rhs.range;
+  return std::fma(lhs.depth, rhs.depth, rangeProduct);
+}
+
 [[nodiscard]] constexpr double squaredNorm(Vec2 value) noexcept {
   return dot(value, value);
 }

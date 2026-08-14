@@ -1,0 +1,26 @@
+id = "irregular_receiver_pairs"
+description = "Five paired range-depth receivers on an irregular 2-D grid"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 ReadRunType", "Bellhop_origin/Bellhop/influence.f90 irregular grid"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 650.0
+minimum_angle_deg = -50.0
+maximum_angle_deg = 50.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 5, 5]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Irregular grid"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

@@ -4,6 +4,43 @@ The original 2-D Bellhop executable contains an optional, single-ray diagnostic
 for validating the F2CPP port. It is disabled by default: an ordinary run opens
 no diagnostic files and follows the original `Step2D` call path.
 
+## Sound-speed profile diagnostic
+
+The independent SSP oracle evaluates requested depths through the original
+`EvaluateSSP` implementation. It is disabled unless both of these variables
+are set:
+
+```bash
+BELLHOP_SSP_ORACLE_REQUEST=/tmp/ssp_requests.csv \
+BELLHOP_SSP_ORACLE_DIR=/tmp/bellhop-ssp-oracle \
+/path/to/Bellhop_origin/bin/bellhop case_root
+```
+
+The request file must start with this header:
+
+```csv
+depth_m,segment_index_1based
+200.0,1
+200.0,2
+250.0,2
+```
+
+The explicit segment selects the arrival side at an exact SSP node; the
+diagnostic never approximates a side with an epsilon depth offset. A request
+that Bellhop relocates to another segment is an error. First/last-segment
+extrapolation remains available outside the global profile endpoints.
+
+The output directory must already exist. SSP schema version 2 writes
+`depth_m,segment_index_1based,c_m_per_s,cimag_m_per_s,cz_s_inv,` followed by
+`czz_m_inv_s_inv,rho_kg_m3` to `ssp_samples.csv`; schema version 1 omitted
+`cimag_m_per_s`. `ssp_manifest.json` records schema version, interpolation kind,
+frequency, and row count. Fortran's internal density is converted to SI in the
+CSV. The diagnostic currently supports the range-independent `C/N/P/S`
+profiles; `Q` requires a future range-cell selector.
+
+The selected segment hint is restored before ray tracing, so enabling the SSP
+oracle must not change the generated SHD file.
+
 ## Enabling the diagnostic
 
 Create an output directory, then set both required environment variables:
@@ -191,3 +228,14 @@ decomposition and non-Cartesian influence routines remain outside the schemas.
 For an absorbing boundary, the original frequency-dependent
 `Amp < 0.005` termination remains in force. Such output is therefore an active
 prefix oracle, not a frequency-independent complete geometry path.
+
+## Grain-size (`G`) 2-D oracle repair
+
+The upstream 2-D `TopBot` path called `GrainSize_to_Geoacoustic` but did not
+copy its `vr`, `rhor`, and `alpha2_f` results into the half-space structure.
+`ReflectMod` subsequently read those uninitialized members while the density
+remained zero, producing non-finite reflection coefficients.  This repository
+copies `vr` and `alpha2_f` into `HS` and assigns `HS%rho = rhor`, matching the
+already explicit data flow in the upstream 3-D bottom-province path.  The
+change is an oracle-only repair of an initialization defect; it is not treated
+as a legacy numerical behavior that F2CPP should reproduce.

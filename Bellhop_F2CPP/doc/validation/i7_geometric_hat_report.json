@@ -1,0 +1,145 @@
+{
+  "executables": {
+    "f2cpp": {
+      "mtime_ns": 1786449716420000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "sha256": "c0a500c91f470f277d31417cff860233fa4ec548ccd85cb76faa0270fc64677e"
+    },
+    "origin": {
+      "mtime_ns": 1786424159320000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_origin/bin/bellhop",
+      "sha256": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537"
+    }
+  },
+  "field_summaries": {
+    "f2cpp/G": {
+      "maximum_magnitude": 0.011248190887272358,
+      "nonzero_count": 6
+    },
+    "f2cpp/g": {
+      "maximum_magnitude": 0.005857674404978752,
+      "nonzero_count": 4
+    },
+    "origin/G": {
+      "maximum_magnitude": 0.011248190887272358,
+      "nonzero_count": 6
+    },
+    "origin/g": {
+      "maximum_magnitude": 0.0058576734736561775,
+      "nonzero_count": 4
+    }
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case geometric_hat_cartesian --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case geometric_hat_ray_centered --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case geometric_hat_cartesian --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case geometric_hat_ray_centered --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i7_geometric_hat.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i7_geometric_hat_report.json"
+  },
+  "independent_coordinate_effect_guards": {
+    "f2cpp": {
+      "cartesian_only_support_count": 2,
+      "common_support_count": 4,
+      "max_pressure_absolute_difference": 0.011248190887272358,
+      "maximum_tl_difference_db": 0.0,
+      "median_tl_difference_db": 0.0,
+      "minimum_tl_difference_db": 0.0,
+      "passed": true,
+      "ray_centered_only_support_count": 0,
+      "support_mismatch_count": 2
+    },
+    "origin": {
+      "cartesian_only_support_count": 2,
+      "common_support_count": 4,
+      "max_pressure_absolute_difference": 0.011248190887272358,
+      "maximum_tl_difference_db": 0.0,
+      "median_tl_difference_db": 0.0,
+      "minimum_tl_difference_db": 0.0,
+      "passed": true,
+      "ray_centered_only_support_count": 0,
+      "support_mismatch_count": 2
+    }
+  },
+  "matrix": {
+    "cases": {
+      "G": {
+        "case_id": "geometric_hat_cartesian",
+        "prt_family_marker": "Geometric hat beams in Cartesian coordinates",
+        "run_type": "CG"
+      },
+      "g": {
+        "case_id": "geometric_hat_ray_centered",
+        "prt_family_marker": "Geometric hat beams in ray-centered coordinates",
+        "run_type": "Cg"
+      }
+    },
+    "frequency_hz": 100.0,
+    "launch_count": 497,
+    "minimum_coordinate_effect": 0.001
+  },
+  "origin_f2cpp_field_comparisons": {
+    "G": {
+      "max_pressure_absolute": 9.385703325648365e-10,
+      "max_pressure_relative": 2.0892544227990584e-07,
+      "max_tl_difference_db": 0.0,
+      "passed": true
+    },
+    "g": {
+      "max_pressure_absolute": 9.385703325648365e-10,
+      "max_pressure_relative": 2.0892544227990584e-07,
+      "max_tl_difference_db": 0.0,
+      "passed": true
+    }
+  },
+  "origin_source_contract": {
+    "bellhop_dispatches_cartesian_and_ray_centered_geometric_hat": true,
+    "geometric_hat_formulas_present": true,
+    "non_cerveny_tail_has_no_extra_reads": true,
+    "read_run_type_has_g_and_cartesian_default": true,
+    "source_sha256": {
+      "bellhop_core": "6fe1094fb4b6bd38927d4f43cd1fa0b2e75c4467c492a9f90b6a70fc8291e6d6",
+      "influence": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe",
+      "read_environment": "515661a25c4eec7e477bae7e42f0272f3fa38b0e07cdd70bba23ec27c1027083"
+    }
+  },
+  "provenance_guards": {
+    "coordinate_effect_guard_count": 2,
+    "distinct_executable_hashes": true,
+    "distinct_executable_paths": true,
+    "env_and_prt_family_identity_bound": true,
+    "g_and_lower_g_inputs_otherwise_identical": true,
+    "integrator_record_is_environment_eof": true,
+    "manifest_executable_identity_bound": true,
+    "manifest_source_references_bound": true,
+    "origin_f2cpp_comparison_count": 2,
+    "origin_f2cpp_rendered_inputs_equal": true,
+    "results_not_older_than_executables": true,
+    "staged_env_and_sidecars_match_canonical_fixtures": true
+  },
+  "schema": "bellhop.f2cpp.i7_geometric_hat_validation",
+  "schema_version": 1,
+  "sha256": {
+    "companions": {
+      "ati": "bbfd07d73e64d00193dd20fee7a0ef6a8bbcc2f207a16f1abdc27578ec928636",
+      "bty": "d098c274c1345b9cd7010ac911aaa489b4d65aad70c83835048dcd5b9d9fbc2b"
+    },
+    "f2cpp_field_aggregate": "e077af425514269c09b45bf9e39b26ade0ba23250f7f76e51c5cf9204f033624",
+    "f2cpp_prt": {
+      "G": "7a953dd3e61affb69c1fcb669087933accce8da2761218e355d08d6735b7a1b8",
+      "g": "edcdb5581e19472101e8c8719913a5b9ad784bfcac5fbe0613159e6fae841c8a"
+    },
+    "normalized_environment": "0a438be6c08c9b3b1a9ffa0e1d3c75587161fadb8edaea288bedfbcfcf8561b4",
+    "origin_field_aggregate": "8778a52a1899a8f64de677ab6e5abb47e2eb82c86b255c95ad4e092da16e9f4c",
+    "origin_prt": {
+      "G": "fd8aae5e4e1e7f4f938096b265a7d0bef41f216ac74b333acca2fbeb9544fca1",
+      "g": "860a284a91480ff920b946cba39bd83025edf691c979619df0bbeec2ad8dc9be"
+    },
+    "rendered_environment": {
+      "G": "eaccbe6edcb7289ca6cd1513a85999404adf5111053e73cdec1fb9dbfd85885b",
+      "g": "ab176b7cdab50d45156bc5bea1a45a9113db8161a123e1cb532f2305884d26d4"
+    }
+  },
+  "status": "passed"
+}

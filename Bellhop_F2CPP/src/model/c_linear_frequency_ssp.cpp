@@ -10,6 +10,11 @@ namespace bellhop {
 
 CLinearFrequencySsp::CLinearFrequencySsp(
     const SoundSpeedProfile& profile, double frequency)
+    : CLinearFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
+
+CLinearFrequencySsp::CLinearFrequencySsp(
+    const SoundSpeedProfile& profile, double frequency,
+    const VolumeAttenuation& volumeAttenuation)
     : frequency_(frequency), realProfile_(profile) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
     throw ValidationError("frequency must be finite and positive");
@@ -23,8 +28,8 @@ CLinearFrequencySsp::CLinearFrequencySsp(
     depths_.push_back(point.depth);
     realSoundSpeeds_.push_back(point.soundSpeed);
     imaginarySoundSpeeds_.push_back(
-        convertAttenuation(point.attenuation, frequency_,
-                           point.soundSpeed)
+        convertAttenuation(point.attenuation, volumeAttenuation,
+                           frequency_, point.soundSpeed, point.depth)
             .imaginarySoundSpeed);
   }
 }

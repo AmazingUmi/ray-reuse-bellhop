@@ -1,0 +1,141 @@
+{
+  "default_explicit_point_no_op_guards": {
+    "f2cpp": {
+      "passed": true,
+      "semantic_arrays_exactly_equal": true,
+      "shd_files_byte_identical": true,
+      "shd_sha256": "e2f569594d2f2bb529b1bcf88a516c4bf11f233d38a074e958e0c1bf226f7eec"
+    },
+    "origin": {
+      "passed": true,
+      "semantic_arrays_exactly_equal": true,
+      "shd_files_byte_identical": true,
+      "shd_sha256": "0597c98fb57992f4013249e667be3b78cbae591ebdcaffe6df4397b4ce93ff05"
+    }
+  },
+  "executables": {
+    "f2cpp": {
+      "mtime_ns": 1786443554220000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "sha256": "3ecbc4ee1c1dc5cd0631b1dbbc0f4a61b163577c94478cc6f69d0701837e4777"
+    },
+    "origin": {
+      "mtime_ns": 1786424159320000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_origin/bin/bellhop",
+      "sha256": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537"
+    }
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case constant_speed_direct --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case source_geometry_point_explicit --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case source_geometry_line --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case constant_speed_direct --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case source_geometry_point_explicit --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case source_geometry_line --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i7_source_geometry.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i7_source_geometry_report.json"
+  },
+  "matrix": {
+    "frequency_hz": 50.0,
+    "launch_count": 300,
+    "minimum_median_tl_effect_db": 20.0,
+    "minimum_pressure_effect": 0.001,
+    "pressure_mask_floor": 1e-07,
+    "run_type_fourth_position": {
+      "DEFAULT": "constant_speed_direct",
+      "R": "source_geometry_point_explicit",
+      "X": "source_geometry_line"
+    }
+  },
+  "origin_f2cpp_field_comparisons": {
+    "DEFAULT": {
+      "max_pressure_absolute": 9.33139787662185e-10,
+      "max_pressure_relative": 8.103583013507887e-07,
+      "max_tl_difference_db": 7.62939453125e-06,
+      "passed": true
+    },
+    "R": {
+      "max_pressure_absolute": 9.33139787662185e-10,
+      "max_pressure_relative": 8.103583013507887e-07,
+      "max_tl_difference_db": 7.62939453125e-06,
+      "passed": true
+    },
+    "X": {
+      "max_pressure_absolute": 1.6408202441198227e-07,
+      "max_pressure_relative": 1.2848428241341026e-06,
+      "max_tl_difference_db": 9.5367431640625e-06,
+      "passed": true
+    }
+  },
+  "origin_source_contract": {
+    "blank_fourth_position_defaults_to_r": true,
+    "cartesian_influence_applies_point_cosine_ratio": true,
+    "influence_sha256": "0781b142098281253e2f73d261234c605333e6dfeb49729c97b0478ba0bb9afe",
+    "r_selects_point_source": true,
+    "read_environment_sha256": "515661a25c4eec7e477bae7e42f0272f3fa38b0e07cdd70bba23ec27c1027083",
+    "scale_pressure_distinguishes_point_and_line": true,
+    "x_selects_line_source": true
+  },
+  "point_line_effect_guards": {
+    "f2cpp": {
+      "line_maximum_magnitude": 0.22513075172901154,
+      "max_pressure_absolute_difference": 0.2273859679698944,
+      "maximum_tl_difference_db": 53.92038345336914,
+      "median_tl_difference_db": 51.08221435546875,
+      "minimum_tl_difference_db": 39.98146057128906,
+      "passed": true,
+      "point_maximum_magnitude": 0.0022552297450602055,
+      "tl_mask_count": 1029
+    },
+    "origin": {
+      "line_maximum_magnitude": 0.22513075172901154,
+      "max_pressure_absolute_difference": 0.2273859679698944,
+      "maximum_tl_difference_db": 53.920387268066406,
+      "median_tl_difference_db": 51.082218170166016,
+      "minimum_tl_difference_db": 39.98145294189453,
+      "passed": true,
+      "point_maximum_magnitude": 0.002255229977890849,
+      "tl_mask_count": 1029
+    }
+  },
+  "provenance_guards": {
+    "distinct_executable_hashes": true,
+    "distinct_executable_paths": true,
+    "effect_guard_count": 2,
+    "env_and_prt_source_geometry_identity_bound": true,
+    "manifest_executable_identity_bound": true,
+    "manifest_source_references_bound": true,
+    "no_op_guard_count": 2,
+    "nonzero_field_guard": true,
+    "origin_f2cpp_comparison_count": 3,
+    "origin_f2cpp_rendered_env_inputs_equal": true,
+    "results_not_older_than_executables": true,
+    "source_geometry_env_inputs_otherwise_identical": true,
+    "source_geometry_env_inputs_pairwise_distinct": true,
+    "staged_env_matches_canonical_fixture": true
+  },
+  "schema": "bellhop.f2cpp.i7_source_geometry_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_field_aggregate": "57daa3deec6e717ecf89fda8f1df5c65249e559cb132da677845f8bf3819ab70",
+    "f2cpp_prt": {
+      "DEFAULT": "450b9d24d3e66e0ccebf708866625acda705223d0c7a12b0e7585fa7371959da",
+      "R": "1a105b50afeb0ed7e09e04a50e59604fbff742e288dcb2599b79e55926f83efb",
+      "X": "2a5a3575375db351280dcf9b9a1f4842d02d2ee35149fb175fce2432ffb0fa82"
+    },
+    "normalized_source_geometry_env": "9e6e14fd75822f8517295531f1ab32912ff681f11f8c9d224a241bb2e7f2d381",
+    "origin_field_aggregate": "10ce93c2ef9802842adb7be49013c2b99ac258b3c6ac4fe155a518f8c6b838ac",
+    "origin_prt": {
+      "DEFAULT": "e00c4299707cebf31589d1c83c28990dc7f420dbb2ec136101ef1e3d878a4159",
+      "R": "5e397db5dd183328d6914aec44540ebbbcb9a8cb645b798676eed99bea9e53bc",
+      "X": "abffca03b8f4531010359882b0b07ea09d26c017cc87a5fb280057cf7f292f45"
+    },
+    "rendered_source_geometry_env": {
+      "DEFAULT": "642f66508e84b32aeea7ec2863ed962221a1709f9420b5ed9490b7c6959048f1",
+      "R": "7e36f97d1173da921b6a1231aabd9d45c06458f173cd3751dd5eff30a86cd0cf",
+      "X": "aa8da02adf820f17b1433f84e6237e09d1e35f5eaf24b4901524b4867eee494d"
+    }
+  },
+  "status": "passed"
+}

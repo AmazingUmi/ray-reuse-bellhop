@@ -1,7 +1,7 @@
 
 EXECUTABLES = bellhop.exe bellhop3d.exe
 
-BELLHOP_OBJECTS   = bellhopMod.o angleMod.o ArrMod.o bdryMod.o   sspMod.o ReflectMod.o WriteRay.o influence.o InfluenceOracleDiagnostics.o Step.o OracleDiagnostics.o ReadEnvironmentBell.o bellhop.o ../misc/libmisc.a
+BELLHOP_OBJECTS   = bellhopMod.o angleMod.o ArrMod.o bdryMod.o sspMod.o SspOracleDiagnostics.o ReflectMod.o WriteRay.o influence.o InfluenceOracleDiagnostics.o Step.o OracleDiagnostics.o ReadEnvironmentBell.o bellhop.o ../misc/libmisc.a
 BELLHOP_LIBS = -L../misc -lmisc
 
 BELLHOP3D_OBJECTS = bellhopMod.o angleMod.o ArrMod.o bdry3DMod.o sspMod.o Reflect2DMod.o Reflect3DMod.o Cone.o Parabot.o WriteRay.o RayNormals.o influence.o influence3D.o Step3DMod.o Step2DMod.o ReadEnvironmentBell.o bellhop3D.o ../misc/libmisc.a
@@ -93,6 +93,8 @@ Step.o step.mod: Step.f90
 	$(FC) -c $(FFLAGS) $<
 
 OracleDiagnostics.o: OracleDiagnostics.f90 Step.o
+
+SspOracleDiagnostics.o ssporaclediagnostics.mod: SspOracleDiagnostics.f90 sspMod.o
 	$(FC) -c $(FFLAGS) $<
 
 Step3DMod.o step3dmod.mod: Step3DMod.f90
@@ -104,6 +106,6 @@ Step2DMod.o step2dmod.mod: Step2DMod.f90 Step3DMod.o
 WriteRay.o writeray.mod: WriteRay.f90
 	$(FC) -c $(FFLAGS) $<
 
-bellhop.o:   arrmod.mod anglemod.mod bdrymod.mod   readenvironmentbell.mod bellhopmod.mod sspmod.mod reflectmod.mod OracleDiagnostics.o InfluenceOracleDiagnostics.o writeray.mod raynormals.mod influence.mod step.mod bellhop.f90
+bellhop.o:   arrmod.mod anglemod.mod bdrymod.mod readenvironmentbell.mod bellhopmod.mod sspmod.mod ssporaclediagnostics.mod reflectmod.mod OracleDiagnostics.o InfluenceOracleDiagnostics.o writeray.mod raynormals.mod influence.mod step.mod bellhop.f90
 
 bellhop3D.o: arrmod.mod anglemod.mod bdry3dmod.mod readenvironmentbell.mod bellhopmod.mod sspmod.mod reflect2dmod.mod reflect3dmod.mod writeray.mod raynormals.mod influence3d.mod step3dmod.mod bellhop3D.f90

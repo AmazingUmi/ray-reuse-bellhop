@@ -1,6 +1,8 @@
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <numbers>
 
 #include "bellhop/acoustics/attenuation.hpp"
@@ -11,16 +13,24 @@ namespace {
 
 using bellhop::AttenuationConversion;
 using bellhop::AttenuationUnit;
+using bellhop::BiologicalAttenuationLayer;
+using bellhop::BiologicalAttenuationLayers;
+using bellhop::FrancoisGarrisonParameters;
 using bellhop::RawAttenuation;
 using bellhop::ValidationError;
+using bellhop::VolumeAttenuation;
 using bellhop::VolumeAttenuationModel;
 using bellhop::attenuationNpPerMeter;
+using bellhop::biologicalAttenuationNpPerMeter;
 using bellhop::convertAttenuation;
+using bellhop::francoisGarrisonAttenuationNpPerMeter;
 using bellhop::imaginarySoundSpeedFromAttenuation;
 using bellhop::test::Context;
 using bellhop::thorpAttenuationNpPerMeter;
 
 constexpr double kDecibelsPerNeper = 8.6858896;
+constexpr double kLegacyDecibelsPerKilometerPerNeper =
+    static_cast<double>(8685.8896F);
 
 RawAttenuation rawAttenuation(double value, AttenuationUnit unit) {
   return RawAttenuation{
@@ -29,7 +39,6 @@ RawAttenuation rawAttenuation(double value, AttenuationUnit unit) {
       .referenceFrequency = 100.0,
       .powerLawExponent = 1.5,
       .transitionFrequency = 1000.0,
-      .volumeModel = VolumeAttenuationModel::None,
   };
 }
 
@@ -84,11 +93,13 @@ void testThorpAndImaginarySoundSpeed(Context& context) {
       1.36984233771845050e-4, 1.0e-20,
       "T matches the 10 kHz Fortran oracle anchor");
 
-  RawAttenuation withThorp =
+  const RawAttenuation withThorp =
       rawAttenuation(0.0, AttenuationUnit::DecibelsPerWavelength);
-  withThorp.volumeModel = VolumeAttenuationModel::Thorp;
+  const VolumeAttenuation thorp{
+      .model = VolumeAttenuationModel::Thorp};
   const AttenuationConversion converted =
-      convertAttenuation(withThorp, frequency, soundSpeed);
+      convertAttenuation(
+          withThorp, thorp, frequency, soundSpeed, 0.0);
   context.checkNear(converted.attenuationNpPerMeter, expectedThorp,
                     1.0e-20,
                     "zero explicit loss plus T yields pure Thorp loss");
@@ -104,6 +115,145 @@ void testThorpAndImaginarySoundSpeed(Context& context) {
                 "the high-frequency no-attenuation case stays exactly zero");
   context.check(zero.imaginarySoundSpeed == 0.0,
                 "zero attenuation produces exactly zero imaginary speed");
+}
+
+void testFrancoisGarrisonOracle(Context& context) {
+  constexpr FrancoisGarrisonParameters canonical{
+      .temperatureCelsius = 20.0,
+      .salinityPsu = 35.0,
+      .pH = 8.0,
+      .meanDepthMeters = 0.0,
+  };
+  constexpr RawAttenuation noBaseLoss{};
+  const VolumeAttenuation volume{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = canonical,
+  };
+  struct Anchor {
+    double frequency;
+    double decibelsPerKilometer;
+    double imaginarySoundSpeed;
+  };
+  constexpr std::array anchors{
+      Anchor{10.0, 7.01348825486111722e-6,
+             2.89149480459668903e-5},
+      Anchor{100.0, 6.98801686474176636e-4,
+             2.88099355478780683e-4},
+      Anchor{1000.0, 5.17084696772871361e-2,
+             2.13181752064518044e-3},
+      Anchor{10000.0, 7.36946806223103268e-1,
+             3.03825683315473447e-3},
+      Anchor{50000.0, 1.29959477197854376e1,
+             1.07158418028359282e-2},
+  };
+  for (const Anchor& anchor : anchors) {
+    const double expectedNpPerMeter =
+        anchor.decibelsPerKilometer /
+        kLegacyDecibelsPerKilometerPerNeper;
+    context.checkNear(
+        francoisGarrisonAttenuationNpPerMeter(
+            canonical, anchor.frequency),
+        expectedNpPerMeter, 2.0e-20,
+        "Francois-Garrison Np/m matches the gfortran oracle");
+    context.checkNear(
+        convertAttenuation(noBaseLoss, volume, anchor.frequency,
+                           1500.0, 500.0)
+            .imaginarySoundSpeed,
+        anchor.imaginarySoundSpeed, 3.0e-18,
+        "Francois-Garrison imaginary speed matches the gfortran oracle");
+  }
+
+  constexpr FrancoisGarrisonParameters cold{
+      .temperatureCelsius = 10.0,
+      .salinityPsu = 35.0,
+      .pH = 8.0,
+      .meanDepthMeters = 1000.0,
+  };
+  constexpr FrancoisGarrisonParameters warm{
+      .temperatureCelsius = 25.0,
+      .salinityPsu = 35.0,
+      .pH = 8.0,
+      .meanDepthMeters = 1000.0,
+  };
+  context.checkNear(
+      francoisGarrisonAttenuationNpPerMeter(cold, 10000.0),
+      8.45396087874079272e-1 /
+          kLegacyDecibelsPerKilometerPerNeper,
+      2.0e-20, "Francois-Garrison cold-water branch matches Origin");
+  context.checkNear(
+      francoisGarrisonAttenuationNpPerMeter(warm, 10000.0),
+      5.93874271560436817e-1 /
+          kLegacyDecibelsPerKilometerPerNeper,
+      2.0e-20, "Francois-Garrison warm-water branch matches Origin");
+}
+
+void testBiologicalOracle(Context& context) {
+  const BiologicalAttenuationLayer first{
+      .minimumDepth = 100.0,
+      .maximumDepth = 200.0,
+      .resonanceFrequency = 1000.0,
+      .qualityFactor = 10.0,
+      .attenuationCoefficientDecibelsPerKilometer = 0.25,
+  };
+  const BiologicalAttenuationLayer second{
+      .minimumDepth = 200.0,
+      .maximumDepth = 300.0,
+      .resonanceFrequency = 500.0,
+      .qualityFactor = 5.0,
+      .attenuationCoefficientDecibelsPerKilometer = 0.5,
+  };
+  const BiologicalAttenuationLayers layers{first, second};
+
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(layers, 99.0, 1000.0),
+      0.0, 0.0, "biological loss is zero above all layers");
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(layers, 100.0, 1000.0),
+      2.87823136280544820e-3, 0.0,
+      "biological top endpoint matches the gfortran oracle");
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(layers, 199.0, 1000.0),
+      2.87823136280544820e-3, 0.0,
+      "biological layer interior matches the gfortran oracle");
+
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(layers, 200.0, 1000.0),
+      2.97377431260811885e-3, 0.0,
+      "shared biological endpoint matches the gfortran accumulation order");
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(layers, 300.0, 1000.0),
+      9.55429498026704745e-5, 0.0,
+      "biological bottom endpoint matches the gfortran oracle");
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(layers, 301.0, 1000.0),
+      0.0, 0.0, "biological loss is zero below all layers");
+
+  const RawAttenuation base =
+      rawAttenuation(1.0e-5, AttenuationUnit::NepersPerMeter);
+  const VolumeAttenuation biological{
+      .model = VolumeAttenuationModel::Biological,
+      .parameters =
+          std::make_shared<const BiologicalAttenuationLayers>(layers),
+  };
+  context.checkNear(
+      attenuationNpPerMeter(base, biological, 1000.0, 1500.0, 200.0),
+      1.0e-5 + 2.97377431260811885e-3,
+      0.0, "base and biological attenuation add before cImag");
+  context.checkNear(
+      convertAttenuation(
+          RawAttenuation{},
+          VolumeAttenuation{
+              .model = VolumeAttenuationModel::Biological,
+              .parameters =
+                  std::make_shared<const BiologicalAttenuationLayers>(
+                      BiologicalAttenuationLayers{first})},
+          1000.0, 1500.0, 100.0)
+          .imaginarySoundSpeed,
+      1.03069068469337122, 0.0,
+      "biological resonance cImag matches the gfortran CRCI oracle");
+  context.checkNear(
+      biologicalAttenuationNpPerMeter({}, 200.0, 1000.0),
+      0.0, 0.0, "zero biological layers are a supported no-op");
 }
 
 void testLegacyAdditionalUnits(Context& context) {
@@ -173,9 +323,6 @@ void testRawInputIsImmutable(Context& context) {
   context.check(
       attenuation.transitionFrequency == original.transitionFrequency,
       "conversion does not overwrite the transition frequency");
-  context.check(attenuation.volumeModel == original.volumeModel,
-                "conversion does not overwrite the volume model");
-
   RawAttenuation otherReference = attenuation;
   otherReference.referenceFrequency = 3700.0;
   context.checkNear(
@@ -224,19 +371,21 @@ void testInvalidAndUnsupportedInputs(Context& context) {
       },
       "unknown attenuation unit fails explicitly");
 
-  invalid = valid;
-  invalid.volumeModel = VolumeAttenuationModel::FrancoisGarrison;
+  const VolumeAttenuation mismatched{
+      .model = VolumeAttenuationModel::FrancoisGarrison};
   context.expectThrows<ValidationError>(
-      [&invalid] {
-        static_cast<void>(convertAttenuation(invalid, 50.0, 1500.0));
+      [&valid, &mismatched] {
+        static_cast<void>(convertAttenuation(
+            valid, mismatched, 50.0, 1500.0, 0.0));
       },
-      "unsupported volume model fails explicitly");
+      "mismatched volume parameters fail explicitly");
 
-  invalid = valid;
-  invalid.volumeModel = static_cast<VolumeAttenuationModel>(999);
+  const VolumeAttenuation invalidVolume{
+      .model = static_cast<VolumeAttenuationModel>(999)};
   context.expectThrows<ValidationError>(
-      [&invalid] {
-        static_cast<void>(convertAttenuation(invalid, 50.0, 1500.0));
+      [&valid, &invalidVolume] {
+        static_cast<void>(convertAttenuation(
+            valid, invalidVolume, 50.0, 1500.0, 0.0));
       },
       "unknown volume model fails explicitly");
 
@@ -254,6 +403,8 @@ int main() {
   Context context;
   testRequiredUnits(context);
   testThorpAndImaginarySoundSpeed(context);
+  testFrancoisGarrisonOracle(context);
+  testBiologicalOracle(context);
   testLegacyAdditionalUnits(context);
   testRawInputIsImmutable(context);
   testInvalidAndUnsupportedInputs(context);

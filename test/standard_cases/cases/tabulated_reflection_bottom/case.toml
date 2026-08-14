@@ -1,0 +1,27 @@
+id = "tabulated_reflection_bottom"
+description = "Constant-speed water over a tabulated bottom reflection coefficient"
+origin_template = "origin.env.in"
+companion_files = ["origin.brc"]
+source_references = ["Bellhop_origin/misc/RefCoef.f90 ReadReflectionCoefficient", "Bellhop_origin/Bellhop/ReflectMod.f90 tabulated reflection"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 750.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 11, 51]
+prt_markers = ["VACUUM", "FILE used for reflection loss", "Using tabulated bottom reflection coef.", "Number of points in bottom reflection coefficient ="]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

@@ -72,12 +72,30 @@ add_library(
     src/acoustics/boundary_acoustics.cpp
     src/field/beam_epsilon.cpp
     src/field/cartesian_cerveny_influence.cpp
+    src/field/geometric_gaussian_influence.cpp
+    src/field/geometric_hat_influence.cpp
+    src/field/ray_centered_cerveny_influence.cpp
+    src/field/simple_gaussian_influence.cpp
     src/field/frequency_projector.cpp
     src/field/pressure_scaling.cpp
     src/io/environment_parser.cpp
+    src/io/output_layout.cpp
+    src/io/ray_writer.cpp
     src/io/shd_writer.cpp
     src/model/c_linear_frequency_ssp.cpp
     src/model/c_linear_ssp.cpp
+    src/model/boundary_geometry.cpp
+    src/model/cubic_spline_frequency_ssp.cpp
+    src/model/cubic_spline_ssp.cpp
+    src/model/n2_linear_frequency_ssp.cpp
+    src/model/n2_linear_ssp.cpp
+    src/model/pchip_frequency_ssp.cpp
+    src/model/pchip_ssp.cpp
+    src/model/quadrilateral_frequency_ssp.cpp
+    src/model/quadrilateral_ssp.cpp
+    src/model/sound_speed_evaluator.cpp
+    src/numerics/pchip_coefficients.cpp
+    src/numerics/cubic_spline_coefficients.cpp
     src/model/environment.cpp
     src/model/launch_fan_planner.cpp
     src/model/simulation_case.cpp
@@ -87,7 +105,17 @@ add_library(
     src/ray/geometry_tracer.cpp
     src/ray/ray_stepper.cpp
     src/solver/single_frequency_solver.cpp
+    src/solver/ray_trace_solver.cpp
 )
+if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
+  # AttenMod calls the libm pow implementation. AppleClang otherwise lowers
+  # pow(10, x) to exp10, which differs from the gfortran oracle by one ULP for
+  # a small subset of Francois-Garrison inputs.
+  set_source_files_properties(
+    src/acoustics/attenuation.cpp
+    PROPERTIES COMPILE_OPTIONS "-fno-builtin-pow"
+  )
+endif()
 target_include_directories(
   bellhop_f2cpp_core
   PUBLIC
@@ -181,6 +209,30 @@ if(BUILD_TESTING)
     component
   )
   add_f2cpp_test(
+    bellhop_f2cpp_ray_centered_cerveny_influence_tests
+    f2cpp.component.ray_centered_cerveny_influence
+    tests/component/ray_centered_cerveny_influence_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_geometric_hat_influence_tests
+    f2cpp.component.geometric_hat_influence
+    tests/component/geometric_hat_influence_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_simple_gaussian_influence_tests
+    f2cpp.component.simple_gaussian_influence
+    tests/component/simple_gaussian_influence_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_geometric_gaussian_influence_tests
+    f2cpp.component.geometric_gaussian_influence
+    tests/component/geometric_gaussian_influence_test.cpp
+    component
+  )
+  add_f2cpp_test(
     bellhop_f2cpp_single_frequency_solver_tests
     f2cpp.component.single_frequency_solver
     tests/component/single_frequency_solver_test.cpp
@@ -190,6 +242,36 @@ if(BUILD_TESTING)
     bellhop_f2cpp_c_linear_ssp_tests
     f2cpp.component.c_linear_ssp
     tests/component/c_linear_ssp_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_boundary_geometry_tests
+    f2cpp.component.boundary_geometry
+    tests/component/boundary_geometry_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_sound_speed_evaluator_tests
+    f2cpp.component.sound_speed_evaluator
+    tests/component/sound_speed_evaluator_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_pchip_ssp_tests
+    f2cpp.component.pchip_ssp
+    tests/component/pchip_ssp_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_n2_linear_ssp_tests
+    f2cpp.component.n2_linear_ssp
+    tests/component/n2_linear_ssp_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_cubic_spline_ssp_tests
+    f2cpp.component.cubic_spline_ssp
+    tests/component/cubic_spline_ssp_test.cpp
     component
   )
   add_f2cpp_test(
@@ -220,6 +302,12 @@ if(BUILD_TESTING)
     bellhop_f2cpp_geometry_tracer_reflection_tests
     f2cpp.component.geometry_tracer_reflection
     tests/component/geometry_tracer_reflection_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_ray_trace_output_tests
+    f2cpp.component.ray_trace_output
+    tests/component/ray_trace_output_test.cpp
     component
   )
   add_f2cpp_test(
@@ -258,5 +346,16 @@ if(BUILD_TESTING)
     PROPERTIES
       LABELS "unit"
       WILL_FAIL TRUE
+  )
+  add_test(
+    NAME f2cpp.cli.output_lifecycle
+    COMMAND ${CMAKE_COMMAND}
+      -DF2CPP_EXECUTABLE=$<TARGET_FILE:bellhop_f2cpp>
+      -DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_output_lifecycle.cmake
+  )
+  set_tests_properties(
+    f2cpp.cli.output_lifecycle
+    PROPERTIES LABELS "component"
   )
 endif()

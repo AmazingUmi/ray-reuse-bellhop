@@ -1,0 +1,26 @@
+id = "source_beam_pattern_omni_control"
+description = "Explicit omnidirectional source-pattern control for the directional SBP case"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/misc/beampattern.f90 ReadPat omni branch", "Bellhop_origin/Bellhop/bellhop.f90 SrcBmPat interpolation"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 750.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 11, 51]
+prt_markers = ["VACUUM", "Perfectly RIGID"]
+prt_forbidden_markers = ["Using source beam pattern file", "THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

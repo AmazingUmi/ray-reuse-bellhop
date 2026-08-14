@@ -1,0 +1,27 @@
+id = "source_geometry_line"
+description = "Explicit RunType fourth-position X line-source field"
+origin_template = "origin.env.in"
+source_references = [
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 ReadRunType source geometry",
+  "Bellhop_origin/Bellhop/influence.f90 InfluenceCervenyCart source ratio",
+  "Bellhop_origin/Bellhop/influence.f90 ScalePressure source spreading",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 1000.0
+maximum_range_m = 5000.0
+minimum_angle_deg = -5.0
+maximum_angle_deg = 5.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 21, 51]
+prt_markers = ["VACUUM", "ACOUSTO-ELASTIC half-space", "Line source (Cartesian coordinates)"]
+prt_forbidden_markers = ["THORP volume attenuation added", "Point source (cylindrical coordinates)"]
+
+[profiles.single]
+frequencies_hz = [50.0]

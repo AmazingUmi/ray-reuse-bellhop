@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "bellhop/model/environment.hpp"
@@ -18,6 +19,7 @@ using bellhop::IntegratorSettings;
 using bellhop::RayPath;
 using bellhop::RayState;
 using bellhop::RayTerminationReason;
+using bellhop::QuadrilateralSspGrid;
 using bellhop::SoundSpeedPoint;
 using bellhop::SoundSpeedProfile;
 using bellhop::Source;
@@ -51,6 +53,24 @@ Environment makeUpwardCrossingEnvironment() {
            {.depth = 1000.0,
             .soundSpeed = 1500.0,
             .density = 1000.0}}),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+}
+
+Environment makeQuadrilateralRangeEnvironment() {
+  const auto grid = std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{
+          .rangesMeters = {-50.0, -25.0, 0.0, 25.0, 50.0},
+          .speedsDepthMajor = {1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
+                               1500.0, 1500.0, 1500.0, 1500.0, 1500.0},
+          .depthCount = 2U,
+          .rangeCount = 5U});
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 1000.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0}},
+          bellhop::SspInterpolationKind::Quadrilateral, grid),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
 }
 
@@ -234,6 +254,54 @@ void testSeaBoundariesReflect(Context& context) {
                 "seabed reflection preserves P = 1 + S + E");
 }
 
+void testRightwardQuadrilateralRangeCells(Context& context) {
+  const GeometryTracer tracer(
+      makeQuadrilateralRangeEnvironment(),
+      IntegratorSettings{.stepLength = 10.0,
+                         .rangeLimit = 1000.0,
+                         .depthLimit = 2000.0,
+                         .maximumRayPoints = 20U});
+  const RayPath path = tracer.trace(Source{.depth = 500.0}, 0.0);
+
+  context.check(
+      path.terminationReason == RayTerminationReason::NumericalFailure,
+      "Q grid exhaustion is a numerical failure, not a box exit");
+  context.check(path.terminationDetail.find("outside its grid") !=
+                    std::string::npos,
+                "Q grid exhaustion reports its SSP-domain cause");
+  context.check(path.points.size() >= 5U,
+                "rightward Q trace retains the internal-node neighborhood");
+  if (path.points.size() >= 5U) {
+    context.checkNear(path.points[3U].position.range, 25.0, 0.0,
+                      "Q limiter lands exactly on the next range node");
+    context.checkNear(path.steps[3U].stepLength, 10.0, 0.0,
+                      "right range node switches cells without a minimum step");
+    context.checkNear(path.points[4U].position.range, 35.0, 0.0,
+                      "rightward Q trace continues in the right-hand cell");
+  }
+}
+
+void testLeftwardQuadrilateralRangeCells(Context& context) {
+  const GeometryTracer tracer(
+      makeQuadrilateralRangeEnvironment(),
+      IntegratorSettings{.stepLength = 10.0,
+                         .rangeLimit = 1000.0,
+                         .depthLimit = 2000.0,
+                         .maximumRayPoints = 5U});
+  const RayPath path = tracer.trace(Source{.depth = 500.0}, kPi);
+
+  context.check(path.terminationReason == RayTerminationReason::PointLimit,
+                "leftward Q trace continues after switching cells");
+  context.checkNear(path.steps.front().stepLength, 0.01, 2.0e-15,
+                    "left departure from an exact node uses one minimum step");
+  context.check(path.points[1U].position.range < 0.0,
+                "leftward minimum step enters the left-hand cell");
+  context.checkNear(path.steps[1U].stepLength, 10.0, 0.0,
+                    "leftward Q trace uses the new range-cell hint");
+  context.check(path.points[2U].position.range < -10.0,
+                "leftward Q trace makes a full step after switching back");
+}
+
 }  // namespace
 
 int main() {
@@ -242,6 +310,8 @@ int main() {
   testUpwardInterfaceCrossing(context);
   testSourceOnNodeMovesWithoutLooping(context);
   testSeaBoundariesReflect(context);
+  testRightwardQuadrilateralRangeCells(context);
+  testLeftwardQuadrilateralRangeCells(context);
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

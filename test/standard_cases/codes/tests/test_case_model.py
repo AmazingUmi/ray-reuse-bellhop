@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 import unittest
 
 
@@ -9,7 +11,7 @@ CODES_ROOT = Path(__file__).resolve().parents[1]
 STANDARD_CASES_ROOT = CODES_ROOT.parent
 sys.path.insert(0, str(CODES_ROOT))
 
-from case_model import discover_cases
+from case_model import discover_cases, load_case
 
 
 class CaseModelTests(unittest.TestCase):
@@ -27,7 +29,371 @@ class CaseModelTests(unittest.TestCase):
                 "constant_speed_no_attenuation_5khz",
                 "constant_speed_thorp",
                 "munk_cerveny_cc",
+                "munk_n2",
+                "munk_pchip",
+                "munk_spline",
+                "i3_piecewise_boundaries",
+                "i3_curvilinear_oracle",
+                "i3_long_format_materials",
+                "attenuation_unit_n",
+                "attenuation_unit_f",
+                "attenuation_unit_m",
+                "attenuation_unit_w",
+                "attenuation_unit_q",
+                "attenuation_unit_l",
+                "volume_attenuation_francois_garrison",
+                "volume_attenuation_biological",
+                "elastic_halfspace_flat",
+                "elastic_halfspace_fluid_control",
+                "grain_size_flat",
+                "grain_size_equivalent_acoustic_control",
+                "tabulated_reflection_bottom",
+                "tabulated_reflection_rigid_control",
+                "q_range_dependent_cross_gradient",
+                "q_range_independent_control",
+                "multi_source_depths",
+                "irregular_receiver_pairs",
+                "source_beam_pattern_directional",
+                "source_beam_pattern_omni_control",
+                "ray_trace_vacuum_rigid",
+                "cartesian_component_pressure",
+                "cartesian_component_vertical",
+                "cartesian_component_horizontal",
+                "cerveny_width_space_filling",
+                "cerveny_width_wkb",
+                "cerveny_curvature_double",
+                "cerveny_curvature_zero",
+                "source_geometry_point_explicit",
+                "source_geometry_line",
+                "incoherent_direct",
+                "semicoherent_direct",
+                "ray_centered_component_pressure",
+                "ray_centered_component_vertical",
+                "ray_centered_component_horizontal",
+                "geometric_hat_cartesian",
+                "geometric_hat_ray_centered",
+                "geometric_hat_cartesian_safe_control",
+                "geometric_gaussian_cartesian",
+                "simple_gaussian_cartesian",
             },
+        )
+
+    def test_i4_attenuation_cases_are_scoped_to_origin_and_f2cpp(self) -> None:
+        for suffix in "nfmwql":
+            with self.subTest(unit=suffix):
+                self.assertEqual(
+                    self.cases[f"attenuation_unit_{suffix}"].supported_versions,
+                    ("origin", "f2cpp"),
+                )
+        for case_id in (
+            "volume_attenuation_francois_garrison",
+            "volume_attenuation_biological",
+            "elastic_halfspace_flat",
+            "elastic_halfspace_fluid_control",
+            "grain_size_flat",
+            "grain_size_equivalent_acoustic_control",
+            "tabulated_reflection_bottom",
+            "tabulated_reflection_rigid_control",
+            "q_range_dependent_cross_gradient",
+            "q_range_independent_control",
+            "multi_source_depths",
+            "irregular_receiver_pairs",
+            "source_beam_pattern_directional",
+            "source_beam_pattern_omni_control",
+            "ray_trace_vacuum_rigid",
+            "cartesian_component_pressure",
+            "cartesian_component_vertical",
+            "cartesian_component_horizontal",
+            "cerveny_width_space_filling",
+            "cerveny_width_wkb",
+            "cerveny_curvature_double",
+            "cerveny_curvature_zero",
+            "source_geometry_point_explicit",
+            "source_geometry_line",
+            "incoherent_direct",
+            "semicoherent_direct",
+            "ray_centered_component_pressure",
+            "ray_centered_component_vertical",
+            "ray_centered_component_horizontal",
+            "geometric_hat_cartesian",
+            "geometric_hat_ray_centered",
+            "geometric_hat_cartesian_safe_control",
+            "geometric_gaussian_cartesian",
+            "simple_gaussian_cartesian",
+        ):
+            with self.subTest(case=case_id):
+                self.assertEqual(
+                    self.cases[case_id].supported_versions,
+                    ("origin", "f2cpp"),
+                )
+
+    def test_i7_geometric_hat_fixtures_only_change_coordinate_family(self) -> None:
+        expected = {
+            "geometric_hat_cartesian": "CG",
+            "geometric_hat_ray_centered": "Cg",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, run_type in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (100.0,))
+                launch_count = definition.shared_launch_angle_count(
+                    frequencies
+                )
+                self.assertEqual(launch_count, 497)
+                rendered = definition.render_origin_environment(
+                    frequencies[0], launch_count
+                )
+                self.assertTrue(rendered.endswith("500.0  121.0  2.1\n"))
+                self.assertIn(f"'{run_type}'", rendered)
+                self.assertNotIn("'MS'", rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(
+                    rendered.replace(f"'{run_type}'", "'<FAMILY>'")
+                )
+                for companion in ("origin.ati", "origin.bty"):
+                    self.assertEqual(
+                        (definition.directory / companion).read_bytes(),
+                        (
+                            STANDARD_CASES_ROOT
+                            / "cases"
+                            / "i3_piecewise_boundaries"
+                            / companion
+                        ).read_bytes(),
+                    )
+        self.assertEqual(len(rendered_inputs), 2)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_ray_centered_fixtures_only_change_family_and_component(self) -> None:
+        expected = {
+            "cartesian_component_pressure": ("CC", "P"),
+            "ray_centered_component_pressure": ("CR", "P"),
+            "ray_centered_component_vertical": ("CR", "V"),
+            "ray_centered_component_horizontal": ("CR", "H"),
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, (family, component) in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (1000.0,))
+                launch_count = definition.shared_launch_angle_count(frequencies)
+                self.assertEqual(launch_count, 300)
+                rendered = definition.render_origin_environment(
+                    frequencies[0], launch_count
+                )
+                self.assertIn(f"'{family}'", rendered)
+                self.assertIn(f"1  5  '{component}'", rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(
+                    rendered.replace(f"'{family}'", "'<FAMILY>'").replace(
+                        f"1  5  '{component}'", "1  5  '<COMPONENT>'"
+                    )
+                )
+        self.assertEqual(len(rendered_inputs), 4)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_cartesian_gaussian_fixtures_only_change_family(self) -> None:
+        expected = {
+            "geometric_hat_cartesian_safe_control": "CG",
+            "geometric_gaussian_cartesian": "CB",
+            "simple_gaussian_cartesian": "CS",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, run_type in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (1000.0,))
+                launch_count = definition.shared_launch_angle_count(
+                    frequencies
+                )
+                self.assertEqual(launch_count, 300)
+                rendered = definition.render_origin_environment(
+                    frequencies[0], launch_count
+                )
+                self.assertTrue(rendered.endswith("1.0  101.0  0.26\n"))
+                self.assertIn(f"'{run_type}'", rendered)
+                self.assertNotIn("'MS'", rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(
+                    rendered.replace(f"'{run_type}'", "'<FAMILY>'")
+                )
+        self.assertEqual(len(rendered_inputs), 3)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_c_i_s_fixtures_only_change_run_mode(self) -> None:
+        expected = {
+            "constant_speed_direct": "'CC'",
+            "incoherent_direct": "'IC'",
+            "semicoherent_direct": "'SC'",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, run_type in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (50.0,))
+                launch_count = definition.shared_launch_angle_count(frequencies)
+                self.assertEqual(launch_count, 300)
+                rendered = definition.render_origin_environment(
+                    frequencies[0], launch_count
+                )
+                self.assertIn(run_type, rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(rendered.replace(run_type, "'<MODE>C'"))
+        self.assertEqual(len(rendered_inputs), 3)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_source_geometry_fixtures_only_change_run_type_fourth(self) -> None:
+        expected = {
+            "constant_speed_direct": "'CC'",
+            "source_geometry_point_explicit": "'CC R'",
+            "source_geometry_line": "'CC X'",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, run_type in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (50.0,))
+                launch_count = definition.shared_launch_angle_count(frequencies)
+                self.assertEqual(launch_count, 300)
+                rendered = definition.render_origin_environment(
+                    frequencies[0], launch_count
+                )
+                self.assertIn(run_type, rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(rendered.replace(run_type, "'<SOURCE>'"))
+        self.assertEqual(len(rendered_inputs), 3)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_cerveny_beam_option_fixtures_only_change_option(self) -> None:
+        expected = {
+            "cerveny_width_space_filling": "FS",
+            "i3_curvilinear_oracle": "MS",
+            "cerveny_width_wkb": "WS",
+            "cerveny_curvature_double": "MD",
+            "cerveny_curvature_zero": "MZ",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        control = self.cases["i3_curvilinear_oracle"]
+        for case_id, option in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (100.0,))
+                launch_count = definition.shared_launch_angle_count(frequencies)
+                self.assertEqual(launch_count, 459)
+                rendered = definition.render_origin_environment(
+                    frequencies[0], launch_count
+                )
+                self.assertIn(f"'{option}' 1.0  1.0", rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(
+                    rendered.replace(
+                        f"'{option}' 1.0  1.0", "'<OPTION>' 1.0  1.0"
+                    )
+                )
+                for companion in ("origin.ati", "origin.bty"):
+                    self.assertEqual(
+                        (definition.directory / companion).read_bytes(),
+                        (control.directory / companion).read_bytes(),
+                    )
+        self.assertEqual(len(rendered_inputs), 5)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_cartesian_component_fixtures_only_change_component(self) -> None:
+        expected = {
+            "cartesian_component_pressure": "P",
+            "cartesian_component_vertical": "V",
+            "cartesian_component_horizontal": "H",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, component in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (1000.0,))
+                rendered = definition.render_origin_environment(
+                    frequencies[0],
+                    definition.shared_launch_angle_count(frequencies),
+                )
+                self.assertIn(f"1  5  '{component}'", rendered)
+                self.assertEqual(
+                    rendered.count("1  5  'P'")
+                    + rendered.count("1  5  'V'")
+                    + rendered.count("1  5  'H'"),
+                    1,
+                )
+                rendered_inputs.add(rendered)
+                normalized.add(
+                    rendered.replace(f"1  5  '{component}'", "1  5  '<C>'")
+                )
+        self.assertEqual(len(rendered_inputs), 3)
+        self.assertEqual(len(normalized), 1)
+
+    def test_ray_trace_case_declares_ray_output(self) -> None:
+        ray_case = self.cases["ray_trace_vacuum_rigid"]
+        self.assertEqual(ray_case.output_kind, "ray")
+        self.assertIsNone(ray_case.expected_dimensions)
+        self.assertEqual(ray_case.supported_versions, ("origin", "f2cpp"))
+        self.assertEqual(
+            ray_case.shared_launch_angle_count(ray_case.frequencies("single")),
+            5,
+        )
+
+    def test_shd_output_remains_the_default(self) -> None:
+        direct = self.cases["constant_speed_direct"]
+        self.assertEqual(direct.output_kind, "shd")
+        self.assertIsNotNone(direct.expected_dimensions)
+
+    def test_shd_dimensions_require_seven_positive_axes(self) -> None:
+        source = self.cases["constant_speed_direct"].directory
+        for replacement in (
+            "shd_dimensions = [1, 1, 1]",
+            "shd_dimensions = [1, 1, 1, 1, 1, 0, 51]",
+        ):
+            with self.subTest(replacement=replacement):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    target = Path(temporary_directory) / "case"
+                    shutil.copytree(source, target)
+                    manifest = target / "case.toml"
+                    contents = manifest.read_text(encoding="utf-8")
+                    contents = contents.replace(
+                        "shd_dimensions = [1, 1, 1, 1, 1, 21, 51]",
+                        replacement,
+                    )
+                    manifest.write_text(contents, encoding="utf-8")
+                    with self.assertRaisesRegex(
+                        ValueError, "seven positive integers"
+                    ):
+                        load_case(target)
+
+    def test_pchip_case_is_scoped_to_implemented_versions(self) -> None:
+        self.assertEqual(
+            self.cases["munk_pchip"].supported_versions,
+            ("origin", "f2cpp"),
+        )
+
+    def test_n2_case_is_scoped_to_implemented_versions(self) -> None:
+        self.assertEqual(
+            self.cases["munk_n2"].supported_versions,
+            ("origin", "f2cpp"),
+        )
+
+    def test_spline_case_is_scoped_to_implemented_versions(self) -> None:
+        self.assertEqual(
+            self.cases["munk_spline"].supported_versions,
+            ("origin", "f2cpp"),
         )
 
     def test_every_profile_renders_all_origin_tokens(self) -> None:

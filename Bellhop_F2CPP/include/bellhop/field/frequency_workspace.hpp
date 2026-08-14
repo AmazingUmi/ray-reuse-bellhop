@@ -46,4 +46,31 @@ class FrequencyWorkspace {
   std::vector<std::complex<double>> pressure_;
 };
 
+// I/S runs accumulate non-negative per-ray power before converting it to a
+// pressure amplitude.  Keep that state distinct from coherent complex
+// pressure so the two accumulation laws cannot be mixed accidentally.
+class IntensityWorkspace {
+ public:
+  IntensityWorkspace(double frequency, const ReceiverGrid& receivers);
+
+  [[nodiscard]] double frequency() const noexcept;
+  [[nodiscard]] std::size_t depthCount() const noexcept;
+  [[nodiscard]] std::size_t rangeCount() const noexcept;
+  [[nodiscard]] std::span<const double> intensity() const noexcept;
+  [[nodiscard]] double at(std::size_t depthIndex,
+                          std::size_t rangeIndex) const;
+  void add(std::size_t depthIndex, std::size_t rangeIndex,
+           double contribution);
+  void clear() noexcept;
+
+ private:
+  [[nodiscard]] std::size_t flatIndex(std::size_t depthIndex,
+                                      std::size_t rangeIndex) const;
+
+  double frequency_;
+  std::size_t depthCount_;
+  std::size_t rangeCount_;
+  std::vector<double> intensity_;
+};
+
 }  // namespace bellhop

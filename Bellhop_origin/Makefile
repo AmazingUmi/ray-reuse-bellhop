@@ -46,6 +46,7 @@ BELLHOP_OBJECTS = \
 	$(OBJ_DIR)/bellhop_ArrMod.o \
 	$(OBJ_DIR)/bellhop_bdryMod.o \
 	$(OBJ_DIR)/bellhop_sspMod.o \
+	$(OBJ_DIR)/bellhop_SspOracleDiagnostics.o \
 	$(OBJ_DIR)/bellhop_ReflectMod.o \
 	$(OBJ_DIR)/bellhop_WriteRay.o \
 	$(OBJ_DIR)/bellhop_influence.o \
@@ -140,6 +141,10 @@ $(OBJ_DIR)/bellhop_sspMod.o: \
 	$(OBJ_DIR)/misc_AttenMod.o \
 	$(OBJ_DIR)/misc_splinec.o
 
+$(OBJ_DIR)/bellhop_SspOracleDiagnostics.o: \
+	$(OBJ_DIR)/misc_FatalError.o \
+	$(OBJ_DIR)/bellhop_sspMod.o
+
 $(OBJ_DIR)/bellhop_ReflectMod.o: \
 	$(OBJ_DIR)/misc_AttenMod.o \
 	$(OBJ_DIR)/misc_RefCoef.o \
@@ -196,6 +201,7 @@ $(OBJ_DIR)/bellhop_bellhop.o: \
 	$(OBJ_DIR)/bellhop_ReadEnvironmentBell.o \
 	$(OBJ_DIR)/bellhop_ReflectMod.o \
 	$(OBJ_DIR)/bellhop_sspMod.o \
+	$(OBJ_DIR)/bellhop_SspOracleDiagnostics.o \
 	$(OBJ_DIR)/bellhop_Step.o \
 	$(OBJ_DIR)/bellhop_OracleDiagnostics.o \
 	$(OBJ_DIR)/bellhop_WriteRay.o

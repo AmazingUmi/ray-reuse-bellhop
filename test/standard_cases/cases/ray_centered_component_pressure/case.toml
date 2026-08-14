@@ -1,0 +1,27 @@
+id = "ray_centered_component_pressure"
+description = "Ray-centered Cerveny pressure control"
+origin_template = "origin.env.in"
+source_references = [
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 ray-centered run type and component input",
+  "Bellhop_origin/Bellhop/bellhop.f90 InfluenceCervenyRayCen dispatch",
+  "Bellhop_origin/Bellhop/influence.f90 InfluenceCervenyRayCen P/V/H formulas",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 250.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 7, 21]
+prt_markers = ["Ray centered beams", "Component", "VACUUM", "Perfectly RIGID"]
+prt_forbidden_markers = ["Cartesian beams", "THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

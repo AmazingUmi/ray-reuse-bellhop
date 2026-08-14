@@ -1,0 +1,120 @@
+{
+  "cases": {
+    "acoustic_control": "grain_size_equivalent_acoustic_control",
+    "grain_size": "grain_size_flat",
+    "profiles": {
+      "broadband_smoke": [
+        1000.0,
+        2000.0
+      ],
+      "single": [
+        1000.0
+      ]
+    }
+  },
+  "component_guards": {
+    "all_grain_size_polynomial_branches_and_boundaries": true,
+    "loss_parameter_conversion_matches_origin": true,
+    "two_frequency_projection_preserves_frozen_path": true
+  },
+  "generation": {
+    "case_command": "python3 test/standard_cases/codes/standard_cases.py test --version <origin|f2cpp> --case <grain_size_flat|grain_size_equivalent_acoustic_control> --profile <single|broadband_smoke> --executable <matching-executable> --results-root <results-root>",
+    "validator_command": "python3 test/standard_cases/codes/validate_i4_grain_size.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
+  },
+  "grain_size_equivalent_acoustic_noop_guards": {
+    "f2cpp/broadband_smoke/1000Hz": {
+      "control_shade_sha256": "c32b7fb941138fe4d53b9c62b14574095060a5555d18f1963620e74af7120a82",
+      "grain_shade_sha256": "d7077df5b96656d477bbbb0a3d5025d6f116b2e651d7143c968cf90266605e38",
+      "passed": true,
+      "pressure_bit_identical": true
+    },
+    "f2cpp/broadband_smoke/2000Hz": {
+      "control_shade_sha256": "7cbda033a23f49e34a0b47036af88a4ae1d3196b0d11b0d525a4713745d36e52",
+      "grain_shade_sha256": "01eb8ddf17c9f819db8234a9b96769183f0aceb21defb46b40041126f174aa22",
+      "passed": true,
+      "pressure_bit_identical": true
+    },
+    "f2cpp/single/1000Hz": {
+      "control_shade_sha256": "c32b7fb941138fe4d53b9c62b14574095060a5555d18f1963620e74af7120a82",
+      "grain_shade_sha256": "d7077df5b96656d477bbbb0a3d5025d6f116b2e651d7143c968cf90266605e38",
+      "passed": true,
+      "pressure_bit_identical": true
+    },
+    "origin/broadband_smoke/1000Hz": {
+      "control_shade_sha256": "2c8049a8dbc29316dfb9aa6e6f120314e448e3e7c0c41b8f47ecbd13b56a0ad0",
+      "grain_shade_sha256": "e45e06104d2e2f444bb1596d7b37218b4975cb07ad16bc59d2278c3925a21673",
+      "passed": true,
+      "pressure_bit_identical": true
+    },
+    "origin/broadband_smoke/2000Hz": {
+      "control_shade_sha256": "2c8dd2bcade911e14d1f4d6bb5efa32a500b811608413add6180c95551f747de",
+      "grain_shade_sha256": "29d4d85aa5904ce80b83678654048a3209edc34a6f67fd9604f126da9d29552e",
+      "passed": true,
+      "pressure_bit_identical": true
+    },
+    "origin/single/1000Hz": {
+      "control_shade_sha256": "2c8049a8dbc29316dfb9aa6e6f120314e448e3e7c0c41b8f47ecbd13b56a0ad0",
+      "grain_shade_sha256": "e45e06104d2e2f444bb1596d7b37218b4975cb07ad16bc59d2278c3925a21673",
+      "passed": true,
+      "pressure_bit_identical": true
+    }
+  },
+  "origin_f2cpp_field_comparisons": {
+    "grain_size_equivalent_acoustic_control/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.504387725503875e-08,
+      "max_pressure_relative": 1.8359095292908023e-06,
+      "max_tl_difference_db": 2.288818359375e-05,
+      "passed": true
+    },
+    "grain_size_equivalent_acoustic_control/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.677027228197403e-08,
+      "max_pressure_relative": 2.5519188966427464e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "grain_size_equivalent_acoustic_control/single/1000Hz": {
+      "max_pressure_absolute": 1.504387725503875e-08,
+      "max_pressure_relative": 1.8359095292908023e-06,
+      "max_tl_difference_db": 2.288818359375e-05,
+      "passed": true
+    },
+    "grain_size_flat/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 1.504387725503875e-08,
+      "max_pressure_relative": 1.8359095292908023e-06,
+      "max_tl_difference_db": 2.288818359375e-05,
+      "passed": true
+    },
+    "grain_size_flat/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.677027228197403e-08,
+      "max_pressure_relative": 2.5519188966427464e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "grain_size_flat/single/1000Hz": {
+      "max_pressure_absolute": 1.504387725503875e-08,
+      "max_pressure_relative": 1.8359095292908023e-06,
+      "max_tl_difference_db": 2.288818359375e-05,
+      "passed": true
+    }
+  },
+  "origin_oracle": {
+    "repair": "ReadEnvironmentBell TopBot G now stores vr, alpha2_f, and rho=rhor, matching the existing 3-D province data flow",
+    "uninitialized_nan_behavior_is_not_a_compatibility_target": true,
+    "upstream_2d_initialization_defect_repaired": true
+  },
+  "schema": "bellhop.f2cpp.i4_grain_size_validation",
+  "schema_version": 1,
+  "sha256": {
+    "f2cpp_executable": "6cfb101d554562db5a6434229a5256145990e389cdca8fd4884fd3d0370034a3",
+    "f2cpp_field_aggregate": "dea0884cad3b5e683429391d18755bb7fddbf2f1f0006a8352ba2d2971d67f55",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_field_aggregate": "ecf0ded38c35e0a97aaf72b96911e96eb7b7652843204ec809158901442877d0",
+    "rendered_input_aggregates": {
+      "grain_size_equivalent_acoustic_control/broadband_smoke": "1276c98f30536b6c9906428ccd945e865954e23669f732252848f3cea42ed1f1",
+      "grain_size_equivalent_acoustic_control/single": "1797b7ff036125e50a48f05cc46b71ad6933e8a645163323e6887f69e5835bd0",
+      "grain_size_flat/broadband_smoke": "1ad4f0807fcae620de011df85d576ae6244e17a92ab34a78443eed18d89f7bf6",
+      "grain_size_flat/single": "c6f13a33b4ffc69c78a603c51e08f3e0536d2d3206fcfd68d378ebb302232049"
+    }
+  },
+  "status": "passed"
+}

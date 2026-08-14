@@ -1,0 +1,25 @@
+id = "attenuation_unit_w"
+description = "Constant-speed field using dB/wavelength attenuation input"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/misc/AttenMod.f90 CRCI unit W"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 1000.0
+maximum_range_m = 1000.0
+minimum_angle_deg = -2.0
+maximum_angle_deg = 2.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 11, 101]
+prt_markers = ["VACUUM", "ACOUSTO-ELASTIC half-space", "Attenuation units: dB/wavelength"]
+
+[profiles.single]
+frequencies_hz = [5000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [4000.0, 5000.0]

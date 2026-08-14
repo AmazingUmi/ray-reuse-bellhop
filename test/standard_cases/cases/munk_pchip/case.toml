@@ -1,0 +1,26 @@
+id = "munk_pchip"
+description = "Munk PCHIP SSP with Cartesian Cerveny beams and acoustic bottom"
+origin_template = "origin.env.in"
+source_references = [
+  "Acoustic Toolbox tests/Munk/MunkB_Coh_CervenyC.env",
+  "Bellhop_origin/misc/pchipMod.f90",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1501.38
+water_depth_m = 5000.0
+maximum_range_m = 100000.0
+minimum_angle_deg = -20.3
+maximum_angle_deg = 20.3
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 201, 501]
+prt_markers = ["VACUUM", "ACOUSTO-ELASTIC half-space"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [50.0]

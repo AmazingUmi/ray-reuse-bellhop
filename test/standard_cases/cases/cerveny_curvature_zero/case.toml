@@ -1,0 +1,29 @@
+id = "cerveny_curvature_zero"
+description = "Cartesian Cerveny zero reflection curvature on the curvilinear control geometry"
+origin_template = "origin.env.in"
+companion_files = ["origin.ati", "origin.bty"]
+source_references = [
+  "Acoustic Toolbox Bellhop 2-D boundary C short format",
+  "Bellhop_origin/Bellhop/bellhop.f90 PickEpsilon",
+  "Bellhop_origin/Bellhop/influence.f90 BranchCut",
+  "Bellhop_origin/Bellhop/ReflectMod.f90 CurvatureCorrection2",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 130.0
+maximum_range_m = 1900.0
+minimum_angle_deg = -40.0
+maximum_angle_deg = 40.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 2, 3]
+prt_markers = ["Curvilinear Interpolation", "VACUUM", "Perfectly RIGID", "Minimum width beams", "Curvature zeroing invoked"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [100.0]

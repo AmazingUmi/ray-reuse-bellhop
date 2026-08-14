@@ -1,0 +1,21 @@
+# Cubic spline activates nonzero czz throughout the Munk profile. The
+# trajectory oracle remains much tighter; these final-field tolerances cover
+# binary32 pressure sensitivity near caustics without changing other cases.
+[pressure]
+absolute = 1.0e-8
+relative = 1.0e-3
+relative_floor = 1.0e-10
+
+[transmission_loss]
+absolute_db = 5.0e-3
+pressure_floor = 1.0e-10
+
+[phase]
+absolute_rad = 1.0e-3
+pressure_floor = 1.0e-4
+
+[trajectory]
+position_m = 1.0e-8
+slowness_s_per_m = 1.0e-12
+dynamic_p = 1.0e-9
+dynamic_q = 1.0e-9

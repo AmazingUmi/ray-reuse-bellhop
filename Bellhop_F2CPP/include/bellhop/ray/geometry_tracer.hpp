@@ -2,10 +2,11 @@
 
 #include <vector>
 
-#include "bellhop/model/c_linear_ssp.hpp"
+#include "bellhop/model/sound_speed_evaluator.hpp"
 #include "bellhop/model/environment.hpp"
 #include "bellhop/model/simulation_case.hpp"
 #include "bellhop/ray/ray_path.hpp"
+#include "bellhop/ray/flat_boundary_reflection.hpp"
 
 namespace bellhop {
 
@@ -21,18 +22,25 @@ namespace bellhop {
 class GeometryTracer {
  public:
   GeometryTracer(const Environment& environment,
-                 IntegratorSettings integrator);
-  explicit GeometryTracer(const SimulationCase& simulation);
+                 IntegratorSettings integrator,
+                 BoundaryCurvatureMode curvatureMode =
+                     BoundaryCurvatureMode::Standard);
+  explicit GeometryTracer(
+      const SimulationCase& simulation,
+      BoundaryCurvatureMode curvatureMode =
+          BoundaryCurvatureMode::Standard);
 
   [[nodiscard]] RayPath trace(const Source& source,
                               double launchAngle) const;
 
  private:
-  CLinearSsp soundSpeedProfile_;
+  GeometrySspEvaluator soundSpeedProfile_;
   IntegratorSettings integrator_;
   std::vector<double> profileDepths_;
-  double seaSurfaceDepth_{};
-  double seabedDepth_{};
+  BoundaryModel seaSurfaceBoundary_;
+  BoundaryModel seabedBoundary_;
+  bool rayTraceMode_{};
+  BoundaryCurvatureMode curvatureMode_{BoundaryCurvatureMode::Standard};
 };
 
 }  // namespace bellhop

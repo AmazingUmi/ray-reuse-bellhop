@@ -1,0 +1,145 @@
+{
+  "cases": {
+    "profiles": {
+      "broadband_smoke": [
+        1000.0,
+        2000.0
+      ],
+      "single": [
+        1000.0
+      ]
+    },
+    "range_dependent": "q_range_dependent_cross_gradient",
+    "range_independent_control": "q_range_independent_control"
+  },
+  "compatibility_tolerances": {
+    "control_exception_reason": "the constant-Q control is an effect/no-op guard; coherent near-zero cells amplify sub-micropressure differences, while the range-dependent feature case keeps the default strict field gate",
+    "range_dependent_case": "codes/tolerances.toml",
+    "range_independent_control": "codes/tolerances_i5_q_control.toml"
+  },
+  "executables": {
+    "f2cpp": {
+      "mtime_ns": 1786428614630000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_F2CPP/build/release/bellhop_f2cpp",
+      "sha256": "75d161912f030779ea0d09f341693e8984a6fba97fa6f99b10b496d4b62b2e86"
+    },
+    "origin": {
+      "mtime_ns": 1786424159320000000,
+      "path": "/Volumes/LYY/user_projects/ray-reuse bellhop/Bellhop_origin/bin/bellhop",
+      "sha256": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537"
+    }
+  },
+  "generation": {
+    "case_commands": [
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case q_range_dependent_cross_gradient --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case q_range_dependent_cross_gradient --profile broadband_smoke --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case q_range_independent_control --profile single --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version origin --case q_range_independent_control --profile broadband_smoke --executable Bellhop_origin/bin/bellhop --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case q_range_dependent_cross_gradient --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case q_range_dependent_cross_gradient --profile broadband_smoke --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case q_range_independent_control --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>",
+      "python3 test/standard_cases/codes/standard_cases.py test --version f2cpp --case q_range_independent_control --profile broadband_smoke --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root <results-root>"
+    ],
+    "validator_command": "python3 test/standard_cases/codes/validate_i5_quadrilateral_ssp.py --results-root <results-root> --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i5_quadrilateral_ssp_report.json"
+  },
+  "origin_f2cpp_field_comparisons": {
+    "q_range_dependent_cross_gradient/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 2.0489096641540527e-08,
+      "max_pressure_relative": 2.2739066025678767e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "q_range_dependent_cross_gradient/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 1.3040594382118798e-08,
+      "max_pressure_relative": 2.2828207875136286e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "q_range_dependent_cross_gradient/single/1000Hz": {
+      "max_pressure_absolute": 2.0489096641540527e-08,
+      "max_pressure_relative": 2.2739066025678767e-06,
+      "max_tl_difference_db": 1.52587890625e-05,
+      "passed": true
+    },
+    "q_range_independent_control/broadband_smoke/1000Hz": {
+      "max_pressure_absolute": 3.2316546594302054e-07,
+      "max_pressure_relative": 0.0014003886608406901,
+      "max_tl_difference_db": 0.01125335693359375,
+      "passed": true
+    },
+    "q_range_independent_control/broadband_smoke/2000Hz": {
+      "max_pressure_absolute": 5.798981987936713e-07,
+      "max_pressure_relative": 0.0003990904660895467,
+      "max_tl_difference_db": 0.003070831298828125,
+      "passed": true
+    },
+    "q_range_independent_control/single/1000Hz": {
+      "max_pressure_absolute": 3.2316546594302054e-07,
+      "max_pressure_relative": 0.0014003886608406901,
+      "max_tl_difference_db": 0.01125335693359375,
+      "passed": true
+    }
+  },
+  "provenance_guards": {
+    "distinct_executable_hashes": true,
+    "distinct_executable_paths": true,
+    "effect_guard_count": 6,
+    "field_comparison_slice_count": 6,
+    "origin_f2cpp_rendered_env_ssp_inputs_equal": true,
+    "origin_f2cpp_staged_ssp_sidecars_equal": true,
+    "range_dependent_and_control_ssp_sources_distinct": true,
+    "results_not_older_than_executables": true,
+    "staged_ssp_sidecars_equal_canonical_sources": true
+  },
+  "range_dependent_effect_guards": {
+    "f2cpp/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_q_control": 0.029652928933501244,
+      "passed": true
+    },
+    "f2cpp/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_q_control": 0.03491731360554695,
+      "passed": true
+    },
+    "f2cpp/single/1000Hz": {
+      "max_pressure_absolute_vs_q_control": 0.029652928933501244,
+      "passed": true
+    },
+    "origin/broadband_smoke/1000Hz": {
+      "max_pressure_absolute_vs_q_control": 0.029652925208210945,
+      "passed": true
+    },
+    "origin/broadband_smoke/2000Hz": {
+      "max_pressure_absolute_vs_q_control": 0.03491731360554695,
+      "passed": true
+    },
+    "origin/single/1000Hz": {
+      "max_pressure_absolute_vs_q_control": 0.029652925208210945,
+      "passed": true
+    }
+  },
+  "schema": "bellhop.f2cpp.i5_quadrilateral_ssp_validation",
+  "schema_version": 1,
+  "sha256": {
+    "canonical_ssp_sidecars": {
+      "q_range_dependent_cross_gradient": "81f1e742e36a09cf61bcd465900b353cbfa9cd34065ab7332d80c06c05467ada",
+      "q_range_independent_control": "31a88413225229d03fdcf679ee3ed13760ff20c5ad9eb5acd79a646c65d55881"
+    },
+    "f2cpp_executable": "75d161912f030779ea0d09f341693e8984a6fba97fa6f99b10b496d4b62b2e86",
+    "f2cpp_field_aggregate": "1b2472738cf3021fd7bf08d69386e6f776d9d0c72bcd640930b315a702b16d42",
+    "origin_executable": "d398873b5d4916572ee651ee9917f7b9cd1ba1705be650c419eb55ab4951c537",
+    "origin_field_aggregate": "e80f63947f718cf909e276e935e7c590e17ca451dddb83c91ea23de26b5ca8c7",
+    "rendered_env_ssp_aggregates": {
+      "q_range_dependent_cross_gradient/broadband_smoke": "e8d328fe87d6cc5016fe02a871c785d0b59255ee36f3e7a609674a041fd9f1e7",
+      "q_range_dependent_cross_gradient/single": "fc880fe840b646c693279a28277432b46bf6d30b080ca0f73ac0b59579418aa3",
+      "q_range_independent_control/broadband_smoke": "59ed25636a8be8fbad250bd4744bb8ed18a439864f914eb577dc34e3bcf3327f",
+      "q_range_independent_control/single": "7db6654bf1427a3c1104ed2afb21d0fe98bda527b0e5ce1ee54b0ee78ba80eeb"
+    },
+    "staged_ssp_aggregates": {
+      "q_range_dependent_cross_gradient/broadband_smoke": "f6111b811a3cf6e0a0e1b04f27adf6634a4da59b36610a12347f5ebb2a1a8244",
+      "q_range_dependent_cross_gradient/single": "81f1e742e36a09cf61bcd465900b353cbfa9cd34065ab7332d80c06c05467ada",
+      "q_range_independent_control/broadband_smoke": "c896ae5aa0d274e2b82406974824935f72dae4c64f624e1ce95cfd8a3f176eda",
+      "q_range_independent_control/single": "31a88413225229d03fdcf679ee3ed13760ff20c5ad9eb5acd79a646c65d55881"
+    }
+  },
+  "status": "passed"
+}

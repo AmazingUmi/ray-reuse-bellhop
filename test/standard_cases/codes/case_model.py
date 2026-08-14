@@ -15,17 +15,21 @@ class CaseDefinition:
     case_id: str
     directory: Path
     description: str
+    output_kind: str
     template_path: Path
+    companion_files: tuple[Path, ...]
     source_references: tuple[str, ...]
     sound_speed_at_source_mps: float
     water_depth_m: float
     maximum_range_m: float
     minimum_angle_deg: float
     maximum_angle_deg: float
-    expected_dimensions: tuple[int, ...]
+    explicit_launch_angle_count: int | None
+    expected_dimensions: tuple[int, ...] | None
     prt_markers: tuple[str, ...]
     prt_forbidden_markers: tuple[str, ...]
     profiles: dict[str, dict[str, object]]
+    supported_versions: tuple[str, ...]
 
     def frequencies(self, profile_name: str) -> tuple[float, ...]:
         try:
@@ -62,6 +66,11 @@ class CaseDefinition:
     def launch_angle_counts(
         self, frequencies: tuple[float, ...]
     ) -> dict[str, int]:
+        if self.explicit_launch_angle_count is not None:
+            return {
+                "explicit": self.explicit_launch_angle_count,
+                "final": self.explicit_launch_angle_count,
+            }
         design_frequency = max(frequencies)
         phase_count = max(
             int(
@@ -120,11 +129,64 @@ def load_case(case_directory: Path) -> CaseDefinition:
 
     launch = raw["launch"]
     validation = raw["validation"]
+    launch_policy = str(launch.get("policy", "shared_fmax"))
+    if launch_policy not in {"shared_fmax", "explicit"}:
+        raise ValueError(
+            f"{manifest_path}: launch.policy must be shared_fmax or explicit"
+        )
+    explicit_launch_angle_count: int | None = None
+    if launch_policy == "explicit":
+        explicit_launch_angle_count = int(launch.get("count", 0))
+        if explicit_launch_angle_count <= 0:
+            raise ValueError(
+                f"{manifest_path}: explicit launch policy requires count > 0"
+            )
+    output_kind = str(raw.get("output_kind", "shd"))
+    if output_kind not in {"shd", "ray"}:
+        raise ValueError(
+            f"{manifest_path}: output_kind must be 'shd' or 'ray'"
+        )
+    raw_dimensions = validation.get("shd_dimensions")
+    if output_kind == "shd" and raw_dimensions is None:
+        raise ValueError(
+            f"{manifest_path}: SHD cases require validation.shd_dimensions"
+        )
+    if output_kind == "ray" and raw_dimensions is not None:
+        raise ValueError(
+            f"{manifest_path}: ray cases must not define shd_dimensions"
+        )
+    if raw_dimensions is not None:
+        dimensions = tuple(int(value) for value in raw_dimensions)
+        if len(dimensions) != 7 or any(value <= 0 for value in dimensions):
+            raise ValueError(
+                f"{manifest_path}: validation.shd_dimensions must contain "
+                "seven positive integers"
+            )
+    else:
+        dimensions = None
+    supported_versions = tuple(
+        raw.get("compatibility", {}).get(
+            "versions", ("origin", "f2cpp", "rayreuse")
+        )
+    )
+    known_versions = {"origin", "f2cpp", "rayreuse"}
+    if not supported_versions or len(set(supported_versions)) != len(
+        supported_versions
+    ) or any(version not in known_versions for version in supported_versions):
+        raise ValueError(
+            f"{manifest_path}: compatibility.versions must contain unique "
+            "known versions"
+        )
     return CaseDefinition(
         case_id=str(raw["id"]),
         directory=case_directory,
         description=str(raw["description"]),
+        output_kind=output_kind,
         template_path=case_directory / str(raw["origin_template"]),
+        companion_files=tuple(
+            case_directory / str(value)
+            for value in raw.get("companion_files", [])
+        ),
         source_references=tuple(raw.get("source_references", [])),
         sound_speed_at_source_mps=float(
             launch["sound_speed_at_source_mps"]
@@ -133,14 +195,14 @@ def load_case(case_directory: Path) -> CaseDefinition:
         maximum_range_m=float(launch["maximum_range_m"]),
         minimum_angle_deg=float(launch["minimum_angle_deg"]),
         maximum_angle_deg=float(launch["maximum_angle_deg"]),
-        expected_dimensions=tuple(
-            int(value) for value in validation["shd_dimensions"]
-        ),
+        explicit_launch_angle_count=explicit_launch_angle_count,
+        expected_dimensions=dimensions,
         prt_markers=tuple(validation.get("prt_markers", [])),
         prt_forbidden_markers=tuple(
             validation.get("prt_forbidden_markers", [])
         ),
         profiles=dict(raw["profiles"]),
+        supported_versions=supported_versions,
     )
 
 

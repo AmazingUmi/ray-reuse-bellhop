@@ -87,10 +87,25 @@ void validateUniformReceiverRanges(const ReceiverGrid& receivers,
 }
 
 void validateAccumulateInput(
-    const FrequencyWorkspace& workspace, const RayPath& path,
+    const FrequencyWorkspace* pressureWorkspace,
+    const IntensityWorkspace* intensityWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState,
     std::complex<double> epsilon, const ReceiverGrid& receivers,
+    BeamWidthMode widthMode,
     const std::optional<CartesianCervenyDiagnosticRequest>& request) {
+  if ((pressureWorkspace == nullptr) == (intensityWorkspace == nullptr)) {
+    throw ValidationError(
+        "Cartesian Cerveny influence requires exactly one workspace");
+  }
+  const double workspaceFrequency =
+      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
+                                   : intensityWorkspace->frequency();
+  const std::size_t workspaceDepthCount =
+      pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
+                                   : intensityWorkspace->depthCount();
+  const std::size_t workspaceRangeCount =
+      pressureWorkspace != nullptr ? pressureWorkspace->rangeCount()
+                                   : intensityWorkspace->rangeCount();
   if (path.points.empty()) {
     throw ValidationError(
         "Cartesian Cerveny influence requires a non-empty ray path");
@@ -99,7 +114,7 @@ void validateAccumulateInput(
     throw ValidationError(
         "Cartesian Cerveny geometry and frequency-state sizes must match");
   }
-  if (workspace.frequency() != frequencyState.frequency) {
+  if (workspaceFrequency != frequencyState.frequency) {
     throw ValidationError(
         "Cartesian Cerveny workspace and ray frequencies must match");
   }
@@ -120,19 +135,37 @@ void validateAccumulateInput(
     requireFinite(point.amplitude, "Cartesian Cerveny amplitude");
     requireFinite(
         point.reflectionPhase, "Cartesian Cerveny reflection phase");
-    if (point.amplitude < 0.0) {
+    // RefCoef.f90 makes its table-domain decision in REAL(4), then forms the
+    // interpolation weight from the original REAL(8) angle.  A table with a
+    // zero endpoint can therefore produce a tiny negative extrapolated
+    // amplitude inside half a REAL(4) ULP.  Bellhop immediately marks that
+    // point inactive via its amplitude cutoff, but retains it as the terminal
+    // Beam%Nsteps point.  Preserve that terminal value while continuing to
+    // reject a negative amplitude on any point that remains active.
+    if (point.active && point.amplitude < 0.0) {
       throw ValidationError(
-          "Cartesian Cerveny amplitude must be non-negative");
+          "Cartesian Cerveny active amplitude must be non-negative");
     }
   }
-  if (workspace.depthCount() != receivers.depthCount() ||
-      workspace.rangeCount() != receivers.rangeCount()) {
+  if (workspaceDepthCount != receivers.receiversPerRange() ||
+      workspaceRangeCount != receivers.rangeCount()) {
     throw ValidationError(
         "Cartesian Cerveny workspace and receiver-grid sizes must match");
   }
-  for (const std::complex<double> pressure : workspace.pressure()) {
-    requireFiniteComplex(
-        pressure, "Cartesian Cerveny existing workspace pressure");
+  if (pressureWorkspace != nullptr) {
+    for (const std::complex<double> pressure :
+         pressureWorkspace->pressure()) {
+      requireFiniteComplex(
+          pressure, "Cartesian Cerveny existing workspace pressure");
+    }
+  } else {
+    for (const double intensity : intensityWorkspace->intensity()) {
+      if (!std::isfinite(intensity) || intensity < 0.0) {
+        throw ValidationError(
+            "Cartesian Cerveny existing workspace intensity must be "
+            "finite and non-negative");
+      }
+    }
   }
   if (!std::isfinite(path.launchAngle)) {
     throw ValidationError(
@@ -161,13 +194,18 @@ void validateAccumulateInput(
     previousTravelTime = point.realTravelTime;
   }
   requireFiniteComplex(epsilon, "Cartesian Cerveny epsilon");
-  if (epsilon.real() != 0.0 || epsilon.imag() <= 0.0) {
+  if ((widthMode == BeamWidthMode::SpaceFilling ||
+       widthMode == BeamWidthMode::MinimumWidth) &&
+      (epsilon.real() != 0.0 || epsilon.imag() <= 0.0)) {
     throw ValidationError(
-        "Cartesian Cerveny minimum-width epsilon must be positive imaginary");
+        "space-filling/minimum-width epsilon must be positive imaginary");
+  }
+  if (widthMode == BeamWidthMode::Wkb && epsilon.imag() != 0.0) {
+    throw ValidationError("WKB epsilon must be real");
   }
   if (request.has_value() &&
       (request->receiverRangeIndex >= receivers.rangeCount() ||
-       request->receiverDepthIndex >= receivers.depthCount())) {
+       request->receiverDepthIndex >= receivers.receiversPerRange())) {
     throw ValidationError(
         "Cartesian Cerveny diagnostic receiver index is out of range");
   }
@@ -181,8 +219,9 @@ struct PrecomputedRayValues {
 };
 
 [[nodiscard]] PrecomputedRayValues precomputeRayValues(
-    const RayPath& path, const CLinearSsp& soundSpeedProfile,
-    std::complex<double> epsilon, std::size_t pointCount) {
+    const RayPath& path, const GeometrySspEvaluator& soundSpeedProfile,
+    std::complex<double> epsilon, std::size_t pointCount,
+    BeamWidthMode widthMode) {
   PrecomputedRayValues values;
   values.p.reserve(pointCount);
   values.q.reserve(pointCount);
@@ -234,7 +273,7 @@ struct PrecomputedRayValues {
     int kmah = index == 0U ? 1 : values.kmah.back();
     if (index != 0U) {
       kmah = updateCervenyKmah(
-          values.q[index - 1U], q, kmah);
+          values.q[index - 1U], q, kmah, widthMode);
     }
     values.kmah.push_back(kmah);
   }
@@ -366,11 +405,25 @@ struct PrecomputedRayValues {
 
 int updateCervenyKmah(std::complex<double> qLeft,
                       std::complex<double> qRight,
-                      int currentKmah) {
+                      int currentKmah,
+                      BeamWidthMode widthMode) {
   requireFiniteComplex(qLeft, "Cerveny branch-cut left q");
   requireFiniteComplex(qRight, "Cerveny branch-cut right q");
   if (currentKmah != -1 && currentKmah != 1) {
     throw ValidationError("Cerveny KMAH must be -1 or +1");
+  }
+  if (widthMode == BeamWidthMode::Wkb) {
+    const double leftReal = qLeft.real();
+    const double rightReal = qRight.real();
+    if ((leftReal < 0.0 && rightReal >= 0.0) ||
+        (leftReal > 0.0 && rightReal <= 0.0)) {
+      return -currentKmah;
+    }
+    return currentKmah;
+  }
+  if (widthMode != BeamWidthMode::SpaceFilling &&
+      widthMode != BeamWidthMode::MinimumWidth) {
+    throw ValidationError("unknown Cerveny beam-width mode");
   }
   if (qRight.real() < 0.0) {
     const double leftImaginary = qLeft.imag();
@@ -412,10 +465,14 @@ double cervenyHermiteTaper(double offset, double fullValueRadius,
 
 CartesianCervenyInfluence::CartesianCervenyInfluence(
     Environment environment, ReceiverGrid receivers,
-    CartesianCervenySettings settings)
+    CartesianCervenySettings settings, BeamWidthMode widthMode,
+    SourceGeometry sourceGeometry, SimulationRunMode runMode)
     : environment_(std::move(environment)),
       receivers_(std::move(receivers)),
       settings_(settings),
+      widthMode_(widthMode),
+      sourceGeometry_(sourceGeometry),
+      runMode_(runMode),
       soundSpeedProfile_(environment_.soundSpeedProfile()),
       receiverRangeDelta_(
           receivers_.rangeCount() >= 2U
@@ -430,6 +487,32 @@ CartesianCervenyInfluence::CartesianCervenyInfluence(
     throw ValidationError(
         "Cartesian Cerveny beam window must be positive");
   }
+  switch (widthMode_) {
+    case BeamWidthMode::SpaceFilling:
+    case BeamWidthMode::MinimumWidth:
+    case BeamWidthMode::Wkb:
+      break;
+    default:
+      throw ValidationError("unknown Cartesian Cerveny beam-width mode");
+  }
+  switch (sourceGeometry_) {
+    case SourceGeometry::Point:
+    case SourceGeometry::Line:
+      break;
+    default:
+      throw ValidationError("unknown Cartesian Cerveny source geometry");
+  }
+  switch (runMode_) {
+    case SimulationRunMode::CoherentTransmissionLoss:
+    case SimulationRunMode::IncoherentTransmissionLoss:
+    case SimulationRunMode::SemiCoherentTransmissionLoss:
+      break;
+    case SimulationRunMode::RayTrace:
+      throw ValidationError(
+          "Cartesian Cerveny influence does not support ray-trace mode");
+    default:
+      throw ValidationError("unknown Cartesian Cerveny run mode");
+  }
   validateUniformReceiverRanges(receivers_, receiverRangeDelta_);
 }
 
@@ -440,9 +523,45 @@ CartesianCervenyInfluence::accumulate(
     std::complex<double> epsilon,
     std::optional<CartesianCervenyDiagnosticRequest>
         diagnosticRequest) const {
-  validateAccumulateInput(
-      workspace, path, frequencyState, epsilon, receivers_,
+  if (runMode_ != SimulationRunMode::CoherentTransmissionLoss) {
+    throw ValidationError(
+        "complex-pressure accumulation requires coherent TL mode");
+  }
+  return accumulateImpl(
+      &workspace, nullptr, path, frequencyState, epsilon,
       diagnosticRequest);
+}
+
+std::optional<CartesianCervenyDiagnostic>
+CartesianCervenyInfluence::accumulateIntensity(
+    IntensityWorkspace& workspace, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    std::complex<double> epsilon,
+    std::optional<CartesianCervenyDiagnosticRequest>
+        diagnosticRequest) const {
+  if (runMode_ != SimulationRunMode::IncoherentTransmissionLoss &&
+      runMode_ != SimulationRunMode::SemiCoherentTransmissionLoss) {
+    throw ValidationError(
+        "intensity accumulation requires incoherent or semi-coherent TL "
+        "mode");
+  }
+  return accumulateImpl(
+      nullptr, &workspace, path, frequencyState, epsilon,
+      diagnosticRequest);
+}
+
+std::optional<CartesianCervenyDiagnostic>
+CartesianCervenyInfluence::accumulateImpl(
+    FrequencyWorkspace* pressureWorkspace,
+    IntensityWorkspace* intensityWorkspace, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    std::complex<double> epsilon,
+    std::optional<CartesianCervenyDiagnosticRequest>
+        diagnosticRequest) const {
+  validateAccumulateInput(
+      pressureWorkspace, intensityWorkspace, path, frequencyState, epsilon,
+      receivers_,
+      widthMode_, diagnosticRequest);
 
   std::optional<CartesianCervenyDiagnostic> diagnostic;
   if (diagnosticRequest.has_value()) {
@@ -462,7 +581,7 @@ CartesianCervenyInfluence::accumulate(
     }
   }
   const PrecomputedRayValues ray = precomputeRayValues(
-      path, soundSpeedProfile_, epsilon, activePrefixPointCount);
+      path, soundSpeedProfile_, epsilon, activePrefixPointCount, widthMode_);
   const double angularFrequency =
       2.0 * std::numbers::pi * frequencyState.frequency;
   const double radiusMax =
@@ -472,11 +591,11 @@ CartesianCervenyInfluence::accumulate(
       static_cast<double>(settings_.beamWindow) *
       static_cast<double>(settings_.beamWindow);
   const double ratio =
-      std::sqrt(std::abs(std::cos(path.launchAngle)));
+      sourceGeometry_ == SourceGeometry::Line
+          ? 1.0
+          : std::sqrt(std::abs(std::cos(path.launchAngle)));
   const std::vector<double>& receiverRanges =
       receivers_.ranges();
-  const std::vector<double>& receiverDepths =
-      receivers_.depths();
 
   for (std::size_t rightIndex = 2U;
        rightIndex < activePrefixPointCount; ++rightIndex) {
@@ -549,7 +668,7 @@ CartesianCervenyInfluence::accumulate(
           std::sqrt(soundSpeed * std::abs(epsilon) / q);
       int finalKmah = ray.kmah[leftIndex];
       finalKmah = updateCervenyKmah(
-          ray.q[leftIndex], q, finalKmah);
+          ray.q[leftIndex], q, finalKmah, widthMode_);
       const std::complex<double> corrected =
           finalKmah < 0 ? -principal : principal;
       requireFiniteComplex(
@@ -558,7 +677,16 @@ CartesianCervenyInfluence::accumulate(
           corrected, "Cartesian Cerveny corrected constant");
 
       for (std::size_t depthIndex = 0U;
-           depthIndex < receiverDepths.size(); ++depthIndex) {
+           depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
+        // InfluenceCervenyCart in the 2-D Origin tree allocates one pressure
+        // row for an irregular grid but still reads Pos%Rz(iz), where iz is
+        // always one, instead of Pos%Rz(ir).  Preserve that observable legacy
+        // behavior for CC; the complete coordinate vectors remain in the SHD
+        // header for compatibility with the irregular file layout.
+        const double receiverDepth =
+            receivers_.isIrregular()
+                ? receivers_.depths().front()
+                : receivers_.depthAt(depthIndex, rangeIndex);
         const bool captureDiagnostic =
             diagnosticRequest.has_value() &&
             diagnosticRequest->receiverRangeIndex == rangeIndex &&
@@ -576,7 +704,7 @@ CartesianCervenyInfluence::accumulate(
                            ? CervenyImageKind::Surface
                            : CervenyImageKind::Bottom);
             images[imageIndex] = evaluateImage(
-                kind, receiverDepths[depthIndex], position.depth,
+                kind, receiverDepth, position.depth,
                 environment_.seaSurface().depth(),
                 environment_.seabed().depth(), angularFrequency,
                 beamWindowSquared, radiusMax, slowness, tau, gamma,
@@ -594,7 +722,7 @@ CartesianCervenyInfluence::accumulate(
                            ? CervenyImageKind::Surface
                            : CervenyImageKind::Bottom);
             imageSum += evaluateImageContribution(
-                kind, receiverDepths[depthIndex], position.depth,
+                kind, receiverDepth, position.depth,
                 environment_.seaSurface().depth(),
                 environment_.seabed().depth(), angularFrequency,
                 beamWindowSquared, radiusMax, slowness, tau, gamma,
@@ -606,12 +734,33 @@ CartesianCervenyInfluence::accumulate(
             corrected * imageSum;
         requireFiniteComplex(
             contribution, "Cartesian Cerveny final contribution");
-        const std::complex<double> updatedPressure =
-            workspace.at(depthIndex, rangeIndex) + contribution;
-        requireFiniteComplex(
-            updatedPressure,
-            "Cartesian Cerveny accumulated workspace pressure");
-        workspace.at(depthIndex, rangeIndex) = updatedPressure;
+        double intensityIncrement = 0.0;
+        if (pressureWorkspace != nullptr) {
+          const std::complex<double> updatedPressure =
+              pressureWorkspace->at(depthIndex, rangeIndex) + contribution;
+          requireFiniteComplex(
+              updatedPressure,
+              "Cartesian Cerveny accumulated workspace pressure");
+          pressureWorkspace->at(depthIndex, rangeIndex) = updatedPressure;
+        } else {
+          // Origin first sums the true/surface/bottom images coherently for
+          // one beam, then forms ABS(z)**2 before adding different beams.
+          // Preserve that operation order; std::norm has a different
+          // rounding and overflow path.
+          const double magnitude = std::abs(contribution);
+          intensityIncrement = magnitude * magnitude;
+          if (!std::isfinite(magnitude) ||
+              !std::isfinite(intensityIncrement) ||
+              intensityIncrement < 0.0) {
+            throw ValidationError(
+                "Cartesian Cerveny intensity increment must be finite and "
+                "non-negative");
+          }
+          // IntensityWorkspace::add validates the sum before committing, so
+          // an overflowing accumulation leaves this receiver cell unchanged.
+          intensityWorkspace->add(
+              depthIndex, rangeIndex, intensityIncrement);
+        }
 
         if (captureDiagnostic) {
           ++diagnostic->evaluationCount;
@@ -644,6 +793,7 @@ CartesianCervenyInfluence::accumulate(
             diagnostic->images = images;
             diagnostic->rawImageSum = imageSum;
             diagnostic->finalContribution = contribution;
+            diagnostic->intensityIncrement = intensityIncrement;
           }
         }
       }

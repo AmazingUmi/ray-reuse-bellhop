@@ -1,0 +1,26 @@
+id = "cartesian_component_horizontal"
+description = "Cartesian Cerveny H selector under the Origin legacy component contract"
+origin_template = "origin.env.in"
+source_references = [
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 component input",
+  "Bellhop_origin/Bellhop/influence.f90 InfluenceCervenyCart legacy component contract",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 250.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 7, 21]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Component"]
+prt_forbidden_markers = ["THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

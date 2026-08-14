@@ -6,7 +6,8 @@
 #include <optional>
 
 #include "bellhop/field/frequency_workspace.hpp"
-#include "bellhop/model/c_linear_ssp.hpp"
+#include "bellhop/field/beam_epsilon.hpp"
+#include "bellhop/model/sound_speed_evaluator.hpp"
 #include "bellhop/model/environment.hpp"
 #include "bellhop/ray/ray_path.hpp"
 
@@ -69,11 +70,13 @@ struct CartesianCervenyDiagnostic {
   std::array<CartesianCervenyImageDiagnostic, 3> images{};
   std::complex<double> rawImageSum{};
   std::complex<double> finalContribution{};
+  double intensityIncrement{};
 };
 
 [[nodiscard]] int updateCervenyKmah(
     std::complex<double> qLeft, std::complex<double> qRight,
-    int currentKmah);
+    int currentKmah,
+    BeamWidthMode widthMode = BeamWidthMode::MinimumWidth);
 
 [[nodiscard]] double cervenyHermiteTaper(
     double offset, double fullValueRadius,
@@ -83,7 +86,11 @@ class CartesianCervenyInfluence {
  public:
   CartesianCervenyInfluence(
       Environment environment, ReceiverGrid receivers,
-      CartesianCervenySettings settings = {});
+      CartesianCervenySettings settings = {},
+      BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
+      SourceGeometry sourceGeometry = SourceGeometry::Point,
+      SimulationRunMode runMode =
+          SimulationRunMode::CoherentTransmissionLoss);
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
@@ -92,11 +99,31 @@ class CartesianCervenyInfluence {
       std::optional<CartesianCervenyDiagnosticRequest>
           diagnosticRequest = std::nullopt) const;
 
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
+  accumulateIntensity(
+      IntensityWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest>
+          diagnosticRequest = std::nullopt) const;
+
  private:
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateImpl(
+      FrequencyWorkspace* pressureWorkspace,
+      IntensityWorkspace* intensityWorkspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest>
+          diagnosticRequest) const;
+
   Environment environment_;
   ReceiverGrid receivers_;
   CartesianCervenySettings settings_;
-  CLinearSsp soundSpeedProfile_;
+  BeamWidthMode widthMode_{BeamWidthMode::MinimumWidth};
+  SourceGeometry sourceGeometry_{SourceGeometry::Point};
+  SimulationRunMode runMode_{
+      SimulationRunMode::CoherentTransmissionLoss};
+  GeometrySspEvaluator soundSpeedProfile_;
   double receiverRangeDelta_{};
 };
 

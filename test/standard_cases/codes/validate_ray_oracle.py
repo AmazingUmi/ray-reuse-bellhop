@@ -57,7 +57,13 @@ def validate_reflection_events(
     manifest: dict[str, object],
     point_rows: list[dict[str, str]],
     expected_reflection_count: int,
+    *,
+    reflection_frame_mode: str = "orthonormal",
 ) -> int:
+    if reflection_frame_mode not in {"orthonormal", "curvilinear_interpolated"}:
+        raise ValueError(
+            f"unsupported reflection frame mode: {reflection_frame_mode!r}"
+        )
     frequency = float(manifest.get("frequency_hz", 0.0))
     if not math.isfinite(frequency) or frequency <= 0.0:
         raise ValueError("schema v2 requires a positive finite frequency_hz")
@@ -261,18 +267,32 @@ def validate_reflection_events(
 
         tangent = (values["tangent_r"], values["tangent_z"])
         normal = (values["normal_r"], values["normal_z"])
-        require_close(
-            math.hypot(*tangent),
-            1.0,
-            f"reflection event {expected_event_index} tangent norm",
-            absolute_tolerance=1e-8,
-        )
-        require_close(
-            math.hypot(*normal),
-            1.0,
-            f"reflection event {expected_event_index} normal norm",
-            absolute_tolerance=1e-8,
-        )
+        tangent_norm = math.hypot(*tangent)
+        normal_norm = math.hypot(*normal)
+        if reflection_frame_mode == "orthonormal":
+            require_close(
+                tangent_norm,
+                1.0,
+                f"reflection event {expected_event_index} tangent norm",
+                absolute_tolerance=1e-8,
+            )
+            require_close(
+                normal_norm,
+                1.0,
+                f"reflection event {expected_event_index} normal norm",
+                absolute_tolerance=1e-8,
+            )
+        else:
+            if tangent_norm == 0.0:
+                raise ValueError(
+                    f"reflection event {expected_event_index}: zero curvilinear frame"
+                )
+            require_close(
+                normal_norm,
+                tangent_norm,
+                f"reflection event {expected_event_index} curvilinear frame norms",
+                absolute_tolerance=1e-12,
+            )
         require_close(
             tangent[0] * normal[0] + tangent[1] * normal[1],
             0.0,
@@ -423,7 +443,9 @@ def validate_reflection_events(
     return len(event_rows)
 
 
-def validate_oracle(directory: Path) -> dict[str, object]:
+def validate_oracle(
+    directory: Path, *, reflection_frame_mode: str = "orthonormal"
+) -> dict[str, object]:
     manifest_path = directory / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema") != SCHEMA_NAME:
@@ -583,6 +605,7 @@ def validate_oracle(directory: Path) -> dict[str, object]:
             manifest,
             rows,
             reflection_count,
+            reflection_frame_mode=reflection_frame_mode,
         )
 
     return {
@@ -603,8 +626,16 @@ def main() -> None:
         type=Path,
         help="directory containing manifest.json and ray_points.csv",
     )
+    parser.add_argument(
+        "--reflection-frame-mode",
+        choices=("orthonormal", "curvilinear_interpolated"),
+        default="orthonormal",
+        help="frame semantics used by reflection_events.csv",
+    )
     args = parser.parse_args()
-    summary = validate_oracle(args.directory)
+    summary = validate_oracle(
+        args.directory, reflection_frame_mode=args.reflection_frame_mode
+    )
     print(json.dumps(summary, indent=2, sort_keys=True))
 
 
