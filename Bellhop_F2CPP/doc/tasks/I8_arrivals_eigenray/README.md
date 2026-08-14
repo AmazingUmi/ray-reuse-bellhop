@@ -269,7 +269,7 @@ OpenCode must execute only one named task per session.
 | I8-01 Arrival data model & accumulation | ACCEPTED | T1–T5 ACCEPTED |
 | I8-02 Arrival writers | IN_PROGRESS | T1–T2 ACCEPTED; T3 TODO |
 | I8-03 Eigenray mode | TODO | T1–T5 |
-| I8-04 Validation & documentation | TODO | T1–T5 |
+| I8-04 Validation & documentation | IN_PROGRESS | T1 ACCEPTED; T2–T5 TODO |
 
 I8-01-T1–T4 have established the accepted record types, checked capacity
 planner, source-local workspace, and Origin-compatible candidate accumulation.

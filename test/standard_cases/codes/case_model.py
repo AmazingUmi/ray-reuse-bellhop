@@ -8,6 +8,13 @@ import tomllib
 
 
 TOKEN_PATTERN = re.compile(r"@[A-Z0-9_]+@")
+OUTPUT_KINDS = {
+    "shd",
+    "ray",
+    "arrivals_ascii",
+    "arrivals_binary",
+    "eigenray",
+}
 
 
 @dataclass(frozen=True)
@@ -142,18 +149,20 @@ def load_case(case_directory: Path) -> CaseDefinition:
                 f"{manifest_path}: explicit launch policy requires count > 0"
             )
     output_kind = str(raw.get("output_kind", "shd"))
-    if output_kind not in {"shd", "ray"}:
+    if output_kind not in OUTPUT_KINDS:
         raise ValueError(
-            f"{manifest_path}: output_kind must be 'shd' or 'ray'"
+            f"{manifest_path}: output_kind must be one of "
+            f"{', '.join(sorted(OUTPUT_KINDS))}"
         )
     raw_dimensions = validation.get("shd_dimensions")
     if output_kind == "shd" and raw_dimensions is None:
         raise ValueError(
             f"{manifest_path}: SHD cases require validation.shd_dimensions"
         )
-    if output_kind == "ray" and raw_dimensions is not None:
+    if output_kind != "shd" and raw_dimensions is not None:
         raise ValueError(
-            f"{manifest_path}: ray cases must not define shd_dimensions"
+            f"{manifest_path}: {output_kind} cases must not define "
+            "shd_dimensions"
         )
     if raw_dimensions is not None:
         dimensions = tuple(int(value) for value in raw_dimensions)

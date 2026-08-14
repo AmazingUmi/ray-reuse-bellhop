@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -20,8 +21,10 @@ sys.path.insert(0, str(CODES_ROOT))
 import numpy as np
 
 from bellhop_io_py.shd import ShdReader
+from arrivals_io import parse_ascii_arrivals, parse_binary_arrivals
 from case_model import CaseDefinition, discover_cases
 from compare_fields import compare_files
+from eigenray_io import parse_eigenray
 
 
 VERSIONS = ("origin", "f2cpp", "rayreuse")
@@ -95,6 +98,16 @@ class RunRecord:
     shade_file: str | None
     ray_file: str | None
     status: str
+    arrival_file: str | None = None
+    product_sha256: str | None = None
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def stage_companion_files(
@@ -211,11 +224,16 @@ def validate_print_output(
     else:
         field_mode_marker = "Coherent TL calculation"
     beam_family_marker = declared_beam_family_marker(definition)
-    common_markers = (
-        (field_mode_marker, beam_family_marker, receiver_grid_marker)
-        if definition.output_kind == "shd"
-        else ("Ray trace run", receiver_grid_marker)
-    )
+    if definition.output_kind == "shd":
+        common_markers = (field_mode_marker, beam_family_marker, receiver_grid_marker)
+    elif definition.output_kind == "ray":
+        common_markers = ("Ray trace run", receiver_grid_marker)
+    elif definition.output_kind == "eigenray":
+        common_markers = ("Eigenray trace run", receiver_grid_marker)
+    elif definition.output_kind == "arrivals_ascii":
+        common_markers = ("Arrivals calculation, ASCII  file output", receiver_grid_marker)
+    else:
+        common_markers = ("Arrivals calculation, binary file output", receiver_grid_marker)
     for marker in common_markers + definition.prt_markers:
         if marker not in print_contents:
             raise RuntimeError(
@@ -255,23 +273,46 @@ def validate_output(
     output_path: Path,
 ) -> None:
     validate_print_output(definition, print_path)
+    expected_suffix = {
+        "shd": ".shd",
+        "ray": ".ray",
+        "eigenray": ".ray",
+        "arrivals_ascii": ".arr",
+        "arrivals_binary": ".arr",
+    }[definition.output_kind]
+    if output_path.suffix != expected_suffix:
+        raise RuntimeError(
+            f"{definition.case_id}: output path {output_path} does not match "
+            f"{definition.output_kind}"
+        )
+    if not output_path.is_file() or output_path.stat().st_size == 0:
+        raise RuntimeError(f"missing product output: {output_path}")
+    for temporary in output_path.parent.glob("*.tmp"):
+        raise RuntimeError(f"{definition.case_id}: unexpected temporary product: {temporary}")
+    for suffix, label in ((".shd", "shade"), (".ray", "ray"), (".arr", "arrival")):
+        candidate = output_path.with_suffix(suffix)
+        if suffix != expected_suffix and candidate.exists():
+            if suffix == ".ray" and expected_suffix == ".shd":
+                raise RuntimeError(f"{definition.case_id}: shade run unexpectedly retained ray output: {candidate}")
+            raise RuntimeError(f"{definition.case_id}: unexpected {label} output: {candidate}")
     if definition.output_kind == "ray":
-        if not output_path.is_file() or output_path.stat().st_size == 0:
-            raise RuntimeError(f"missing ray output: {output_path}")
-        unexpected_shade = output_path.with_suffix(".shd")
-        if unexpected_shade.exists():
-            raise RuntimeError(
-                f"ray run unexpectedly produced shade output: {unexpected_shade}"
-            )
+        return
+    if definition.output_kind == "eigenray":
+        result = parse_eigenray(output_path)
+        if not np.isclose(result.header.frequency_hz, frequency_hz):
+            raise RuntimeError(f"{definition.case_id}: eigenray frequency mismatch")
+        return
+    if definition.output_kind == "arrivals_ascii":
+        result = parse_ascii_arrivals(output_path)
+        if not np.isclose(result.header.frequency_hz, frequency_hz):
+            raise RuntimeError(f"{definition.case_id}: ASCII ARR frequency mismatch")
+        return
+    if definition.output_kind == "arrivals_binary":
+        result = parse_binary_arrivals(output_path)
+        if not np.isclose(result.header.frequency_hz, frequency_hz):
+            raise RuntimeError(f"{definition.case_id}: binary ARR frequency mismatch")
         return
     shade_path = output_path
-    unexpected_ray = output_path.with_suffix(".ray")
-    if unexpected_ray.exists():
-        raise RuntimeError(
-            f"shade run unexpectedly retained ray output: {unexpected_ray}"
-        )
-    if not shade_path.is_file() or shade_path.stat().st_size == 0:
-        raise RuntimeError(f"missing shade output: {shade_path}")
 
     reader = ShdReader(shade_path)
     if definition.expected_dimensions is None:
@@ -439,6 +480,7 @@ def process_rayreuse_broadband(
         if shade_path.exists()
         else None
     )
+    product_hash = sha256_file(shade_path) if shade_path.is_file() else None
     records = [
         RunRecord(
             frequency_index=index,
@@ -449,6 +491,7 @@ def process_rayreuse_broadband(
             shade_file=relative_shade,
             ray_file=None,
             status=status,
+            product_sha256=product_hash,
         )
         for index, frequency_hz in enumerate(frequencies)
     ]
@@ -538,8 +581,13 @@ def process_case(
         print_path = run_directory / f"{file_root}.prt"
         shade_path = run_directory / f"{file_root}.shd"
         ray_path = run_directory / f"{file_root}.ray"
+        arrival_path = run_directory / f"{file_root}.arr"
         output_path = (
-            shade_path if definition.output_kind == "shd" else ray_path
+            shade_path
+            if definition.output_kind == "shd"
+            else ray_path
+            if definition.output_kind in {"ray", "eigenray"}
+            else arrival_path
         )
 
         if stage in ("generate", "test"):
@@ -566,8 +614,10 @@ def process_case(
                 print_path,
                 shade_path,
                 ray_path,
+                arrival_path,
                 Path(str(shade_path) + ".tmp"),
                 Path(str(ray_path) + ".tmp"),
+                Path(str(arrival_path) + ".tmp"),
             ):
                 stale_output.unlink(missing_ok=True)
             adapter.run_single(run_directory, file_root)
@@ -578,6 +628,8 @@ def process_case(
                 definition, frequency_hz, print_path, output_path
             )
             status = "passed"
+
+        product_hash = sha256_file(output_path) if output_path.is_file() else None
 
         records.append(
             RunRecord(
@@ -599,10 +651,17 @@ def process_case(
                 ),
                 ray_file=(
                     str(ray_path.relative_to(case_result_root))
-                    if definition.output_kind == "ray" and ray_path.exists()
+                    if definition.output_kind in {"ray", "eigenray"} and ray_path.exists()
                     else None
                 ),
                 status=status,
+                arrival_file=(
+                    str(arrival_path.relative_to(case_result_root))
+                    if definition.output_kind in {"arrivals_ascii", "arrivals_binary"}
+                    and arrival_path.exists()
+                    else None
+                ),
+                product_sha256=product_hash,
             )
         )
         print(

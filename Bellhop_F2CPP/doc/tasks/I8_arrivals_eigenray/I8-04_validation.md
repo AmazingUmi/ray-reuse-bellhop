@@ -12,7 +12,7 @@ OpenCode—updates task status, acceptance records, progress documents, and Git.
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -91,10 +91,18 @@ serve as project truth.
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-04-T1 reader checkpoint commit.
+- Tests: full Python regression 131/131 passed; independent ASCII/binary ARR
+  and EOF eigenray tests cover zero/multiple sources and arrivals, caller-
+  supplied irregular cell count, repeated eigenray angles, Nalpha mismatch,
+  marker/count/finite/truncation/trailing failures; standard-case listing and
+  `git diff --check` passed.
+- Oracle / parity result: readers are independent of F2CPP writer code and
+  implement the frozen GNU Fortran record ABI / RAY text grammar. Product
+  parity cases remain assigned to T3/T4.
+- Notes: ordinary R keeps its existing fixed-count path; eigenray blocks are
+  parsed to exact EOF. Standard-case records now carry the selected product
+  path and SHA-256 and reject incompatible stale products and temporaries.
 
 ## I8-04-T2
 
