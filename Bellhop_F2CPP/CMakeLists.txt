@@ -80,6 +80,7 @@ add_library(
     src/field/frequency_projector.cpp
     src/field/pressure_scaling.cpp
     src/io/environment_parser.cpp
+    src/io/arrival_writer.cpp
     src/io/output_layout.cpp
     src/io/ray_writer.cpp
     src/io/shd_writer.cpp
@@ -244,6 +245,12 @@ if(BUILD_TESTING)
     bellhop_f2cpp_arrival_solver_tests
     f2cpp.component.arrival_solver
     tests/component/arrival_solver_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_arrival_writer_tests
+    f2cpp.component.arrival_writer
+    tests/component/arrival_writer_test.cpp
     component
   )
   add_f2cpp_test(

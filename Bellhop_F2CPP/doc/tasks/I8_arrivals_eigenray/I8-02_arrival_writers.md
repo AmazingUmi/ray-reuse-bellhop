@@ -11,7 +11,7 @@ This stage serializes accepted source-local arrival workspaces and exposes
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -99,10 +99,16 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wr
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-02 writer checkpoint commit.
+- Tests: AppleClang Debug ASan/UBSan and GCC 14 Release/Werror ARR writer
+  targets passed; SHD and ordinary R writer regressions passed; regular,
+  irregular, multi-source, zero-arrival, scaling, ordering, mismatch, failure,
+  and atomic-publication component cases passed; `git diff --check` passed.
+- Oracle / parity result: ASCII header/body order, stored-float emission, phase
+  conversion, and source scaling were source-audited against `ArrMod.f90`;
+  end-to-end Origin product parity remains assigned to I8-04.
+- Notes: layout bounds are checked before opening output, workspaces remain
+  immutable, and only the writer-owned temporary file is removed on failure.
 ## I8-02-T2
 
 ### Task ID
@@ -111,7 +117,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wr
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -192,10 +198,15 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_wr
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: same closed I8-02 writer checkpoint as T1.
+- Tests: independent binary reader component cases passed on AppleClang Debug
+  sanitizer and GCC 14 Werror, including record markers, exact payload kinds,
+  multi-source/empty cells, bounce conversion and corruption/failure paths.
+- Oracle / parity result: GNU Fortran sequential-unformatted little-endian
+  records and the 32-byte eight-float arrival payload match the frozen ABI
+  design; executable parity remains assigned to I8-04.
+- Notes: binary serialization uses explicit scalar packing and never dumps a
+  native struct; ASCII behavior accepted in T1 is unchanged.
 
 ## I8-02-T3
 
