@@ -38,15 +38,6 @@ RayTraceStatistics RayTraceSolver::trace(
   if (simulation.runMode() != SimulationRunMode::RayTrace) {
     throw ValidationError("ray tracer requires ray-trace run mode");
   }
-  if (simulation.sourceBeamPattern().isDirectional() ||
-      simulation.environment().seaSurface().kind() !=
-          BoundaryKind::Vacuum ||
-      simulation.environment().seabed().kind() != BoundaryKind::Rigid) {
-    throw ValidationError(
-        "ray tracer currently requires an omnidirectional source, vacuum "
-        "surface, and rigid seabed so the written terminal prefix remains "
-        "frequency independent");
-  }
   if (!consumer) {
     throw ValidationError("ray tracer requires a frozen-cache consumer");
   }

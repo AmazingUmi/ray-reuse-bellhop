@@ -1,0 +1,25 @@
+id = "ray_trace_directional_tabulated"
+description = "Single directional R ray terminated by tabulated top reflection loss"
+output_kind = "ray"
+origin_template = "origin.env.in"
+companion_files = ["origin.sbp", "origin.trc"]
+source_references = ["Bellhop_origin/Bellhop/bellhop.f90 TraceRay2D amplitude cutoff", "Bellhop_origin/misc/beampattern.f90 ReadPat", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 1200.0
+minimum_angle_deg = 30.0
+maximum_angle_deg = 30.0
+policy = "explicit"
+count = 1
+
+[validation]
+prt_markers = ["FILE used for reflection loss", "Perfectly RIGID", "Using source beam pattern file", "Number of source beam pattern points"]
+prt_forbidden_markers = ["Coherent TL calculation", "THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [1000.0]

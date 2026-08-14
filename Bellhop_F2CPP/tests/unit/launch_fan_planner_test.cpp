@@ -205,9 +205,14 @@ void testRayTraceCountPolicy(Context& context) {
                 "ray-trace mode defaults to 50 launch angles");
 
   input.explicitLaunchAngleCount = 1U;
-  context.expectThrows<ValidationError>(
-      [&input]() { static_cast<void>(LaunchFanPlanner::plan(input)); },
-      "ray-trace mode rejects a one-angle fan");
+  input.minimumLaunchAngle = 0.25;
+  input.maximumLaunchAngle = 0.5;
+  input.inputDegreeBounds = std::nullopt;
+  const LaunchFanPlan singlePlan = LaunchFanPlanner::plan(input);
+  context.check(singlePlan.launchAngleCount == 1U &&
+                    singlePlan.launchAngles == std::vector<double>{0.25} &&
+                    singlePlan.launchAngleStep == 0.0,
+                "ray-trace mode preserves one explicit launch angle");
 }
 
 void testFortranDegreeSubtabulationBits(Context& context) {

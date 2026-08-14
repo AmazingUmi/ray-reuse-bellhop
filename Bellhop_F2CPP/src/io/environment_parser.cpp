@@ -1319,19 +1319,6 @@ struct ParsedBoundaryFile {
     requireUniformRanges(
         receiverRanges, receiverRangeCountRecord, source);
   }
-  if (runType.runMode == SimulationRunMode::RayTrace &&
-      runType.usesSourceBeamPattern) {
-    fail(source, runTypeRecord.lineNumber,
-         "directional source beam patterns in ray-trace mode are not yet "
-         "supported because they can change the written terminal prefix");
-  }
-  if (runType.runMode == SimulationRunMode::RayTrace &&
-      (seaSurface.kind() != BoundaryKind::Vacuum ||
-       seabed.kind() != BoundaryKind::Rigid)) {
-    fail(source, runTypeRecord.lineNumber,
-         "the initial ray-trace slice requires vacuum surface and rigid "
-         "seabed boundaries");
-  }
   const ReceiverGridLayout receiverLayout = runType.receiverLayout;
   if ((runType.beamFamily == BeamFamily::CervenyGaussian ||
        runType.beamFamily == BeamFamily::GeometricHat) &&
@@ -1377,16 +1364,29 @@ struct ParsedBoundaryFile {
 
   const Record launchAngleRecord =
       reader.require("launch-angle endpoints");
-  requireTokenCount(
-      launchAngleRecord, 2U, source, "launch-angle endpoints");
+  const bool singleRayTraceAngle =
+      runType.runMode == SimulationRunMode::RayTrace &&
+      requestedLaunchCount == 1U;
+  if (singleRayTraceAngle) {
+    if (launchAngleRecord.tokens.size() != 1U &&
+        launchAngleRecord.tokens.size() != 2U) {
+      fail(source, launchAngleRecord.lineNumber,
+           "one explicit ray-trace angle requires one angle or an endpoint "
+           "pair");
+    }
+  } else {
+    requireTokenCount(launchAngleRecord, 2U, source,
+                      "launch-angle endpoints");
+  }
   const double minimumLaunchAngleDegrees =
       parseDouble(
           launchAngleRecord, 0U, source,
           "minimum launch angle");
   const double maximumLaunchAngleDegrees =
-      parseDouble(
-          launchAngleRecord, 1U, source,
-          "maximum launch angle");
+      launchAngleRecord.tokens.size() == 1U
+          ? minimumLaunchAngleDegrees
+          : parseDouble(launchAngleRecord, 1U, source,
+                        "maximum launch angle");
   const double degreesToRadians =
       std::numbers::pi / 180.0;
 

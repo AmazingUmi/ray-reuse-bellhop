@@ -14,6 +14,34 @@
 namespace bellhop {
 namespace {
 
+std::size_t originTerminalPrefixPointCount(
+    const RayPath& path, const RayFrequencyState& frequencyState) {
+  if (frequencyState.points.size() != path.points.size()) {
+    throw ValidationError(
+        "ray writer frequency projection does not match geometry path");
+  }
+  std::size_t eventIndex = 0U;
+  for (std::size_t pointIndex = 1U;
+       pointIndex < frequencyState.points.size(); ++pointIndex) {
+    while (eventIndex < path.events.size() &&
+           path.events[eventIndex].rayPointIndex < pointIndex) {
+      ++eventIndex;
+    }
+    const bool incidentReflectionPoint =
+        eventIndex < path.events.size() &&
+        path.events[eventIndex].rayPointIndex == pointIndex;
+    // Origin tests the cutoff after completing the whole integration
+    // iteration.  When that iteration reflects, the incident point and its
+    // same-position reflected point are indivisible and the latter is the
+    // retained terminal point.
+    if (!incidentReflectionPoint &&
+        !frequencyState.points[pointIndex].active) {
+      return pointIndex + 1U;
+    }
+  }
+  return path.points.size();
+}
+
 std::int32_t checkedOriginInt32(std::size_t value, const char* label) {
   if (value > static_cast<std::size_t>(
                   std::numeric_limits<std::int32_t>::max())) {
@@ -28,7 +56,8 @@ RayWriter::RayWriter(std::filesystem::path outputPath, std::string title,
                      const SimulationCase& simulation)
     : outputPath_(std::move(outputPath)),
       temporaryPath_(outputPath_.string() + ".tmp"),
-      simulation_(simulation) {
+      simulation_(simulation),
+      projector_(simulation.environment()) {
   if (simulation_.runMode() != SimulationRunMode::RayTrace) {
     throw ValidationError("ray writer requires ray-trace run mode");
   }
@@ -79,6 +108,8 @@ void RayWriter::appendSource(std::size_t sourceIndex,
   }
   const double topDepth = simulation_.environment().seaSurface().depth();
   const double bottomDepth = simulation_.environment().seabed().depth();
+  const double frequency = simulation_.frequencies().values().front();
+  const Source& source = simulation_.sources()[sourceIndex];
   std::size_t launchIndex = 0U;
   for (const RayPath& path : cache.paths()) {
     if (path.launchAngle !=
@@ -86,8 +117,16 @@ void RayWriter::appendSource(std::size_t sourceIndex,
       throw ValidationError(
           "ray writer cache launch angles are out of canonical order");
     }
+    const double sourceAmplitude =
+        source.amplitude *
+        simulation_.sourceBeamPattern().amplitudeForLaunchAngle(
+            path.launchAngle);
+    const RayFrequencyState frequencyState =
+        projector_.project(path, frequency, sourceAmplitude);
+    const std::size_t prefixPointCount =
+        originTerminalPrefixPointCount(path, frequencyState);
     const ray_output_detail::EncodedRayPrefix encoded =
-        ray_output_detail::encodeRayPrefix(path, path.points.size(), topDepth,
+        ray_output_detail::encodeRayPrefix(path, prefixPointCount, topDepth,
                                            bottomDepth);
     const std::vector<std::size_t>& indices = encoded.pointIndices;
     const std::size_t topBounces = encoded.topBounceCount;

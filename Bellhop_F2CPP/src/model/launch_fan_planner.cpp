@@ -76,15 +76,21 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
   requireFinitePositive(input.maximumRange, "maximumRange");
   requireFinite(input.minimumLaunchAngle, "minimumLaunchAngle");
   requireFinite(input.maximumLaunchAngle, "maximumLaunchAngle");
-  if (input.minimumLaunchAngle >= input.maximumLaunchAngle) {
+  const bool singleRayTrace =
+      input.rayTraceMode && input.explicitLaunchAngleCount == 1U;
+  if (input.minimumLaunchAngle > input.maximumLaunchAngle ||
+      (!singleRayTrace &&
+       input.minimumLaunchAngle == input.maximumLaunchAngle)) {
     throw ValidationError(
-        "minimumLaunchAngle must be less than maximumLaunchAngle");
+        "minimumLaunchAngle must be less than maximumLaunchAngle unless "
+        "ray-trace mode explicitly selects one angle");
   }
 
   const double angleSpan =
       input.maximumLaunchAngle - input.minimumLaunchAngle;
-  if (!std::isfinite(angleSpan) || angleSpan <= 0.0) {
-    throw ValidationError("launch angle span must be finite and positive");
+  if (!std::isfinite(angleSpan) || angleSpan < 0.0) {
+    throw ValidationError(
+        "launch angle span must be finite and non-negative");
   }
 
   const double phaseCriterion =
@@ -122,8 +128,11 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
       ? input.explicitLaunchAngleCount.value_or(kDefaultRayTraceCount)
       : std::max({phaseCriterionCount, depthCriterionCount,
                   minimumRecommendedAngleCount});
-  if (launchAngleCount < 2U) {
-    throw ValidationError("launch angle count must be at least two");
+  if (launchAngleCount == 0U ||
+      (launchAngleCount == 1U && !singleRayTrace)) {
+    throw ValidationError(
+        "launch angle count must be at least two unless ray-trace mode "
+        "explicitly selects one angle");
   }
 
   std::vector<double> launchAngles;
@@ -133,16 +142,19 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
   }
   launchAngles.resize(launchAngleCount);
 
-  double launchAngleStep =
-      angleSpan / static_cast<double>(launchAngleCount - 1U);
+  double launchAngleStep = launchAngleCount == 1U
+      ? 0.0
+      : angleSpan / static_cast<double>(launchAngleCount - 1U);
   if (input.inputDegreeBounds.has_value()) {
     const LaunchAngleDegreeBounds bounds =
         input.inputDegreeBounds.value();
     requireFinite(bounds.minimum, "inputDegreeBounds.minimum");
     requireFinite(bounds.maximum, "inputDegreeBounds.maximum");
-    if (bounds.minimum >= bounds.maximum) {
+    if (bounds.minimum > bounds.maximum ||
+        (launchAngleCount != 1U && bounds.minimum == bounds.maximum)) {
       throw ValidationError(
-          "input degree minimum must be less than maximum");
+          "input degree minimum must be less than maximum unless one "
+          "ray-trace angle is selected");
     }
     if (bounds.minimum * kRadiansPerDegree !=
             input.minimumLaunchAngle ||
@@ -156,9 +168,10 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
     // degrees and only then converts every generated angle to radians.
     // Preserve those original degree inputs: converting runtime radians back
     // to degrees can itself shift the negative endpoint by one ULP.
-    const double launchAngleStepDegrees =
-        (bounds.maximum - bounds.minimum) /
-        static_cast<double>(launchAngleCount - 1U);
+    const double launchAngleStepDegrees = launchAngleCount == 1U
+        ? 0.0
+        : (bounds.maximum - bounds.minimum) /
+              static_cast<double>(launchAngleCount - 1U);
     for (std::size_t index = 0U; index < launchAngleCount; ++index) {
       const double launchAngleDegrees =
           bounds.minimum +
@@ -166,9 +179,10 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
       launchAngles[index] =
           launchAngleDegrees * kRadiansPerDegree;
     }
-    launchAngleStep =
-        (launchAngles.back() - launchAngles.front()) /
-        static_cast<double>(launchAngleCount - 1U);
+    launchAngleStep = launchAngleCount == 1U
+        ? 0.0
+        : (launchAngles.back() - launchAngles.front()) /
+              static_cast<double>(launchAngleCount - 1U);
   } else {
     for (std::size_t index = 0U; index < launchAngleCount; ++index) {
       launchAngles[index] =
@@ -176,11 +190,15 @@ LaunchFanPlan LaunchFanPlanner::plan(const LaunchFanPlanningInput& input) {
                    input.minimumLaunchAngle);
     }
     launchAngles.front() = input.minimumLaunchAngle;
-    launchAngles.back() = input.maximumLaunchAngle;
+    if (launchAngleCount != 1U) {
+      launchAngles.back() = input.maximumLaunchAngle;
+    }
   }
-  if (!std::isfinite(launchAngleStep) || launchAngleStep <= 0.0) {
+  if (!std::isfinite(launchAngleStep) || launchAngleStep < 0.0 ||
+      (launchAngleCount != 1U && launchAngleStep == 0.0)) {
     throw ValidationError(
-        "launch angle step is not representable as a positive finite value");
+        "launch angle step is not representable as a finite non-negative "
+        "value");
   }
 
   return LaunchFanPlan{

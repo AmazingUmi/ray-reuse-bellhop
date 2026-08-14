@@ -58,6 +58,7 @@ class CaseModelTests(unittest.TestCase):
                 "source_beam_pattern_directional",
                 "source_beam_pattern_omni_control",
                 "ray_trace_vacuum_rigid",
+                "ray_trace_directional_tabulated",
                 "cartesian_component_pressure",
                 "cartesian_component_vertical",
                 "cartesian_component_horizontal",

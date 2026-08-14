@@ -6,6 +6,7 @@
 #include <string>
 
 #include "bellhop/cache/ray_path_cache.hpp"
+#include "bellhop/field/frequency_projector.hpp"
 #include "bellhop/model/simulation_case.hpp"
 
 namespace bellhop {
@@ -25,6 +26,7 @@ class RayWriter {
   std::filesystem::path outputPath_;
   std::filesystem::path temporaryPath_;
   const SimulationCase& simulation_;
+  FrequencyProjector projector_;
   std::ofstream output_;
   std::size_t nextSourceIndex_{};
   bool finalized_{};

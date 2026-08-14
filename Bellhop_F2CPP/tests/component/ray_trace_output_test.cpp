@@ -97,6 +97,42 @@ ParsedEnvironment parseRayTraceEnvironment(bool includeTail = false) {
   return EnvironmentParser::parse(input, "ray_trace.env");
 }
 
+ParsedEnvironment parseDirectionalSingleRayEnvironment(
+    const TemporaryDirectory& directory) {
+  const std::filesystem::path environmentPath =
+      directory.path() / "directional.env";
+  {
+    std::ofstream output(environmentPath);
+    output << "'Directional single ray'\n"
+           << "1000.0\n"
+           << "1\n"
+           << "'CFW'\n"
+           << "2 0.0 100.0\n"
+           << "0.0 1500.0 /\n"
+           << "100.0 1500.0 /\n"
+           << "'R' 0.0\n"
+           << "1\n"
+           << "50.0 /\n"
+           << "1\n"
+           << "50.0 /\n"
+           << "1\n"
+           << "1.2 /\n"
+           << "'R *'\n"
+           << "1\n"
+           << "30.0 /\n"
+           << "1.0 101.0 1.2\n";
+  }
+  {
+    std::ofstream output(directory.path() / "directional.sbp");
+    output << "3\n-180.0 -20.0\n30.0 -10.0\n180.0 -30.0\n";
+  }
+  {
+    std::ofstream output(directory.path() / "directional.trc");
+    output << "2\n0.0 0.25 0.0\n90.0 0.25 0.0\n";
+  }
+  return EnvironmentParser::parseFile(environmentPath);
+}
+
 struct ExpectedRay {
   std::size_t topBounces{};
   std::size_t bottomBounces{};
@@ -287,7 +323,7 @@ void testTwoSourceRayTraceFile(Context& context) {
                 "ray output retains an observable pre/post reflection point");
 }
 
-void testRaySolverEnforcesTheSafeLibrarySubset(Context& context) {
+void testRaySolverAcceptsGeneralUnshiftedProducts(Context& context) {
   const SimulationCase& baseline =
       parseRayTraceEnvironment().simulationCase;
   const LaunchFan launchFan{
@@ -304,11 +340,13 @@ void testRaySolverEnforcesTheSafeLibrarySubset(Context& context) {
           std::vector<SourceBeamPatternSample>{{-60.0, 0.0},
                                                {60.0, 0.0}}),
       SimulationRunMode::RayTrace);
-  context.expectThrows<ValidationError>(
-      [&directional, &consumer]() {
-        static_cast<void>(RayTraceSolver::trace(directional, consumer));
-      },
-      "ray solver rejects a directional pattern constructed outside parser");
+  const RayTraceStatistics directionalStatistics =
+      RayTraceSolver::trace(directional, consumer);
+  context.check(
+      directionalStatistics.rayCount ==
+          directional.sourceCount() *
+              directional.launchFanPlan().launchAngleCount,
+      "ray solver accepts a directional source pattern");
 
   const Environment nonRigidEnvironment(
       baseline.environment().soundSpeedProfile(),
@@ -320,11 +358,83 @@ void testRaySolverEnforcesTheSafeLibrarySubset(Context& context) {
       nonRigidEnvironment, baseline.sources(), baseline.receivers(),
       baseline.frequencies(), launchFan, baseline.integrator(),
       SourceBeamPattern::omnidirectional(), SimulationRunMode::RayTrace);
-  context.expectThrows<ValidationError>(
-      [&nonRigid, &consumer]() {
-        static_cast<void>(RayTraceSolver::trace(nonRigid, consumer));
-      },
-      "ray solver rejects a lossy boundary constructed outside parser");
+  const RayTraceStatistics nonRigidStatistics =
+      RayTraceSolver::trace(nonRigid, consumer);
+  context.check(
+      nonRigidStatistics.rayCount ==
+          nonRigid.sourceCount() *
+              nonRigid.launchFanPlan().launchAngleCount,
+      "ray solver accepts a non-rigid unshifted boundary");
+}
+
+void testFrequencyDependentRayPrefixes(Context& context) {
+  TemporaryDirectory directory;
+  const ParsedEnvironment parsed =
+      parseDirectionalSingleRayEnvironment(directory);
+  const SimulationCase& simulation = parsed.simulationCase;
+  context.check(
+      simulation.sourceBeamPattern().isDirectional() &&
+          simulation.launchFanPlan().launchAngleCount == 1U &&
+          simulation.launchFanPlan().launchAngleStep == 0.0,
+      "R parser accepts a directional SBP and one explicit launch angle");
+
+  const std::filesystem::path lossyPath = directory.path() / "lossy.ray";
+  RayWriter lossyWriter(lossyPath, parsed.title, simulation);
+  std::size_t fullPointCount = 0U;
+  std::size_t expectedTerminalPointCount = 0U;
+  static_cast<void>(RayTraceSolver::trace(
+      simulation,
+      [&](std::size_t sourceIndex, const RayPathCache& cache) {
+        const auto& path = cache.at(0U);
+        fullPointCount = path.points.size();
+        std::size_t topReflectionCount = 0U;
+        for (const auto& event : path.events) {
+          if (event.boundary == ReflectionBoundary::SeaSurface &&
+              ++topReflectionCount == 3U) {
+            expectedTerminalPointCount =
+                event.reflectedRayPointIndex + 1U;
+            break;
+          }
+        }
+        lossyWriter.appendSource(sourceIndex, cache);
+        context.check(path.points.size() == fullPointCount && cache.frozen(),
+                      "R projection does not mutate the frozen path cache");
+      }));
+  lossyWriter.finalize();
+  const WrittenRayFile lossy = readRayFile(lossyPath, 1U);
+  context.check(
+      expectedTerminalPointCount > 0U &&
+          lossy.rays[0U].pointCount == expectedTerminalPointCount &&
+          lossy.rays[0U].pointCount < fullPointCount &&
+          lossy.rays[0U].topBounces == 3U,
+      "R writer retains the post-reflection point that first falls below "
+      "the Origin amplitude cutoff");
+
+  const LaunchFan singleFan{
+      .minimumAngle = simulation.launchFanPlan().launchAngles.front(),
+      .maximumAngle = simulation.launchFanPlan().launchAngles.front(),
+      .explicitLaunchAngleCount = 1U};
+  const SimulationCase lowSourcePattern(
+      simulation.environment(), simulation.sources(), simulation.receivers(),
+      simulation.frequencies(), singleFan, simulation.integrator(),
+      SourceBeamPattern::directional(
+          std::vector<SourceBeamPatternSample>{{-180.0, -60.0},
+                                               {180.0, -60.0}}),
+      SimulationRunMode::RayTrace);
+  const std::filesystem::path lowPath = directory.path() / "low.ray";
+  RayWriter lowWriter(lowPath, "low source pattern", lowSourcePattern);
+  static_cast<void>(RayTraceSolver::trace(
+      lowSourcePattern,
+      [&lowWriter](std::size_t sourceIndex, const RayPathCache& cache) {
+        lowWriter.appendSource(sourceIndex, cache);
+      }));
+  lowWriter.finalize();
+  const WrittenRayFile low = readRayFile(lowPath, 1U);
+  context.check(low.rays[0U].pointCount == 2U &&
+                    low.rays[0U].topBounces == 0U &&
+                    low.rays[0U].bottomBounces == 0U,
+                "R writer retains exactly the first integrated terminal "
+                "point for a source pattern below the cutoff");
 }
 
 void testRayWriterCleansTemporaryOutputOnFailure(Context& context) {
@@ -378,7 +488,8 @@ int main() {
   Context context;
   testRayRunParserDoesNotConsumeBeamLines(context);
   testTwoSourceRayTraceFile(context);
-  testRaySolverEnforcesTheSafeLibrarySubset(context);
+  testRaySolverAcceptsGeneralUnshiftedProducts(context);
+  testFrequencyDependentRayPrefixes(context);
   testRayWriterCleansTemporaryOutputOnFailure(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
