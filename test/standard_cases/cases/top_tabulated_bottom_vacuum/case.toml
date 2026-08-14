@@ -1,0 +1,27 @@
+id = "top_tabulated_bottom_vacuum"
+description = "Constant-speed water between a tabulated top and vacuum bottom"
+origin_template = "origin.env.in"
+companion_files = ["origin.trc"]
+source_references = ["Bellhop_origin/misc/RefCoef.f90 ReadReflectionCoefficient", "Bellhop_origin/Bellhop/ReflectMod.f90 top and bottom reflection"]
+
+[compatibility]
+versions = ["origin", "f2cpp"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 750.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 11, 51]
+prt_markers = ["FILE used for reflection loss", "VACUUM", "Using tabulated top", "Number of points in top reflection coefficient ="]
+prt_forbidden_markers = ["Using tabulated bottom reflection coef."]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

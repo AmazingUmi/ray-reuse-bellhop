@@ -363,6 +363,78 @@ void requireUniformRanges(const std::vector<double>& ranges,
       .transitionFrequency = 1.0};
 }
 
+struct ParsedAcousticHalfSpace {
+  double materialDepth{};
+  AcousticMaterial material;
+};
+
+[[nodiscard]] ParsedAcousticHalfSpace readAcousticHalfSpace(
+    RecordReader& reader, AttenuationUnit attenuationUnit,
+    std::string_view boundaryName) {
+  const std::string fieldName =
+      std::string(boundaryName) + " acoustic half-space";
+  const Record record = reader.require(fieldName);
+  const std::string& source = reader.sourceName();
+  if (record.tokens.size() != 5U && record.tokens.size() != 6U) {
+    fail(source, record.lineNumber,
+         fieldName + " requires 5 or 6 values");
+  }
+  const double materialDepth =
+      parseDouble(record, 0U, source, "half-space depth");
+  const double compressionalSoundSpeed = parseDouble(
+      record, 1U, source, "half-space compressional sound speed");
+  const double shearSoundSpeed =
+      parseDouble(record, 2U, source, "half-space shear sound speed");
+  const double densityInput =
+      parseDouble(record, 3U, source, "half-space density");
+  const double compressionalAttenuation = parseDouble(
+      record, 4U, source, "half-space compressional attenuation");
+  const double shearAttenuation =
+      record.tokens.size() == 6U
+          ? parseDouble(record, 5U, source,
+                        "half-space shear attenuation")
+          : 0.0;
+  if (compressionalSoundSpeed <= 0.0 || shearSoundSpeed < 0.0 ||
+      densityInput <= 0.0 || compressionalAttenuation < 0.0 ||
+      shearAttenuation < 0.0 ||
+      (shearSoundSpeed == 0.0 && shearAttenuation != 0.0)) {
+    fail(source, record.lineNumber,
+         "half-space requires positive compressional speed/density, "
+         "non-negative shear speed/attenuation, and zero shear loss "
+         "when shear speed is zero");
+  }
+  return ParsedAcousticHalfSpace{
+      .materialDepth = materialDepth,
+      .material =
+          AcousticMaterial{
+              .compressionalSoundSpeed = compressionalSoundSpeed,
+              .shearSoundSpeed = shearSoundSpeed,
+              .density = densityInput * kDensityInputToSi,
+              .compressionalAttenuation = makeAttenuation(
+                  compressionalAttenuation, attenuationUnit),
+              .shearAttenuation = makeAttenuation(
+                  shearAttenuation, attenuationUnit)}};
+}
+
+struct ParsedGrainSizeHalfSpace {
+  double materialDepth{};
+  double meanGrainSize{};
+};
+
+[[nodiscard]] ParsedGrainSizeHalfSpace readGrainSizeHalfSpace(
+    RecordReader& reader, std::string_view boundaryName) {
+  const std::string fieldName =
+      std::string(boundaryName) + " grain size";
+  const Record record = reader.require(fieldName);
+  requireTokenCount(record, 2U, reader.sourceName(), fieldName);
+  return ParsedGrainSizeHalfSpace{
+      .materialDepth = parseDouble(
+          record, 0U, reader.sourceName(),
+          "grain-size half-space depth"),
+      .meanGrainSize = parseDouble(
+          record, 1U, reader.sourceName(), "mean grain size")};
+}
+
 [[nodiscard]] bool depthMatches(double value, double bottomDepth) {
   return std::abs(value - bottomDepth) <
          100.0 * static_cast<double>(
@@ -530,7 +602,7 @@ struct ParsedBoundaryFile {
   std::ifstream input(path);
   if (!input.is_open()) {
     throw BellhopError(
-        "unable to open bottom reflection coefficient file: " +
+        "unable to open reflection coefficient file: " +
         path.string());
   }
   RecordReader reader(input, path.string());
@@ -855,14 +927,16 @@ struct ParsedBoundaryFile {
            "unknown SSP interpolation option '" +
                std::string(1U, topOptions.front()) + "'");
   }
-  if (topOptions[1U] != 'V' ||
+  if ((topOptions[1U] != 'V' && topOptions[1U] != 'R' &&
+       topOptions[1U] != 'A' && topOptions[1U] != 'G' &&
+       topOptions[1U] != 'F') ||
       (topOptions[3U] != ' ' && topOptions[3U] != 'T' &&
        topOptions[3U] != 'F' && topOptions[3U] != 'B') ||
       (topOptions[4U] != ' ' && topOptions[4U] != '~' &&
        topOptions[4U] != '*') ||
       topOptions[5U] != ' ') {
     fail(source, topOptionsRecord.lineNumber,
-         "only a vacuum surface, N/F/M/W/Q/L attenuation units with "
+         "only V/R/A/G/F surfaces, N/F/M/W/Q/L attenuation units with "
          "optional T/F/B volume attenuation, and optional boundary "
          "topography are "
          "supported");
@@ -949,6 +1023,14 @@ struct ParsedBoundaryFile {
     default:
       fail(source, topOptionsRecord.lineNumber,
            "unknown volume attenuation option");
+  }
+  std::optional<ParsedAcousticHalfSpace> topAcousticHalfSpace;
+  std::optional<ParsedGrainSizeHalfSpace> topGrainSizeHalfSpace;
+  if (topOptions[1U] == 'A') {
+    topAcousticHalfSpace = readAcousticHalfSpace(
+        reader, attenuationUnit, "top");
+  } else if (topOptions[1U] == 'G') {
+    topGrainSizeHalfSpace = readGrainSizeHalfSpace(reader, "top");
   }
   const bool hasTopography =
       topOptions[4U] == '~' || topOptions[4U] == '*';
@@ -1047,19 +1129,66 @@ struct ParsedBoundaryFile {
   const double surfaceDepth = soundSpeedPoints.front().depth;
   BoundaryGeometry seaSurfaceGeometry = BoundaryGeometry::flat(
       surfaceDepth, BoundaryOrientation::Upper);
+  SharedLongBoundaryMaterials seaSurfaceLongMaterials;
   if (hasTopography) {
     if (!environmentPath.has_value()) {
       fail(source, topOptionsRecord.lineNumber,
            "topography requires parseFile so the sibling .ati file can be "
            "resolved");
     }
-    seaSurfaceGeometry = readBoundaryFile(
+    ParsedBoundaryFile boundary = readBoundaryFile(
         boundaryPath(*environmentPath, ".ati"), surfaceDepth,
-        BoundaryOrientation::Upper, attenuationUnit)
-                             .geometry;
+        BoundaryOrientation::Upper, attenuationUnit);
+    seaSurfaceGeometry = std::move(boundary.geometry);
+    seaSurfaceLongMaterials = std::move(boundary.longMaterials);
   }
-  const BoundaryModel seaSurface =
-      BoundaryModel::vacuum(std::move(seaSurfaceGeometry));
+  BoundaryModel seaSurface =
+      BoundaryModel::vacuum(seaSurfaceGeometry);
+  if (topOptions[1U] == 'R') {
+    seaSurface = BoundaryModel::rigid(std::move(seaSurfaceGeometry));
+  } else if (topOptions[1U] == 'A') {
+    if (!topAcousticHalfSpace.has_value()) {
+      fail(source, topOptionsRecord.lineNumber,
+           "top acoustic half-space record is missing");
+    }
+    if (!depthMatches(topAcousticHalfSpace->materialDepth, surfaceDepth)) {
+      fail(source, topOptionsRecord.lineNumber,
+           "top half-space depth must match the first SSP depth");
+    }
+    seaSurface = BoundaryModel::acousticHalfSpace(
+        std::move(seaSurfaceGeometry), topAcousticHalfSpace->material,
+        std::move(seaSurfaceLongMaterials));
+  } else if (topOptions[1U] == 'G') {
+    if (seaSurfaceLongMaterials) {
+      fail(source, topOptionsRecord.lineNumber,
+           "grain-size surfaces do not support long-format altimetry");
+    }
+    if (!topGrainSizeHalfSpace.has_value()) {
+      fail(source, topOptionsRecord.lineNumber,
+           "top grain-size half-space record is missing");
+    }
+    if (!depthMatches(topGrainSizeHalfSpace->materialDepth, surfaceDepth)) {
+      fail(source, topOptionsRecord.lineNumber,
+           "top grain-size half-space depth must match the first SSP depth");
+    }
+    seaSurface = BoundaryModel::grainSizeHalfSpace(
+        std::move(seaSurfaceGeometry),
+        topGrainSizeHalfSpace->meanGrainSize);
+  } else if (topOptions[1U] == 'F') {
+    if (seaSurfaceLongMaterials) {
+      fail(source, topOptionsRecord.lineNumber,
+           "tabulated-reflection surfaces do not support long-format "
+           "altimetry");
+    }
+    if (!environmentPath.has_value()) {
+      fail(source, topOptionsRecord.lineNumber,
+           "top tabulated reflection requires parseFile so the sibling "
+           ".trc file can be resolved");
+    }
+    seaSurface = BoundaryModel::tabulatedReflection(
+        std::move(seaSurfaceGeometry),
+        readReflectionTable(boundaryPath(*environmentPath, ".trc")));
+  }
 
   const Record bottomOptionsRecord =
       reader.require("bottom options");
@@ -1102,79 +1231,28 @@ struct ParsedBoundaryFile {
 
   BoundaryModel seabed = BoundaryModel::rigid(seabedGeometry);
   if (bottomOption[0U] == 'A') {
-    const Record materialRecord =
-        reader.require("bottom acoustic half-space");
-    if (materialRecord.tokens.size() != 5U &&
-        materialRecord.tokens.size() != 6U) {
-      fail(source, materialRecord.lineNumber,
-           "an acoustic half-space requires 5 or 6 values");
-    }
-    const double materialDepth =
-        parseDouble(
-            materialRecord, 0U, source, "half-space depth");
-    if (!depthMatches(materialDepth, bottomDepth)) {
-      fail(source, materialRecord.lineNumber,
+    const ParsedAcousticHalfSpace acousticHalfSpace =
+        readAcousticHalfSpace(reader, attenuationUnit, "bottom");
+    if (!depthMatches(acousticHalfSpace.materialDepth, bottomDepth)) {
+      fail(source, bottomOptionsRecord.lineNumber,
            "half-space depth must match the declared bottom depth");
     }
-    const double compressionalSoundSpeed =
-        parseDouble(
-            materialRecord, 1U, source,
-            "half-space compressional sound speed");
-    const double shearSoundSpeed =
-        parseDouble(
-            materialRecord, 2U, source,
-            "half-space shear sound speed");
-    const double densityInput =
-        parseDouble(
-            materialRecord, 3U, source, "half-space density");
-    const double compressionalAttenuation =
-        parseDouble(
-            materialRecord, 4U, source,
-            "half-space compressional attenuation");
-    const double shearAttenuation =
-        materialRecord.tokens.size() == 6U
-            ? parseDouble(
-                  materialRecord, 5U, source,
-                  "half-space shear attenuation")
-            : 0.0;
-    if (compressionalSoundSpeed <= 0.0 || shearSoundSpeed < 0.0 ||
-        densityInput <= 0.0 || compressionalAttenuation < 0.0 ||
-        shearAttenuation < 0.0 ||
-        (shearSoundSpeed == 0.0 && shearAttenuation != 0.0)) {
-      fail(source, materialRecord.lineNumber,
-           "half-space requires positive compressional speed/density, "
-           "non-negative shear speed/attenuation, and zero shear loss "
-           "when shear speed is zero");
-    }
     seabed = BoundaryModel::acousticHalfSpace(
-        std::move(seabedGeometry),
-        AcousticMaterial{
-            .compressionalSoundSpeed =
-                compressionalSoundSpeed,
-            .shearSoundSpeed = shearSoundSpeed,
-            .density = densityInput * kDensityInputToSi,
-            .compressionalAttenuation = makeAttenuation(
-                compressionalAttenuation, attenuationUnit),
-            .shearAttenuation = makeAttenuation(
-                shearAttenuation, attenuationUnit)},
+        std::move(seabedGeometry), acousticHalfSpace.material,
         std::move(seabedLongMaterials));
   } else if (bottomOption[0U] == 'G') {
     if (seabedLongMaterials) {
       fail(source, bottomOptionsRecord.lineNumber,
            "grain-size bottoms do not support long-format bathymetry");
     }
-    const Record grainSizeRecord = reader.require("bottom grain size");
-    requireTokenCount(grainSizeRecord, 2U, source, "bottom grain size");
-    const double materialDepth = parseDouble(
-        grainSizeRecord, 0U, source, "grain-size half-space depth");
-    if (!depthMatches(materialDepth, bottomDepth)) {
-      fail(source, grainSizeRecord.lineNumber,
+    const ParsedGrainSizeHalfSpace grainSizeHalfSpace =
+        readGrainSizeHalfSpace(reader, "bottom");
+    if (!depthMatches(grainSizeHalfSpace.materialDepth, bottomDepth)) {
+      fail(source, bottomOptionsRecord.lineNumber,
            "grain-size half-space depth must match the declared bottom depth");
     }
-    const double meanGrainSize = parseDouble(
-        grainSizeRecord, 1U, source, "mean grain size");
     seabed = BoundaryModel::grainSizeHalfSpace(
-        std::move(seabedGeometry), meanGrainSize);
+        std::move(seabedGeometry), grainSizeHalfSpace.meanGrainSize);
   } else if (bottomOption[0U] == 'F') {
     if (seabedLongMaterials) {
       fail(source, bottomOptionsRecord.lineNumber,
@@ -1189,10 +1267,12 @@ struct ParsedBoundaryFile {
     seabed = BoundaryModel::tabulatedReflection(
         std::move(seabedGeometry),
         readReflectionTable(boundaryPath(*environmentPath, ".brc")));
+  } else if (bottomOption[0U] == 'V') {
+    seabed = BoundaryModel::vacuum(std::move(seabedGeometry));
   } else if (bottomOption[0U] != 'R') {
     fail(source, bottomOptionsRecord.lineNumber,
-         "only rigid ('R'), acoustic ('A'), grain-size ('G'), and "
-         "tabulated-reflection ('F') bottoms are supported");
+         "only vacuum ('V'), rigid ('R'), acoustic ('A'), grain-size ('G'), "
+         "and tabulated-reflection ('F') bottoms are supported");
   }
 
   const Record sourceCountRecord =

@@ -360,9 +360,6 @@ BoundaryModel BoundaryModel::vacuum(double depth) {
 }
 
 BoundaryModel BoundaryModel::vacuum(BoundaryGeometry geometry) {
-  if (geometry.orientation() != BoundaryOrientation::Upper) {
-    throw ValidationError("vacuum sea-surface geometry must be upper");
-  }
   return BoundaryModel(
       BoundaryKind::Vacuum, std::move(geometry), std::nullopt);
 }
@@ -372,9 +369,6 @@ BoundaryModel BoundaryModel::rigid(double depth) {
 }
 
 BoundaryModel BoundaryModel::rigid(BoundaryGeometry geometry) {
-  if (geometry.orientation() != BoundaryOrientation::Lower) {
-    throw ValidationError("rigid seabed geometry must be lower");
-  }
   return BoundaryModel(
       BoundaryKind::Rigid, std::move(geometry), std::nullopt);
 }
@@ -395,10 +389,6 @@ BoundaryModel BoundaryModel::acousticHalfSpace(
 BoundaryModel BoundaryModel::acousticHalfSpace(
     BoundaryGeometry geometry, AcousticMaterial material,
     SharedLongBoundaryMaterials longMaterials) {
-  if (geometry.orientation() != BoundaryOrientation::Lower) {
-    throw ValidationError(
-        "acoustic-half-space seabed geometry must be lower");
-  }
   validateMaterial(material);
   if (longMaterials && longMaterials->size() != geometry.nodes().size()) {
     throw ValidationError(
@@ -440,10 +430,6 @@ BoundaryModel BoundaryModel::grainSizeHalfSpace(double depth,
 
 BoundaryModel BoundaryModel::grainSizeHalfSpace(
     BoundaryGeometry geometry, double meanGrainSize) {
-  if (geometry.orientation() != BoundaryOrientation::Lower) {
-    throw ValidationError(
-        "grain-size half-space seabed geometry must be lower");
-  }
   return BoundaryModel(BoundaryKind::GrainSizeHalfSpace,
                        std::move(geometry), std::nullopt, {},
                        grainSizeToGeoacoustic(meanGrainSize));
@@ -451,10 +437,6 @@ BoundaryModel BoundaryModel::grainSizeHalfSpace(
 
 BoundaryModel BoundaryModel::tabulatedReflection(
     BoundaryGeometry geometry, SharedTabulatedReflectionTable table) {
-  if (geometry.orientation() != BoundaryOrientation::Lower) {
-    throw ValidationError(
-        "tabulated-reflection seabed geometry must be lower");
-  }
   validateReflectionTable(table);
   return BoundaryModel(BoundaryKind::TabulatedReflection,
                        std::move(geometry), std::nullopt, {}, {},
@@ -562,15 +544,11 @@ Environment::Environment(SoundSpeedProfile soundSpeedProfile,
       seabed_(std::move(seabed)),
       volumeAttenuation_(std::move(volumeAttenuation)) {
   validateVolumeAttenuation(volumeAttenuation_);
-  if (seaSurface_.kind() != BoundaryKind::Vacuum) {
-    throw ValidationError("the first F2CPP sea surface must be vacuum");
+  if (seaSurface_.geometry().orientation() != BoundaryOrientation::Upper) {
+    throw ValidationError("sea-surface geometry must be upper");
   }
-  if (seabed_.kind() != BoundaryKind::Rigid &&
-      seabed_.kind() != BoundaryKind::AcousticHalfSpace &&
-      seabed_.kind() != BoundaryKind::GrainSizeHalfSpace &&
-      seabed_.kind() != BoundaryKind::TabulatedReflection) {
-    throw ValidationError(
-        "the first F2CPP seabed must be rigid, acoustic, or grain-size");
+  if (seabed_.geometry().orientation() != BoundaryOrientation::Lower) {
+    throw ValidationError("seabed geometry must be lower");
   }
   std::vector<double> boundaryRanges;
   boundaryRanges.reserve(seaSurface_.geometry().nodes().size() +

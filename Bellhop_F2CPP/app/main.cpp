@@ -121,6 +121,44 @@ std::string_view beamFamilyLabel(
   }
 }
 
+void writeBoundarySummary(std::ostream& stream,
+                          const bellhop::BoundaryModel& boundary,
+                          std::string_view side) {
+  switch (boundary.kind()) {
+    case bellhop::BoundaryKind::Vacuum:
+      stream << "VACUUM " << side << '\n';
+      return;
+    case bellhop::BoundaryKind::Rigid:
+      stream << "Perfectly RIGID " << side << '\n';
+      return;
+    case bellhop::BoundaryKind::AcousticHalfSpace:
+      stream << "ACOUSTO-ELASTIC half-space " << side << '\n';
+      return;
+    case bellhop::BoundaryKind::GrainSizeHalfSpace: {
+      const auto& grain = *boundary.grainSizeMaterial();
+      stream << "Grain size to define half-space\n"
+             << "Grain size = " << grain.meanGrainSize << '\n'
+             << "Grain sound-speed ratio = " << grain.soundSpeedRatio << '\n'
+             << "Grain density ratio = " << grain.densityRatio << '\n'
+             << "Grain attenuation coefficient = "
+             << grain.attenuationCoefficient << '\n';
+      return;
+    }
+    case bellhop::BoundaryKind::TabulatedReflection: {
+      const auto& table = *boundary.reflectionTable();
+      stream << "FILE used for reflection loss\n"
+             << "Using tabulated " << side << " reflection coef.\n"
+             << "Number of points in " << side
+             << " reflection coefficient = " << table.size() << '\n'
+             << "Reflection coefficient angle domain = "
+             << table.front().angleDegrees << " to "
+             << table.back().angleDegrees << " degrees\n";
+      return;
+    }
+  }
+  throw bellhop::ValidationError("boundary kind is invalid");
+}
+
 void writeConfigurationSummary(
     std::ostream& stream,
     const bellhop::ParsedEnvironment& parsed) {
@@ -233,9 +271,8 @@ void writeConfigurationSummary(
   } else {
     stream << "Rectilinear receiver grid\n";
   }
-  stream
-         << "VACUUM sea surface\n"
-         << "Attenuation units: "
+  writeBoundarySummary(stream, environment.seaSurface(), "top");
+  stream << "Attenuation units: "
          << attenuationUnitLabel(
                 environment.soundSpeedProfile()
                     .points()
@@ -265,34 +302,11 @@ void writeConfigurationSummary(
            bellhop::BoundaryInterpolationKind::PiecewiseLinear)) {
     stream << "Piecewise linear interpolation\n";
   }
-  if (environment.seabed().hasRangeDependentMaterials()) {
+  if (environment.seaSurface().hasRangeDependentMaterials() ||
+      environment.seabed().hasRangeDependentMaterials()) {
     stream << "Long format (bathymetry and geoacoustics)\n";
   }
-  if (environment.seabed().kind() ==
-      bellhop::BoundaryKind::Rigid) {
-    stream << "Perfectly RIGID seabed\n";
-  } else if (environment.seabed().kind() ==
-             bellhop::BoundaryKind::GrainSizeHalfSpace) {
-    const auto& grain = *environment.seabed().grainSizeMaterial();
-    stream << "Grain size to define half-space\n"
-           << "Grain size = " << grain.meanGrainSize << '\n'
-           << "Grain sound-speed ratio = " << grain.soundSpeedRatio << '\n'
-           << "Grain density ratio = " << grain.densityRatio << '\n'
-           << "Grain attenuation coefficient = "
-           << grain.attenuationCoefficient << '\n';
-  } else if (environment.seabed().kind() ==
-             bellhop::BoundaryKind::TabulatedReflection) {
-    const auto& table = *environment.seabed().reflectionTable();
-    stream << "FILE used for reflection loss\n"
-           << "Using tabulated bottom reflection coef.\n"
-           << "Number of points in bottom reflection coefficient = "
-           << table.size() << '\n'
-           << "Reflection coefficient angle domain = "
-           << table.front().angleDegrees << " to "
-           << table.back().angleDegrees << " degrees\n";
-  } else {
-    stream << "ACOUSTO-ELASTIC half-space seabed\n";
-  }
+  writeBoundarySummary(stream, environment.seabed(), "bottom");
   const bellhop::VolumeAttenuation& volumeAttenuation =
       environment.volumeAttenuation();
   switch (volumeAttenuation.model) {

@@ -367,9 +367,8 @@ python3 test/standard_cases/codes/standard_cases.py validate \
 | 维度与场 | 二维；coherent complex pressure，incoherent/semi-coherent intensity-derived pressure，普通射线，arrivals 或 eigenray prefixes |
 | 运行类型 | Cartesian Cerveny `CC`/`IC`/`SC`，或 ray-centered Cerveny `CR`/`IR`/`SR`；安全子集内的 `R`/`RG`/`RGO` ray trace；`A/a` arrivals；`E` eigenray。A/a/E 的 beam family 支持 Cartesian geometric hat `G`、ray-centered geometric hat `g` 和 Cartesian geometric Gaussian `B` |
 | 频率与声源 | 每次运行恰好一个频率；支持一个或多个 source depth |
-| 水体 | 一个水层、C-linear、N²-linear、PCHIP、Cubic Spline 或 Q 型范围相关二维 SSP、真空海面 |
-| 二维边界 | 平坦边界；`.ati/.bty` 的 piecewise-linear `LS`、canonical curvilinear `C` short format；piecewise-linear `LL` fluid long format |
-| 海底 | 刚性底 `R`，普通 ENV 流体/弹性声学半空间 `A`，bottom grain-size `G`，或 bottom tabulated reflection `F + .brc` |
+| 水体 | 一个水层、C-linear、N²-linear、PCHIP、Cubic Spline 或 Q 型范围相关二维 SSP |
+| 二维边界 | top/bottom 均支持 `V/R/A/G/F`；top `F + .trc`、bottom `F + .brc`；平坦边界及 `.ati/.bty` 的 piecewise-linear `LS`、canonical curvilinear `C` short format；piecewise-linear `LL` fluid long format |
 | 衰减 | `N/F/M/W/Q/L` 输入单位；可选 Thorp、Francois–Garrison 或 biological 体积衰减 |
 | 接收网格 | Cartesian TL：规则 depth×range 笛卡尔积，或等数量 depth/range 轴的 irregular SHD；ray-centered TL：仅规则网格。A/a/E 的 Cartesian G/B 支持规则及 Origin 配对 irregular 接收器，ray-centered g 仅规则、等间距 range；R 允许单个 receiver range |
 | 波束 | Cartesian/ray-centered Cerveny TL：`F/M/W` beam width × `D/S/Z` reflection-curvature condition，1～3 个图像源；A/a/E 仅 G/g/B，不读取 TL 的 beam/image 两行；R 同样不读取 |
@@ -383,7 +382,7 @@ python3 test/standard_cases/codes/standard_cases.py validate \
   仅由 ray-centered Cerveny 计算；
 - ray-centered irregular receiver grid；首个纵切会明确拒绝，不会退化为
   Cartesian 或静默套用 CC 的 irregular legacy 深度语义；
-- 顶部声学/粒径/表格反射边界、`G+LL`、`F+LL`、弹性 `LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
+- `G+LL`、`F+LL`、弹性 `LL`、`CS/CL` legacy 混合写法、curvilinear long format、边界粗糙度；
 - `P/W` reflection-coefficient 路径；当前 Origin 2D 中它们没有完整的实际反射消费/写出链；
 - 小写 `m` 幂律单位；
 - beam shift；

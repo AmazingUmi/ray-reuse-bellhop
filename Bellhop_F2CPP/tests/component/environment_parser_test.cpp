@@ -26,6 +26,7 @@ using bellhop::BellhopError;
 using bellhop::BiologicalAttenuationLayers;
 using bellhop::BoundaryInterpolationKind;
 using bellhop::BoundaryKind;
+using bellhop::BoundaryOrientation;
 using bellhop::BeamFamily;
 using bellhop::BeamWidthMode;
 using bellhop::CervenyCoordinateSystem;
@@ -730,6 +731,89 @@ void testBoundaryCases(Context& context) {
       material.compressionalAttenuation.unit ==
           AttenuationUnit::DecibelsPerWavelength,
       "acoustic-bottom attenuation options");
+}
+
+void testBoundarySymmetry(Context& context) {
+  const std::string direct =
+      renderCase("constant_speed_direct", 1000.0, 300U);
+
+  std::string rigidTopVacuumBottom = direct;
+  replaceFirst(rigidTopVacuumBottom, "'CVW'", "'CRW'");
+  replaceFirst(rigidTopVacuumBottom, "'A' 0.0", "'V' 0.0");
+  replaceFirst(rigidTopVacuumBottom,
+               "1000.0  1600.0  0.0  1.8  0.0", "");
+  const ParsedEnvironment symmetric = parseText(
+      rigidTopVacuumBottom, "rigid_top_vacuum_bottom.env");
+  const auto& symmetricEnvironment =
+      symmetric.simulationCase.environment();
+  context.check(
+      symmetricEnvironment.seaSurface().kind() == BoundaryKind::Rigid &&
+          symmetricEnvironment.seabed().kind() == BoundaryKind::Vacuum,
+      "parser accepts rigid top and vacuum bottom boundaries");
+  context.check(
+      symmetricEnvironment.seaSurface().geometry().orientation() ==
+              BoundaryOrientation::Upper &&
+          symmetricEnvironment.seabed().geometry().orientation() ==
+              BoundaryOrientation::Lower,
+      "parser retains physical upper/lower boundary orientations");
+
+  std::string acousticTop = direct;
+  replaceFirst(acousticTop, "'CVW'",
+               "'CAW'\n0.0  1700.0  0.0  1.3  0.25  0.0");
+  const ParsedEnvironment parsedAcoustic =
+      parseText(acousticTop, "acoustic_top.env");
+  const auto& acousticSurface =
+      parsedAcoustic.simulationCase.environment().seaSurface();
+  context.check(
+      acousticSurface.kind() == BoundaryKind::AcousticHalfSpace &&
+          acousticSurface.material().has_value(),
+      "parser accepts a top acoustic half-space record");
+  if (acousticSurface.material().has_value()) {
+    context.checkNear(acousticSurface.material()->density, 1300.0, 0.0,
+                      "top acoustic density converts to SI");
+  }
+
+  std::string grainTop = direct;
+  replaceFirst(grainTop, "'CVW'", "'CGW'\n0.0  2.6");
+  const ParsedEnvironment parsedGrain =
+      parseText(grainTop, "grain_top.env");
+  const auto& grainSurface =
+      parsedGrain.simulationCase.environment().seaSurface();
+  context.check(
+      grainSurface.kind() == BoundaryKind::GrainSizeHalfSpace &&
+          grainSurface.grainSizeMaterial().has_value(),
+      "parser accepts a top grain-size half-space record");
+
+  std::string tableTop = direct;
+  replaceFirst(tableTop, "'CVW'", "'CFW'");
+  replaceFirst(tableTop, "'A' 0.0", "'V' 0.0");
+  replaceFirst(tableTop, "1000.0  1600.0  0.0  1.8  0.0", "");
+  const std::filesystem::path directory =
+      std::filesystem::temp_directory_path() /
+      "bellhop_f2cpp_top_boundary_symmetry";
+  std::error_code cleanupError;
+  std::filesystem::remove_all(directory, cleanupError);
+  std::filesystem::create_directories(directory);
+  const std::filesystem::path environmentPath = directory / "case.env";
+  {
+    std::ofstream environmentFile(environmentPath);
+    environmentFile << tableTop;
+    std::ofstream tableFile(directory / "case.trc");
+    tableFile << "3\n0 1.0 0\n30 0.5 90\n90 0.0 180\n";
+  }
+  const ParsedEnvironment parsedTable =
+      EnvironmentParser::parseFile(environmentPath);
+  const auto& tableSurface =
+      parsedTable.simulationCase.environment().seaSurface();
+  context.check(
+      tableSurface.kind() == BoundaryKind::TabulatedReflection &&
+          tableSurface.reflectionTable() &&
+          tableSurface.reflectionTable()->size() == 3U,
+      "top F loads an immutable sibling TRC table");
+  context.expectThrows<ValidationError>(
+      [&] { static_cast<void>(parseText(tableTop, "top_table_stream.env")); },
+      "stream parsing rejects an unresolved TRC sidecar");
+  std::filesystem::remove_all(directory, cleanupError);
 }
 
 void testAttenuationCases(Context& context) {
@@ -1625,6 +1709,7 @@ int main() {
   testMultipleSourceDepths(context);
   testIrregularReceiverGrid(context);
   testBoundaryCases(context);
+  testBoundarySymmetry(context);
   testAttenuationCases(context);
   testVolumeAttenuationCases(context);
   testMunkCase(context);

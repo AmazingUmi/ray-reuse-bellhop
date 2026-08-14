@@ -29,8 +29,11 @@ using bellhop::AcousticMaterial;
 using bellhop::AttenuationUnit;
 using bellhop::BiologicalAttenuationLayer;
 using bellhop::BiologicalAttenuationLayers;
+using bellhop::BoundaryAcousticsResult;
+using bellhop::BoundaryGeometry;
 using bellhop::BoundaryKind;
 using bellhop::BoundaryModel;
+using bellhop::BoundaryOrientation;
 using bellhop::CLinearFrequencySsp;
 using bellhop::Environment;
 using bellhop::FrequencyProjector;
@@ -778,6 +781,50 @@ void testTabulatedReflectionProjection(Context& context) {
                 "tiny negative tabulated amplitude terminates the ray");
 }
 
+void testTopTabulatedReflectionProjection(Context& context) {
+  const auto table = std::make_shared<const TabulatedReflectionTable>(
+      TabulatedReflectionTable{
+          {.angleDegrees = 0.0, .magnitude = 0.25, .phaseRadians = 0.0},
+          {.angleDegrees = 90.0,
+           .magnitude = 0.75,
+           .phaseRadians = std::numbers::pi}});
+  const Environment environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = kSoundSpeed,
+            .density = kWaterDensity},
+           {.depth = 100.0,
+            .soundSpeed = kSoundSpeed,
+            .density = kWaterDensity}}),
+      BoundaryModel::tabulatedReflection(
+          BoundaryGeometry::flat(0.0, BoundaryOrientation::Upper), table),
+      BoundaryModel::vacuum(
+          BoundaryGeometry::flat(100.0, BoundaryOrientation::Lower)));
+  const double tangentSlowness = 0.5 / kSoundSpeed;
+  const double normalSlowness =
+      std::sqrt(0.75) / kSoundSpeed;
+  const Vec2 position{.range = 25.0, .depth = 0.0};
+  const ReflectionEvent event = makeReflectionEvent(
+      0U, ReflectionBoundary::SeaSurface, position,
+      tangentSlowness, normalSlowness);
+  RayPath path;
+  path.points = {
+      makeRayState(position, event.incidentSlowness),
+      makeRayState(position, event.reflectedSlowness)};
+  path.events = {event};
+  const RayFrequencyState projected =
+      FrequencyProjector(environment).project(path, 1000.0, 1.0);
+  const BoundaryAcousticsResult expected =
+      evaluateTabulatedReflectionAcoustics(
+          *table, tangentSlowness, normalSlowness);
+  context.checkNear(projected.points.back().amplitude,
+                    expected.amplitudeMultiplier, 2.0e-15,
+                    "top table reflection amplitude uses the shared projector");
+  context.checkNear(projected.points.back().reflectionPhase,
+                    expected.phaseIncrement, 2.0e-15,
+                    "top table reflection phase uses the shared projector");
+}
+
 void testAcousticReflectionAndActiveCutoff(Context& context) {
   const auto& fixture =
       bellhop::test::kHalfSpaceCoefficientFixtures[1U];
@@ -1070,6 +1117,7 @@ int main() {
   testElasticEnvironmentProjection(context);
   testGrainSizeEnvironmentProjection(context);
   testTabulatedReflectionProjection(context);
+  testTopTabulatedReflectionProjection(context);
   testFrozenLongMaterialOverridesEnvironmentFallback(context);
   testMunkReflectionOracle(context);
   testProjectionDoesNotMutateGeometry(context);

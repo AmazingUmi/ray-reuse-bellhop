@@ -49,6 +49,7 @@ class CaseModelTests(unittest.TestCase):
                 "grain_size_equivalent_acoustic_control",
                 "tabulated_reflection_bottom",
                 "tabulated_reflection_rigid_control",
+                "top_tabulated_bottom_vacuum",
                 "q_range_dependent_cross_gradient",
                 "q_range_independent_control",
                 "multi_source_depths",

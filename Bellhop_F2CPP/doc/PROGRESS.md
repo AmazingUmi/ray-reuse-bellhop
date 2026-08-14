@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-14
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I8 已完成并冻结；暂停在 I9 之前。
+> 当前施工状态：I0～I8 已完成并冻结；I9-B1 Boundary symmetry 已完成，B2/B3 可并行启动。
 
 ## 1. 已完成范围
 
@@ -39,14 +39,15 @@
 | I8-02 | 完成 | ASCII `A`、GNU sequential-unformatted binary `a`、多 source ARR writer 与原子发布 |
 | I8-03 | 完成 | G/g/B eigenray 命中、冻结 ray prefix、EOF `.ray` writer 与 E-mode CLI |
 | I8-04 | 完成 | 独立 ARR/E reader、真实 ArrMod oracle、Origin/F2CPP 矩阵、输出安全与全回归报告 |
+| I9-B1 | 完成 | top `R/A/G/F`、top `.trc`、bottom `V` 与方向无关的共享边界声学/事件投影 |
 
 ## 2. 当前验证基线
 
 - AppleClang Debug ASan/UBSan：37/37 CTest；
 - AppleClang Release：37/37 CTest；
 - GCC 14 Release/Werror：37/37 CTest，项目 C++ 源码无 GCC warning/error；
-- Python 标准算例工具：142/142；
-- F2CPP 单频端到端案例：62/62，其中新增 6 个 ARR、4 个 E，既有 SHD/RAY
+- Python 标准算例工具：145/145；
+- F2CPP 单频端到端案例：63/63，其中包含 6 个 ARR、4 个 E 和 B1 top-F/bottom-V，既有 SHD/RAY
   案例全部保持通过；
 - I3-06 `LL` 最终场：最大复压力绝对误差 `4.66e-11`、最大相对误差
   `4.57e-7`、最大 TL 差 `7.63e-6 dB`。
@@ -144,6 +145,10 @@
   陈旧 SHD/RAY/ARR 和 `.tmp` 清理，以及 parse、solver 和 publish 三阶段失败
   对旧正式产品的保留。报告为
   [`validation/i8_output_safety_report.json`](./validation/i8_output_safety_report.json)。
+- I9-B1 top-F/bottom-V 对照：top `.trc` 和 bottom vacuum 均由 Origin/F2CPP
+  端到端消费；最大复压力绝对误差 `1.73985413e-8`、最大相对误差
+  `1.40428056e-5`、最大 TL 差 `1.14440918e-4 dB`。B1 checkpoint 的
+  `f2cpp-regression`、Python 145/145、CTest 37/37 和单频案例 63/63 均通过。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 [`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
@@ -172,10 +177,13 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 ## 5. 下一步
 
 I8 arrivals/eigenray 已完成并冻结，正式任务与验收记录位于
-[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)。当前按
-要求暂停在 I9 之前，不启动二维兼容收口，也不向 `Bellhop_RayReuse` 同步。
-I8 继续复用冻结 `RayPathCache`，但 arrival workspace、duplicate/capacity
-语义和 E 的逐命中 prefix stream 均保持独立生命周期；E 不使用 arrival
-去重或容量截断。ray-centered irregular receiver grid、顶部 `F/.trc`、
-`F+LL`、顶部 `G`、`G+LL`、顶部声学半空间、弹性 `LL/CL`、3D、N×2D 和
-beam shift 仍明确延期，范围以 [`USAGE.md`](./USAGE.md) 为准。
+[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)。剩余二维
+复刻按 B1 Boundary symmetry → B2 General R products 与 B3 Elastic LL
+materials 并行 → B4 Replication closure 的顺序执行；不重新打开 I0～I8，
+也不向 `Bellhop_RayReuse` 同步。
+
+B1 已补齐 top `R/A/G/F`、top `F + .trc` 和 bottom `V`，并统一
+`BoundaryModel` 的上下方向逻辑。B2 General R products 与 B3 Elastic LL
+materials 的共同边界接口前置条件已经满足，可按计划并行启动。
+`P/W`、`CS/CL`、`G/F + LL`、ray-centered irregular receiver、3D、N×2D、
+beam shift 和 analytic SSP 继续延期，范围以 [`USAGE.md`](./USAGE.md) 为准。

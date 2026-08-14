@@ -207,12 +207,12 @@ void testEnvironmentVolumeAttenuation(Context& context) {
                       anchor.attenuationCoefficient, 0.0,
                       "grain-size attenuation breakpoint matches gfortran");
   }
-  context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(BoundaryModel::grainSizeHalfSpace(
-            BoundaryGeometry::flat(0.0, BoundaryOrientation::Upper), 1.0));
-      },
-      "grain-size half-space rejects upper-boundary geometry");
+  const BoundaryModel upperGrain = BoundaryModel::grainSizeHalfSpace(
+      BoundaryGeometry::flat(0.0, BoundaryOrientation::Upper), 1.0);
+  context.check(
+      upperGrain.kind() == bellhop::BoundaryKind::GrainSizeHalfSpace &&
+          upperGrain.geometry().orientation() == BoundaryOrientation::Upper,
+      "grain-size half-space preserves explicit upper orientation");
   context.expectThrows<ValidationError>(
       [] {
         static_cast<void>(BoundaryModel::grainSizeHalfSpace(
@@ -241,6 +241,44 @@ void testEnvironmentVolumeAttenuation(Context& context) {
                     {.angleDegrees = 0.0, .magnitude = 0.5}})));
       },
       "tabulated reflection rejects duplicate angles");
+
+  const AcousticMaterial symmetricMaterial{
+      .compressionalSoundSpeed = 1600.0,
+      .shearSoundSpeed = 0.0,
+      .density = 1800.0};
+  const BoundaryModel upperRigid = BoundaryModel::rigid(
+      BoundaryGeometry::flat(0.0, BoundaryOrientation::Upper));
+  const BoundaryModel upperAcoustic = BoundaryModel::acousticHalfSpace(
+      BoundaryGeometry::flat(0.0, BoundaryOrientation::Upper),
+      symmetricMaterial);
+  const BoundaryModel upperTabulated = BoundaryModel::tabulatedReflection(
+      BoundaryGeometry::flat(0.0, BoundaryOrientation::Upper),
+      reflectionTable);
+  const BoundaryModel lowerVacuum = BoundaryModel::vacuum(
+      BoundaryGeometry::flat(1000.0, BoundaryOrientation::Lower));
+  context.check(
+      upperRigid.kind() == bellhop::BoundaryKind::Rigid &&
+          upperAcoustic.kind() == bellhop::BoundaryKind::AcousticHalfSpace &&
+          upperTabulated.kind() ==
+              bellhop::BoundaryKind::TabulatedReflection &&
+          lowerVacuum.kind() == bellhop::BoundaryKind::Vacuum,
+      "all boundary physics kinds accept an explicit upper or lower geometry");
+  static_cast<void>(Environment(
+      SoundSpeedProfile({
+          {.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+          {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0}}),
+      upperRigid, lowerVacuum));
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(Environment(
+            SoundSpeedProfile({
+                {.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+                {.depth = 1000.0,
+                 .soundSpeed = 1500.0,
+                 .density = 1000.0}}),
+            lowerVacuum, BoundaryModel::rigid(1000.0)));
+      },
+      "Environment rejects a lower-oriented sea surface");
 }
 
 SimulationCase makeSimulationCase(

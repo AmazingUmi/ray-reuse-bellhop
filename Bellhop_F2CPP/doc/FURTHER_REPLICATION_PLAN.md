@@ -3,7 +3,7 @@
 > 初始规划日期：2026-08-07
 > 最近更新：2026-08-14
 > 状态依据：本文件、`PROGRESS.md`、`tasks/`、测试和验证报告，以 Git 内容为准
-> 当前基线：F2CPP 已完成并冻结 I7；I8 架构与任务拆分已完成，功能实现未开始
+> 当前基线：F2CPP 已完成并冻结 I0～I8；正在执行剩余二维复刻 B1
 > 默认前提：不实现 3D，也不把 N×2D 作为二维功能纳入
 
 ## 1. 目标
@@ -541,15 +541,41 @@ CTest 为 37/37，Python 为 142/142，F2CPP 单频案例为 62/62。I8 当前�
 出口：arrivals/eigenray 与 TL 模式共享已验收 tracer，但拥有独立的数据和
 writer；任何容量截断都必须在 PRT 中可见。
 
-### I9：二维兼容收口
+### I9：剩余二维复刻与兼容收口
 
-- [ ] 发布机器可读的二维 feature matrix：`supported/rejected/deferred`；
-- [ ] 运行所有旧例和新增例的 AppleClang/GCC CTest、gfortran 单频 oracle、
-  中间状态和最终产品矩阵；
-- [ ] 检查 F2CPP 不链接、不包含 RayReuse，且可在隔离副本独立构建；
-- [ ] 更新 `USAGE.md` 的输入语法、附属文件、输出和限制；
-- [ ] 记录新的派生清单和源码树哈希，供 RayReuse 分批同步；
-- [ ] 对所有仍未支持的二维原版选项保留明确拒绝测试。
+I0～I8 保持冻结，不重新拆分或修改其数值语义。剩余工作按以下四个 batch
+实施；每个 batch 只增加当前功能无法由既有案例验证时所必需的最小案例，
+标准算例总增量控制在 2～3 个。
+
+1. **B1 — Boundary symmetry（ACCEPTED）**
+   - 支持 top `R/A/G/F`、top `F + .trc` 和 bottom `V`；
+   - 统一 `BoundaryModel` 的 upper/lower 方向约束，复用已有边界声学、
+     `ReflectionEvent` 和逐频投影；
+   - 运行相关 parser/boundary/projector 测试、一个 top-boundary Origin 对照、
+     `f2cpp-regression` 和 `f2cpp-full`。
+2. **B2 — General R products（TODO）**
+   - 在 B1 接口稳定后支持方向性 source pattern、已支持有损边界、逐频活动
+     prefix 和显式单 ray；
+   - 不加入 beam shift，不改变冻结轨迹的频率无关契约。
+3. **B3 — Elastic LL materials（TODO）**
+   - 在 B1 接口稳定后支持 top/bottom acoustic `LL` 的沿程 elastic P/S 材料；
+   - B2 与 B3 并行实现，batch 完成后统一 review 和集成。
+4. **B4 — Replication closure（TODO）**
+   - 发布 `supported/rejected/deferred` feature matrix；
+   - 更新 `PROGRESS.md`、`USAGE.md` 和派生清单；
+   - 检查 F2CPP 与 RayReuse 的构建独立性，并执行最终 AppleClang/GCC、
+     `f2cpp-full` 和 release/checkpoint 验收。
+
+`P/W` reflection coefficient、`CS/CL` legacy 混合格式、`G/F + LL`、
+ray-centered irregular receiver、3D/N×2D、beam shift、analytic SSP 和
+F2CPP 多频调度继续明确延期。它们不因本轮收口而获得静默降级路径。
+
+B1 于 2026-08-14 完成：parser 和 `BoundaryModel` 允许 top `R/A/G/F` 与
+bottom `V`，top `F` 解析同根 `.trc`，上下边界共用既有反射事件和逐频声学
+投影。新增的单个 top-F/bottom-V 算例相对 Origin 最大复压力绝对/相对误差
+分别为 `1.73985413e-8`/`1.40428056e-5`，最大 TL 差
+`1.14440918e-4 dB`；`f2cpp-regression`、145 项 Python 测试、37 项 CTest
+及 63 个 F2CPP 单频案例全部通过。B1 接口已稳定，B2/B3 可以并行启动。
 
 ## 6. 每项功能的统一验收门
 
@@ -575,10 +601,12 @@ writer；任何容量截断都必须在 PRT 中可见。
 | P1 | I2～I3 | 扩大常用二维环境，同时复用 I0 的通用接口 |
 | P2 | I4～I6 | 补真实边界材料、范围相关环境和常见输入/输出 |
 | P3 | I7～I8 | 算法分支最多，必须建立在环境、网格和 writer 稳定之后 |
-| 收口 | I9 | 形成可声明的二维兼容范围和新派生基线 |
+| P4 | I9-B1 | 补齐上下边界类型对称性 |
+| P4 | I9-B2～B3 | B1 后并行补普通 R 产品与 elastic LL |
+| 收口 | I9-B4 | 形成可声明的二维兼容范围和新派生基线 |
 
 I0～I2、I3-01～I3-06、I4-01～I4-05、I5-01～I5-05、I6-01～I6-05 和
-I7-01～I7-06、I8-01～I8-04 已按纵切完成并冻结，当前暂停在 I9 之前。
+I7-01～I7-06、I8-01～I8-04 已按纵切完成并冻结，当前执行 I9-B1。
 每个阶段开始前仍应根据实际
 算例需求复核优先级；该复核只能调整尚未开始阶段的先后，不能绕过依赖门。
 
