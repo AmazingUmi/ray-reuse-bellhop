@@ -1,0 +1,109 @@
+schema_version = 1
+
+[sets.core]
+description = "Core SHD propagation, reflections and refracting Munk field"
+ctest_regex = "f2cpp\\.(component\\.(single_frequency_solver|cartesian_cerveny_influence|geometry_tracer_munk)|unit\\.pressure_scaling)"
+
+[sets.ssp]
+description = "SSP interpolation and range-dependent sound speed"
+ctest_regex = "f2cpp\\.component\\.(sound_speed_evaluator|c_linear_ssp|pchip_ssp|n2_linear_ssp|cubic_spline_ssp|geometry_tracer_ssp_interface)"
+
+[sets.boundary]
+description = "Boundary geometry, material and reflection models"
+ctest_regex = "f2cpp\\.component\\.(boundary_geometry|boundary_acoustics|flat_boundary_reflection|geometry_tracer_reflection)"
+
+[sets.attenuation]
+description = "Attenuation units and volume attenuation models"
+ctest_regex = "f2cpp\\.(unit\\.attenuation|component\\.frequency_projector)"
+
+[sets.source_receiver]
+description = "Source count/geometry/pattern and receiver layout"
+ctest_regex = "f2cpp\\.(component\\.(environment_parser|single_frequency_solver)|unit\\.pressure_scaling)"
+
+[sets.beam]
+description = "Coherence, components and Cartesian/ray-centered beam families"
+ctest_regex = "f2cpp\\.(component\\.(cartesian_cerveny_influence|ray_centered_cerveny_influence|geometric_hat_influence|geometric_gaussian_influence|simple_gaussian_influence)|unit\\.beam_epsilon)"
+
+[sets.ray]
+description = "Ordinary RAY product"
+ctest_regex = "f2cpp\\.component\\.(ray_trace_output|geometry_tracer)"
+
+[sets.arrival]
+description = "ASCII/binary Arrival products and accumulation"
+ctest_regex = "f2cpp\\.component\\.(arrival_workspace|arrival_solver|arrival_writer|geometric_hat_influence|geometric_gaussian_influence)"
+
+[sets.eigenray]
+description = "Eigenray EOF stream and ray-prefix products"
+ctest_regex = "f2cpp\\.component\\.(eigenray_solver|eigenray_writer|ray_trace_output|geometric_hat_influence|geometric_gaussian_influence)"
+
+[sets.output]
+description = "Representative SHD, RAY, Arrival and Eigenray lifecycle"
+ctest_regex = "f2cpp\\.(component\\.(shd_writer|ray_trace_output|arrival_writer|eigenray_writer)|cli\\.output_lifecycle)"
+
+[sets.f2cpp_regular]
+description = "Small high-information F2CPP routine regression"
+ctest_regex = "f2cpp\\.(unit|component|cli)"
+
+[cases]
+constant_speed_direct = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:none"], sets = ["core", "output", "f2cpp_regular"] }
+constant_speed_vacuum_rigid = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["core", "boundary"] }
+constant_speed_acoustic_bottom = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:acoustic_halfspace"], sets = ["core", "boundary"] }
+constant_speed_no_attenuation_5khz = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid", "attenuation:none"], sets = ["attenuation"] }
+constant_speed_thorp = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid", "attenuation:thorp"], sets = ["attenuation", "f2cpp_regular"] }
+munk_cerveny_cc = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:vacuum_acoustic"], sets = ["core", "ssp", "f2cpp_regular"] }
+munk_pchip = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:pchip", "boundary:vacuum_acoustic"], sets = ["ssp"] }
+munk_n2 = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:n2_linear", "boundary:vacuum_acoustic"], sets = ["ssp"] }
+munk_spline = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:cubic_spline", "boundary:vacuum_acoustic"], sets = ["ssp"] }
+i3_piecewise_boundaries = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:piecewise_linear"], sets = ["boundary", "f2cpp_regular"] }
+i3_curvilinear_oracle = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:curvilinear"], sets = ["boundary"] }
+i3_long_format_materials = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:piecewise_material"], sets = ["boundary"] }
+attenuation_unit_n = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:nepers_per_m"], sets = ["attenuation"] }
+attenuation_unit_f = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:db_per_khz_m"], sets = ["attenuation"] }
+attenuation_unit_m = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:db_per_m"], sets = ["attenuation"] }
+attenuation_unit_w = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:db_per_wavelength"], sets = ["attenuation"] }
+attenuation_unit_q = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:quality_factor"], sets = ["attenuation"] }
+attenuation_unit_l = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:loss_parameter"], sets = ["attenuation"] }
+volume_attenuation_francois_garrison = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:francois_garrison"], sets = ["attenuation"] }
+volume_attenuation_biological = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:c_linear", "boundary:acoustic", "attenuation:biological"], sets = ["attenuation"] }
+elastic_halfspace_flat = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:elastic_halfspace"], sets = ["boundary"] }
+elastic_halfspace_fluid_control = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:fluid_control"], sets = ["boundary"] }
+grain_size_flat = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:grain_size"], sets = ["boundary"] }
+grain_size_equivalent_acoustic_control = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:grain_acoustic_control"], sets = ["boundary"] }
+tabulated_reflection_bottom = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:tabulated_reflection"], sets = ["boundary"] }
+tabulated_reflection_rigid_control = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:rigid_control"], sets = ["boundary"] }
+q_range_dependent_cross_gradient = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:quadrilateral_range_dependent", "boundary:vacuum_rigid"], sets = ["ssp", "f2cpp_regular"] }
+q_range_independent_control = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:quadrilateral_control", "boundary:vacuum_rigid"], sets = ["ssp"] }
+multi_source_depths = { tags = ["product:shd", "source:multisource", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["source_receiver", "f2cpp_regular"] }
+irregular_receiver_pairs = { tags = ["product:shd", "source:single", "receiver:irregular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["source_receiver", "f2cpp_regular"] }
+source_beam_pattern_directional = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:directional", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["source_receiver"] }
+source_beam_pattern_omni_control = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["source_receiver"] }
+ray_trace_vacuum_rigid = { tags = ["product:ray", "source:multisource", "receiver:regular", "geometry:point", "pattern:omni", "beam:center_ray", "ssp:constant", "boundary:vacuum_rigid"], sets = ["ray", "output", "f2cpp_regular"] }
+cartesian_component_pressure = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny_pressure", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+cartesian_component_vertical = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny_vertical", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+cartesian_component_horizontal = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny_horizontal", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+cerveny_width_space_filling = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cerveny_space_filling", "ssp:c_linear", "boundary:curvilinear"], sets = ["beam"] }
+cerveny_width_wkb = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cerveny_wkb", "ssp:c_linear", "boundary:curvilinear"], sets = ["beam"] }
+cerveny_curvature_double = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cerveny_curvature_double", "ssp:c_linear", "boundary:curvilinear"], sets = ["beam"] }
+cerveny_curvature_zero = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cerveny_curvature_zero", "ssp:c_linear", "boundary:curvilinear"], sets = ["beam"] }
+source_geometry_point_explicit = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["source_receiver"] }
+source_geometry_line = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:line", "pattern:omni", "beam:cartesian_cerveny", "ssp:constant", "boundary:vacuum_rigid"], sets = ["source_receiver"] }
+incoherent_direct = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny_incoherent", "ssp:constant", "boundary:none"], sets = ["beam"] }
+semicoherent_direct = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:cartesian_cerveny_semicoherent", "ssp:constant", "boundary:none"], sets = ["beam"] }
+ray_centered_component_pressure = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:ray_centered_cerveny_pressure", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam", "f2cpp_regular"] }
+ray_centered_component_vertical = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:ray_centered_cerveny_vertical", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+ray_centered_component_horizontal = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:ray_centered_cerveny_horizontal", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+geometric_hat_cartesian = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:c_linear", "boundary:piecewise_linear"], sets = ["beam"] }
+geometric_hat_ray_centered = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_ray_centered", "ssp:c_linear", "boundary:piecewise_linear"], sets = ["beam"] }
+geometric_hat_cartesian_safe_control = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+geometric_gaussian_cartesian = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_gaussian_cartesian", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam", "f2cpp_regular"] }
+simple_gaussian_cartesian = { tags = ["product:shd", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:simple_gaussian_cartesian", "ssp:constant", "boundary:vacuum_rigid"], sets = ["beam"] }
+arrival_geometric_hat_ascii = { tags = ["product:arrival_ascii", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid", "effect:multipath"], sets = ["arrival", "output", "f2cpp_regular"] }
+arrival_geometric_hat_binary = { tags = ["product:arrival_binary", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid", "effect:multipath"], sets = ["arrival", "output"] }
+arrival_geometric_hat_ray_centered = { tags = ["product:arrival_ascii", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_ray_centered", "ssp:constant", "boundary:vacuum_rigid", "effect:caustic_phase"], sets = ["arrival"] }
+arrival_geometric_gaussian_irregular = { tags = ["product:arrival_ascii", "source:single", "receiver:irregular", "geometry:point", "pattern:omni", "beam:geometric_gaussian_cartesian", "ssp:constant", "boundary:vacuum_rigid"], sets = ["arrival"] }
+arrival_line_directional_multisource = { tags = ["product:arrival_ascii", "source:multisource", "receiver:regular", "geometry:line", "pattern:directional", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid"], sets = ["arrival"] }
+arrival_zero = { tags = ["product:arrival_ascii", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid", "effect:zero_product"], sets = ["arrival"] }
+eigenray_geometric_hat = { tags = ["product:eigenray", "source:multisource", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid", "effect:reflected_prefix"], sets = ["eigenray", "output", "f2cpp_regular"] }
+eigenray_geometric_hat_ray_centered = { tags = ["product:eigenray", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_ray_centered", "ssp:constant", "boundary:vacuum_rigid"], sets = ["eigenray"] }
+eigenray_geometric_gaussian = { tags = ["product:eigenray", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_gaussian_cartesian", "ssp:constant", "boundary:vacuum_rigid"], sets = ["eigenray"] }
+eigenray_zero = { tags = ["product:eigenray", "source:single", "receiver:regular", "geometry:point", "pattern:omni", "beam:geometric_hat_cartesian", "ssp:constant", "boundary:vacuum_rigid", "effect:zero_product"], sets = ["eigenray"] }

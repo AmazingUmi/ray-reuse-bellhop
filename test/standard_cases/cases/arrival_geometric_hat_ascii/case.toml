@@ -1,8 +1,8 @@
-id = "i8_arrivals_zero"
-description = "I8 ASCII arrivals: valid source and receiver layout with deliberately empty arrival cells"
+id = "arrival_geometric_hat_ascii"
+description = "ASCII arrivals: Cartesian geometric-hat direct and reflected multipath"
 output_kind = "arrivals_ascii"
 origin_template = "origin.env.in"
-source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart", "Bellhop_origin/Bellhop/ArrMod.f90 WriteArrivalsASCII"]
+source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ArrMod.f90 WriteArrivalsASCII"]
 
 [compatibility]
 versions = ["origin", "f2cpp"]
@@ -10,9 +10,9 @@ versions = ["origin", "f2cpp"]
 [launch]
 sound_speed_at_source_mps = 1500.0
 water_depth_m = 100.0
-maximum_range_m = 100.0
-minimum_angle_deg = -2.0
-maximum_angle_deg = 2.0
+maximum_range_m = 400.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
 policy = "shared_fmax"
 
 [validation]

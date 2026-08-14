@@ -22,12 +22,12 @@ from case_model import discover_cases
 
 
 CASES = (
-    "i8_arrivals_geometric_hat_ascii",
-    "i8_arrivals_geometric_hat_binary",
-    "i8_arrivals_geometric_hat_ray_centered",
-    "i8_arrivals_geometric_gaussian_irregular",
-    "i8_arrivals_line_directional_multisource",
-    "i8_arrivals_zero",
+    "arrival_geometric_hat_ascii",
+    "arrival_geometric_hat_binary",
+    "arrival_geometric_hat_ray_centered",
+    "arrival_geometric_gaussian_irregular",
+    "arrival_line_directional_multisource",
+    "arrival_zero",
 )
 ULP_LIMIT = 8
 CODES_ROOT = Path(__file__).resolve().parent
@@ -187,23 +187,23 @@ def _effects(products: dict[str, ArrivalsProduct]) -> dict[str, object]:
     all_arrivals = [arrival for product in products.values() for cell in product.cells for arrival in cell.arrivals]
     if not all_arrivals:
         raise ValueError("arrival matrix produced no non-zero products")
-    zero = products["i8_arrivals_zero"]
+    zero = products["arrival_zero"]
     if any(cell.count for cell in zero.cells):
         raise ValueError("zero-arrival case contains an arrival")
     if not any(arrival.top_bounces or arrival.bottom_bounces for arrival in all_arrivals):
         raise ValueError("arrival matrix did not observe a reflected path")
     if max((source.maximum_arrivals for product in products.values() for source in product.sources), default=0) < 2:
         raise ValueError("arrival matrix did not observe multi-arrival cells")
-    ray_centered = products["i8_arrivals_geometric_hat_ray_centered"]
+    ray_centered = products["arrival_geometric_hat_ray_centered"]
     if not any(abs(arrival.phase_degrees) > 180.0 for cell in ray_centered.cells for arrival in cell.arrivals):
         raise ValueError("ray-centered case did not observe unwrapped/caustic phase")
-    multi = products["i8_arrivals_line_directional_multisource"]
+    multi = products["arrival_line_directional_multisource"]
     if multi.source_count != 2 or not all(any(cell.count for cell in source.cells) for source in multi.sources):
         raise ValueError("line/directional multi-source case lacks separated non-empty source bodies")
     amplitudes = [arrival.amplitude for cell in multi.cells for arrival in cell.arrivals]
     if len({float32_bits(value) for value in amplitudes}) < 2:
         raise ValueError("line/directional case does not expose directional amplitude variation")
-    irregular = products["i8_arrivals_geometric_gaussian_irregular"]
+    irregular = products["arrival_geometric_gaussian_irregular"]
     if len(irregular.sources[0].cells) != 3:
         raise ValueError("irregular case did not retain the paired receiver layout")
     return {"zero_cells": len(zero.cells), "reflected_arrivals": sum(bool(a.top_bounces or a.bottom_bounces) for a in all_arrivals), "maximum_arrivals": max(source.maximum_arrivals for product in products.values() for source in product.sources), "line_directional_amplitude_values": len({float32_bits(value) for value in amplitudes}), "irregular_cells": len(irregular.sources[0].cells), "path_class_counts": {case_id: _path_classes(product) for case_id, product in products.items()}, "observed_but_not_isolated": ["multiple stored arrivals do not independently prove duplicate merge behavior", "the frozen six-case matrix has no otherwise-identical point-source control, so point-vs-line scaling is not isolated", "the directional companion and amplitude variation are structural evidence, not an omnidirectional numerical control"]}

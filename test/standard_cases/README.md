@@ -19,27 +19,53 @@ standard_cases/
 │   ├── compare_fields.py
 │   ├── tolerances.toml
 │   └── tests/
+├── coverage.toml          全部算例的功能标记和最小测试集合
 └── results/               生成输入、求解输出和运行清单
 ```
 
 根目录只保留说明和 Makefile；业务内容严格归入 `cases/`、`codes/`、
 `results/`。`results/` 中除说明文件外均可重新生成，不进入 Git。
 
-## 算例与 profiles
+## Coverage 与功能测试集合
 
-| 算例 | 主要覆盖 |
-|---|---|
-| `constant_speed_direct` | 等声速直达场、无边界碰撞 |
-| `constant_speed_vacuum_rigid` | 真空海面、刚性平底、多次反射 |
-| `constant_speed_acoustic_bottom` | 有损声学半空间反射 |
-| `constant_speed_no_attenuation_5khz` | 无体吸收参考 |
-| `constant_speed_thorp` | 水体频率相关 Thorp 吸收 |
-| `munk_cerveny_cc` | Munk SSP、折射、焦散区域和远程传播 |
+统一算例库当前包含 62 个 Origin/F2CPP 单频案例：51 个 SHD、1 个普通 RAY、
+6 个 Arrival（5 个 ASCII `A`、1 个 binary `a`）和 4 个 Eigenray `E`。
+A/a/E 案例直接位于 `cases/`，不在 `Bellhop_F2CPP` 内维护第二套输入。
+
+长期分类采用 [`coverage.toml`](./coverage.toml)，不使用 I8/I9 等 iteration
+作为案例分类。每个案例均声明：
+
+- `product`：SHD、RAY、Arrival ASCII/binary 或 Eigenray；
+- `source`：single/multisource；
+- `receiver`：regular/irregular；
+- `geometry`：point/line source；
+- `pattern`：omni/directional；
+- `beam`、`ssp` 和 `boundary`；
+- 所属的一个或多个最小测试集合。
+
+当前功能集合：
+
+| 集合 | 案例数 | 用途 |
+|---|---:|---|
+| `core` | 4 | 基础 SHD、反射和 Munk 折射场 |
+| `ssp` | 6 | SSP 插值与 Q 型范围相关声速 |
+| `boundary` | 11 | 边界几何、材料和反射模型 |
+| `attenuation` | 10 | 衰减单位与体积衰减 |
+| `source_receiver` | 6 | 多源、source geometry/方向图、接收布局 |
+| `beam` | 17 | 相干模式、分量和 beam family |
+| `ray` | 1 | 普通 RAY 产品 |
+| `arrival` | 6 | A/a、累加、多径、不规则接收和零结果 |
+| `eigenray` | 4 | E、变长 prefix、重复角度和零命中 |
+| `output` | 5 | SHD/RAY/A/a/E 代表性产品生命周期 |
+| `f2cpp_regular` | 12 | 日常高信息量 F2CPP 回归 |
+
+`make -C test/standard_cases list` 会列出每个集合和每个案例的完整 coverage。
+生成的 `run_manifest.json` 同时记录 `coverage_tags` 和 `test_sets`。
 
 算例参考自 `/Volumes/LYY/user_projects/Acoustics Toolbox to read/at/tests`，
 但这里保存的是面向本项目回归目标的裁剪 fixture，不是逐字节副本。
 
-各算例至少提供：
+基础场案例通常提供：
 
 - `single`：单频组件和端到端回归；
 - `broadband_smoke`：两频快速验证宽带数据流。
@@ -79,6 +105,43 @@ make -C test/standard_cases test \
 `CASE=all` 可对指定版本/profile 运行全部适用算例。只有 `run` 和 `test`
 需要求解器；若可执行文件不在默认位置，可增加
 `EXECUTABLE=/absolute/path/to/bellhop`。
+
+也可以直接按功能集合运行。集合入口会先运行对应的 F2CPP CTest，再运行少量
+代表性 standard cases：
+
+```bash
+make -C test/standard_cases feature SET=arrival
+make -C test/standard_cases feature SET=eigenray
+make -C test/standard_cases feature SET=ssp
+```
+
+### 推荐的三层入口
+
+功能局部测试，用于修改单一功能时：
+
+```bash
+make -C test/standard_cases feature SET=<功能集合>
+```
+
+F2CPP 常规回归，运行完整 CTest 和 12 个高信息量代表案例：
+
+```bash
+make -C test/standard_cases f2cpp-regression
+```
+
+F2CPP 全量验证，运行标准算例工具测试、完整 CTest 和全部 62 个 F2CPP 单频
+案例，用于 checkpoint、重要合并和 release：
+
+```bash
+make -C test/standard_cases f2cpp-full
+```
+
+只有在重新确认 Origin 兼容契约时，才额外运行双方全量单频集合：
+
+```bash
+make -C test/standard_cases batch \
+  VERSIONS=origin,f2cpp PROFILES=single
+```
 
 整体批量测试会先检查算例定义，再测试所有已有可执行程序支持的版本，并
 默认覆盖单频和两频 smoke：

@@ -1,5 +1,5 @@
-id = "i8_eigenray_geometric_hat_ray_centered"
-description = "I8 ray-centered geometric-hat eigenray prefix stream"
+id = "eigenray_geometric_hat_ray_centered"
+description = "Ray-centered geometric-hat eigenray prefix stream"
 output_kind = "eigenray"
 origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatRayCen ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]

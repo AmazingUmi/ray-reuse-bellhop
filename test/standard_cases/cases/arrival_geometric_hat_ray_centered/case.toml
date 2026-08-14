@@ -1,5 +1,5 @@
-id = "i8_arrivals_geometric_hat_ray_centered"
-description = "I8 ASCII arrivals: ray-centered geometric-hat path and unwrapped phase coverage"
+id = "arrival_geometric_hat_ray_centered"
+description = "ASCII arrivals: ray-centered geometric-hat path and unwrapped phase coverage"
 output_kind = "arrivals_ascii"
 origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatRayCen ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ArrMod.f90 AddArr"]

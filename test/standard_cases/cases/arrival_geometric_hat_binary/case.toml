@@ -1,5 +1,5 @@
-id = "i8_arrivals_geometric_hat_binary"
-description = "I8 binary arrivals paired byte-layout counterpart of the Cartesian geometric-hat ASCII case"
+id = "arrival_geometric_hat_binary"
+description = "Binary arrivals paired byte-layout counterpart of the Cartesian geometric-hat ASCII case"
 output_kind = "arrivals_binary"
 origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ArrMod.f90 WriteArrivalsBinary"]

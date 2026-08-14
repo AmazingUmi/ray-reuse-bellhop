@@ -320,6 +320,8 @@ class StandardCasesAdapterTests(unittest.TestCase):
             rendered = environment.read_text(encoding="utf-8")
 
         self.assertEqual(manifest["output_kind"], "ray")
+        self.assertIn("product:ray", manifest["coverage_tags"])
+        self.assertIn("ray", manifest["test_sets"])
         self.assertEqual(manifest["shared_launch_angle_count"], 5)
         self.assertIsNone(run["shade_file"])
         self.assertIsNone(run["ray_file"])

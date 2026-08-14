@@ -14,6 +14,7 @@ from typing import Sequence
 CODES_ROOT = Path(__file__).resolve().parent
 STANDARD_CASES_ROOT = CODES_ROOT.parent
 PROJECT_ROOT = STANDARD_CASES_ROOT.parents[1]
+COVERAGE_PATH = STANDARD_CASES_ROOT / "coverage.toml"
 PLOTREAD_ROOT = PROJECT_ROOT / "test" / "PlotRead"
 sys.path.insert(0, str(PLOTREAD_ROOT))
 sys.path.insert(0, str(CODES_ROOT))
@@ -24,6 +25,7 @@ from bellhop_io_py.shd import ShdReader
 from arrivals_io import parse_ascii_arrivals, parse_binary_arrivals
 from case_model import CaseDefinition, discover_cases
 from compare_fields import compare_files
+from coverage_manifest import load_coverage_manifest
 from eigenray_io import parse_eigenray
 
 
@@ -108,6 +110,22 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def reset_run_directory(path: Path) -> None:
+    """Clear generated contents while preserving the directory itself."""
+    path.mkdir(parents=True, exist_ok=True)
+    # External macOS volumes can expose AppleDouble ``._*`` sidecars that
+    # disappear while their corresponding file is removed. Treat that as an
+    # already-completed cleanup so repeated runs remain reliable.
+    for child in tuple(path.iterdir()):
+        try:
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass
 
 
 def stage_companion_files(
@@ -428,9 +446,7 @@ def process_rayreuse_broadband(
         manifest_path.unlink(missing_ok=True)
 
     if stage in ("generate", "test"):
-        if run_directory.exists():
-            shutil.rmtree(run_directory)
-        run_directory.mkdir(parents=True)
+        reset_run_directory(run_directory)
         environment_path.write_text(
             definition.render_origin_environment(
                 frequencies[0], launch_angle_count
@@ -515,6 +531,8 @@ def process_rayreuse_broadband(
         "last_stage": stage,
         "description": definition.description,
         "output_kind": definition.output_kind,
+        "coverage_tags": definition.coverage_tags,
+        "test_sets": definition.test_sets,
         "source_references": definition.source_references,
         "frequencies_hz": frequencies,
         "design_frequency_hz": max(frequencies),
@@ -597,9 +615,7 @@ def process_case(
         )
 
         if stage in ("generate", "test"):
-            if run_directory.exists():
-                shutil.rmtree(run_directory)
-            run_directory.mkdir(parents=True)
+            reset_run_directory(run_directory)
             environment_path.write_text(
                 definition.render_origin_environment(
                     frequency_hz, launch_angle_count
@@ -684,6 +700,8 @@ def process_case(
         "last_stage": stage,
         "description": definition.description,
         "output_kind": definition.output_kind,
+        "coverage_tags": definition.coverage_tags,
+        "test_sets": definition.test_sets,
         "source_references": definition.source_references,
         "frequencies_hz": frequencies,
         "design_frequency_hz": max(frequencies),
@@ -725,9 +743,20 @@ def run_selection(
     executable: Path | None,
     results_root: Path,
     rayreuse_execution_mode: str = "nonreuse",
+    requested_test_sets: list[str] | None = None,
 ) -> int:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
-    selected, explicit = select_cases(definitions, requested_cases)
+    if requested_cases and requested_test_sets:
+        raise ValueError("--case and --test-set cannot be used together")
+    if requested_test_sets:
+        coverage = load_coverage_manifest(COVERAGE_PATH, definitions)
+        case_ids = coverage.case_ids_for_sets(
+            requested_test_sets, definitions
+        )
+        selected = [definitions[case_id] for case_id in case_ids]
+        explicit = True
+    else:
+        selected, explicit = select_cases(definitions, requested_cases)
     adapter = default_adapters(None)[version]
     if executable is not None:
         adapter = VersionAdapter(
@@ -781,6 +810,12 @@ def add_selection_arguments(parser: argparse.ArgumentParser) -> None:
         action="append",
         dest="cases",
         help="case id; repeat for multiple cases; default: all",
+    )
+    parser.add_argument(
+        "--test-set",
+        action="append",
+        dest="test_sets",
+        help="functional test set from coverage.toml; repeat to combine sets",
     )
     parser.add_argument("--profile", default="single")
     parser.add_argument("--executable", type=Path)
@@ -849,6 +884,25 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    suite_parser = subparsers.add_parser(
+        "suite", help="run relevant F2CPP CTest plus one functional case set"
+    )
+    suite_parser.add_argument(
+        "--test-set", action="append", dest="test_sets", required=True
+    )
+    suite_parser.add_argument("--profile", default="single")
+    suite_parser.add_argument("--executable", type=Path)
+    suite_parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=PROJECT_ROOT / "Bellhop_F2CPP" / "build" / "release",
+    )
+    suite_parser.add_argument(
+        "--results-root",
+        type=Path,
+        default=STANDARD_CASES_ROOT / "results",
+    )
+
     subparsers.add_parser("list", help="list versions, cases and profiles")
 
     compare_parser = subparsers.add_parser(
@@ -872,6 +926,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def list_configuration() -> int:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
+    coverage = load_coverage_manifest(COVERAGE_PATH, definitions)
     adapters = default_adapters(None)
     print("Versions:")
     for name in VERSIONS:
@@ -883,11 +938,57 @@ def list_configuration() -> int:
         else:
             state = f"missing executable ({adapter.executable})"
         print(f"  {name}: {state}")
-    print("Cases:")
+    print("Test sets:")
+    for name, test_set in coverage.test_sets.items():
+        case_ids = coverage.case_ids_for_sets((name,), definitions)
+        print(f"  {name}: {test_set.description} ({len(case_ids)} cases)")
+    print("Cases and coverage:")
     for definition in definitions.values():
         profiles = ", ".join(definition.profiles)
-        print(f"  {definition.case_id}: {profiles}")
+        case_coverage = coverage.cases[definition.case_id]
+        print(
+            f"  {definition.case_id}: profiles={profiles}; "
+            f"sets={','.join(case_coverage.test_sets)}; "
+            f"tags={','.join(case_coverage.tags)}"
+        )
     return 0
+
+
+def run_f2cpp_suite(
+    *,
+    test_sets: list[str],
+    profile: str,
+    executable: Path | None,
+    build_dir: Path,
+    results_root: Path,
+) -> int:
+    definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
+    coverage = load_coverage_manifest(COVERAGE_PATH, definitions)
+    coverage.case_ids_for_sets(test_sets, definitions)
+    regex = "|".join(
+        f"({coverage.test_sets[name].ctest_regex})"
+        for name in test_sets
+    )
+    subprocess.run(
+        [
+            "ctest",
+            "--test-dir",
+            str(build_dir.resolve()),
+            "--output-on-failure",
+            "-R",
+            regex,
+        ],
+        check=True,
+    )
+    return run_selection(
+        stage="test",
+        version="f2cpp",
+        profile=profile,
+        requested_cases=None,
+        executable=executable,
+        results_root=results_root.resolve(),
+        requested_test_sets=test_sets,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -899,9 +1000,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 version=args.version,
                 profile=args.profile,
                 requested_cases=args.cases,
+                requested_test_sets=args.test_sets,
                 executable=args.executable,
                 results_root=args.results_root.resolve(),
                 rayreuse_execution_mode=args.rayreuse_execution_mode,
+            )
+            return 0
+
+        if args.command == "suite":
+            run_f2cpp_suite(
+                test_sets=args.test_sets,
+                profile=args.profile,
+                executable=args.executable,
+                build_dir=args.build_dir,
+                results_root=args.results_root,
             )
             return 0
 

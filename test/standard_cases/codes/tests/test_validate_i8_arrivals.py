@@ -63,15 +63,15 @@ class ArrivalParityTests(unittest.TestCase):
             (ArrivalSource((ArrivalCell((reflected,)),) * 3, 1),),
         )
         products = {
-            "i8_arrivals_geometric_hat_ascii": base,
-            "i8_arrivals_geometric_hat_binary": base,
-            "i8_arrivals_geometric_hat_ray_centered": base,
-            "i8_arrivals_geometric_gaussian_irregular": irregular,
-            "i8_arrivals_line_directional_multisource": multi_source,
-            "i8_arrivals_zero": zero,
+            "arrival_geometric_hat_ascii": base,
+            "arrival_geometric_hat_binary": base,
+            "arrival_geometric_hat_ray_centered": base,
+            "arrival_geometric_gaussian_irregular": irregular,
+            "arrival_line_directional_multisource": multi_source,
+            "arrival_zero": zero,
         }
         _effects(products)
-        products["i8_arrivals_zero"] = base
+        products["arrival_zero"] = base
         with self.assertRaisesRegex(ValueError, "zero-arrival"):
             _effects(products)
 

@@ -1,5 +1,5 @@
-id = "i8_eigenray_geometric_gaussian"
-description = "I8 Cartesian geometric-Gaussian eigenray stream"
+id = "eigenray_geometric_gaussian"
+description = "Cartesian geometric-Gaussian eigenray stream"
 output_kind = "eigenray"
 origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoGaussianCart ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]

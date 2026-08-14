@@ -1,5 +1,5 @@
-id = "i8_arrivals_line_directional_multisource"
-description = "I8 ASCII arrivals: Cartesian geometric-hat line source with directional pattern and ordered multiple sources"
+id = "arrival_line_directional_multisource"
+description = "ASCII arrivals: Cartesian geometric-hat line source with directional pattern and ordered multiple sources"
 output_kind = "arrivals_ascii"
 origin_template = "origin.env.in"
 companion_files = ["origin.sbp"]

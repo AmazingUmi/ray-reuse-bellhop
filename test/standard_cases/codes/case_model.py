@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 from pathlib import Path
 import re
@@ -38,6 +38,8 @@ class CaseDefinition:
     prt_forbidden_markers: tuple[str, ...]
     profiles: dict[str, dict[str, object]]
     supported_versions: tuple[str, ...]
+    coverage_tags: tuple[str, ...] = ()
+    test_sets: tuple[str, ...] = ()
 
     def frequencies(self, profile_name: str) -> tuple[float, ...]:
         try:
@@ -238,4 +240,17 @@ def discover_cases(cases_root: Path) -> dict[str, CaseDefinition]:
         if definition.case_id in definitions:
             raise ValueError(f"duplicate case id: {definition.case_id}")
         definitions[definition.case_id] = definition
+    coverage_path = cases_root.parent / "coverage.toml"
+    if coverage_path.is_file():
+        from coverage_manifest import load_coverage_manifest
+
+        coverage = load_coverage_manifest(coverage_path, definitions)
+        definitions = {
+            case_id: replace(
+                definition,
+                coverage_tags=coverage.cases[case_id].tags,
+                test_sets=coverage.cases[case_id].test_sets,
+            )
+            for case_id, definition in definitions.items()
+        }
     return definitions

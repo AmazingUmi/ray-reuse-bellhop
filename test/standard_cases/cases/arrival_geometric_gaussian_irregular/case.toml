@@ -1,5 +1,5 @@
-id = "i8_arrivals_geometric_gaussian_irregular"
-description = "I8 ASCII arrivals: Cartesian geometric-Gaussian beams on paired irregular receivers"
+id = "arrival_geometric_gaussian_irregular"
+description = "ASCII arrivals: Cartesian geometric-Gaussian beams on paired irregular receivers"
 output_kind = "arrivals_ascii"
 origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoGaussianCart ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 irregular receiver grammar"]

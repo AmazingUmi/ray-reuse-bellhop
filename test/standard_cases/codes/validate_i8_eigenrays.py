@@ -16,10 +16,10 @@ from validate_i6_ray_trace import parse_ray
 
 
 CASES = (
-    "i8_eigenray_geometric_hat",
-    "i8_eigenray_geometric_hat_ray_centered",
-    "i8_eigenray_geometric_gaussian",
-    "i8_eigenray_zero",
+    "eigenray_geometric_hat",
+    "eigenray_geometric_hat_ray_centered",
+    "eigenray_geometric_gaussian",
+    "eigenray_zero",
 )
 CONTROL = "ray_trace_vacuum_rigid"
 ABS_TOL = 1.0e-7
@@ -116,10 +116,15 @@ def compare_eigenrays(left: EigenrayOutput, right: EigenrayOutput, label: str) -
 
 
 def _effect_summary(products: dict[str, EigenrayOutput], control_point_counts: tuple[int, ...]) -> dict[str, object]:
-    zero = products["i8_eigenray_zero"]
+    zero = products["eigenray_zero"]
     if zero.rays:
         raise ValueError("zero-hit eigenray case contains an EOF block")
-    nonzero = [ray for key, product in products.items() if key != "i8_eigenray_zero" for ray in product.rays]
+    nonzero = [
+        ray
+        for key, product in products.items()
+        if key != "eigenray_zero"
+        for ray in product.rays
+    ]
     if not nonzero:
         raise ValueError("eigenray matrix has no successful hit")
     if not any(len(product.rays) != product.header.launch_counts[0] for product in products.values()):
@@ -133,7 +138,7 @@ def _effect_summary(products: dict[str, EigenrayOutput], control_point_counts: t
     if not control_point_counts or not any(ray.point_count < max(control_point_counts) for ray in nonzero):
         raise ValueError("eigenray stream did not contain a prefix shorter than ordinary full-ray control")
     families = {key: len(product.rays) for key, product in products.items()}
-    multi = products["i8_eigenray_geometric_hat"]
+    multi = products["eigenray_geometric_hat"]
     if math.prod(multi.header.source_counts) != 2:
         raise ValueError("geometric-hat eigenray case lost its two-source header")
     return {"zero_blocks": 0, "nonzero_blocks": len(nonzero), "repeated_launch_angle_blocks": repeated, "family_blocks": families, "point_total": sum(ray.point_count for ray in nonzero), "top_bounce_total": sum(ray.top_bounces for ray in nonzero), "bottom_bounce_total": sum(ray.bottom_bounces for ray in nonzero), "prefix_point_minimum": min(ray.point_count for ray in nonzero), "prefix_point_maximum": max(ray.point_count for ray in nonzero), "ordinary_control_point_maximum": max(control_point_counts), "shorter_than_full_ray": True, "multi_source_header_count": 2}

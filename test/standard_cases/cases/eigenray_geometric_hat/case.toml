@@ -1,5 +1,5 @@
-id = "i8_eigenray_zero"
-description = "I8 valid zero-hit Cartesian geometric-hat eigenray product"
+id = "eigenray_geometric_hat"
+description = "Cartesian geometric-hat eigenrays with two ordered sources and reflected prefixes"
 output_kind = "eigenray"
 origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]
@@ -10,9 +10,9 @@ versions = ["origin", "f2cpp"]
 [launch]
 sound_speed_at_source_mps = 1500.0
 water_depth_m = 100.0
-maximum_range_m = 100.0
-minimum_angle_deg = -2.0
-maximum_angle_deg = 2.0
+maximum_range_m = 400.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
 policy = "shared_fmax"
 
 [validation]
