@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <numbers>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@
 
 namespace {
 
+using bellhop::ArrivalWorkspace;
 using bellhop::FrequencyWorkspace;
 using bellhop::GeometricGaussianDiagnostic;
 using bellhop::GeometricGaussianDiagnosticRequest;
@@ -25,6 +27,8 @@ using bellhop::RayPath;
 using bellhop::RayState;
 using bellhop::ReceiverGrid;
 using bellhop::ReceiverGridLayout;
+using bellhop::ReflectionBoundary;
+using bellhop::ReflectionEvent;
 using bellhop::SimulationRunMode;
 using bellhop::SourceGeometry;
 using bellhop::ValidationError;
@@ -294,6 +298,31 @@ void testPrefixDuplicateAndContracts(Context& context) {
   context.check(workspace.at(0U, 2U) == std::complex<double>{},
                 "B includes the inactive terminal but not its suffix");
 
+  path.events.push_back(
+      ReflectionEvent{.rayPointIndex = 1U,
+                      .reflectedRayPointIndex = 2U,
+                      .boundary = ReflectionBoundary::Seabed,
+                      .boundarySegmentIndex = 0U,
+                      .boundaryCurvature = 0.0,
+                      .position = {},
+                      .boundaryTangent = {},
+                      .outwardNormal = {},
+                      .incidentSlowness = {},
+                      .reflectedSlowness = {},
+                      .tangentSlowness = 0.0,
+                      .normalSlowness = 0.0,
+                      .longMaterialOverride = std::nullopt});
+  ArrivalWorkspace arrivalWorkspace(kFrequency, receivers);
+  const GeometricGaussianInfluence arrivals(
+      receivers, SourceGeometry::Point,
+      SimulationRunMode::AsciiArrivals);
+  static_cast<void>(arrivals.accumulateArrivals(
+      arrivalWorkspace, path, frequencyState, kDalpha));
+  context.check(
+      !arrivalWorkspace.arrivalsAt(0U, 1U).empty() &&
+          arrivalWorkspace.arrivalsAt(0U, 1U).front().bottomBounceCount == 1,
+      "B arrivals use reflected endpoint prefix bounce counts");
+
   const GeometricGaussianInfluence incoherent(
       receivers, SourceGeometry::Point,
       SimulationRunMode::IncoherentTransmissionLoss);
@@ -330,6 +359,69 @@ void testPrefixDuplicateAndContracts(Context& context) {
       "B rejects non-finite frequency state before accumulation");
 }
 
+void testArrivalSinkWidthBranchesAndFields(Context& context) {
+  const auto runArrival = [&](double leftQ, double rightQ,
+                              double rightDelay) {
+    const ReceiverGrid receivers({500.0}, {100.0, 300.0});
+    const RayPath path = makeHorizontalPath(
+        {0.0, 200.0}, {leftQ, rightQ}, std::numbers::pi / 3.0);
+    const RayFrequencyState frequencyState =
+        makeFrequencyState(2U, rightDelay, -1.0e-5);
+    ArrivalWorkspace workspace(kFrequency, receivers);
+    const GeometricGaussianInfluence influence(
+        receivers, SourceGeometry::Point,
+        SimulationRunMode::AsciiArrivals);
+    const auto diagnostic = influence.accumulateArrivals(
+        workspace, path, frequencyState, kDalpha,
+        GeometricGaussianDiagnosticRequest{0U, 0U});
+    context.check(diagnostic.has_value() && diagnostic->evaluated &&
+                      workspace.arrivalCountAt(0U, 0U) == 1U,
+                  "B arrival sink shares the accepted receiver traversal");
+    const bellhop::Arrival arrival = workspace.arrivalsAt(0U, 0U).front();
+    context.checkNear(
+        arrival.amplitude,
+        static_cast<float>(diagnostic->amplitudeConstant *
+                           diagnostic->gaussianWeight),
+        0.0, "B arrival stores the family-specific amplitude and weight");
+    context.checkNear(arrival.phaseRadians,
+                      static_cast<float>(diagnostic->causticPhase), 0.0,
+                      "B arrival stores unwrapped phase");
+    context.checkNear(arrival.delaySeconds.real(),
+                      static_cast<float>(diagnostic->delay.real()), 0.0,
+                      "B arrival stores interpolated delay");
+    context.checkNear(arrival.sourceDeclinationDegrees, 60.0F, 4.0e-6,
+                      "B arrival stores source declination");
+    context.checkNear(arrival.receiverDeclinationDegrees, 0.0F, 0.0,
+                      "B arrival stores segment declination");
+    return diagnostic->widthBranch;
+  };
+
+  context.check(runArrival(200.0, 400.0, 0.001) ==
+                    GeometricGaussianWidthBranch::Geometric,
+                "B arrivals preserve the geometric-width branch");
+  context.check(runArrival(100.0, 200.0, 0.002) ==
+                    GeometricGaussianWidthBranch::NearField,
+                "B arrivals preserve the near-field branch");
+  context.check(runArrival(100.0, 200.0, 20.0) ==
+                    GeometricGaussianWidthBranch::WavelengthCap,
+                "B arrivals preserve the wavelength-cap branch");
+
+  const ReceiverGrid irregular(
+      {500.0, 500.0001}, {100.0, 300.0},
+      ReceiverGridLayout::Irregular);
+  const RayPath path = makeHorizontalPath(
+      {0.0, 200.0, 400.0}, {1.0, -1.0, -2.0});
+  RayFrequencyState frequencyState = makeFrequencyState(3U, 0.003);
+  ArrivalWorkspace workspace(kFrequency, irregular);
+  const GeometricGaussianInfluence influence(
+      irregular, SourceGeometry::Line,
+      SimulationRunMode::BinaryArrivals);
+  static_cast<void>(influence.accumulateArrivals(
+      workspace, path, frequencyState, kDalpha));
+  context.check(workspace.candidateCount() > 0U,
+                "B arrivals retain irregular Cartesian support and caustics");
+}
+
 }  // namespace
 
 int main() {
@@ -338,6 +430,7 @@ int main() {
   testIntensityAndSourceGeometry(context);
   testGridWalkerCausticAndFrozenInput(context);
   testPrefixDuplicateAndContracts(context);
+  testArrivalSinkWidthBranchesAndFields(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
               << " geometric Gaussian assertion(s) failed\n";

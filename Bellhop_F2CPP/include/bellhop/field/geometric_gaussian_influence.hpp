@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <optional>
 
+#include "bellhop/field/arrival_workspace.hpp"
 #include "bellhop/field/frequency_workspace.hpp"
 #include "bellhop/model/simulation_case.hpp"
 #include "bellhop/ray/ray_path.hpp"
@@ -70,10 +71,19 @@ class GeometricGaussianInfluence {
       std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
+  [[nodiscard]] std::optional<GeometricGaussianDiagnostic>
+  accumulateArrivals(
+      ArrivalWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState,
+      double launchAngleSpacingRadians,
+      std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest =
+          std::nullopt) const;
+
  private:
   [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulateImpl(
       FrequencyWorkspace* pressureWorkspace,
-      IntensityWorkspace* intensityWorkspace, const RayPath& path,
+      IntensityWorkspace* intensityWorkspace,
+      ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState,
       double launchAngleSpacingRadians,
       std::optional<GeometricGaussianDiagnosticRequest>

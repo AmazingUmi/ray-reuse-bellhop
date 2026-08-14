@@ -153,6 +153,11 @@ void testPatternAmplitudeAndContracts(Context& context) {
                                                {30.0, -6.020599913279624}})));
   context.checkNear(half / base, 0.5, 2.0e-6,
                     "directional source amplitude reaches candidates once");
+  context.check(
+      maximumAmplitude(makeSimulation(
+          SimulationRunMode::BinaryArrivals,
+          BeamFamily::GeometricGaussian)) > 0.0F,
+      "arrival solver dispatches Cartesian geometric-Gaussian beams");
 
   const auto consumer = [](std::size_t, const bellhop::RayPathCache&,
                            const bellhop::ArrivalWorkspace&) {};
@@ -186,6 +191,15 @@ void testPatternAmplitudeAndContracts(Context& context) {
             consumer));
       },
       "arrival solver retains ray-centered receiver restrictions");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(ArrivalSolver::solve(
+            makeSimulation(SimulationRunMode::AsciiArrivals,
+                           BeamFamily::GeometricGaussian,
+                           CervenyCoordinateSystem::RayCentered),
+            consumer));
+      },
+      "geometric-Gaussian arrival dispatch remains Cartesian-only");
 
   std::size_t partialCalls = 0U;
   context.expectThrows<ValidationError>(

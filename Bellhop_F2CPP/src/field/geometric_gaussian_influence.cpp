@@ -4,11 +4,13 @@
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "bellhop/error.hpp"
 
@@ -64,12 +66,17 @@ void requireFiniteComplex(std::complex<double> value,
 
 void validateInput(
     const FrequencyWorkspace* pressureWorkspace,
-    const IntensityWorkspace* intensityWorkspace, const RayPath& path,
+    const IntensityWorkspace* intensityWorkspace,
+    const ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState, const ReceiverGrid& receivers,
     double launchAngleSpacingRadians,
     const std::optional<GeometricGaussianDiagnosticRequest>&
         diagnosticRequest) {
-  if ((pressureWorkspace == nullptr) == (intensityWorkspace == nullptr)) {
+  const unsigned sinkCount =
+      static_cast<unsigned>(pressureWorkspace != nullptr) +
+      static_cast<unsigned>(intensityWorkspace != nullptr) +
+      static_cast<unsigned>(arrivalWorkspace != nullptr);
+  if (sinkCount != 1U) {
     throw ValidationError(
         "geometric Gaussian influence requires exactly one workspace");
   }
@@ -89,15 +96,21 @@ void validateInput(
     throw ValidationError(
         "geometric Gaussian source point must be active");
   }
-  const double workspaceFrequency =
-      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
-                                   : intensityWorkspace->frequency();
+  const double workspaceFrequency = pressureWorkspace != nullptr
+                                        ? pressureWorkspace->frequency()
+                                    : intensityWorkspace != nullptr
+                                        ? intensityWorkspace->frequency()
+                                        : arrivalWorkspace->frequency();
   const std::size_t workspaceDepthCount =
-      pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
-                                   : intensityWorkspace->depthCount();
+      pressureWorkspace != nullptr
+          ? pressureWorkspace->depthCount()
+      : intensityWorkspace != nullptr ? intensityWorkspace->depthCount()
+                                      : arrivalWorkspace->depthCount();
   const std::size_t workspaceRangeCount =
-      pressureWorkspace != nullptr ? pressureWorkspace->rangeCount()
-                                   : intensityWorkspace->rangeCount();
+      pressureWorkspace != nullptr
+          ? pressureWorkspace->rangeCount()
+      : intensityWorkspace != nullptr ? intensityWorkspace->rangeCount()
+                                      : arrivalWorkspace->rangeCount();
   if (workspaceFrequency != frequencyState.frequency ||
       workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
@@ -169,9 +182,9 @@ GeometricGaussianInfluence::GeometricGaussianInfluence(
       throw ValidationError(
           "geometric Gaussian source geometry is invalid");
   }
-  if (!isTransmissionLossMode(runMode_)) {
+  if (!isTransmissionLossMode(runMode_) && !isArrivalMode(runMode_)) {
     throw ValidationError(
-        "geometric Gaussian influence requires a transmission-loss mode");
+        "geometric Gaussian influence requires a field or arrival mode");
   }
 }
 
@@ -186,7 +199,7 @@ GeometricGaussianInfluence::accumulate(
     throw ValidationError(
         "geometric Gaussian complex pressure requires coherent TL mode");
   }
-  return accumulateImpl(&workspace, nullptr, path, frequencyState,
+  return accumulateImpl(&workspace, nullptr, nullptr, path, frequencyState,
                         launchAngleSpacingRadians, diagnosticRequest);
 }
 
@@ -203,20 +216,37 @@ GeometricGaussianInfluence::accumulateIntensity(
         "geometric Gaussian intensity requires incoherent or "
         "semi-coherent TL mode");
   }
-  return accumulateImpl(nullptr, &workspace, path, frequencyState,
+  return accumulateImpl(nullptr, &workspace, nullptr, path, frequencyState,
+                        launchAngleSpacingRadians, diagnosticRequest);
+}
+
+std::optional<GeometricGaussianDiagnostic>
+GeometricGaussianInfluence::accumulateArrivals(
+    ArrivalWorkspace& workspace, const RayPath& path,
+    const RayFrequencyState& frequencyState,
+    double launchAngleSpacingRadians,
+    std::optional<GeometricGaussianDiagnosticRequest>
+        diagnosticRequest) const {
+  if (!isArrivalMode(runMode_)) {
+    throw ValidationError(
+        "geometric Gaussian arrivals require an arrival run mode");
+  }
+  return accumulateImpl(nullptr, nullptr, &workspace, path, frequencyState,
                         launchAngleSpacingRadians, diagnosticRequest);
 }
 
 std::optional<GeometricGaussianDiagnostic>
 GeometricGaussianInfluence::accumulateImpl(
     FrequencyWorkspace* pressureWorkspace,
-    IntensityWorkspace* intensityWorkspace, const RayPath& path,
+    IntensityWorkspace* intensityWorkspace,
+    ArrivalWorkspace* arrivalWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState,
     double launchAngleSpacingRadians,
     std::optional<GeometricGaussianDiagnosticRequest>
         diagnosticRequest) const {
-  validateInput(pressureWorkspace, intensityWorkspace, path, frequencyState,
-                receivers_, launchAngleSpacingRadians, diagnosticRequest);
+  validateInput(pressureWorkspace, intensityWorkspace, arrivalWorkspace, path,
+                frequencyState, receivers_, launchAngleSpacingRadians,
+                diagnosticRequest);
   std::optional<GeometricGaussianDiagnostic> diagnostic;
   if (diagnosticRequest.has_value()) {
     diagnostic.emplace();
@@ -239,6 +269,32 @@ GeometricGaussianInfluence::accumulateImpl(
   requireFinite(q0, "geometric Gaussian q0");
   requireFinite(sourceRatio, "geometric Gaussian source ratio");
 
+  std::vector<std::int32_t> prefixTopBounces;
+  std::vector<std::int32_t> prefixBottomBounces;
+  if (arrivalWorkspace != nullptr) {
+    prefixTopBounces.assign(pointCount, 0);
+    prefixBottomBounces.assign(pointCount, 0);
+    for (const ReflectionEvent& event : path.events) {
+      if (event.reflectedRayPointIndex != event.rayPointIndex + 1U ||
+          event.reflectedRayPointIndex >= path.points.size()) {
+        throw ValidationError(
+            "geometric Gaussian reflection event has invalid indices");
+      }
+      if (event.reflectedRayPointIndex >= pointCount) {
+        continue;
+      }
+      std::vector<std::int32_t>& prefix =
+          event.boundary == ReflectionBoundary::SeaSurface
+              ? prefixTopBounces
+              : prefixBottomBounces;
+      ++prefix[event.reflectedRayPointIndex];
+    }
+    for (std::size_t index = 1U; index < pointCount; ++index) {
+      prefixTopBounces[index] += prefixTopBounces[index - 1U];
+      prefixBottomBounces[index] += prefixBottomBounces[index - 1U];
+    }
+  }
+
   const auto applyContribution =
       [&](std::size_t depthIndex, std::size_t rangeIndex,
           std::size_t leftIndex, std::size_t rightIndex,
@@ -247,7 +303,8 @@ GeometricGaussianInfluence::accumulateImpl(
           double nearFieldSigma, double wavelengthSigma, double sigma1,
           GeometricGaussianWidthBranch widthBranch,
           double gaussianWeight, double amplitudeConstant,
-          double causticPhase, std::complex<double> delay) {
+          double causticPhase, std::complex<double> delay,
+          double receiverDeclinationDegrees) {
         requireFinite(qInterpolated,
                       "geometric Gaussian interpolated q");
         requireFinite(geometricSigma,
@@ -281,7 +338,7 @@ GeometricGaussianInfluence::accumulateImpl(
           requireFiniteComplex(updated,
                                "geometric Gaussian accumulated pressure");
           pressureWorkspace->at(depthIndex, rangeIndex) = updated;
-        } else {
+        } else if (intensityWorkspace != nullptr) {
           const double attenuatedConstant =
               amplitudeConstant *
               std::exp((angularFrequency * delay).imag());
@@ -296,6 +353,20 @@ GeometricGaussianInfluence::accumulateImpl(
           }
           intensityWorkspace->add(depthIndex, rangeIndex,
                                   intensityIncrement);
+        } else {
+          arrivalWorkspace->addCandidate(
+              frequencyState.frequency,
+              ArrivalCandidate{
+                  .amplitude = amplitudeConstant * gaussianWeight,
+                  .phaseRadians = causticPhase,
+                  .delaySeconds = delay,
+                  .sourceDeclinationDegrees =
+                      path.launchAngle * (180.0 / std::numbers::pi),
+                  .receiverDeclinationDegrees =
+                      receiverDeclinationDegrees,
+                  .topBounceCount = prefixTopBounces[rightIndex],
+                  .bottomBounceCount = prefixBottomBounces[rightIndex]},
+              depthIndex, rangeIndex);
         }
 
         if (diagnosticRequest.has_value() &&
@@ -453,7 +524,9 @@ GeometricGaussianInfluence::accumulateImpl(
                 geometricSigma, nearFieldSigma, wavelengthSigma, sigma1,
                 classifyWidthBranch(geometricSigma, nearFieldSigma,
                                     wavelengthSigma),
-                gaussianWeight, amplitudeConstant, phaseAtReceiver, delay);
+                gaussianWeight, amplitudeConstant, phaseAtReceiver, delay,
+                std::atan2(tangent.depth, tangent.range) *
+                    (180.0 / std::numbers::pi));
           }
         }
       }

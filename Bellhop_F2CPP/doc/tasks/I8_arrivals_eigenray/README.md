@@ -266,7 +266,7 @@ OpenCode must execute only one named task per session.
 
 | Stage | Status | Tasks |
 |---|---|---|
-| I8-01 Arrival data model & accumulation | IN_PROGRESS | T1–T4 ACCEPTED; T5 TODO |
+| I8-01 Arrival data model & accumulation | ACCEPTED | T1–T5 ACCEPTED |
 | I8-02 Arrival writers | TODO | T1–T3 |
 | I8-03 Eigenray mode | TODO | T1–T5 |
 | I8-04 Validation & documentation | TODO | T1–T5 |
@@ -275,7 +275,8 @@ I8-01-T1–T4 have established the accepted record types, checked capacity
 planner, source-local workspace, and Origin-compatible candidate accumulation.
 Geometric-hat contribution delivery now shares one accepted traversal across
 pressure, intensity, and arrival sinks plus source-streamed orchestration.
-Geometric-Gaussian arrival dispatch remains next.
+Cartesian geometric-Gaussian arrival dispatch is also accepted; I8-01 is
+closed.
 
 ## Codex / OpenCode handoff
 

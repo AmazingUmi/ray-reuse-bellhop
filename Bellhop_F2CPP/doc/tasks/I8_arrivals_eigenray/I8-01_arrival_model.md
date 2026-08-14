@@ -430,7 +430,7 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R f2cpp.component.arrival_so
 
 ### Status
 
-TODO
+ACCEPTED
 
 ### Objective
 
@@ -501,7 +501,14 @@ ctest --test-dir Bellhop_F2CPP/build/gcc14-release -R 'f2cpp.component.(geometri
 
 ### Acceptance Record
 
-- Accepted commit:
-- Tests:
-- Oracle / parity result:
-- Notes:
+- Accepted commit: this I8-01-T5 checkpoint commit.
+- Tests: AppleClang Debug ASan/UBSan and GCC 14 Release/Werror geometric-
+  Gaussian/arrival-solver targets passed; geometric, near-field, wavelength-
+  cap, irregular, caustic, reflection-prefix, candidate-field, and B-dispatch
+  component checks passed; `git diff --check` passed.
+- Oracle / parity result: fresh Origin/F2CPP G/B/S matrix passed
+  `validate_i7_gaussian_beams.py`; accepted B pressure output did not drift.
+- Notes: B keeps its original receiver walker, strict window, width branches,
+  amplitude and phase formulas. The new sink emits the accepted arrival model;
+  ArrivalSolver now accepts Cartesian B while retaining explicit Cerveny,
+  simple-Gaussian, and ray-centered-B rejection.

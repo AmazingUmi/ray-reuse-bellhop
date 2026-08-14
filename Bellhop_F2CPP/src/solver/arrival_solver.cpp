@@ -4,11 +4,13 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "bellhop/error.hpp"
 #include "bellhop/field/frequency_projector.hpp"
+#include "bellhop/field/geometric_gaussian_influence.hpp"
 #include "bellhop/field/geometric_hat_influence.hpp"
 #include "bellhop/ray/geometry_tracer.hpp"
 
@@ -67,9 +69,10 @@ ArrivalSolverStatistics ArrivalSolver::solve(
   if (!isArrivalMode(simulation.runMode())) {
     throw ValidationError("arrival solver requires ASCII or binary arrivals");
   }
-  if (simulation.beamFamily() != BeamFamily::GeometricHat) {
+  if (simulation.beamFamily() != BeamFamily::GeometricHat &&
+      simulation.beamFamily() != BeamFamily::GeometricGaussian) {
     throw ValidationError(
-        "arrival solver currently supports only geometric-hat beams");
+        "arrival solver supports only geometric-hat or geometric-Gaussian beams");
   }
   if (!consumer) {
     throw ValidationError("arrival solver requires a source consumer");
@@ -87,9 +90,22 @@ ArrivalSolverStatistics ArrivalSolver::solve(
 
   GeometryTracer tracer(simulation);
   const FrequencyProjector projector(simulation.environment());
-  const GeometricHatInfluence influence(
-      simulation.receivers(), simulation.cervenyCoordinateSystem(),
-      simulation.sourceGeometry(), simulation.runMode());
+  std::optional<GeometricHatInfluence> geometricHatInfluence;
+  std::optional<GeometricGaussianInfluence> geometricGaussianInfluence;
+  if (simulation.beamFamily() == BeamFamily::GeometricHat) {
+    geometricHatInfluence.emplace(
+        simulation.receivers(), simulation.cervenyCoordinateSystem(),
+        simulation.sourceGeometry(), simulation.runMode());
+  } else {
+    if (simulation.cervenyCoordinateSystem() !=
+        CervenyCoordinateSystem::Cartesian) {
+      throw ValidationError(
+          "geometric-Gaussian arrivals require Cartesian coordinates");
+    }
+    geometricGaussianInfluence.emplace(
+        simulation.receivers(), simulation.sourceGeometry(),
+        simulation.runMode());
+  }
   const double frequency = simulation.frequencies().values().front();
 
   ArrivalSolverStatistics statistics;
@@ -135,8 +151,13 @@ ArrivalSolverStatistics ArrivalSolver::solve(
       const RayFrequencyState frequencyState = projector.project(
           path, frequency, projectedSourceAmplitude);
       const Clock::time_point projectEnd = Clock::now();
-      static_cast<void>(influence.accumulateArrivals(
-          workspace, path, frequencyState, fan.launchAngleStep));
+      if (geometricHatInfluence.has_value()) {
+        static_cast<void>(geometricHatInfluence->accumulateArrivals(
+            workspace, path, frequencyState, fan.launchAngleStep));
+      } else {
+        static_cast<void>(geometricGaussianInfluence->accumulateArrivals(
+            workspace, path, frequencyState, fan.launchAngleStep));
+      }
       const Clock::time_point influenceEnd = Clock::now();
       statistics.projectSeconds += elapsed(projectBegin, projectEnd);
       statistics.influenceSeconds += elapsed(projectEnd, influenceEnd);
