@@ -70,6 +70,7 @@ add_library(
   STATIC
     src/acoustics/attenuation.cpp
     src/acoustics/boundary_acoustics.cpp
+    src/field/arrival_workspace.cpp
     src/field/beam_epsilon.cpp
     src/field/cartesian_cerveny_influence.cpp
     src/field/geometric_gaussian_influence.cpp
@@ -230,6 +231,12 @@ if(BUILD_TESTING)
     bellhop_f2cpp_geometric_gaussian_influence_tests
     f2cpp.component.geometric_gaussian_influence
     tests/component/geometric_gaussian_influence_test.cpp
+    component
+  )
+  add_f2cpp_test(
+    bellhop_f2cpp_arrival_workspace_tests
+    f2cpp.component.arrival_workspace
+    tests/component/arrival_workspace_test.cpp
     component
   )
   add_f2cpp_test(

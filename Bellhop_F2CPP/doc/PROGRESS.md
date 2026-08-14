@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-14
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I7-06 已完成并冻结；I8 架构审查与任务拆分已完成，功能实现尚未开始。
+> 当前施工状态：I7-06 已完成并冻结；I8-01-T1 已验收，暂停在 I8-01-T2 之前。
 
 ## 1. 已完成范围
 
@@ -35,6 +35,7 @@
 | I7-04 | 完成 | `C/I/S` 相干模式、逐 beam 强度累加、逐频 Lloyd mirror、最终强度平方根与 SHD |
 | I7-05 | 完成 | ray-centered Cerveny、规则接收网格求交与物理 `P/V/H` 分量变换 |
 | I7-06 | 完成 | Cartesian simple Gaussian、geometric Gaussian，以及 Cartesian/ray-centered geometric hat |
+| I8-01-T1 | 完成 | Origin-compatible Arrival 类型、checked 容量规划和 source/frequency-local 空 workspace |
 
 ## 2. 当前验证基线
 
@@ -152,8 +153,10 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 I7-06 已完成并冻结。I8 arrivals/eigenray 的 Origin 数据流、Arrival 模型、
 容量/重复到达语义、A/a 格式、E 模式以及 oracle/validator 方案已经完成架构
 审查，正式任务定义位于
-[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)；所有
-I8-01-T1～I8-04-T5 仍为 TODO，尚未实现任何 I8 功能代码。I7-05
+[`tasks/I8_arrivals_eigenray/`](./tasks/I8_arrivals_eigenray/README.md)。
+I8-01-T1 已验收：Arrival 候选/存储类型、Origin 容量公式、checked capacity
+plan、规则/不规则 receiver flat order 和 lazy 空 workspace 已冻结；尚未开始
+I8-01-T2 的 `AddArr` accumulation。I7-05
 冻结的 ray-centered Cerveny 规则网格求交、`P/V/H` 分量变换和
 CC/P↔CR/P family 效果门，以及 I7-06 冻结的 G/B/S family 效果门，均不得在
 后续阶段反向混入已验收路径。ray-centered irregular receiver grid 继续明确

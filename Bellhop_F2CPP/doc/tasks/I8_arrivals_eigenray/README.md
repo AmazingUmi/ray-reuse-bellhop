@@ -266,12 +266,13 @@ OpenCode must execute only one named task per session.
 
 | Stage | Status | Tasks |
 |---|---|---|
-| I8-01 Arrival data model & accumulation | TODO | T1–T5 |
+| I8-01 Arrival data model & accumulation | IN_PROGRESS | T1 ACCEPTED; T2–T5 TODO |
 | I8-02 Arrival writers | TODO | T1–T3 |
 | I8-03 Eigenray mode | TODO | T1–T5 |
 | I8-04 Validation & documentation | TODO | T1–T5 |
 
-No I8 implementation file has been created or modified by this design pass.
+I8-01-T1 has established the accepted record types, checked capacity planner,
+and empty source-local workspace. Candidate accumulation has not started.
 
 ## Codex / OpenCode handoff
 
