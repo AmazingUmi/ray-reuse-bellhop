@@ -255,3 +255,42 @@ P3-02 wall speedup 为 `1.066×`，Influence speedup 为 `1.069×`；RSS 增加
 37/37、案例 14/14；`git diff --check` 通过。Hermite 已不再是独立显著热点，
 P3-02 按停止条件结束，不继续 hoist 检查或改写 polynomial，也不自动优化
 sincos/exp。
+
+## P3-03 sincos/exp 调用审查
+
+P3-03 从 P3-02 checkpoint `965d9c61f30e96c311dd31ee18e72d85e6266c53`
+的 clean Release 开始，继续使用相同 Munk、单线程、1 次 warmup + 5 次独立
+子进程协议。clean baseline 的 wall 为 `1.4180 s`、Influence 为 `1.3472 s`、
+peak RSS 为 `65824 KiB`；SHD SHA-256 仍为
+`be3e6257bee54a021a0be5c983e2dd495fe2f1d0b5109ed32dc3e9636a8ba033`。
+ignored build 中 `f2cpp_p303_before.json` 的 SHA-256 为
+`266671e901e09f5dff96ea2baa5f7d2b2b271ba2fa6305a5cb440a3214d344ea`。
+
+每个通过 window/taper 检查的 receiver × image 候选只构造一次完整复相位，
+随后 `negativeImaginaryExponential` 精确执行一次 `exp(imag)` 和一次
+sin/cos 对。AppleClang 已把源代码中的同参数 `cos` 与 `sin` 合并为单次
+`__sincos_stret`，不存在可再合并的两次三角函数调用。一次性计数得到
+`67,155,371` 个实际传播候选，即同数目的 `exp` 与 `sincos`；振幅为零、
+实相位为零和虚相位为零的候选均为 0，因而没有可保持表达式不变的零值短路。
+
+`angularFrequency` 是整次计算不变量；插值后的走时、复慢度、gamma、振幅和
+反射相位在一个 ray segment/range 上稳定；但 image/receiver 改变
+`deltaDepth`，实相位同时含线性与二次项，虚相位也含二次项。由此三个 image
+不是简单固定相移，通常没有相同的 transcendental 参数。对调用流中前两个
+传播候选作精确复相位比较，只找到 `324,785` 个重复值（`0.484%` 上界），
+集中于边界退化位置；即使假定缓存零成本，按 P3-02 的 sincos/exp 样本占比，
+其 wall 理论上限也约为 `0.1%`，不足以抵消比较、分支和缓存状态成本。
+
+没有接受生产修改。把基相位、线性项和二次项预乘到外层，或用 receiver/image
+递推生成相位，虽可能减少 scalar 乘加，却会改变现有浮点运算顺序，并不减少
+每个唯一相位所需的 sincos/exp；更换 libm、近似函数和 lookup table 又超出
+本阶段精度约束。因此 P3-03 的 before/final 是同一个可执行文件（SHA-256
+`44c4cb2f43eb563e5266c7809d221d04eb3b8ccdfb6957b42aeca62bf91c3e7b`），
+speedup 记为 `1.000×`，RSS 和产品哈希均不变。
+
+最终具名热点继续采用 P3-02 的冻结 sample：`accumulateImpl` 本体 `62.12%`、
+`__sincos_stret` `14.35%`、`exp` `6.85%`，以及两个未命名 libsystem_m leaf
+`2.94%/2.80%`。AppleClang focused Influence/solver CTest、独立 Munk 标准
+案例与 `f2cpp-regression` 均通过，SHD 与 replication baseline 逐字节一致。
+P3-03 按停止条件关闭单线程低风险 scalar 优化；后续若继续，应单独评估精确
+vector-math/SIMD 或保持 cell 内 ray 顺序的线程级切分，不在本阶段自动实施。

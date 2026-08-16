@@ -230,3 +230,13 @@ P3-02 已完成上述 Hermite specialization：保留公开 helper 和全部 cor
 中公开 taper 叶占比由 `18.51%` 降至 `0%`。AppleClang/GCC focused CTest
 均为 2/2，regression 仍为 CTest 37/37、案例 14/14。Hermite 已满足停止条件，
 后续是否进入 sincos/exp 必须作为新的、单独批准的性能阶段。
+
+P3-03 已审查 Cartesian Cerveny 的 transcendental 调用结构。Munk 中
+`67,155,371` 个实际传播候选各只调用一次 `exp` 和一次由 AppleClang 已融合的
+`sincos`；zero amplitude/real phase/imaginary phase 均为 0，精确重复复相位
+仅 `324,785` 个（`0.484%` 上界），没有覆盖缓存成本的安全复用机会。相位
+hoist/递推会改变浮点运算顺序且不能减少唯一相位的 transcendental 调用，
+因此未接受生产修改。clean wall/Influence 为 `1.4180/1.3472 s`，最终使用
+同一 Release 二进制，speedup `1.000×`，RSS 与 SHD hash 不变；focused、Munk
+和 regression 均通过。单线程低风险 scalar 阶段至此停止，不自动进入
+SIMD/OpenMP。

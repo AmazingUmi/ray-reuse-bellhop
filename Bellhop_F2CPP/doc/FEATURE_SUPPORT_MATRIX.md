@@ -73,7 +73,8 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
    speedup 且产品逐字节一致；P3-01 profile 进一步确认 compute/math/check 路径
    主导，并接受一个 `1.096×` wall 的 finite-helper scalar 优化；P3-02 又以
    bitwise 一致的 Hermite hot helper 获得 `1.066×` wall speedup。当前没有
-   RayPathCache memory-bound 证据，sincos/exp、数据布局、显式 SIMD 和并行
-   均仍需单独批准。
+   RayPathCache memory-bound 证据；P3-03 又确认每个唯一复相位已只执行一次
+   fused sincos 和一次 exp，重复参数仅 `0.484%` 上界，因而没有接受新的
+   scalar 改动。数据布局、显式 SIMD 和并行均仍需单独批准。
    详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。
