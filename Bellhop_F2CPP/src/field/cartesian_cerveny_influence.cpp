@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <limits>
 #include <numbers>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -15,6 +16,12 @@
 
 namespace bellhop {
 namespace {
+
+constexpr std::array<CervenyImageKind, 3> kImageKinds{
+    CervenyImageKind::True,
+    CervenyImageKind::Surface,
+    CervenyImageKind::Bottom,
+};
 
 [[nodiscard]] bool finiteComplex(
     std::complex<double> value) noexcept {
@@ -594,17 +601,43 @@ CartesianCervenyInfluence::accumulateImpl(
       sourceGeometry_ == SourceGeometry::Line
           ? 1.0
           : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double epsilonMagnitude = std::abs(epsilon);
   const std::vector<double>& receiverRanges =
       receivers_.ranges();
+  const std::vector<double>& receiverDepths =
+      receivers_.depths();
+  const std::size_t receiverRangeCount = receiverRanges.size();
+  const std::size_t receiversPerRange =
+      receivers_.receiversPerRange();
+  const bool irregularReceivers = receivers_.isIrregular();
+  const double irregularReceiverDepth = receiverDepths.front();
+  const double maximumReceiverRange = receiverRanges.back();
+  const double seaSurfaceDepth =
+      environment_.seaSurface().depth();
+  const double seabedDepth = environment_.seabed().depth();
+  const std::size_t imageCount = settings_.imageCount;
+  const bool captureRequested = diagnosticRequest.has_value();
+  const std::size_t requestedRangeIndex =
+      captureRequested ? diagnosticRequest->receiverRangeIndex : 0U;
+  const std::size_t requestedDepthIndex =
+      captureRequested ? diagnosticRequest->receiverDepthIndex : 0U;
+  std::span<std::complex<double>> pressureValues;
+  if (pressureWorkspace != nullptr) {
+    pressureValues = pressureWorkspace->pressure();
+  }
 
   for (std::size_t rightIndex = 2U;
        rightIndex < activePrefixPointCount; ++rightIndex) {
     const std::size_t leftIndex = rightIndex - 1U;
-    const double leftRange =
-        path.points[leftIndex].position.range;
-    const double rightRange =
-        path.points[rightIndex].position.range;
-    if (rightRange > receiverRanges.back()) {
+    const RayState& leftPoint = path.points[leftIndex];
+    const RayState& rightPoint = path.points[rightIndex];
+    const RayFrequencyPoint& leftFrequencyPoint =
+        frequencyState.points[leftIndex];
+    const RayFrequencyPoint& rightFrequencyPoint =
+        frequencyState.points[rightIndex];
+    const double leftRange = leftPoint.position.range;
+    const double rightRange = rightPoint.position.range;
+    if (rightRange > maximumReceiverRange) {
       return diagnostic;
     }
     if (std::abs(rightRange - leftRange) <
@@ -615,7 +648,7 @@ CartesianCervenyInfluence::accumulateImpl(
     // is still the terminal point retained by legacy Beam%Nsteps, so the
     // segment ending there remains eligible; only a false left endpoint
     // suppresses the geometry suffix.
-    if (!frequencyState.points[leftIndex].active) {
+    if (!leftFrequencyPoint.active) {
       continue;
     }
 
@@ -636,25 +669,22 @@ CartesianCervenyInfluence::accumulateImpl(
           (receiverRanges[rangeIndex] - leftRange) /
           (rightRange - leftRange);
       const Vec2 position =
-          path.points[leftIndex].position +
-          weight * (path.points[rightIndex].position -
-                    path.points[leftIndex].position);
+          leftPoint.position +
+          weight * (rightPoint.position - leftPoint.position);
       const Vec2 slowness =
-          path.points[leftIndex].slowness +
-          weight * (path.points[rightIndex].slowness -
-                    path.points[leftIndex].slowness);
+          leftPoint.slowness +
+          weight * (rightPoint.slowness - leftPoint.slowness);
       const double soundSpeed =
-          path.points[leftIndex].soundSpeed +
-          weight * (path.points[rightIndex].soundSpeed -
-                    path.points[leftIndex].soundSpeed);
+          leftPoint.soundSpeed +
+          weight * (rightPoint.soundSpeed - leftPoint.soundSpeed);
       const std::complex<double> q =
           ray.q[leftIndex] +
           weight * (ray.q[rightIndex] - ray.q[leftIndex]);
       const std::complex<double> tau =
-          frequencyState.points[leftIndex].complexTravelTime +
+          leftFrequencyPoint.complexTravelTime +
           weight *
-              (frequencyState.points[rightIndex].complexTravelTime -
-               frequencyState.points[leftIndex].complexTravelTime);
+              (rightFrequencyPoint.complexTravelTime -
+               leftFrequencyPoint.complexTravelTime);
       const std::complex<double> gamma =
           ray.gamma[leftIndex] +
           weight *
@@ -665,7 +695,7 @@ CartesianCervenyInfluence::accumulateImpl(
 
       const std::complex<double> principal =
           ratio *
-          std::sqrt(soundSpeed * std::abs(epsilon) / q);
+          std::sqrt(soundSpeed * epsilonMagnitude / q);
       int finalKmah = ray.kmah[leftIndex];
       finalKmah = updateCervenyKmah(
           ray.q[leftIndex], q, finalKmah, widthMode_);
@@ -677,57 +707,44 @@ CartesianCervenyInfluence::accumulateImpl(
           corrected, "Cartesian Cerveny corrected constant");
 
       for (std::size_t depthIndex = 0U;
-           depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
+           depthIndex < receiversPerRange; ++depthIndex) {
         // InfluenceCervenyCart in the 2-D Origin tree allocates one pressure
         // row for an irregular grid but still reads Pos%Rz(iz), where iz is
         // always one, instead of Pos%Rz(ir).  Preserve that observable legacy
         // behavior for CC; the complete coordinate vectors remain in the SHD
         // header for compatibility with the irregular file layout.
         const double receiverDepth =
-            receivers_.isIrregular()
-                ? receivers_.depths().front()
-                : receivers_.depthAt(depthIndex, rangeIndex);
+            irregularReceivers
+                ? irregularReceiverDepth
+                : receiverDepths[depthIndex];
         const bool captureDiagnostic =
-            diagnosticRequest.has_value() &&
-            diagnosticRequest->receiverRangeIndex == rangeIndex &&
-            diagnosticRequest->receiverDepthIndex == depthIndex;
+            captureRequested && requestedRangeIndex == rangeIndex &&
+            requestedDepthIndex == depthIndex;
         std::complex<double> imageSum{};
         std::array<CartesianCervenyImageDiagnostic, 3> images;
         if (captureDiagnostic) {
           images = {};
           for (std::size_t imageIndex = 0U;
-               imageIndex < settings_.imageCount; ++imageIndex) {
-            const CervenyImageKind kind =
-                imageIndex == 0U
-                    ? CervenyImageKind::True
-                    : (imageIndex == 1U
-                           ? CervenyImageKind::Surface
-                           : CervenyImageKind::Bottom);
+               imageIndex < imageCount; ++imageIndex) {
+            const CervenyImageKind kind = kImageKinds[imageIndex];
             images[imageIndex] = evaluateImage(
                 kind, receiverDepth, position.depth,
-                environment_.seaSurface().depth(),
-                environment_.seabed().depth(), angularFrequency,
+                seaSurfaceDepth, seabedDepth, angularFrequency,
                 beamWindowSquared, radiusMax, slowness, tau, gamma,
-                frequencyState.points[rightIndex].amplitude,
-                frequencyState.points[rightIndex].reflectionPhase);
+                rightFrequencyPoint.amplitude,
+                rightFrequencyPoint.reflectionPhase);
             imageSum += images[imageIndex].contribution;
           }
         } else {
           for (std::size_t imageIndex = 0U;
-               imageIndex < settings_.imageCount; ++imageIndex) {
-            const CervenyImageKind kind =
-                imageIndex == 0U
-                    ? CervenyImageKind::True
-                    : (imageIndex == 1U
-                           ? CervenyImageKind::Surface
-                           : CervenyImageKind::Bottom);
+               imageIndex < imageCount; ++imageIndex) {
+            const CervenyImageKind kind = kImageKinds[imageIndex];
             imageSum += evaluateImageContribution(
                 kind, receiverDepth, position.depth,
-                environment_.seaSurface().depth(),
-                environment_.seabed().depth(), angularFrequency,
+                seaSurfaceDepth, seabedDepth, angularFrequency,
                 beamWindowSquared, radiusMax, slowness, tau, gamma,
-                frequencyState.points[rightIndex].amplitude,
-                frequencyState.points[rightIndex].reflectionPhase);
+                rightFrequencyPoint.amplitude,
+                rightFrequencyPoint.reflectionPhase);
           }
         }
         const std::complex<double> contribution =
@@ -736,12 +753,14 @@ CartesianCervenyInfluence::accumulateImpl(
             contribution, "Cartesian Cerveny final contribution");
         double intensityIncrement = 0.0;
         if (pressureWorkspace != nullptr) {
+          std::complex<double>& pressure =
+              pressureValues[depthIndex * receiverRangeCount + rangeIndex];
           const std::complex<double> updatedPressure =
-              pressureWorkspace->at(depthIndex, rangeIndex) + contribution;
+              pressure + contribution;
           requireFiniteComplex(
               updatedPressure,
               "Cartesian Cerveny accumulated workspace pressure");
-          pressureWorkspace->at(depthIndex, rangeIndex) = updatedPressure;
+          pressure = updatedPressure;
         } else {
           // Origin first sums the true/surface/bottom images coherently for
           // one beam, then forms ABS(z)**2 before adding different beams.
@@ -774,10 +793,8 @@ CartesianCervenyInfluence::accumulateImpl(
             diagnostic->interpolatedPosition = position;
             diagnostic->interpolatedSlowness = slowness;
             diagnostic->interpolatedSoundSpeed = soundSpeed;
-            diagnostic->rightAmplitude =
-                frequencyState.points[rightIndex].amplitude;
-            diagnostic->rightPhase =
-                frequencyState.points[rightIndex].reflectionPhase;
+            diagnostic->rightAmplitude = rightFrequencyPoint.amplitude;
+            diagnostic->rightPhase = rightFrequencyPoint.reflectionPhase;
             diagnostic->epsilonLeft = epsilon;
             diagnostic->pLeft = ray.p[leftIndex];
             diagnostic->pRight = ray.p[rightIndex];

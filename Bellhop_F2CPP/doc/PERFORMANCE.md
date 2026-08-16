@@ -1,6 +1,7 @@
 # Bellhop F2CPP 性能阶段
 
-> 当前状态：P1 baseline/profile 已完成；尚未实施性能优化。
+> 当前状态：P1 baseline/profile 与 P2 Cartesian Cerveny 局部热循环优化已完成；
+> 尚未进入数据布局、SIMD 或并行阶段。
 > 基线日期：2026-08-16。
 
 ## P1 目标与边界
@@ -79,3 +80,54 @@ footprint 同量级，说明后续仍需关注 cache layout；当前没有容量
 - `make -C test/standard_cases f2cpp-regression`：CTest 37/37、标准案例
   14/14；
 - 本阶段未修改生产数值路径，因此未运行 `f2cpp-full`。
+
+## P2 Cartesian Cerveny 热循环
+
+P2 保持 P1 的 `munk_cerveny_cc` Release、单线程、1 次 warmup + 5 次正式
+测量协议。P2-before 位于 `7977fe682a929c542e08b8a7c8e153a475702b34`，
+可执行文件与 P1 的 SHA-256 相同；候选版本虽在未提交 working tree 中逐项
+测量，但每项均记录独立可执行文件哈希。没有修改射线缓存布局、算术累加顺序、
+有限性保护、Arrival/Eigenray/Trace/writer，也没有引入 SIMD 或 OpenMP。
+
+审查确认的热点浪费包括：receiver × image 循环内重复读取固定海面/海底深度和
+设置；重复取得 receiver 布局、深度与诊断索引；相邻射线/逐频点的重复索引；
+以及每个 coherent cell 两次执行已在入口验证过维度的
+`FrequencyWorkspace::at` 边界检查和扁平索引。P1 sampling 中相应叶调用包括
+boundary/environment getter、receiver accessor 和 workspace accessor；
+`sincos/exp` 与逐贡献有限性检查仍属于剩余计算，本轮没有移动或削弱。
+
+三个低风险优化点按顺序独立构建、测试和 A/B。下表为每一步完成后的 5 次
+中位数；speedup 是相对紧邻前一步，RSS 单位为 KiB。
+
+| 状态 / accepted change | Wall before→after (s) | Influence before→after (s) | Wall / Influence speedup | Peak RSS |
+|---|---:|---:|---:|---:|
+| 稳定循环量、边界深度、相邻点和 image kind hoist | 2.6642→2.0494 | 2.5916→1.9689 | 1.300× / 1.316× | 65840→65792 |
+| 缓存 receiver 布局/向量并直接读取冻结深度 | 2.0494→1.9590 | 1.9689→1.8770 | 1.046× / 1.049× | 65792→65856 |
+| 一次取得 pressure span，按已验证维度直接访问 cell | 1.9590→1.6565 | 1.8770→1.5816 | 1.183× / 1.187× | 65856→65824 |
+
+相对 P2-before，最终 wall speedup 为 `1.608×`，Influence speedup 为
+`1.639×`；wall 降低约 `37.8%`。最终 RSS 中位数为 `65824 KiB`，相对
+before 的 `65840 KiB` 没有实质变化。四轮 SHD SHA-256 均为
+`be3e6257bee54a021a0be5c983e2dd495fe2f1d0b5109ed32dc3e9636a8ba033`，
+与 P1 baseline 逐字节一致。
+
+原始 JSON 位于 ignored build 目录，不进入 Git：
+
+| 记录 | 文件 | JSON SHA-256 |
+|---|---|---|
+| before | `f2cpp_p2_before.json` | `0e5c9b21ec3de0078ce6c97c5a1ee65ab7d81fba8cee1ab87f20ac9307ac9294` |
+| invariant hoist | `f2cpp_p2_invariants.json` | `2cafb92d91be0eec8289fbb1a41ecce885d9793e265442d6c88d528a906212b1` |
+| receiver cache | `f2cpp_p2_receivers.json` | `be6312dfb456308460d650f7d595dc07d18d0091e3650e7ebea600619fb7f74a` |
+| workspace span | `f2cpp_p2_workspace.json` | `b462bd61edb12db381368060e643f4575b2a6c25b98570ee130315deb2d71a0a` |
+
+每个 accepted change 后相关 Cartesian Influence 与 single-frequency solver
+CTest 均为 2/2；最终独立 Munk 标准案例通过且产品哈希一致；
+`make -C test/standard_cases f2cpp-regression` 为 CTest 37/37、标准案例
+14/14；`git diff --check` 通过。由于结果 bitwise 一致且改动仅限已定位的
+局部热循环，本轮未运行 `f2cpp-full`。
+
+P2 在低风险局部收益已经明显时停止。剩余绝对热点仍是 Cartesian Cerveny
+Influence（最终约 1.58 s），主要工作包含每个 receiver/image 必需的复数
+传播、`sincos/exp` 和保留的 correctness 检查；另有每条 ray 的四个临时
+预计算向量。是否进入 P3 应先单独批准和重新取样；数据布局、SIMD、OpenMP
+及更激进的校验边界调整均不属于本阶段。

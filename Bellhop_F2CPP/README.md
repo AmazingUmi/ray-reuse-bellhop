@@ -74,7 +74,7 @@ I0～I8 与 I9-B1～B3 已全部验收并冻结，I9-B4 已完成二维单频复
 
 当前可正式声明的范围、兼容语义及明确延期项以
 [二维单频支持矩阵](./doc/FEATURE_SUPPORT_MATRIX.md)为准。后续工作进入基于
-profile 的性能阶段；P1 基线与 P2 热点入口见
+profile 的性能阶段；P1 基线与 P2 局部热循环优化结果见
 [性能阶段记录](./doc/PERFORMANCE.md)。除非发现真实 correctness bug，不再
 重新打开已冻结 iteration，也不在 F2CPP 中顺带实现 3D、N×2D、beam shift
 或宽带调度。

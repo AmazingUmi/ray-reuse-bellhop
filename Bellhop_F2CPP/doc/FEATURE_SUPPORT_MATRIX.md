@@ -62,12 +62,14 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
 
 ## Post-replication backlog
 
-复刻封板后只保留性能阶段入口，不在 B4 实施。P1 已于 2026-08-16 完成：
+复刻封板后只保留性能阶段入口，不在 B4 实施。P1/P2 已于 2026-08-16 完成：
 
 1. TL、R、A、E 四个 workload 已完成分阶段 wall/peak RSS profile；Munk TL 的
    Cartesian Cerveny Influence 占外部 wall `97.27%`；
 2. 完整冻结轨迹的 peak RSS/capacity footprint 已记录；分配次数和 cache miss
    留到确有数据布局候选时再用系统工具测量；
-3. P2 先评估 Cartesian Cerveny receiver/Influence 遍历和热循环不变量，之后
-   才考虑数据布局、SIMD/OpenMP 或批处理。详细结果见
+3. P2 已完成 Cartesian Cerveny receiver/Influence 的局部循环不变量、receiver
+   与 workspace 访问优化，Munk wall/Influence 分别获得 `1.608×/1.639×`
+   speedup 且产品逐字节一致；数据布局、SIMD 和并行仅在单独批准的 P3 评估。
+   详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。

@@ -5,7 +5,7 @@
 | 文档 | 内容 | 主要读者 |
 |---|---|---|
 | [PROGRESS.md](./PROGRESS.md) | 当前施工阶段、已完成能力和最新验证基线 | 所有人 |
-| [PERFORMANCE.md](./PERFORMANCE.md) | P1 性能基线、热点证据和 P2 优化入口 | 性能开发者、维护者 |
+| [PERFORMANCE.md](./PERFORMANCE.md) | P1 性能基线、P2 热循环优化证据和后续性能入口 | 性能开发者、维护者 |
 | [FEATURE_SUPPORT_MATRIX.md](./FEATURE_SUPPORT_MATRIX.md) | 二维单频 supported、intentional divergence 与 deferred/out-of-scope 封板矩阵 | 使用者、维护者 |
 | [USAGE.md](./USAGE.md) | 环境要求、编译、测试、CLI、输入输出和故障排查 | 使用者、测试人员 |
 | [BUILD_PLAN.md](./BUILD_PLAN.md) | G0/M1/M2 工作包、依赖顺序和完成证据 | 开发者、维护者 |

@@ -191,8 +191,8 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 - [`DERIVATION_MANIFEST.md`](./DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
   历史派生快照，继续用于追溯当时批准 RayReuse 的源码和性能门，不代表当前
   I0～I8 扩展树的哈希。
-- [`PERFORMANCE.md`](./PERFORMANCE.md) 记录复刻封板后的 P1 基线、热点证据和
-  后续逐项优化入口。
+- [`PERFORMANCE.md`](./PERFORMANCE.md) 记录复刻封板后的 P1 基线、P2
+  Cartesian Cerveny 热循环优化证据和后续性能入口。
 
 ## 5. 下一步
 
@@ -207,7 +207,10 @@ Influence 为 `2.6030 s`（`97.27%`）；peak RSS 为 `64.27 MiB`。四例产品
 在重复测量与独立标准案例验证之间完全一致，`f2cpp-regression` 为 CTest
 37/37、案例 14/14。详细证据见 [`PERFORMANCE.md`](./PERFORMANCE.md)。
 
-P2 只处理 Cartesian Cerveny Influence 热循环，先实测循环不变量、receiver/
-workspace 访问和 Release 校验边界；不同时修改 ray cache 布局，不直接引入
-SIMD/OpenMP。除非发现真实 correctness bug，不重新打开已验收 iteration，
-也不自动同步 RayReuse。
+P2 已完成 Cartesian Cerveny Influence 的局部低风险优化：hoist 稳定循环量与
+边界读取、缓存 receiver 布局/深度访问，并在入口维度验证后直接访问连续
+pressure workspace。Munk TL 的 wall 中位数由同轮 before `2.6642 s` 降至
+`1.6565 s`（`1.608×`），Influence 由 `2.5916 s` 降至 `1.5816 s`
+（`1.639×`）；peak RSS 无实质变化，SHD 与 P1 baseline 逐字节一致。
+`f2cpp-regression` 为 CTest 37/37、案例 14/14。P2 至此暂停；只有经单独批准
+并重新取样后才进入 P3 数据布局、SIMD 或并行探索，不自动同步 RayReuse。
