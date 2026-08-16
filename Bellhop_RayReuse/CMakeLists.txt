@@ -73,9 +73,14 @@ add_library(
     src/acoustics/boundary_acoustics.cpp
     src/field/beam_epsilon.cpp
     src/field/cartesian_cerveny_influence.cpp
+    src/field/geometric_gaussian_influence.cpp
+    src/field/geometric_hat_influence.cpp
+    src/field/arrival_workspace.cpp
     src/field/frequency_projector.cpp
     src/field/pressure_scaling.cpp
     src/io/command_line.cpp
+    src/io/ray_prefix_writer.cpp
+    src/io/ray_writer.cpp
     src/io/environment_parser.cpp
     src/io/shd_writer.cpp
     src/model/boundary_geometry.cpp
@@ -86,11 +91,16 @@ add_library(
     src/model/simulation_case.cpp
     src/cache/ray_path_cache.cpp
     src/field/frequency_workspace.cpp
+    src/io/arrival_writer.cpp
+    src/io/eigenray_writer.cpp
     src/ray/flat_boundary_reflection.cpp
     src/ray/geometry_tracer.cpp
     src/ray/ray_stepper.cpp
     src/solver/broadband_nonreuse_solver.cpp
+    src/solver/arrival_solver.cpp
+    src/solver/eigenray_solver.cpp
     src/solver/parallel_ray_reuse_solver.cpp
+    src/solver/ray_trace_product.cpp
     src/solver/serial_ray_reuse_solver.cpp
     src/solver/single_frequency_solver.cpp
 )
@@ -184,6 +194,18 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_arrival_workspace_tests
+    rayreuse.component.arrival_workspace
+    tests/component/arrival_workspace_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_arrival_eigenray_solver_tests
+    rayreuse.component.arrival_eigenray_solver
+    tests/component/arrival_eigenray_solver_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_environment_parser_tests
     rayreuse.component.environment_parser
     tests/component/environment_parser_test.cpp
@@ -193,6 +215,12 @@ if(BUILD_TESTING)
     bellhop_rayreuse_shd_writer_tests
     rayreuse.component.shd_writer
     tests/component/shd_writer_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_ray_writer_tests
+    rayreuse.component.ray_writer
+    tests/component/ray_writer_test.cpp
     component
   )
   target_compile_definitions(

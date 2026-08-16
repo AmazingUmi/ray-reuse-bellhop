@@ -27,6 +27,10 @@ struct LaunchFanPlanningInput {
   // degree-domain SubTab operation can be reproduced without converting the
   // radian-domain core inputs back to degrees.
   std::optional<LaunchAngleDegreeBounds> inputDegreeBounds{};
+
+  // R products use the requested count as-is (default 50) instead of the
+  // broadband D-02 count. An explicit count of one is a true single ray.
+  bool rayTraceMode{};
 };
 
 struct LaunchFanPlan {

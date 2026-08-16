@@ -1,6 +1,8 @@
+#include <cmath>
 #include <complex>
 #include <iostream>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -15,6 +17,7 @@
 
 namespace {
 
+using rayreuse::BeamFamily;
 using rayreuse::BoundaryModel;
 using rayreuse::Environment;
 using rayreuse::FrequencyGrid;
@@ -28,9 +31,12 @@ using rayreuse::RayState;
 using rayreuse::RayTerminationReason;
 using rayreuse::ReceiverGrid;
 using rayreuse::SimulationCase;
+using rayreuse::SimulationRunMode;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
+using rayreuse::SourceBeamPattern;
+using rayreuse::SourceBeamPatternSample;
 using rayreuse::StepQuadrature;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
@@ -154,6 +160,11 @@ void testVec2(Context& context) {
 
 void testSimulationCase(Context& context) {
   const SimulationCase simulation = makeSimulationCase({50.0});
+  context.check(simulation.runMode() == SimulationRunMode::Coherent &&
+                    simulation.beamFamily() == BeamFamily::CervenyGaussian &&
+                    !simulation.sourceBeamPattern().isDirectional(),
+                "SimulationCase defaults to coherent Cerveny metadata and "
+                "an omnidirectional source beam pattern");
   context.check(simulation.frequencies().size() == 1U,
                 "single-frequency RayReuse case retains its frequency");
   context.check(simulation.frequencies().designFrequency() == 50.0,
@@ -207,6 +218,94 @@ void testSimulationCase(Context& context) {
             ReceiverGrid(std::vector<double>{}, std::vector<double>{1.0}));
       },
       "empty receiver depth grid is rejected");
+}
+
+void testSimulationProductMetadata(Context& context) {
+  const SourceBeamPattern pattern = SourceBeamPattern::directional(
+      {{.angleDegrees = -30.0, .powerDecibels = -6.0},
+       {.angleDegrees = 0.0, .powerDecibels = 0.0},
+       {.angleDegrees = 20.0, .powerDecibels = -12.0}});
+  const double degreesToRadians = std::numbers::pi / 180.0;
+  const double minusSixDb = std::pow(10.0, -6.0 / 20.0);
+  const double minusTwelveDb = std::pow(10.0, -12.0 / 20.0);
+  context.check(pattern.isDirectional() && pattern.size() == 3U &&
+                    pattern.minimumAngleDegrees() == -30.0 &&
+                    pattern.maximumAngleDegrees() == 20.0,
+                "directional source beam pattern retains its range metadata");
+  context.checkNear(pattern.amplitudeForLaunchAngle(-30.0 * degreesToRadians),
+                    minusSixDb, 2.0e-15,
+                    "source beam pattern converts amplitude dB at a knot");
+  context.checkNear(
+      pattern.amplitudeForLaunchAngle(-15.0 * degreesToRadians),
+      0.5 * (minusSixDb + 1.0), 2.0e-15,
+      "source beam pattern interpolates converted linear amplitudes");
+  context.checkNear(
+      pattern.amplitudeForLaunchAngle(30.0 * degreesToRadians),
+      1.5 * minusTwelveDb - 0.5, 2.0e-15,
+      "source beam pattern uses the last segment for extrapolation");
+
+  const SourceBeamPattern omni = SourceBeamPattern::omnidirectional();
+  context.check(
+      !omni.isDirectional() && omni.size() == 2U &&
+          omni.minimumAngleDegrees() == -180.0 &&
+          omni.maximumAngleDegrees() == 180.0,
+      "omnidirectional source beam pattern has default range metadata");
+  context.checkNear(omni.amplitudeForLaunchAngle(2.0), 1.0, 0.0,
+                    "omnidirectional source beam pattern is unity");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(SourceBeamPattern::directional(
+            {{.angleDegrees = 0.0, .powerDecibels = 0.0}}));
+      },
+      "source beam pattern rejects a single sample");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(SourceBeamPattern::directional(
+            {{.angleDegrees = 0.0, .powerDecibels = 0.0},
+             {.angleDegrees = 0.0, .powerDecibels = -3.0}}));
+      },
+      "source beam pattern rejects duplicate angles");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(SourceBeamPattern::directional(
+            {{.angleDegrees = 0.0, .powerDecibels = 0.0},
+             {.angleDegrees = 1.0, .powerDecibels = 10000.0}}));
+      },
+      "source beam pattern rejects amplitude-conversion overflow");
+
+  const auto makeMetadataCase = [&](SimulationRunMode runMode,
+                                    BeamFamily beamFamily) {
+    return SimulationCase(
+        makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
+        ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+        FrequencyGrid({50.0}),
+        LaunchFan{.minimumAngle = -0.1,
+                  .maximumAngle = 0.1,
+                  .explicitLaunchAngleCount = 301U},
+        IntegratorSettings{.stepLength = 10.0,
+                           .rangeLimit = 5100.0,
+                           .depthLimit = 1100.0,
+                           .maximumRayPoints = 10000U},
+        pattern, runMode, beamFamily);
+  };
+  const SimulationCase arrivals = makeMetadataCase(
+      SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
+  context.check(arrivals.runMode() == SimulationRunMode::AsciiArrivals &&
+                    arrivals.beamFamily() == BeamFamily::GeometricHat &&
+                    arrivals.sourceBeamPattern().isDirectional(),
+                "SimulationCase preserves product metadata and beam pattern");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(static_cast<SimulationRunMode>(999),
+                                           BeamFamily::CervenyGaussian));
+      },
+      "SimulationCase rejects invalid run mode enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Coherent,
+                                           static_cast<BeamFamily>(999)));
+      },
+      "SimulationCase rejects invalid beam family enum values");
 }
 
 void testRayPathCache(Context& context) {
@@ -400,6 +499,7 @@ int main() {
   Context context;
   testVec2(context);
   testSimulationCase(context);
+  testSimulationProductMetadata(context);
   testRayPathCache(context);
   testFrequencyWorkspace(context);
 

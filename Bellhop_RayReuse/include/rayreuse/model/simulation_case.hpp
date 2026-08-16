@@ -40,6 +40,46 @@ struct Source {
   double amplitude{1.0};
 };
 
+enum class SimulationRunMode {
+  Coherent,
+  RayTrace,
+  AsciiArrivals,
+  BinaryArrivals,
+  Eigenray,
+};
+
+enum class BeamFamily {
+  CervenyGaussian,
+  GeometricHat,
+  GeometricGaussian,
+};
+
+struct SourceBeamPatternSample {
+  double angleDegrees{};
+  double powerDecibels{};
+};
+
+class SourceBeamPattern {
+ public:
+  [[nodiscard]] static SourceBeamPattern omnidirectional();
+  [[nodiscard]] static SourceBeamPattern directional(
+      std::vector<SourceBeamPatternSample> samples);
+
+  [[nodiscard]] double amplitudeForLaunchAngle(double launchAngleRadians) const;
+  [[nodiscard]] bool isDirectional() const noexcept;
+  [[nodiscard]] std::size_t size() const noexcept;
+  [[nodiscard]] double minimumAngleDegrees() const noexcept;
+  [[nodiscard]] double maximumAngleDegrees() const noexcept;
+
+ private:
+  SourceBeamPattern(std::vector<double> anglesDegrees,
+                    std::vector<double> amplitudes, bool directional);
+
+  std::vector<double> anglesDegrees_;
+  std::vector<double> amplitudes_;
+  bool directional_{};
+};
+
 struct LaunchFan {
   double minimumAngle{};
   double maximumAngle{};
@@ -58,7 +98,11 @@ class SimulationCase {
  public:
   SimulationCase(Environment environment, Source source, ReceiverGrid receivers,
                  FrequencyGrid frequencies, LaunchFan launchFan,
-                 IntegratorSettings integrator);
+                 IntegratorSettings integrator,
+                 SourceBeamPattern sourceBeamPattern =
+                     SourceBeamPattern::omnidirectional(),
+                 SimulationRunMode runMode = SimulationRunMode::Coherent,
+                 BeamFamily beamFamily = BeamFamily::CervenyGaussian);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
@@ -66,6 +110,9 @@ class SimulationCase {
   [[nodiscard]] const FrequencyGrid& frequencies() const noexcept;
   [[nodiscard]] const LaunchFanPlan& launchFanPlan() const noexcept;
   [[nodiscard]] const IntegratorSettings& integrator() const noexcept;
+  [[nodiscard]] const SourceBeamPattern& sourceBeamPattern() const noexcept;
+  [[nodiscard]] SimulationRunMode runMode() const noexcept;
+  [[nodiscard]] BeamFamily beamFamily() const noexcept;
 
  private:
   Environment environment_;
@@ -74,6 +121,9 @@ class SimulationCase {
   FrequencyGrid frequencies_;
   LaunchFanPlan launchFanPlan_;
   IntegratorSettings integrator_;
+  SourceBeamPattern sourceBeamPattern_;
+  SimulationRunMode runMode_;
+  BeamFamily beamFamily_;
 };
 
 }  // namespace rayreuse

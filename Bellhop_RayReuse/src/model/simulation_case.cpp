@@ -1,6 +1,9 @@
 #include "rayreuse/model/simulation_case.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <iterator>
+#include <numbers>
 #include <string>
 #include <utility>
 
@@ -27,6 +30,28 @@ void validateStrictlyIncreasing(const std::vector<double>& values,
       throw ValidationError(name + " must be strictly increasing");
     }
   }
+}
+
+void validateRunMode(SimulationRunMode mode) {
+  switch (mode) {
+    case SimulationRunMode::Coherent:
+    case SimulationRunMode::RayTrace:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
+      return;
+  }
+  throw ValidationError("simulation run mode is invalid");
+}
+
+void validateBeamFamily(BeamFamily family) {
+  switch (family) {
+    case BeamFamily::CervenyGaussian:
+    case BeamFamily::GeometricHat:
+    case BeamFamily::GeometricGaussian:
+      return;
+  }
+  throw ValidationError("beam family is invalid");
 }
 
 }  // namespace
@@ -80,15 +105,94 @@ double FrequencyGrid::designFrequency() const noexcept {
   return values_.back();
 }
 
+SourceBeamPattern::SourceBeamPattern(std::vector<double> anglesDegrees,
+                                     std::vector<double> amplitudes,
+                                     bool directional)
+    : anglesDegrees_(std::move(anglesDegrees)),
+      amplitudes_(std::move(amplitudes)),
+      directional_(directional) {}
+
+SourceBeamPattern SourceBeamPattern::omnidirectional() {
+  return SourceBeamPattern({-180.0, 180.0}, {1.0, 1.0}, false);
+}
+
+SourceBeamPattern SourceBeamPattern::directional(
+    std::vector<SourceBeamPatternSample> samples) {
+  if (samples.size() < 2U) {
+    throw ValidationError("source beam pattern requires at least two samples");
+  }
+  std::vector<double> angles;
+  std::vector<double> amplitudes;
+  angles.reserve(samples.size());
+  amplitudes.reserve(samples.size());
+  for (const SourceBeamPatternSample& sample : samples) {
+    requireFinite(sample.angleDegrees, "source beam pattern angle");
+    requireFinite(sample.powerDecibels, "source beam pattern power");
+    if (!angles.empty() && angles.back() >= sample.angleDegrees) {
+      throw ValidationError(
+          "source beam pattern angles must be strictly increasing");
+    }
+    const double amplitude = std::pow(10.0, sample.powerDecibels / 20.0);
+    if (!std::isfinite(amplitude) || amplitude < 0.0) {
+      throw ValidationError(
+          "source beam pattern conversion produced an invalid amplitude");
+    }
+    angles.push_back(sample.angleDegrees);
+    amplitudes.push_back(amplitude);
+  }
+  return SourceBeamPattern(std::move(angles), std::move(amplitudes), true);
+}
+
+double SourceBeamPattern::amplitudeForLaunchAngle(
+    double launchAngleRadians) const {
+  requireFinite(launchAngleRadians, "source beam pattern launch angle");
+  const double angleDegrees = launchAngleRadians * (180.0 / std::numbers::pi);
+  const auto upper = std::lower_bound(anglesDegrees_.begin(),
+                                      anglesDegrees_.end(), angleDegrees);
+  std::size_t leftIndex = 0U;
+  if (upper == anglesDegrees_.end()) {
+    leftIndex = anglesDegrees_.size() - 2U;
+  } else if (upper != anglesDegrees_.begin()) {
+    leftIndex = static_cast<std::size_t>(
+        std::distance(anglesDegrees_.begin(), upper) - 1);
+  }
+  const double fraction =
+      (angleDegrees - anglesDegrees_[leftIndex]) /
+      (anglesDegrees_[leftIndex + 1U] - anglesDegrees_[leftIndex]);
+  return (1.0 - fraction) * amplitudes_[leftIndex] +
+         fraction * amplitudes_[leftIndex + 1U];
+}
+
+bool SourceBeamPattern::isDirectional() const noexcept { return directional_; }
+
+std::size_t SourceBeamPattern::size() const noexcept {
+  return anglesDegrees_.size();
+}
+
+double SourceBeamPattern::minimumAngleDegrees() const noexcept {
+  return anglesDegrees_.front();
+}
+
+double SourceBeamPattern::maximumAngleDegrees() const noexcept {
+  return anglesDegrees_.back();
+}
+
 SimulationCase::SimulationCase(Environment environment, Source source,
                                ReceiverGrid receivers,
                                FrequencyGrid frequencies, LaunchFan launchFan,
-                               IntegratorSettings integrator)
+                               IntegratorSettings integrator,
+                               SourceBeamPattern sourceBeamPattern,
+                               SimulationRunMode runMode, BeamFamily beamFamily)
     : environment_(std::move(environment)),
       source_(source),
       receivers_(std::move(receivers)),
       frequencies_(std::move(frequencies)),
-      integrator_(integrator) {
+      integrator_(integrator),
+      sourceBeamPattern_(std::move(sourceBeamPattern)),
+      runMode_(runMode),
+      beamFamily_(beamFamily) {
+  validateRunMode(runMode_);
+  validateBeamFamily(beamFamily_);
   requireFinite(source_.depth, "source.depth");
   requireFinite(source_.amplitude, "source.amplitude");
   const Vec2 sourcePosition{.range = 0.0, .depth = source_.depth};
@@ -143,7 +247,17 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       .maximumLaunchAngle = launchFan.maximumAngle,
       .explicitLaunchAngleCount = launchFan.explicitLaunchAngleCount,
       .inputDegreeBounds = launchFan.inputDegreeBounds,
+      .rayTraceMode = runMode_ == SimulationRunMode::RayTrace,
   });
+  for (double launchAngle : launchFanPlan_.launchAngles) {
+    const double patternAmplitude =
+        sourceBeamPattern_.amplitudeForLaunchAngle(launchAngle);
+    if (!std::isfinite(patternAmplitude) || patternAmplitude < 0.0) {
+      throw ValidationError(
+          "source beam pattern must remain finite and non-negative over "
+          "the configured launch fan");
+    }
+  }
 }
 
 const Environment& SimulationCase::environment() const noexcept {
@@ -167,5 +281,13 @@ const LaunchFanPlan& SimulationCase::launchFanPlan() const noexcept {
 const IntegratorSettings& SimulationCase::integrator() const noexcept {
   return integrator_;
 }
+
+const SourceBeamPattern& SimulationCase::sourceBeamPattern() const noexcept {
+  return sourceBeamPattern_;
+}
+
+SimulationRunMode SimulationCase::runMode() const noexcept { return runMode_; }
+
+BeamFamily SimulationCase::beamFamily() const noexcept { return beamFamily_; }
 
 }  // namespace rayreuse
