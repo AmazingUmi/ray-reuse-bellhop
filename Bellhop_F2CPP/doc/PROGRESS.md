@@ -1,6 +1,6 @@
 # Bellhop F2CPP 当前进度
 
-> 更新日期：2026-08-14
+> 更新日期：2026-08-16
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
 > 当前施工状态：I0～I8 与 I9-B1～B4 已完成并冻结；二维单频复刻正式封板。
 
@@ -191,6 +191,8 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 - [`DERIVATION_MANIFEST.md`](./DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
   历史派生快照，继续用于追溯当时批准 RayReuse 的源码和性能门，不代表当前
   I0～I8 扩展树的哈希。
+- [`PERFORMANCE.md`](./PERFORMANCE.md) 记录复刻封板后的 P1 基线、热点证据和
+  后续逐项优化入口。
 
 ## 5. 下一步
 
@@ -199,6 +201,13 @@ I0～I8 与 B1～B4 已全部冻结，不再以“剩余复刻功能”继续扩
 `P/W`、`CS/CL`、`G/F + LL`、ray-centered irregular receiver、3D、N×2D、
 beam shift、analytic SSP 和 F2CPP 多频调度均不属于本次 closure。
 
-下一阶段只在代表性 workload 上先做 profile，再依据证据处理运行时间、
-peak RSS/cache locality 和 receiver/Influence 遍历复杂度。除非发现真实
-correctness bug，不重新打开已验收 iteration，也不自动同步 RayReuse。
+P1 已在 TL、R、A、E 四个代表性 workload 上完成 1 次 warmup + 5 次正式
+测量。Munk TL 外部 wall 中位数为 `2.6761 s`，其中 Cartesian Cerveny
+Influence 为 `2.6030 s`（`97.27%`）；peak RSS 为 `64.27 MiB`。四例产品哈希
+在重复测量与独立标准案例验证之间完全一致，`f2cpp-regression` 为 CTest
+37/37、案例 14/14。详细证据见 [`PERFORMANCE.md`](./PERFORMANCE.md)。
+
+P2 只处理 Cartesian Cerveny Influence 热循环，先实测循环不变量、receiver/
+workspace 访问和 Release 校验边界；不同时修改 ray cache 布局，不直接引入
+SIMD/OpenMP。除非发现真实 correctness bug，不重新打开已验收 iteration，
+也不自动同步 RayReuse。
