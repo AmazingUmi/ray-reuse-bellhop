@@ -288,6 +288,33 @@ struct PrecomputedRayValues {
   return values;
 }
 
+[[gnu::always_inline]] inline double cervenyHermiteTaperHot(
+    double offset, double fullValueRadius, double zeroValueRadius) {
+  requireFinite(offset, "Hermite offset");
+  requireFinite(fullValueRadius, "Hermite full-value radius");
+  requireFinite(zeroValueRadius, "Hermite zero-value radius");
+  if (fullValueRadius < 0.0 ||
+      zeroValueRadius <= fullValueRadius) {
+    throw ValidationError(
+        "Hermite radii must satisfy 0 <= full < zero");
+  }
+
+  const double absoluteOffset = std::abs(offset);
+  if (absoluteOffset <= fullValueRadius) {
+    return 1.0;
+  }
+  if (absoluteOffset >= zeroValueRadius) {
+    return 0.0;
+  }
+  const double coordinate =
+      (absoluteOffset - fullValueRadius) /
+      (zeroValueRadius - fullValueRadius);
+  const double complement = 1.0 - coordinate;
+  const double complementSquared = complement * complement;
+  return (1.0 + 2.0 * coordinate) *
+         complementSquared;
+}
+
 [[nodiscard]] CartesianCervenyImageDiagnostic evaluateImage(
     CervenyImageKind kind, double receiverDepth,
     double interpolatedDepth, double seaSurfaceDepth,
@@ -323,7 +350,7 @@ struct PrecomputedRayValues {
       -angularFrequency * gamma.imag() * deltaSquared;
   const bool windowPassed =
       windowMetric < beamWindowSquared;
-  const double taper = cervenyHermiteTaper(
+  const double taper = cervenyHermiteTaperHot(
       deltaDepth, radiusMax, 2.0 * radiusMax);
   std::complex<double> exponential{};
   std::complex<double> contribution{};
@@ -391,7 +418,7 @@ struct PrecomputedRayValues {
     return {};
   }
 
-  const double taper = cervenyHermiteTaper(
+  const double taper = cervenyHermiteTaperHot(
       deltaDepth, radiusMax, 2.0 * radiusMax);
   if (taper == 0.0) {
     return {};
@@ -446,29 +473,8 @@ int updateCervenyKmah(std::complex<double> qLeft,
 
 double cervenyHermiteTaper(double offset, double fullValueRadius,
                            double zeroValueRadius) {
-  requireFinite(offset, "Hermite offset");
-  requireFinite(fullValueRadius, "Hermite full-value radius");
-  requireFinite(zeroValueRadius, "Hermite zero-value radius");
-  if (fullValueRadius < 0.0 ||
-      zeroValueRadius <= fullValueRadius) {
-    throw ValidationError(
-        "Hermite radii must satisfy 0 <= full < zero");
-  }
-
-  const double absoluteOffset = std::abs(offset);
-  if (absoluteOffset <= fullValueRadius) {
-    return 1.0;
-  }
-  if (absoluteOffset >= zeroValueRadius) {
-    return 0.0;
-  }
-  const double coordinate =
-      (absoluteOffset - fullValueRadius) /
-      (zeroValueRadius - fullValueRadius);
-  const double complement = 1.0 - coordinate;
-  const double complementSquared = complement * complement;
-  return (1.0 + 2.0 * coordinate) *
-         complementSquared;
+  return cervenyHermiteTaperHot(
+      offset, fullValueRadius, zeroValueRadius);
 }
 
 CartesianCervenyInfluence::CartesianCervenyInfluence(

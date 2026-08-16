@@ -200,3 +200,58 @@ per-thread 大 workspace 和非确定 reduction，直接并行 501-depth 小循�
 独立 Munk 标准案例通过且产品 bitwise 一致，`f2cpp-regression` 为 CTest
 37/37、案例 14/14，`git diff --check` 通过。P3-01 至此停止，不进入显式
 SIMD、OpenMP、fast-math 或数据布局重构。
+
+## P3-02 Hermite taper hot path
+
+P3-02 从 P3-01 checkpoint `8b66477e2ce02f3902c6f73e135d3c6b007d68a9`
+的 clean Release 开始。相同 Munk 协议的 before 为 wall `1.5087 s`、
+Influence `1.4375 s`、peak RSS `65648 KiB`，产品哈希保持 replication
+baseline。`cervenyHermiteTaper` 的输入层级为：`offset` 随 receiver 与 image
+变化，`radiusMax` 对一条 ray 固定且由 source sound speed/frequency 决定，
+zero radius 固定为 `2*radiusMax`；每个通过 beam-window 的 receiver cell 最多
+为 true/surface/bottom 三个 image 各调用一次。多项式本身只有 abs、两次边界
+分支、一次除法和三次乘加，18.5% 叶级热点主要来自极高调用频率、外部调用
+边界及每次重复的 checked-path 控制流，而不是临时返回对象。
+
+唯一 accepted change 将现有实现原样移入 TU-local
+`cervenyHermiteTaperHot` 并强制内联；Cartesian diagnostic 与普通 contribution
+路径直接调用该 helper，公开 `cervenyHermiteTaper` 接口保留并委托同一实现，
+ray-centered 调用不变。finite 检查、半径约束、abs/branch/divide 和 polynomial
+表达式顺序均未改变。曾尝试直接标记公开定义，但 GCC 14/Werror 正确拒绝了
+缺少 `inline` 的 attribute；该中间版本未接受，最终内部 helper 同时通过
+AppleClang 与 GCC 14。
+
+独立 1 warmup + 5 repeats A/B：
+
+| 状态 | Wall median | Influence median | Peak RSS | Product SHA-256 |
+|---|---:|---:|---:|---|
+| before | 1.5087 s | 1.4375 s | 65648 KiB | `be3e6257...a033` |
+| hot helper | 1.4152 s | 1.3441 s | 65840 KiB | `be3e6257...a033` |
+
+P3-02 wall speedup 为 `1.066×`，Influence speedup 为 `1.069×`；RSS 增加
+`192 KiB`（约 `0.3%`），无实质容量变化。P3-01 before 到 P3-02 final 的
+累计 wall speedup 为 `1.168×`。ignored build 中 `f2cpp_p302_before.json` 与
+`f2cpp_p302_hot_helper.json` 的 SHA-256 分别为
+`0fdb68d7e40c08a703d945db58cdd0ade2cabe77ff57a3d9464a6651d0302b84` 和
+`5c5e1b7eef77a347fd5ce464c9a37eaa71e1b81446e68e08b3d1e3593e9b44d4`。
+
+最终实现的两次 1 ms sample 共 2146 个主线程样本：
+
+| 叶级位置 | 样本占比 |
+|---|---:|
+| `accumulateImpl` 本体（含已内联 taper 算术） | 62.12% |
+| `__sincos_stret` | 14.35% |
+| `exp` | 6.85% |
+| libsystem_m 未命名 leaf `+0x1154` | 2.94% |
+| libsystem_m 未命名 leaf `+0x10ac` | 2.80% |
+
+`cervenyHermiteTaper` 的直接叶占比由 `18.51%` 降为 `0%`；Clang inline report
+确认 Cartesian diagnostic/non-diagnostic 调用均已内联，二进制中唯一剩余的
+公开函数调用来自未修改的 ray-centered 路径。这里的 `0%` 表示调用热点消失，
+不是多项式被删除；其必要算术已归入 `accumulateImpl`。
+
+验收：AppleClang 与 GCC 14/Werror focused Influence/solver CTest 均为 2/2；
+独立 Munk 标准案例通过且 SHD bitwise 一致；`f2cpp-regression` 为 CTest
+37/37、案例 14/14；`git diff --check` 通过。Hermite 已不再是独立显著热点，
+P3-02 按停止条件结束，不继续 hoist 检查或改写 polynomial，也不自动优化
+sincos/exp。

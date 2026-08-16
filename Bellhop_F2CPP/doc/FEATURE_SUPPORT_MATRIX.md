@@ -71,7 +71,9 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
 3. P2 已完成 Cartesian Cerveny receiver/Influence 的局部循环不变量、receiver
    与 workspace 访问优化，Munk wall/Influence 分别获得 `1.608×/1.639×`
    speedup 且产品逐字节一致；P3-01 profile 进一步确认 compute/math/check 路径
-   主导，并接受一个 `1.096×` wall 的 finite-helper scalar 优化。当前没有
-   RayPathCache memory-bound 证据，数据布局、显式 SIMD 和并行仍需单独批准。
+   主导，并接受一个 `1.096×` wall 的 finite-helper scalar 优化；P3-02 又以
+   bitwise 一致的 Hermite hot helper 获得 `1.066×` wall speedup。当前没有
+   RayPathCache memory-bound 证据，sincos/exp、数据布局、显式 SIMD 和并行
+   均仍需单独批准。
    详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。

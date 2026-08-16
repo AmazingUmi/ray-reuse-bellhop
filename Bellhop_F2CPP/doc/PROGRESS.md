@@ -222,3 +222,11 @@ finite helper，wall `1.6536→1.5093 s`（`1.096×`），Influence
 `1.5797→1.4374 s`（`1.099×`），产品继续 bitwise 一致；回归仍为 CTest
 37/37、案例 14/14。下一优先级是独立的 P3-A Hermite hot-path specialization；
 不直接进入数据布局、显式 SIMD 或 OpenMP，也不自动同步 RayReuse。
+
+P3-02 已完成上述 Hermite specialization：保留公开 helper 和全部 correctness
+检查，将相同实现置于 TU-local always-inline hot helper，并只让 Cartesian
+两个直接路径消费。Munk wall `1.5087→1.4152 s`（`1.066×`），Influence
+`1.4375→1.3441 s`（`1.069×`），SHD 继续 bitwise 一致；优化后两轮 sample
+中公开 taper 叶占比由 `18.51%` 降至 `0%`。AppleClang/GCC focused CTest
+均为 2/2，regression 仍为 CTest 37/37、案例 14/14。Hermite 已满足停止条件，
+后续是否进入 sincos/exp 必须作为新的、单独批准的性能阶段。
