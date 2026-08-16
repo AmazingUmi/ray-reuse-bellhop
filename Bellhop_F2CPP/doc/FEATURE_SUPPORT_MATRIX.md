@@ -78,9 +78,11 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
    fused sincos 和一次 exp，重复参数仅 `0.484%` 上界，因而没有接受新的
    scalar 改动。P4-01 的真实输入原型进一步排除 SIMD 首选路线：精确 vForce
    不能保持 bitwise，而确定性 receiver-depth 线程分区已有 `2.0～2.5×` 绝对
-   wall 潜力且 RSS 近似不变。P4-02 已将其正式化为持久 team：4-thread 在
-   50/250 Hz Munk 上分别达到 `2.276×/2.117×`，所有线程档 SHD bitwise
-   一致，最大 RSS 增量低于 `0.21 MiB`。当前 F2CPP 性能阶段暂停，数据布局
+   wall 潜力且 RSS 近似不变。P4-02 已将其正式化为持久 team：在当前 Apple
+   M4 开发机器的 50/250 Hz Munk benchmark 上，4-thread points 分别达到
+   `2.276×/2.117×`，所有已测线程档 SHD bitwise 一致，最大 RSS 增量低于
+   `0.21 MiB`。1/2/4/8 只是本次参考测量档，不构成推荐上限；用户仍可按其他
+   硬件/workload 选择 8/16 或更高线程数。当前 F2CPP 性能阶段暂停，数据布局
    仍没有重构依据。
    详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。

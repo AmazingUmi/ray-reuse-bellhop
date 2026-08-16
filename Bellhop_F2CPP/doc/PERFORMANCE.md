@@ -358,6 +358,8 @@ pressure workspace，仅有线程栈和运行库开销。
 以下为 `OMP_DYNAMIC=FALSE`、`OMP_PROC_BIND=SPREAD`、`OMP_PLACES=CORES` 的
 1 warmup + 5 repeats（50 Hz）或 1 warmup + 3 repeats（250 Hz）中位数。
 Speedup/efficiency 均相对同一个 OpenMP 原型的 1-thread；RSS 单位 KiB。
+这里的 1/2/4/8 threads 只是 P1 所述 Apple M4 开发机器和这两个 Munk
+workload 的 benchmark points，不是设计假设、推荐上限或线程扩展边界。
 
 | Workload | Threads | Wall (s) | Influence (s) | Peak RSS | Speedup | Efficiency |
 |---|---:|---:|---:|---:|---:|---:|
@@ -389,8 +391,10 @@ OpenMP 原型可执行文件 SHA-256 为
 同轮正式串行 wall/Influence 为 50 Hz `1.4156/1.3453 s`、250 Hz
 `4.6380/4.3148 s`。原型 1-thread 因每 ray 建立 parallel region，分别慢
 `5.6%/9.2%`；即便包含该开销，8-thread 相对正式串行 wall 仍为 `2.48×/2.01×`。
-本机只有 4 个 performance cores，两个 workload 都在 4 threads 后明显饱和，
-8 threads 的 efficiency 不足以支持默认使用全部 logical cores。
+本机只有 4 个 performance cores；在这台机器和这两个 workload 上，4 threads
+以后边际收益明显收窄。这只是本次测量结果，不表示实现假定 4 threads 后必然
+饱和；8/16 或更多线程在其他核心拓扑、receiver 规模和 ray workload 上仍可能
+继续获得收益。
 
 原型未保留为生产修改，因为 OpenMP region 内直接抛出异常不能满足当前错误
 传播契约，且每 ray fork/join 不是正式设计。若进入 P4-02，建议拆分
@@ -400,14 +404,16 @@ prepare 与 cell accumulation，在 solver/source 生命周期建立持久 team�
 
 source-level 并行在现有架构中数值风险最低，因为各 source 已拥有独立 cache
 和 workspace；但单-source Munk 无收益，且它与未来 BARR/RayReuse 的
-frequency/source 外层并行占用同一核心预算。正式接口应只有一个 parallel
-owner：F2CPP 单 source 可选择 receiver-depth tiles，多 source 或 BARR 可选择
-更外层 task，禁止隐藏的 nested OpenMP/oversubscription。
+frequency/source 外层并行占用同一核心预算。同一次执行应只启用一个 active
+parallel owner：单 source 可以选择 receiver-depth tiles，多 source 或 BARR
+也可以选择更外层 task；具体层级由该次 workload 和调度策略决定，而不是被
+接口永久固定。此约束只用于禁止隐藏的 nested parallelism/oversubscription。
 
-P4-01 的结论是优先线程并行而非 SIMD：它在两个真实 workload 上已有
+P4-01 的结论是优先线程并行而非 SIMD：它在当前两个真实 workload 上已有
 `2.0～2.5×` 绝对收益、保持 bitwise 且 RSS 近似不变；SIMD 的理想 wall 上限
-较小并立即破坏 bitwise。正式实现以 4 threads 为首个目标并保留 1-thread
-默认/回退，但需新的明确批准。本阶段恢复原始源码后，focused CTest 2/2、
+较小并立即破坏 bitwise。1/2/4 threads 是首轮正式验收档，8 threads 是本机
+scaling 参考档；这些档位不构成程序级推荐或上限，正式接口必须继续允许用户
+按硬件和 workload 选择线程数。本阶段恢复原始源码后，focused CTest 2/2、
 Munk 标准案例、`f2cpp-regression`（CTest 37/37、案例 14/14）及
 `git diff --check` 均通过。
 
@@ -424,12 +430,17 @@ ray reduction、per-thread field workspace、RayPathCache 复制或 nested OpenM
 
 worker 边界捕获任意异常，在同一 barrier 内完成所有 worker 的汇合后由调用
 线程重抛第一个异常；组件测试同时验证了重抛与异常后的 team 复用。默认
-`F2CPP_THREADS=1` 完全走串行；大于 1 只允许单 source Cartesian Cerveny TL，
-其他 family、多 source、R/A/E 均明确拒绝。实际 worker 数取请求值与 receiver
-depth 数的较小者并写入 PRT。未来 source/frequency/BARR/RayReuse 外层若拥有
-并行，必须把内层值保持为 1，禁止两个 parallel owner 嵌套。
+`F2CPP_THREADS=1` 完全走串行，是为了确定性默认值、资源可控和明确 parallel
+ownership，并不表示 1 thread 或 4 threads 被认为普遍最优。大于 1 只允许
+当前单 source Cartesian Cerveny TL 路径，其他 family、多 source、R/A/E 均
+明确拒绝。实际 worker 数取用户请求值与 receiver depth 数的较小者并写入 PRT。
+未来 source/frequency/BARR/RayReuse 外层若启用并行，同一次执行应选择一个
+active parallel layer、把其他层保持串行，以避免 nested parallelism 和
+oversubscription；该规则不预先规定永远由哪一层拥有并行。
 
-正式二进制为 AppleClang Release，SHA-256
+以下具体线程数和 scaling 数据只代表 P1 所述 Apple M4 开发机器及当前两个
+Munk workload，不能外推为程序级线程建议。正式二进制为 AppleClang Release，
+SHA-256
 `1689973a0caf22d91c734681025a27e096b8faa95e6868e0bc1f479e61ef03e9`。
 继续使用 P4-01 的两个输入、固定独立子进程与 1 次 warmup；50 Hz 每档 5 次、
 250 Hz 每档 3 次正式计量。Speedup/efficiency 相对本实现的 1-thread；RSS 单位
@@ -449,9 +460,11 @@ KiB。
 正式 1-thread 相对 P4-01 原始串行的 `1.4156/4.6380 s` 没有 parallel-region
 开销，反而分别快约 `1.6%/2.5%`。这是把 prepared context 的稳定成员显式
 缓存为 kernel locals、并保持原先直接贡献 helper 内联后恢复的代码生成；物理
-表达式、检查位置和累加顺序未改变。4-thread 在两个 workload 上均有稳定的
-`2.12～2.28×` 收益；250 Hz 的 8-thread 已略慢于 4-thread，确认本机 4 个
-performance cores 后继续扩线程没有价值。
+表达式、检查位置和累加顺序未改变。在当前机器的两个 workload 上，4-thread
+分别获得 `2.276×/2.117×`；250 Hz 的 8-thread 本轮略慢于 4-thread。这只说明
+本次环境在该点出现 scaling 饱和，不是算法或接口对 4/8 threads 的假设。
+`F2CPP_THREADS` 继续由用户配置；8/16 或更多线程在其他硬件和更大 workload
+上可能更有价值，应以目标环境的实测结果选择。
 
 50/250 Hz 的所有线程档 SHD SHA-256 分别保持
 `be3e6257bee54a021a0be5c983e2dd495fe2f1d0b5109ed32dc3e9636a8ba033`
@@ -468,7 +481,9 @@ focused 2/2；Munk 标准案例通过；`f2cpp-regression` 为 CTest 37/37、案
 14/14；`f2cpp-full` 为 Python 145/145、CTest 37/37、单频案例 65/65；所有
 性能档输出 bitwise 一致，`git diff --check` 通过。
 
-P4-02 满足停止条件：4-thread 有显著、确定性收益，RSS 和线程安全均无阻塞
-问题。当前 F2CPP Performance Phase 正式暂停；不自动进入 SIMD、数据布局、
-更多 scalar 微优化或 BARR/RayReuse。若未来重启，必须先以新的 workload/profile
-证明收益，并重新决定全局唯一 parallel owner。
+P4-02 满足停止条件：当前 benchmark environment 的 4-thread point 有显著、
+确定性收益，RSS 和线程安全均无阻塞问题。当前 F2CPP Performance Phase 正式
+暂停；不自动进入 SIMD、数据布局、更多 scalar 微优化或 BARR/RayReuse。
+若未来重启，应在目标硬件/workload 上重新测量更高线程数，并为该次执行选择
+合适的 active parallel layer；parallel ownership 只负责避免嵌套和超额订阅，
+不永久绑定到 Influence、source 或 frequency 中的某一层。

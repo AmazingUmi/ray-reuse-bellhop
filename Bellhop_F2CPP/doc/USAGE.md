@@ -295,16 +295,23 @@ F2CPP_THREADS=4 \
 ```
 
 允许值为 `1`～`256` 的整数；`1` 是默认值，实际 worker 数不会超过 receiver
-depth 数，并会写入 PRT 的 `Influence threads =`。2/4 threads 是当前建议的
-首选计量档，最大线程数不保证最快。不同 worker 只写互不重叠的 receiver rows，
-每个 cell 内仍保持与串行相同的 ray/image/coherent accumulation 顺序，因此
-已验收的 1/2/4/8-thread SHD 逐字节一致。
+depth 数，并会写入 PRT 的 `Influence threads =`。默认 1 thread 是为了提供
+确定性、资源可控且 ownership 明确的串行起点，不表示它或 4 threads 普遍
+最快。`F2CPP_THREADS` 始终由用户按目标硬件和 workload 配置，程序不设置
+4-thread 或 8-thread 推荐上限。文档中的 1/2/4/8-thread 只是当前 Apple M4
+开发机器及两个 Munk workload 的 benchmark points；8/16 或更多线程在其他
+核心拓扑和更大 workload 上可能继续获得收益，应以实际测量为准。
 
-该开关不适用于多 source、ray-centered 或其他 beam family，也不适用于
-R/A/a/E；这些组合在值大于 1 时会明确报错，不会静默回退。如果未来由外层
-source/frequency/BARR/RayReuse 调度拥有并行，本值必须保持为 `1`，避免 nested
-parallelism 和 oversubscription。该实现使用持久 `std::thread` team，
-`OMP_NUM_THREADS` 不控制它。
+不同 worker 只写互不重叠的 receiver rows，每个 cell 内仍保持与串行相同的
+ray/image/coherent accumulation 顺序；当前验收的 1/2/4/8-thread SHD 逐字节
+一致。这一正确性契约不依赖某个固定线程数。
+
+当前该开关不适用于多 source、ray-centered 或其他 beam family，也不适用于
+R/A/a/E；这些组合在值大于 1 时会明确报错，不会静默回退。如果未来启用外层
+source/frequency/BARR/RayReuse 并行，同一次执行应只选择一个 active parallel
+layer，并把其他层保持串行，以避免 nested parallelism 和 oversubscription；
+这不预先规定将来必须永远由外层或 Influence 层拥有并行。该实现使用持久
+`std::thread` team，`OMP_NUM_THREADS` 不控制它。
 
 ### 5.5 退出状态
 

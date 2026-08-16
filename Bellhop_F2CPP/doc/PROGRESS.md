@@ -168,13 +168,15 @@
   solver 边界显式报错，未发现 correctness blocker 或 silent fallback。
 - P4-02 确定性线程并行：Cartesian Cerveny 使用持久 `std::thread` team 和
   receiver-depth 静态 stripe，每 ray 只准备一份共享只读状态并在 barrier 后
-  前进；worker 异常汇合后由调用线程重抛。50 Hz/1000-ray 的 1/2/4/8-thread
-  wall 为 `1.3924/0.8979/0.6119/0.5506 s`，250 Hz/5000-ray 为
+  前进；worker 异常汇合后由调用线程重抛。当前 Apple M4 开发机器上，
+  50 Hz/1000-ray 的 1/2/4/8-thread benchmark points wall 为
+  `1.3924/0.8979/0.6119/0.5506 s`，250 Hz/5000-ray 为
   `4.5203/2.9482/2.1350/2.1490 s`；4-thread speedup 分别为
   `2.276×/2.117×`。全部线程档 SHD 与 replication baseline bitwise 一致，
   最大 RSS 增量低于 `0.21 MiB`。AppleClang/GCC CTest 37/37、Debug sanitizer
   focused 2/2、TSan focused 2/2、regression 37/37+14/14、full
-  145/145+37/37+65/65 均通过。
+  145/145+37/37+65/65 均通过。上述线程档与 scaling 只描述当前 benchmark
+  environment，不构成程序推荐值或扩展上限。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 [`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
@@ -257,16 +259,21 @@ receiver/image 热循环；真实 Munk 相位上的 Accelerate vForce math-only 
 `6.50e-16`），且总体理想 wall 上限约 `1.18×`，不接受为正式路线。保持每个
 cell 内 ray 顺序的 receiver-depth stripe OpenMP 原型在 50 Hz/1000-ray 与
 250 Hz/5000-ray Munk 上，8-thread 相对正式串行分别达到 `2.48×/2.01×`，
-所有线程数 SHD 均逐字节一致，额外 RSS 小于 0.3 MiB；4 threads 后已明显
-饱和。原型源码已移除，focused 2/2、Munk 与 regression 37/37+14/14 通过。
-推荐下一阶段只正式化持久 team、静态 depth tiles 和异常汇合，不实施 SIMD，
-也不允许与 BARR/RayReuse 外层 frequency/source 并行嵌套。
+所有线程数 SHD 均逐字节一致，额外 RSS 小于 0.3 MiB；当前开发机器和这两个
+workload 在 4 threads 后边际收益明显收窄。该观察不构成普遍饱和假设，其他
+硬件/workload 的 8/16 或更多线程仍需实测。原型源码已移除，focused 2/2、
+Munk 与 regression 37/37+14/14 通过。下一阶段只正式化持久 team、静态 depth
+tiles 和异常汇合，不实施 SIMD，并通过 parallel ownership 避免与外层
+frequency/source 并行发生嵌套或 oversubscription。
 
-P4-02 已完成上述正式化。默认 `F2CPP_THREADS=1` 保持串行；单 source
-Cartesian Cerveny TL 可选择持久 receiver-depth team，其他 family、多 source
-和 R/A/E 明确拒绝大于 1 的内层线程数。4-thread 在两个 Munk workload 上有
-`2.12～2.28×` wall 收益，1-thread 已消除原型的 per-ray parallel-region
-开销，1/2/4/8-thread 均保持 SHD bitwise 一致，TSan 与 full 均通过。
-当前 F2CPP Performance Phase 按停止条件暂停，不自动进入 SIMD、数据布局、
-更多微优化或 BARR/RayReuse；若后续重启，必须以新 profile 明确收益并维持
-全局唯一 parallel owner。
+P4-02 已完成上述正式化。默认 `F2CPP_THREADS=1` 保持串行，是为了确定性、
+资源控制和明确的 parallel ownership，不表示 1 或 4 threads 普遍最优；单
+source Cartesian Cerveny TL 的用户线程数仍完全可配置，其他 family、多 source
+和 R/A/E 当前明确拒绝大于 1 的内层线程数。在本次两个 Munk benchmark 上，
+4-thread 有 `2.12～2.28×` wall 收益，1-thread 已消除原型的 per-ray
+parallel-region 开销，1/2/4/8-thread 均保持 SHD bitwise 一致，TSan 与 full
+均通过。这些档位只用于当前环境验收，不设置 4T/8T 推荐上限；8T/16T 或更高
+线程数可能在其他硬件和 workload 上获益。当前 F2CPP Performance Phase 按
+停止条件暂停，不自动进入 SIMD、数据布局、更多微优化或 BARR/RayReuse；若
+后续重启，应按执行配置选择一个 active parallel layer 来避免嵌套和超额订阅，
+而不是永久指定 Influence、source 或 frequency 中的某一层拥有并行。
