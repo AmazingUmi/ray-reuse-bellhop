@@ -70,6 +70,8 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
    留到确有数据布局候选时再用系统工具测量；
 3. P2 已完成 Cartesian Cerveny receiver/Influence 的局部循环不变量、receiver
    与 workspace 访问优化，Munk wall/Influence 分别获得 `1.608×/1.639×`
-   speedup 且产品逐字节一致；数据布局、SIMD 和并行仅在单独批准的 P3 评估。
+   speedup 且产品逐字节一致；P3-01 profile 进一步确认 compute/math/check 路径
+   主导，并接受一个 `1.096×` wall 的 finite-helper scalar 优化。当前没有
+   RayPathCache memory-bound 证据，数据布局、显式 SIMD 和并行仍需单独批准。
    详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。

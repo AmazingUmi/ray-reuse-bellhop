@@ -29,15 +29,16 @@ constexpr std::array<CervenyImageKind, 3> kImageKinds{
          std::isfinite(value.imag());
 }
 
-void requireFinite(double value, std::string_view name) {
+[[gnu::always_inline]] inline void requireFinite(
+    double value, std::string_view name) {
   if (!std::isfinite(value)) {
     throw ValidationError(
         std::string(name) + " must be finite");
   }
 }
 
-void requireFiniteComplex(std::complex<double> value,
-                          std::string_view name) {
+[[gnu::always_inline]] inline void requireFiniteComplex(
+    std::complex<double> value, std::string_view name) {
   if (!finiteComplex(value)) {
     throw ValidationError(
         std::string(name) + " must be finite");

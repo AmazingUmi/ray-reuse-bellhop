@@ -131,3 +131,72 @@ Influence（最终约 1.58 s），主要工作包含每个 receiver/image 必需
 传播、`sincos/exp` 和保留的 correctness 检查；另有每条 ray 的四个临时
 预计算向量。是否进入 P3 应先单独批准和重新取样；数据布局、SIMD、OpenMP
 及更激进的校验边界调整均不属于本阶段。
+
+## P3-01 剩余热点剖析与路线选择
+
+P3 从 P2 checkpoint `27b10d25952168a927edebb0fcbfbe93bc1806bb`
+的 clean AppleClang Release 开始，继续使用同一 Munk 输入、固定单线程、1 次
+warmup + 5 次独立子进程计量。新的 clean baseline 为 wall `1.6536 s`、
+Influence `1.5797 s`、peak RSS `65856 KiB`；SHD SHA-256 仍为 P1/P2 的
+`be3e6257bee54a021a0be5c983e2dd495fe2f1d0b5109ed32dc3e9636a8ba033`。
+原始 `f2cpp_p3_baseline.json` 位于 ignored build 目录，文件 SHA-256 为
+`868d73e7c99ea50b777a1e55f63a44d37ca4f1a4769e4079db41375360abd148`。
+
+三次 macOS `sample` 以 1 ms interval 共取得 4195 个主线程样本。以下为
+P2 HEAD 的前五个直接叶级归属；dyld stub 和未命名的 libsystem math 内部叶
+没有重复计入函数本体：
+
+| 叶级位置 | 样本 | 主线程占比 |
+|---|---:|---:|
+| `accumulateImpl` 本体（loop/branch/index/load/store/复数算术混合） | 1958 | 46.67% |
+| `__sincos_stret` | 526 | 12.54% |
+| `requireFinite(double)` | 479 | 11.42% |
+| `requireFiniteComplex` | 279 | 6.65% |
+| `exp` | 268 | 6.39% |
+
+把可明确归属的 dyld stub 合并后，sincos 至少占 `13.85%`，exp 至少占
+`8.96%`；未命名 libsystem_m 内部叶会继续提高 transcendental 实际占比。
+两个 finite helper 合计占 `18.07%`。`sqrt/hypot/norm` 没有形成稳定叶级
+热点；ray-point preparation 中的 SSP evaluate 和 allocator 叶均低于约
+`1%`，四个每-ray vector 的 4000 次 reserve/allocation 不是当前优先项。
+
+低成本硬件证据使用系统 `/usr/bin/time -lp` 三次采集：instructions 为
+`45.993～46.089 B`，cycles 为 `6.675～6.733 B`，IPC 为
+`6.831～6.901`（中位数 `6.890`）；user/real 分别约 `1.63～1.65 s` 与
+`1.65～1.67 s`。每轮只有 1 次 hard page fault，且无 swap 或文件 block I/O。
+当前机器没有 `perf`，`xctrace` 缺少完整 Xcode，`powermetrics` 的 process
+counter 需要 superuser，因此没有伪造 branch-miss/cache-miss 数值。现有证据
+支持 compute/instruction-bound，而不支持因 60 MiB cache footprint 直接判为
+memory-bound。
+
+唯一即时 accepted scalar change 是强制内联本 translation unit 的两个 finite
+helper；检查位置、条件和异常语义均未改变。独立 A/B 的 wall 为
+`1.6536→1.5093 s`（`1.096×`），Influence 为 `1.5797→1.4374 s`
+（`1.099×`），RSS `65856→65712 KiB`，SHD bitwise 一致。候选 JSON
+`f2cpp_p3_inline_finite.json` 的 SHA-256 为
+`9b8e8b9b301a050d3fd8c84e11720bc121f6a4eb82cd31e32f83b2f3b8a16604`。
+优化后两次 sample 中 finite helper 已退出叶级榜首，`cervenyHermiteTaper`
+成为稳定的 `18.51%` 叶级热点，sincos/exp 仍紧随其后。
+
+路线优先级如下：
+
+| 路线 | 预期收益 | 复杂度 / 数值风险 | 对后续 BARR/RayReuse 的影响 | 决定 |
+|---|---|---|---|---|
+| P3-A scalar/local | 下一步约 5～15% | 低～中 / 低 | 保持逐频 kernel 与冻结轨迹接口不变 | 第一优先；先做 Hermite hot-path specialization |
+| P3-E exact math/complex | 约 5～15%，需 A/B | 中 / 中 | 必须跨频保持 Origin 误差门，禁止近似 libm | 第二优先，scalar 用尽后再评估 |
+| P3-B SIMD | 总体约 1.15～1.5× 的潜力，不保证 | 高 / 中～高 | 可复用 kernel，但引入 ISA/vector-math 变体与跨频一致性负担 | 暂不实施 |
+| P3-C OpenMP | 大网格有多核潜力；当前 Munk 无直接安全上限 | 高 / 中～高 | 内层并行会与 BARR 外层频率/source 并行竞争并可能 oversubscribe | 先设计并行所有权；不直接 parallel ray reduction |
+| P3-D cache/data layout | 当前无可测收益依据 | 很高 / 中 | 会直接改变冻结轨迹/BARR 核心接口 | 不推荐 |
+
+编译器 vectorization report 明确指出 image loop 因异常早退、控制流和 coherent
+reduction recurrence 无法自动向量化。501-depth receiver 维具有稳定独立 cell，
+但只有在将 checked/diagnostic slow path 与 hot kernel 分离并解决精确 vector
+sincos/exp 后才值得显式 SIMD。OpenMP 对单 source Munk 最安全的潜在切分是
+持久的 receiver-range tile 且保持每个 cell 的 ray 顺序；直接并行 ray 会引入
+per-thread 大 workspace 和非确定 reduction，直接并行 501-depth 小循环则粒度
+过细。多 source 外层最安全但对本 workload 无收益。
+
+验收：AppleClang 与 GCC 14/Werror 的相关 Influence/solver CTest 均为 2/2，
+独立 Munk 标准案例通过且产品 bitwise 一致，`f2cpp-regression` 为 CTest
+37/37、案例 14/14，`git diff --check` 通过。P3-01 至此停止，不进入显式
+SIMD、OpenMP、fast-math 或数据布局重构。

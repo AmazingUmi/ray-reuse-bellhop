@@ -212,5 +212,13 @@ P2 已完成 Cartesian Cerveny Influence 的局部低风险优化：hoist 稳定
 pressure workspace。Munk TL 的 wall 中位数由同轮 before `2.6642 s` 降至
 `1.6565 s`（`1.608×`），Influence 由 `2.5916 s` 降至 `1.5816 s`
 （`1.639×`）；peak RSS 无实质变化，SHD 与 P1 baseline 逐字节一致。
-`f2cpp-regression` 为 CTest 37/37、案例 14/14。P2 至此暂停；只有经单独批准
-并重新取样后才进入 P3 数据布局、SIMD 或并行探索，不自动同步 RayReuse。
+`f2cpp-regression` 为 CTest 37/37、案例 14/14。
+
+P3-01 已在 P2 clean HEAD 上重新采样。三轮 1 ms sample 的 4195 个主线程样本
+表明剩余成本以 accumulateImpl 本体、sincos/exp 和 finite helper 为主；三轮
+硬件统计 IPC 中位数为 `6.890`，无 swap/block I/O，仅各 1 次 hard fault，
+当前没有 RayPathCache memory-bound 证据。唯一接受的即时 scalar 优化是内联
+finite helper，wall `1.6536→1.5093 s`（`1.096×`），Influence
+`1.5797→1.4374 s`（`1.099×`），产品继续 bitwise 一致；回归仍为 CTest
+37/37、案例 14/14。下一优先级是独立的 P3-A Hermite hot-path specialization；
+不直接进入数据布局、显式 SIMD 或 OpenMP，也不自动同步 RayReuse。
