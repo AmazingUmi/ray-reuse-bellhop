@@ -240,3 +240,14 @@ hoist/递推会改变浮点运算顺序且不能减少唯一相位的 transcende
 同一 Release 二进制，speedup `1.000×`，RSS 与 SHD hash 不变；focused、Munk
 和 regression 均通过。单线程低风险 scalar 阶段至此停止，不自动进入
 SIMD/OpenMP。
+
+P4-01 已完成并行/vectorization 决策。AppleClang/GCC 均无法自动向量化
+receiver/image 热循环；真实 Munk 相位上的 Accelerate vForce math-only 原型
+虽为 `3.705×`，但 84.84% 的合成复指数不再 bitwise（最大相对差
+`6.50e-16`），且总体理想 wall 上限约 `1.18×`，不接受为正式路线。保持每个
+cell 内 ray 顺序的 receiver-depth stripe OpenMP 原型在 50 Hz/1000-ray 与
+250 Hz/5000-ray Munk 上，8-thread 相对正式串行分别达到 `2.48×/2.01×`，
+所有线程数 SHD 均逐字节一致，额外 RSS 小于 0.3 MiB；4 threads 后已明显
+饱和。原型源码已移除，focused 2/2、Munk 与 regression 37/37+14/14 通过。
+推荐下一阶段只正式化持久 team、静态 depth tiles 和异常汇合，不实施 SIMD，
+也不允许与 BARR/RayReuse 外层 frequency/source 并行嵌套。

@@ -75,6 +75,9 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
    bitwise 一致的 Hermite hot helper 获得 `1.066×` wall speedup。当前没有
    RayPathCache memory-bound 证据；P3-03 又确认每个唯一复相位已只执行一次
    fused sincos 和一次 exp，重复参数仅 `0.484%` 上界，因而没有接受新的
-   scalar 改动。数据布局、显式 SIMD 和并行均仍需单独批准。
+   scalar 改动。P4-01 的真实输入原型进一步排除 SIMD 首选路线：精确 vForce
+   不能保持 bitwise，而确定性 receiver-depth 线程分区已有 `2.0～2.5×` 绝对
+   wall 潜力且 RSS 近似不变。正式持久线程 team 仍需单独批准；数据布局没有
+   重构依据。
    详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。

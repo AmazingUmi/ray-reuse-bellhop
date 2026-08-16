@@ -1,7 +1,7 @@
 # Bellhop F2CPP 性能阶段
 
-> 当前状态：P1 baseline/profile 与 P2 Cartesian Cerveny 局部热循环优化已完成；
-> 尚未进入数据布局、SIMD 或并行阶段。
+> 当前状态：P1～P3 scalar 优化与 P4-01 SIMD/线程并行可行性评估已完成；
+> 尚未进入正式 SIMD、OpenMP 或数据布局实现。
 > 基线日期：2026-08-16。
 
 ## P1 目标与边界
@@ -294,3 +294,119 @@ speedup 记为 `1.000×`，RSS 和产品哈希均不变。
 案例与 `f2cpp-regression` 均通过，SHD 与 replication baseline 逐字节一致。
 P3-03 按停止条件关闭单线程低风险 scalar 优化；后续若继续，应单独评估精确
 vector-math/SIMD 或保持 cell 内 ray 顺序的线程级切分，不在本阶段自动实施。
+
+## P4-01 Parallel/vectorization decision
+
+P4-01 从 `e7e09cdd3f472877e4759fb8d4882cebe976969b` 的 clean Release
+开始，只保留一次性编译诊断和两个 `/tmp` 原型，未修改正式数据布局或提交
+生产代码。正式 AppleClang Release 可执行文件 SHA-256 为
+`44c4cb2f43eb563e5266c7809d221d04eb3b8ccdfb6957b42aeca62bf91c3e7b`。
+工作负载为既有 50 Hz Munk（1000 rays、337079 points、201×501 receivers）
+及同一标准案例已有 `broadband_smoke` 250 Hz 输入（5000 rays、1683973
+points、201×501 receivers）；后者足以放大 ray 维度，因此没有新增 case。
+
+### SIMD / vector math
+
+AppleClang 的 `-Rpass{,-missed,-analysis}=loop-vectorize` 与 GCC 14 的
+`-fopt-info-vec-all` 均未向量化 receiver/image 热循环。AppleClang 报告 image
+loop 的 reduction/recurrence、可能抛出异常的 early exit 和不可 select 化的
+控制流；GCC 对 `accumulateImpl` 报告 `0 loops`，depth loop 因包含连续内层
+image loops 无法向量化。GCC 只对少量复数/Vec2 scalar 表达式做了 128-bit
+SLP，不是跨 receiver 的 vector kernel。
+
+receiver depth 对一个 ray 本可形成 201-lane 独立集合，但每个 cell 有
+window/taper 分支、1～3 image 的 coherent reduction、finite/异常保护，以及
+最终 workspace load/add/store。标准 C++20 和当前 GCC 工具链没有保持 scalar
+libm 结果的 portable double-vector sincos/exp；本机可用的 Apple Accelerate
+`vvsincos/vvexp` 又是平台专用接口。
+
+一次性原型从真实 Munk 调用流每 64 次抽取一个复相位，共 `1,048,576` 个输入，
+固定 `VECLIB_MAXIMUM_THREADS=1` 比较 scalar libm 与 Accelerate batch。9 次中位数
+为 `0.0092643→0.0025008 s`（math-only `3.705×`），但结果并不 bitwise：
+
+| 结果 | 与 scalar 不同的输入 | 最大 ULP |
+|---|---:|---:|
+| exp | 278726（26.58%） | 1 |
+| sin | 664808（63.40%） | 3 |
+| cos | 665249（63.44%） | 3 |
+| 合成复指数 | 889657（84.84%） | — |
+
+合成复指数最大绝对/相对差分别为 `4.5183e-16` / `6.4981e-16`。差异来自
+vForce 与 scalar libm 不同的 range reduction/舍入，而非降精度；它已经足以
+否定现有 bitwise 契约。即使忽略 phase gather、branch compaction、scatter、
+临时数组和小 batch 调用开销，并把 P3-02 的 sincos+exp `21.2%` 全部按
+`3.705×` 加速，Amdahl wall 上限也只有约 `1.18×`。因此不接受 SIMD 原型；
+若未来单独批准非 bitwise 数值门，还必须端到端量化 SHD 累加误差和跨平台
+实现，不应作为当前首选。
+
+抽样 phase binary 与 vector probe 输出 SHA-256 分别为
+`bfd34622c11461e96a289291f02fa9dd7e125e862532053b1ee995b966aac28d`、
+`f96bafccaf8f87602947be849c63e661a30eab4b932368cf6cbf7b47fa21f3a5`；
+AppleClang/GCC vectorization report SHA-256 分别为
+`5eb09b0a8cf85f3005b1e9ec194fd31f99237f7d1b3948200047fe9192176edb`、
+`f1d832c0f0f48598ace02515d084a9be3ddc32b556fa8572151b68a8cd53957d`。
+
+### Thread-level parallelism
+
+一次性 AppleClang+libomp 原型在每条 ray 的 `accumulateImpl` 内建立一个线程
+team，按连续 receiver-depth stripe 静态分工；所有线程共享只读 ray/frequency
+状态并写入互不重叠的 workspace rows，ray 返回前 join。每个 cell 仍严格按
+原 ray 顺序累加，未采用 ray reduction。depth-major workspace 下每个线程拥有
+完整 rows，false sharing 只可能出现在少量 stripe 边界；原型没有 per-thread
+pressure workspace，仅有线程栈和运行库开销。
+
+以下为 `OMP_DYNAMIC=FALSE`、`OMP_PROC_BIND=SPREAD`、`OMP_PLACES=CORES` 的
+1 warmup + 5 repeats（50 Hz）或 1 warmup + 3 repeats（250 Hz）中位数。
+Speedup/efficiency 均相对同一个 OpenMP 原型的 1-thread；RSS 单位 KiB。
+
+| Workload | Threads | Wall (s) | Influence (s) | Peak RSS | Speedup | Efficiency |
+|---|---:|---:|---:|---:|---:|---:|
+| 50 Hz / 1000 rays | 1 | 1.4949 | 1.4230 | 66224 | 1.000× | 100.0% |
+| | 2 | 0.9370 | 0.8632 | 66144 | 1.595× | 79.8% |
+| | 4 | 0.6394 | 0.5625 | 66240 | 2.338× | 58.4% |
+| | 8 | 0.5705 | 0.4898 | 66496 | 2.620× | 32.8% |
+| 250 Hz / 5000 rays | 1 | 5.0670 | 4.7418 | 312336 | 1.000× | 100.0% |
+| | 2 | 3.1974 | 2.8719 | 312320 | 1.585× | 79.2% |
+| | 4 | 2.3624 | 2.0114 | 312416 | 2.145× | 53.6% |
+| | 8 | 2.3103 | 1.9744 | 312544 | 2.193× | 27.4% |
+
+所有线程数的 SHD 分别保持冻结 SHA-256
+`be3e6257bee54a021a0be5c983e2dd495fe2f1d0b5109ed32dc3e9636a8ba033`
+和 `a7fb6b38edd6f55f66cd41b117e97b14d496a17da2789fd57a4210ab4593e825`；
+线程数之间及相对正式串行输出均逐字节一致。最大线程增量 RSS 只有 272 KiB
+和 208 KiB，没有 per-thread field 或 RayPathCache 复制。
+
+OpenMP 原型可执行文件 SHA-256 为
+`9be86839ff1d04d2c2072deb6c5e9135d7005e5d9893ab6390083d871d5416f1`；
+50/250 Hz 原型 JSON SHA-256 为
+`cf1084c5b7b4b954bb1658fe75fb5bfd83e36f04b43b96edf3efe1b08f76303e`、
+`d1024955220b3547898a48a7d26ac652f39d1575895f4280f4ab2843acfc7726`。
+正式串行 JSON SHA-256 为
+`00e40ad0dc7c098d3cb0495a078e5fbac9648a4d65065a0fd25fbec5330259ba`、
+`f6a5b013d9ce85c29e6edef879805d529522499ed9ac2b772b69fa99f75e57f3`；
+原始记录保存在 ignored `build/benchmarks`，不进入 Git。
+
+同轮正式串行 wall/Influence 为 50 Hz `1.4156/1.3453 s`、250 Hz
+`4.6380/4.3148 s`。原型 1-thread 因每 ray 建立 parallel region，分别慢
+`5.6%/9.2%`；即便包含该开销，8-thread 相对正式串行 wall 仍为 `2.48×/2.01×`。
+本机只有 4 个 performance cores，两个 workload 都在 4 threads 后明显饱和，
+8 threads 的 efficiency 不足以支持默认使用全部 logical cores。
+
+原型未保留为生产修改，因为 OpenMP region 内直接抛出异常不能满足当前错误
+传播契约，且每 ray fork/join 不是正式设计。若进入 P4-02，建议拆分
+prepare 与 cell accumulation，在 solver/source 生命周期建立持久 team，以
+静态 depth tiles 消费共享的逐-ray prepared state；每 ray barrier 后再前进，
+从而保持 cell 内累加顺序。异常应由线程局部捕获、join 后在调用线程重抛。
+
+source-level 并行在现有架构中数值风险最低，因为各 source 已拥有独立 cache
+和 workspace；但单-source Munk 无收益，且它与未来 BARR/RayReuse 的
+frequency/source 外层并行占用同一核心预算。正式接口应只有一个 parallel
+owner：F2CPP 单 source 可选择 receiver-depth tiles，多 source 或 BARR 可选择
+更外层 task，禁止隐藏的 nested OpenMP/oversubscription。
+
+P4-01 的结论是优先线程并行而非 SIMD：它在两个真实 workload 上已有
+`2.0～2.5×` 绝对收益、保持 bitwise 且 RSS 近似不变；SIMD 的理想 wall 上限
+较小并立即破坏 bitwise。正式实现以 4 threads 为首个目标并保留 1-thread
+默认/回退，但需新的明确批准。本阶段恢复原始源码后，focused CTest 2/2、
+Munk 标准案例、`f2cpp-regression`（CTest 37/37、案例 14/14）及
+`git diff --check` 均通过。
