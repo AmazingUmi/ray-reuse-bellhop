@@ -62,6 +62,39 @@ void printVersion(std::ostream& stream) {
   stream << "Bellhop RayReuse " << RAYREUSE_VERSION << '\n';
 }
 
+void writeBoundarySummary(std::ostream& stream,
+                          const rayreuse::BoundaryModel& boundary,
+                          std::string_view name) {
+  switch (boundary.kind()) {
+    case rayreuse::BoundaryKind::Vacuum:
+      stream << "VACUUM " << name << '\n';
+      break;
+    case rayreuse::BoundaryKind::Rigid:
+      stream << "Perfectly RIGID " << name << '\n';
+      break;
+    case rayreuse::BoundaryKind::AcousticHalfSpace:
+      stream << "ACOUSTO-ELASTIC half-space " << name << '\n';
+      break;
+    case rayreuse::BoundaryKind::GrainSizeHalfSpace:
+      stream << "Grain size to define half-space " << name << '\n'
+             << "Grain size = " << boundary.grainSizeMaterial()->meanGrainSize
+             << '\n';
+      break;
+    case rayreuse::BoundaryKind::TabulatedReflection:
+      stream << "FILE used for reflection loss\n"
+             << "Using tabulated " << name << " reflection coef.\n"
+             << "Number of points in " << name << " reflection coefficient = "
+             << boundary.reflectionTable()->size() << '\n';
+      break;
+  }
+  if (!boundary.geometry().isFlat()) {
+    stream << "Piecewise linear interpolation\n";
+    if (boundary.hasRangeDependentMaterials()) {
+      stream << "Long format (bathymetry and geoacoustics)\n";
+    }
+  }
+}
+
 void writeConfigurationSummary(std::ostream& stream,
                                const rayreuse::ParsedEnvironment& parsed) {
   const rayreuse::SimulationCase& simulation = parsed.simulationCase;
@@ -85,13 +118,9 @@ void writeConfigurationSummary(std::ostream& stream,
          << "Coherent TL calculation\n"
          << "Cartesian beams\n"
          << "Point source (cylindrical coordinates)\n"
-         << "Rectilinear receiver grid\n"
-         << "VACUUM sea surface\n";
-  if (environment.seabed().kind() == rayreuse::BoundaryKind::Rigid) {
-    stream << "Perfectly RIGID seabed\n";
-  } else {
-    stream << "ACOUSTO-ELASTIC half-space seabed\n";
-  }
+         << "Rectilinear receiver grid\n";
+  writeBoundarySummary(stream, environment.seaSurface(), "top");
+  writeBoundarySummary(stream, environment.seabed(), "bottom");
   if (environment.soundSpeedProfile()
           .points()
           .front()

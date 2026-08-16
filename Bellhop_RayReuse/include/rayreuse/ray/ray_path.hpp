@@ -2,8 +2,10 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <vector>
 
+#include "rayreuse/model/environment.hpp"
 #include "rayreuse/numerics/vec2.hpp"
 
 namespace rayreuse {
@@ -29,10 +31,17 @@ enum class ReflectionBoundary {
   Seabed,
 };
 
+struct FrozenBoundaryMaterial {
+  AcousticMaterial material;
+  double attenuationEvaluationDepth{};
+};
+
 struct ReflectionEvent {
   std::size_t rayPointIndex{};
+  std::size_t reflectedRayPointIndex{};
   ReflectionBoundary boundary{ReflectionBoundary::SeaSurface};
   std::size_t boundarySegmentIndex{};
+  double boundaryCurvature{};
   Vec2 position;
   Vec2 boundaryTangent;
   Vec2 outwardNormal;
@@ -40,6 +49,7 @@ struct ReflectionEvent {
   Vec2 reflectedSlowness;
   double tangentSlowness{};
   double normalSlowness{};
+  std::optional<FrozenBoundaryMaterial> longMaterialOverride;
 };
 
 enum class RayTerminationReason {

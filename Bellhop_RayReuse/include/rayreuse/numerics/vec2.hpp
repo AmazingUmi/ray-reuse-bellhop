@@ -35,6 +35,13 @@ struct Vec2 {
   return lhs.range * rhs.range + lhs.depth * rhs.depth;
 }
 
+// Match the locked gfortran two-element DOT_PRODUCT rounding used by strict
+// boundary sign tests.
+[[nodiscard]] inline double fortranDotProduct2D(Vec2 lhs, Vec2 rhs) noexcept {
+  const double rangeProduct = lhs.range * rhs.range;
+  return std::fma(lhs.depth, rhs.depth, rangeProduct);
+}
+
 [[nodiscard]] constexpr double squaredNorm(Vec2 value) noexcept {
   return dot(value, value);
 }

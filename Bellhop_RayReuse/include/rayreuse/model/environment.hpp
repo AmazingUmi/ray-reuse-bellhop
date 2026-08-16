@@ -1,7 +1,11 @@
 #pragma once
 
+#include <cstddef>
+#include <memory>
 #include <optional>
 #include <vector>
+
+#include "rayreuse/model/boundary_geometry.hpp"
 
 namespace rayreuse {
 
@@ -54,6 +58,8 @@ enum class BoundaryKind {
   Vacuum,
   Rigid,
   AcousticHalfSpace,
+  GrainSizeHalfSpace,
+  TabulatedReflection,
 };
 
 struct AcousticMaterial {
@@ -64,25 +70,74 @@ struct AcousticMaterial {
   RawAttenuation shearAttenuation{};
 };
 
+struct GrainSizeMaterial {
+  double meanGrainSize{};
+  double soundSpeedRatio{};
+  double densityRatio{};
+  double attenuationCoefficient{};
+};
+
+struct TabulatedReflectionPoint {
+  double angleDegrees{};
+  double magnitude{};
+  double phaseRadians{};
+};
+
+using TabulatedReflectionTable = std::vector<TabulatedReflectionPoint>;
+using SharedTabulatedReflectionTable =
+    std::shared_ptr<const TabulatedReflectionTable>;
+using SharedLongBoundaryMaterials =
+    std::shared_ptr<const std::vector<AcousticMaterial>>;
+inline constexpr double kLegacyLongBoundaryAttenuationDepth = 1.0e20;
+
 class BoundaryModel {
  public:
   [[nodiscard]] static BoundaryModel vacuum(double depth);
+  [[nodiscard]] static BoundaryModel vacuum(BoundaryGeometry geometry);
   [[nodiscard]] static BoundaryModel rigid(double depth);
+  [[nodiscard]] static BoundaryModel rigid(BoundaryGeometry geometry);
   [[nodiscard]] static BoundaryModel acousticHalfSpace(
       double depth, AcousticMaterial material);
+  [[nodiscard]] static BoundaryModel acousticHalfSpace(
+      BoundaryGeometry geometry, AcousticMaterial material);
+  [[nodiscard]] static BoundaryModel acousticHalfSpace(
+      BoundaryGeometry geometry, AcousticMaterial material,
+      SharedLongBoundaryMaterials longMaterials);
+  [[nodiscard]] static BoundaryModel grainSizeHalfSpace(double depth,
+                                                        double meanGrainSize);
+  [[nodiscard]] static BoundaryModel grainSizeHalfSpace(
+      BoundaryGeometry geometry, double meanGrainSize);
+  [[nodiscard]] static BoundaryModel tabulatedReflection(
+      BoundaryGeometry geometry, SharedTabulatedReflectionTable table);
 
   [[nodiscard]] BoundaryKind kind() const noexcept;
   [[nodiscard]] double depth() const noexcept;
+  [[nodiscard]] const BoundaryGeometry& geometry() const noexcept;
   [[nodiscard]] const std::optional<AcousticMaterial>& material()
       const noexcept;
+  [[nodiscard]] const std::optional<GrainSizeMaterial>& grainSizeMaterial()
+      const noexcept;
+  [[nodiscard]] const SharedTabulatedReflectionTable& reflectionTable()
+      const noexcept;
+  [[nodiscard]] bool hasRangeDependentMaterials() const noexcept;
+  [[nodiscard]] const AcousticMaterial& materialAtSegment(
+      std::size_t segmentIndex) const;
+  [[nodiscard]] double materialAttenuationDepthAtSegment(
+      std::size_t segmentIndex) const;
 
  private:
-  BoundaryModel(BoundaryKind kind, double depth,
-                std::optional<AcousticMaterial> material);
+  BoundaryModel(BoundaryKind kind, BoundaryGeometry geometry,
+                std::optional<AcousticMaterial> material,
+                SharedLongBoundaryMaterials longMaterials = {},
+                std::optional<GrainSizeMaterial> grainSizeMaterial = {},
+                SharedTabulatedReflectionTable reflectionTable = {});
 
   BoundaryKind kind_;
-  double depth_;
+  BoundaryGeometry geometry_;
   std::optional<AcousticMaterial> material_;
+  SharedLongBoundaryMaterials longMaterials_;
+  std::optional<GrainSizeMaterial> grainSizeMaterial_;
+  SharedTabulatedReflectionTable reflectionTable_;
 };
 
 class Environment {

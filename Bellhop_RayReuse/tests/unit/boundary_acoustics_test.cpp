@@ -1,5 +1,6 @@
 #include "rayreuse/acoustics/boundary_acoustics.hpp"
 
+#include <array>
 #include <cmath>
 #include <complex>
 #include <iostream>
@@ -20,7 +21,13 @@ using rayreuse::BoundaryAcousticsResult;
 using rayreuse::BoundaryModel;
 using rayreuse::classifyBoundaryCoefficient;
 using rayreuse::convertAttenuation;
+using rayreuse::evaluateAcousticHalfSpaceAcoustics;
 using rayreuse::evaluateBoundaryAcoustics;
+using rayreuse::evaluateGrainSizeHalfSpaceAcoustics;
+using rayreuse::evaluateTabulatedReflectionAcoustics;
+using rayreuse::GrainSizeMaterial;
+using rayreuse::TabulatedReflectionPoint;
+using rayreuse::TabulatedReflectionTable;
 using rayreuse::ValidationError;
 using rayreuse::test::Context;
 
@@ -86,6 +93,75 @@ void testFluidHalfSpaceOracles(Context& context) {
   }
 }
 
+void testElasticHalfSpaceOracles(Context& context) {
+  struct Fixture {
+    double incidenceAngleDegrees;
+    double compressionalAttenuation;
+    double shearAttenuation;
+    std::complex<double> expected;
+  };
+  const std::array fixtures{
+      Fixture{0.0, 0.0, 0.0, {4.54545454545454530e-1, 0.0}},
+      Fixture{30.0, 0.0, 0.0, {4.04439753970198490e-1, 0.0}},
+      Fixture{
+          60.0, 0.0, 0.0, {-1.33833243674634672e-1, 1.68586165662701098e-1}},
+      Fixture{30.0, 0.5, 1.0, {4.04463539890146495e-1, 3.04094195441093063e-3}},
+  };
+  for (const Fixture& fixture : fixtures) {
+    const double angle =
+        fixture.incidenceAngleDegrees * std::numbers::pi / 180.0;
+    const AcousticMaterial material{
+        .compressionalSoundSpeed = 2000.0,
+        .shearSoundSpeed = 1000.0,
+        .density = 2000.0,
+        .compressionalAttenuation =
+            {.value = fixture.compressionalAttenuation,
+             .unit = AttenuationUnit::DecibelsPerWavelength},
+        .shearAttenuation = {.value = fixture.shearAttenuation,
+                             .unit = AttenuationUnit::DecibelsPerWavelength}};
+    const BoundaryAcousticsResult result = evaluateAcousticHalfSpaceAcoustics(
+        material, 1000.0, 1000.0, std::sin(angle) / 1500.0,
+        std::cos(angle) / 1500.0);
+    checkComplexNear(context, result.rawCoefficient, fixture.expected, 3.0e-15,
+                     "elastic Origin coefficient");
+  }
+}
+
+void testGrainAndTabulatedOracles(Context& context) {
+  const GrainSizeMaterial grain =
+      *BoundaryModel::grainSizeHalfSpace(100.0, 3.0).grainSizeMaterial();
+  const double angle = 30.0 * std::numbers::pi / 180.0;
+  const BoundaryAcousticsResult grainResult =
+      evaluateGrainSizeHalfSpaceAcoustics(grain, 1000.0, 1500.0, 1000.0,
+                                          std::sin(angle) / 1500.0,
+                                          std::cos(angle) / 1500.0);
+  checkComplexNear(context, grainResult.rawCoefficient,
+                   {1.96328379103933526e-1, 1.15078565713302005e-2}, 3.0e-15,
+                   "grain-size Origin coefficient");
+
+  const TabulatedReflectionTable table{
+      TabulatedReflectionPoint{
+          .angleDegrees = 10.0,
+          .magnitude = 0.2,
+          .phaseRadians = 170.0 * std::numbers::pi / 180.0},
+      TabulatedReflectionPoint{
+          .angleDegrees = 30.0,
+          .magnitude = 0.6,
+          .phaseRadians = 190.0 * std::numbers::pi / 180.0},
+      TabulatedReflectionPoint{
+          .angleDegrees = 60.0,
+          .magnitude = 0.9,
+          .phaseRadians = 250.0 * std::numbers::pi / 180.0}};
+  const double tableAngle = 20.0 * std::numbers::pi / 180.0;
+  const BoundaryAcousticsResult tableResult =
+      evaluateTabulatedReflectionAcoustics(table, std::cos(tableAngle) / 1500.0,
+                                           std::sin(tableAngle) / 1500.0);
+  context.checkNear(tableResult.amplitudeMultiplier, 0.4, 2.0e-15,
+                    "tabulated magnitude interpolation");
+  context.checkNear(tableResult.phaseIncrement, std::numbers::pi, 3.0e-15,
+                    "tabulated unwrapped phase interpolation");
+}
+
 void testCoefficientApplicationSemantics(Context& context) {
   for (const auto& fixture :
        rayreuse::test::kRawCoefficientApplicationFixtures) {
@@ -130,17 +206,6 @@ void testInvalidAndUnsupportedInputs(Context& context) {
             {std::numeric_limits<double>::quiet_NaN(), 0.0}, true));
       },
       "non-finite raw coefficient is rejected");
-
-  const BoundaryModel elastic = BoundaryModel::acousticHalfSpace(
-      100.0, AcousticMaterial{.compressionalSoundSpeed = 1600.0,
-                              .shearSoundSpeed = 500.0,
-                              .density = 1800.0});
-  context.expectThrows<ValidationError>(
-      [&elastic] {
-        static_cast<void>(evaluateBoundaryAcoustics(elastic, 50.0, 1000.0, 0.0,
-                                                    1.0 / 1500.0));
-      },
-      "elastic half-space is rejected rather than approximated as fluid");
 }
 
 }  // namespace
@@ -149,6 +214,8 @@ int main() {
   Context context;
   testVacuumAndRigid(context);
   testFluidHalfSpaceOracles(context);
+  testElasticHalfSpaceOracles(context);
+  testGrainAndTabulatedOracles(context);
   testCoefficientApplicationSemantics(context);
   testInvalidAndUnsupportedInputs(context);
 

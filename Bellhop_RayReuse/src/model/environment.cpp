@@ -1,5 +1,6 @@
 #include "rayreuse/model/environment.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <utility>
@@ -50,6 +51,93 @@ void validateMaterial(const AcousticMaterial& material) {
                          "material.compressionalAttenuation");
   validateRawAttenuation(material.shearAttenuation,
                          "material.shearAttenuation");
+  if (material.shearSoundSpeed == 0.0 &&
+      material.shearAttenuation.value != 0.0) {
+    throw ValidationError(
+        "zero material shear speed requires zero shear attenuation");
+  }
+}
+
+[[nodiscard]] GrainSizeMaterial grainSizeToGeoacoustic(double meanGrainSize) {
+  requireFinite(meanGrainSize, "grainSize.meanGrainSize");
+  const auto legacy = [](float value) { return static_cast<double>(value); };
+  const double squared = meanGrainSize * meanGrainSize;
+  double soundSpeedRatio{};
+  double densityRatio{};
+  if (meanGrainSize >= -1.0 && meanGrainSize < 1.0) {
+    soundSpeedRatio = std::fma(-legacy(0.056452F), meanGrainSize,
+                               legacy(0.002709F) * squared) +
+                      legacy(1.2778F);
+    densityRatio = std::fma(-legacy(0.17057F), meanGrainSize,
+                            legacy(0.007797F) * squared) +
+                   legacy(2.3139F);
+  } else if (meanGrainSize >= 1.0 && meanGrainSize < legacy(5.3F)) {
+    const double cubed = squared * meanGrainSize;
+    soundSpeedRatio = std::fma(-legacy(0.1382798F), meanGrainSize,
+                               std::fma(legacy(0.0213937F), squared,
+                                        -legacy(0.0014881F) * cubed)) +
+                      legacy(1.3425F);
+    densityRatio = std::fma(-legacy(1.1069031F), meanGrainSize,
+                            std::fma(legacy(0.2290201F), squared,
+                                     -legacy(0.0165406F) * cubed)) +
+                   legacy(3.0455F);
+  } else {
+    soundSpeedRatio =
+        std::fma(-legacy(0.0024324F), meanGrainSize, legacy(1.0019F));
+    densityRatio =
+        std::fma(-legacy(0.0012973F), meanGrainSize, legacy(1.1565F));
+  }
+
+  double attenuationCoefficient{};
+  if (meanGrainSize >= -1.0 && meanGrainSize < 0.0) {
+    attenuationCoefficient = legacy(0.4556F);
+  } else if (meanGrainSize >= 0.0 && meanGrainSize < legacy(2.6F)) {
+    attenuationCoefficient =
+        std::fma(legacy(0.0245F), meanGrainSize, legacy(0.4556F));
+  } else if (meanGrainSize >= legacy(2.6F) && meanGrainSize < legacy(4.5F)) {
+    attenuationCoefficient =
+        std::fma(legacy(0.1245F), meanGrainSize, legacy(0.1978F));
+  } else if (meanGrainSize >= legacy(4.5F) && meanGrainSize < legacy(6.0F)) {
+    attenuationCoefficient =
+        std::fma(legacy(0.20098F), squared,
+                 std::fma(-legacy(2.5228F), meanGrainSize, legacy(8.0399F)));
+  } else if (meanGrainSize >= legacy(6.0F) && meanGrainSize < legacy(9.5F)) {
+    attenuationCoefficient =
+        std::fma(legacy(0.0117F), squared,
+                 std::fma(-legacy(0.2041F), meanGrainSize, legacy(0.9431F)));
+  } else {
+    attenuationCoefficient = legacy(0.0601F);
+  }
+  if (!std::isfinite(soundSpeedRatio) || soundSpeedRatio <= 0.0 ||
+      !std::isfinite(densityRatio) || densityRatio <= 0.0 ||
+      !std::isfinite(attenuationCoefficient) || attenuationCoefficient < 0.0) {
+    throw ValidationError(
+        "grain size derives non-physical geoacoustic properties");
+  }
+  return GrainSizeMaterial{.meanGrainSize = meanGrainSize,
+                           .soundSpeedRatio = soundSpeedRatio,
+                           .densityRatio = densityRatio,
+                           .attenuationCoefficient = attenuationCoefficient};
+}
+
+void validateReflectionTable(const SharedTabulatedReflectionTable& table) {
+  if (!table || table->size() < 2U) {
+    throw ValidationError(
+        "tabulated reflection requires at least two table points");
+  }
+  for (std::size_t index = 0U; index < table->size(); ++index) {
+    const TabulatedReflectionPoint& point = (*table)[index];
+    requireFinite(point.angleDegrees, "reflectionTable.angleDegrees");
+    requireFinite(point.magnitude, "reflectionTable.magnitude");
+    requireFinite(point.phaseRadians, "reflectionTable.phaseRadians");
+    if (point.magnitude < 0.0) {
+      throw ValidationError("reflectionTable.magnitude must be non-negative");
+    }
+    if (index > 0U && (*table)[index - 1U].angleDegrees >= point.angleDegrees) {
+      throw ValidationError(
+          "reflectionTable angles must be strictly increasing");
+    }
+  }
 }
 
 }  // namespace
@@ -92,40 +180,168 @@ double SoundSpeedProfile::maximumDepth() const noexcept {
 }
 
 BoundaryModel BoundaryModel::vacuum(double depth) {
-  return BoundaryModel(BoundaryKind::Vacuum, depth, std::nullopt);
+  return vacuum(BoundaryGeometry::flat(depth, BoundaryOrientation::Upper));
+}
+
+BoundaryModel BoundaryModel::vacuum(BoundaryGeometry geometry) {
+  return BoundaryModel(BoundaryKind::Vacuum, std::move(geometry), std::nullopt);
 }
 
 BoundaryModel BoundaryModel::rigid(double depth) {
-  return BoundaryModel(BoundaryKind::Rigid, depth, std::nullopt);
+  return rigid(BoundaryGeometry::flat(depth, BoundaryOrientation::Lower));
+}
+
+BoundaryModel BoundaryModel::rigid(BoundaryGeometry geometry) {
+  return BoundaryModel(BoundaryKind::Rigid, std::move(geometry), std::nullopt);
 }
 
 BoundaryModel BoundaryModel::acousticHalfSpace(double depth,
                                                AcousticMaterial material) {
-  validateMaterial(material);
-  return BoundaryModel(BoundaryKind::AcousticHalfSpace, depth,
-                       std::move(material));
+  return acousticHalfSpace(
+      BoundaryGeometry::flat(depth, BoundaryOrientation::Lower),
+      std::move(material));
 }
 
-BoundaryModel::BoundaryModel(BoundaryKind kind, double depth,
-                             std::optional<AcousticMaterial> material)
-    : kind_(kind), depth_(depth), material_(std::move(material)) {
-  requireFinite(depth_, "boundary.depth");
+BoundaryModel BoundaryModel::acousticHalfSpace(BoundaryGeometry geometry,
+                                               AcousticMaterial material) {
+  return acousticHalfSpace(std::move(geometry), std::move(material), {});
+}
+
+BoundaryModel BoundaryModel::acousticHalfSpace(
+    BoundaryGeometry geometry, AcousticMaterial material,
+    SharedLongBoundaryMaterials longMaterials) {
+  validateMaterial(material);
+  if (longMaterials && longMaterials->size() != geometry.nodes().size()) {
+    throw ValidationError(
+        "long-format material count must match boundary nodes");
+  }
+  if (longMaterials && longMaterials->empty()) {
+    throw ValidationError("long-format material profile must not be empty");
+  }
+  if (longMaterials && geometry.isFlat()) {
+    throw ValidationError(
+        "long-format materials require range-dependent piecewise-linear "
+        "boundary geometry");
+  }
+  if (longMaterials) {
+    for (const AcousticMaterial& nodeMaterial : *longMaterials) {
+      validateMaterial(nodeMaterial);
+    }
+  }
+  return BoundaryModel(BoundaryKind::AcousticHalfSpace, std::move(geometry),
+                       std::move(material), std::move(longMaterials));
+}
+
+BoundaryModel BoundaryModel::grainSizeHalfSpace(double depth,
+                                                double meanGrainSize) {
+  return grainSizeHalfSpace(
+      BoundaryGeometry::flat(depth, BoundaryOrientation::Lower), meanGrainSize);
+}
+
+BoundaryModel BoundaryModel::grainSizeHalfSpace(BoundaryGeometry geometry,
+                                                double meanGrainSize) {
+  return BoundaryModel(BoundaryKind::GrainSizeHalfSpace, std::move(geometry),
+                       std::nullopt, {}, grainSizeToGeoacoustic(meanGrainSize));
+}
+
+BoundaryModel BoundaryModel::tabulatedReflection(
+    BoundaryGeometry geometry, SharedTabulatedReflectionTable table) {
+  validateReflectionTable(table);
+  return BoundaryModel(BoundaryKind::TabulatedReflection, std::move(geometry),
+                       std::nullopt, {}, {}, std::move(table));
+}
+
+BoundaryModel::BoundaryModel(BoundaryKind kind, BoundaryGeometry geometry,
+                             std::optional<AcousticMaterial> material,
+                             SharedLongBoundaryMaterials longMaterials,
+                             std::optional<GrainSizeMaterial> grainSizeMaterial,
+                             SharedTabulatedReflectionTable reflectionTable)
+    : kind_(kind),
+      geometry_(std::move(geometry)),
+      material_(std::move(material)),
+      longMaterials_(std::move(longMaterials)),
+      grainSizeMaterial_(std::move(grainSizeMaterial)),
+      reflectionTable_(std::move(reflectionTable)) {
   if (kind_ == BoundaryKind::AcousticHalfSpace && !material_.has_value()) {
     throw ValidationError("acoustic half-space requires material properties");
   }
   if (kind_ != BoundaryKind::AcousticHalfSpace && material_.has_value()) {
     throw ValidationError(
-        "vacuum and rigid boundaries cannot carry acoustic material");
+        "only ordinary acoustic half-spaces can carry acoustic material");
+  }
+  if (kind_ != BoundaryKind::AcousticHalfSpace && longMaterials_) {
+    throw ValidationError(
+        "only ordinary acoustic half-spaces can carry segment materials");
+  }
+  if (kind_ == BoundaryKind::GrainSizeHalfSpace &&
+      !grainSizeMaterial_.has_value()) {
+    throw ValidationError("grain-size half-space requires grain properties");
+  }
+  if (kind_ != BoundaryKind::GrainSizeHalfSpace &&
+      grainSizeMaterial_.has_value()) {
+    throw ValidationError(
+        "only grain-size half-spaces can carry grain properties");
+  }
+  if (kind_ == BoundaryKind::TabulatedReflection) {
+    validateReflectionTable(reflectionTable_);
+  } else if (reflectionTable_) {
+    throw ValidationError(
+        "only tabulated-reflection boundaries can carry a reflection table");
   }
 }
 
 BoundaryKind BoundaryModel::kind() const noexcept { return kind_; }
 
-double BoundaryModel::depth() const noexcept { return depth_; }
+double BoundaryModel::depth() const noexcept {
+  return geometry_.referenceDepth();
+}
+
+const BoundaryGeometry& BoundaryModel::geometry() const noexcept {
+  return geometry_;
+}
 
 const std::optional<AcousticMaterial>& BoundaryModel::material()
     const noexcept {
   return material_;
+}
+
+const std::optional<GrainSizeMaterial>& BoundaryModel::grainSizeMaterial()
+    const noexcept {
+  return grainSizeMaterial_;
+}
+
+const SharedTabulatedReflectionTable& BoundaryModel::reflectionTable()
+    const noexcept {
+  return reflectionTable_;
+}
+
+bool BoundaryModel::hasRangeDependentMaterials() const noexcept {
+  return static_cast<bool>(longMaterials_);
+}
+
+const AcousticMaterial& BoundaryModel::materialAtSegment(
+    std::size_t segmentIndex) const {
+  if (kind_ != BoundaryKind::AcousticHalfSpace || !material_.has_value()) {
+    throw ValidationError(
+        "only acoustic half-spaces provide material properties");
+  }
+  if (segmentIndex >= geometry_.segmentCount()) {
+    throw ValidationError("boundary material segment index is out of range");
+  }
+  if (!longMaterials_) {
+    return *material_;
+  }
+  const std::size_t nodeIndex =
+      segmentIndex == 0U
+          ? 0U
+          : std::min(segmentIndex - 1U, longMaterials_->size() - 1U);
+  return (*longMaterials_)[nodeIndex];
+}
+
+double BoundaryModel::materialAttenuationDepthAtSegment(
+    std::size_t segmentIndex) const {
+  static_cast<void>(materialAtSegment(segmentIndex));
+  return longMaterials_ ? kLegacyLongBoundaryAttenuationDepth : depth();
 }
 
 Environment::Environment(SoundSpeedProfile soundSpeedProfile,
@@ -133,19 +349,38 @@ Environment::Environment(SoundSpeedProfile soundSpeedProfile,
     : soundSpeedProfile_(std::move(soundSpeedProfile)),
       seaSurface_(std::move(seaSurface)),
       seabed_(std::move(seabed)) {
-  if (seaSurface_.kind() != BoundaryKind::Vacuum) {
-    throw ValidationError("the first RayReuse sea surface must be vacuum");
+  if (seaSurface_.geometry().orientation() != BoundaryOrientation::Upper) {
+    throw ValidationError("sea-surface geometry must be upper");
   }
-  if (seabed_.kind() != BoundaryKind::Rigid &&
-      seabed_.kind() != BoundaryKind::AcousticHalfSpace) {
-    throw ValidationError(
-        "the first RayReuse seabed must be rigid or an acoustic half-space");
+  if (seabed_.geometry().orientation() != BoundaryOrientation::Lower) {
+    throw ValidationError("seabed geometry must be lower");
   }
-  if (seaSurface_.depth() >= seabed_.depth()) {
-    throw ValidationError("sea-surface depth must be less than seabed depth");
+  std::vector<double> boundaryRanges;
+  boundaryRanges.reserve(seaSurface_.geometry().nodes().size() +
+                         seabed_.geometry().nodes().size() + 1U);
+  for (Vec2 node : seaSurface_.geometry().nodes()) {
+    boundaryRanges.push_back(node.range);
   }
-  if (soundSpeedProfile_.minimumDepth() > seaSurface_.depth() ||
-      soundSpeedProfile_.maximumDepth() < seabed_.depth()) {
+  for (Vec2 node : seabed_.geometry().nodes()) {
+    boundaryRanges.push_back(node.range);
+  }
+  if (boundaryRanges.empty()) {
+    boundaryRanges.push_back(0.0);
+  }
+  std::sort(boundaryRanges.begin(), boundaryRanges.end());
+  boundaryRanges.erase(
+      std::unique(boundaryRanges.begin(), boundaryRanges.end()),
+      boundaryRanges.end());
+  for (double range : boundaryRanges) {
+    if (seaSurface_.geometry().depthAt(range, 0U) >=
+        seabed_.geometry().depthAt(range, 0U)) {
+      throw ValidationError(
+          "sea surface must remain strictly above the seabed");
+    }
+  }
+  if (soundSpeedProfile_.minimumDepth() >
+          seaSurface_.geometry().minimumDepth() ||
+      soundSpeedProfile_.maximumDepth() < seabed_.geometry().maximumDepth()) {
     throw ValidationError(
         "sound-speed profile must cover the complete water column");
   }

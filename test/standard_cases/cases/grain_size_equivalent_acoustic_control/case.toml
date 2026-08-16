@@ -4,7 +4,7 @@ origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/misc/AttenMod.f90 GrainSize_to_Geoacoustic", "Bellhop_origin/Bellhop/ReflectMod.f90 grain-size half-space"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0

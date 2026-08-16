@@ -1,6 +1,7 @@
 #pragma once
 
 #include <complex>
+#include <cstddef>
 
 #include "rayreuse/model/environment.hpp"
 
@@ -21,12 +22,32 @@ struct BoundaryAcousticsResult {
 [[nodiscard]] BoundaryAcousticsResult classifyBoundaryCoefficient(
     std::complex<double> rawCoefficient, bool suppressSmallAcousticCoefficient);
 
+[[nodiscard]] BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
+    const AcousticMaterial& material, double frequency, double waterDensity,
+    double tangentSlowness, double outwardNormalSlowness);
+
+[[nodiscard]] BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
+    const AcousticMaterial& material, double frequency, double waterDensity,
+    double tangentSlowness, double outwardNormalSlowness);
+
+[[nodiscard]] BoundaryAcousticsResult evaluateGrainSizeHalfSpaceAcoustics(
+    const GrainSizeMaterial& material, double frequency, double waterSoundSpeed,
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness);
+
+[[nodiscard]] BoundaryAcousticsResult evaluateTabulatedReflectionAcoustics(
+    const TabulatedReflectionTable& table, double tangentSlowness,
+    double outwardNormalSlowness);
+
 // Evaluates the per-frequency coefficient for a frozen geometry event.
 // Slowness components are projections on the boundary tangent and outward
-// normal. M2-02 accepts vacuum, rigid, and fluid acoustic half-spaces;
-// elastic half-spaces fail explicitly.
+// normal. Reflection coefficients remain frequency-local and never mutate the
+// boundary model or frozen ReflectionEvent.
 [[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness);
+[[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
+    double frequency, double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness);
 
 }  // namespace rayreuse

@@ -1,5 +1,6 @@
 #include "rayreuse/io/environment_parser.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -9,9 +10,13 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
+#include "rayreuse/cache/ray_path_cache.hpp"
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/frequency_projector.hpp"
+#include "rayreuse/ray/geometry_tracer.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -20,7 +25,11 @@ using rayreuse::AttenuationUnit;
 using rayreuse::BellhopError;
 using rayreuse::BoundaryKind;
 using rayreuse::EnvironmentParser;
+using rayreuse::FrequencyProjector;
+using rayreuse::GeometryTracer;
 using rayreuse::ParsedEnvironment;
+using rayreuse::RayPath;
+using rayreuse::RayPathCache;
 using rayreuse::ValidationError;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
@@ -69,6 +78,50 @@ std::string renderCase(const std::string& caseName, double frequency,
   replaceAll(contents, "@NALPHA@", std::to_string(launchAngleCount));
   return contents;
 }
+
+class TemporaryStandardCase {
+ public:
+  TemporaryStandardCase(const std::string& caseName, double frequency,
+                        std::size_t launchAngleCount)
+      : directory_(std::filesystem::temp_directory_path() /
+                   ("rayreuse_rr_b1_" + caseName)),
+        environmentPath_(directory_ / "case.env") {
+    std::error_code cleanupError;
+    std::filesystem::remove_all(directory_, cleanupError);
+    std::filesystem::create_directories(directory_);
+    std::ofstream environment(environmentPath_);
+    if (!environment.is_open()) {
+      throw std::runtime_error("unable to stage RR-B1 environment fixture");
+    }
+    environment << renderCase(caseName, frequency, launchAngleCount);
+    environment.close();
+
+    const std::filesystem::path source = kCasesRoot / caseName;
+    for (const std::string extension : {".ati", ".bty", ".trc", ".brc"}) {
+      const std::filesystem::path companion = source / ("origin" + extension);
+      if (std::filesystem::exists(companion)) {
+        std::filesystem::copy_file(companion,
+                                   directory_ / ("case" + extension));
+      }
+    }
+  }
+
+  TemporaryStandardCase(const TemporaryStandardCase&) = delete;
+  TemporaryStandardCase& operator=(const TemporaryStandardCase&) = delete;
+
+  ~TemporaryStandardCase() {
+    std::error_code cleanupError;
+    std::filesystem::remove_all(directory_, cleanupError);
+  }
+
+  [[nodiscard]] const std::filesystem::path& environmentPath() const noexcept {
+    return environmentPath_;
+  }
+
+ private:
+  std::filesystem::path directory_;
+  std::filesystem::path environmentPath_;
+};
 
 ParsedEnvironment parseText(const std::string& contents,
                             const std::string& name) {
@@ -202,6 +255,121 @@ void testBoundaryCases(Context& context) {
                 "acoustic-bottom attenuation options");
 }
 
+void testRrB1BoundarySidecarsAndFrozenEvents(Context& context) {
+  const TemporaryStandardCase piecewise("i3_piecewise_boundaries", 100.0, 400U);
+  const ParsedEnvironment parsedPiecewise =
+      EnvironmentParser::parseFile(piecewise.environmentPath());
+  const auto& piecewiseEnvironment =
+      parsedPiecewise.simulationCase.environment();
+  context.check(!piecewiseEnvironment.seaSurface().geometry().isFlat() &&
+                    !piecewiseEnvironment.seabed().geometry().isFlat(),
+                "standard LS .ati/.bty files create range-dependent geometry");
+  context.checkNear(
+      piecewiseEnvironment.seaSurface().geometry().depthAt(1000.0, 0U), 20.0,
+      1.0e-12, "LS topography interpolates in SI range units");
+
+  const TemporaryStandardCase longCase("i3_long_format_materials", 1000.0,
+                                       100U);
+  const ParsedEnvironment parsedLong =
+      EnvironmentParser::parseFile(longCase.environmentPath());
+  const auto& longSimulation = parsedLong.simulationCase;
+  const auto& longSeabed = longSimulation.environment().seabed();
+  context.check(longSeabed.hasRangeDependentMaterials(),
+                "LL bathymetry retains immutable raw segment materials");
+  context.checkNear(longSeabed.materialAtSegment(2U).compressionalSoundSpeed,
+                    1800.0, 0.0,
+                    "LL physical segment selects its left-node material");
+
+  RayPath longPath =
+      GeometryTracer(longSimulation)
+          .trace(longSimulation.source(), 45.0 * std::numbers::pi / 180.0);
+  const auto frozenEvent = std::find_if(
+      longPath.events.begin(), longPath.events.end(),
+      [](const auto& event) { return event.longMaterialOverride.has_value(); });
+  context.check(frozenEvent != longPath.events.end(),
+                "LL reflection freezes raw material in ReflectionEvent");
+  if (frozenEvent != longPath.events.end()) {
+    context.check(
+        frozenEvent->reflectedRayPointIndex ==
+                frozenEvent->rayPointIndex + 1U &&
+            frozenEvent->boundarySegmentIndex > 0U &&
+            frozenEvent->longMaterialOverride->attenuationEvaluationDepth ==
+                rayreuse::kLegacyLongBoundaryAttenuationDepth,
+        "frozen event retains explicit point pair, segment identity, and "
+        "legacy LL attenuation depth");
+  }
+  RayPathCache cache;
+  cache.append(std::move(longPath));
+  cache.freeze();
+  const std::uint64_t fingerprint = cache.contentFingerprint();
+  const FrequencyProjector projector(longSimulation.environment());
+  const auto low = projector.project(cache.at(0U), 1000.0, 1.0);
+  const auto high = projector.project(cache.at(0U), 2000.0, 1.0);
+  context.check(cache.contentFingerprint() == fingerprint,
+                "two-frequency LL projection does not mutate frozen cache");
+  context.check(low.frequency == 1000.0 && high.frequency == 2000.0,
+                "LL reflection is projected independently per frequency");
+
+  const TemporaryStandardCase elastic("elastic_ll_top_bottom", 1000.0, 100U);
+  const ParsedEnvironment parsedElastic =
+      EnvironmentParser::parseFile(elastic.environmentPath());
+  context.check(parsedElastic.simulationCase.environment()
+                            .seaSurface()
+                            .materialAtSegment(1U)
+                            .shearSoundSpeed > 0.0 &&
+                    parsedElastic.simulationCase.environment()
+                            .seabed()
+                            .materialAtSegment(1U)
+                            .shearSoundSpeed > 0.0,
+                "elastic LL preserves top and bottom P/S raw materials");
+
+  const TemporaryStandardCase grain("grain_size_flat", 1000.0, 200U);
+  context.check(EnvironmentParser::parseFile(grain.environmentPath())
+                        .simulationCase.environment()
+                        .seabed()
+                        .kind() == BoundaryKind::GrainSizeHalfSpace,
+                "standard G case selects grain-size bottom");
+
+  const TemporaryStandardCase bottomTable("tabulated_reflection_bottom", 1000.0,
+                                          200U);
+  const ParsedEnvironment parsedBottomTable =
+      EnvironmentParser::parseFile(bottomTable.environmentPath());
+  const auto& bottomBoundary =
+      parsedBottomTable.simulationCase.environment().seabed();
+  context.check(bottomBoundary.kind() == BoundaryKind::TabulatedReflection &&
+                    bottomBoundary.reflectionTable() &&
+                    bottomBoundary.reflectionTable()->size() == 4U,
+                "standard F bottom loads sibling .brc table");
+
+  const TemporaryStandardCase topTable("top_tabulated_bottom_vacuum", 1000.0,
+                                       200U);
+  const ParsedEnvironment parsedTopTable =
+      EnvironmentParser::parseFile(topTable.environmentPath());
+  context.check(
+      parsedTopTable.simulationCase.environment().seaSurface().kind() ==
+              BoundaryKind::TabulatedReflection &&
+          parsedTopTable.simulationCase.environment().seabed().kind() ==
+              BoundaryKind::Vacuum,
+      "standard top F/bottom V case loads sibling .trc table");
+
+  std::string topRigid =
+      renderCase("top_tabulated_bottom_vacuum", 1000.0, 200U);
+  replaceFirst(topRigid, "'CFW'", "'CRW'");
+  context.check(parseText(topRigid, "top_rigid.env")
+                        .simulationCase.environment()
+                        .seaSurface()
+                        .kind() == BoundaryKind::Rigid,
+                "flat top R is accepted");
+  std::string topGrain =
+      renderCase("top_tabulated_bottom_vacuum", 1000.0, 200U);
+  replaceFirst(topGrain, "'CFW'", "'CGW'\n0.0 3.0 /");
+  context.check(parseText(topGrain, "top_grain.env")
+                        .simulationCase.environment()
+                        .seaSurface()
+                        .kind() == BoundaryKind::GrainSizeHalfSpace,
+                "flat top G is accepted");
+}
+
 void testAttenuationCases(Context& context) {
   const ParsedEnvironment lossless = parseText(
       renderCase("constant_speed_no_attenuation_5khz", 5000.0, 10000U),
@@ -298,14 +466,14 @@ void testUnsupportedAndMalformedInput(Context& context) {
         static_cast<void>(parseText(contents, "filling_beam.env"));
       },
       "unsupported beam-width mode is explicitly rejected");
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents = direct;
-        replaceFirst(contents, "1000.0  1600.0  0.0  1.8",
-                     "1000.0  1600.0  100.0  1.8");
-        static_cast<void>(parseText(contents, "elastic_bottom.env"));
-      },
-      "elastic half-space is explicitly rejected");
+  std::string elasticContents = direct;
+  replaceFirst(elasticContents, "1000.0  1600.0  0.0  1.8",
+               "1000.0  1600.0  100.0  1.8");
+  const ParsedEnvironment elastic =
+      parseText(elasticContents, "elastic_bottom.env");
+  context.checkNear(
+      elastic.simulationCase.environment().seabed().material()->shearSoundSpeed,
+      100.0, 0.0, "elastic half-space shear speed is retained raw");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;
@@ -352,6 +520,7 @@ int main() {
   testFrequencyOverride(context);
   testEnvironmentFrequencyList(context);
   testBoundaryCases(context);
+  testRrB1BoundarySidecarsAndFrozenEvents(context);
   testAttenuationCases(context);
   testMunkCase(context);
   testFortranNumericSpelling(context);

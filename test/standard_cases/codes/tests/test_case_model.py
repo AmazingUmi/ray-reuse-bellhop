@@ -91,7 +91,7 @@ class CaseModelTests(unittest.TestCase):
             },
         )
 
-    def test_i4_attenuation_cases_are_scoped_to_origin_and_f2cpp(self) -> None:
+    def test_i4_case_scopes_match_implemented_versions(self) -> None:
         for suffix in "nfmwql":
             with self.subTest(unit=suffix):
                 self.assertEqual(
@@ -103,10 +103,6 @@ class CaseModelTests(unittest.TestCase):
             "volume_attenuation_biological",
             "elastic_halfspace_flat",
             "elastic_halfspace_fluid_control",
-            "grain_size_flat",
-            "grain_size_equivalent_acoustic_control",
-            "tabulated_reflection_bottom",
-            "tabulated_reflection_rigid_control",
             "q_range_dependent_cross_gradient",
             "q_range_independent_control",
             "multi_source_depths",
@@ -138,6 +134,17 @@ class CaseModelTests(unittest.TestCase):
                 self.assertEqual(
                     self.cases[case_id].supported_versions,
                     ("origin", "f2cpp"),
+                )
+        for case_id in (
+            "grain_size_flat",
+            "grain_size_equivalent_acoustic_control",
+            "tabulated_reflection_bottom",
+            "tabulated_reflection_rigid_control",
+        ):
+            with self.subTest(case=case_id):
+                self.assertEqual(
+                    self.cases[case_id].supported_versions,
+                    ("origin", "f2cpp", "rayreuse"),
                 )
 
     def test_i7_geometric_hat_fixtures_only_change_coordinate_family(self) -> None:

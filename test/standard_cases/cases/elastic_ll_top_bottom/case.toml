@@ -5,7 +5,7 @@ companion_files = ["origin.ati", "origin.bty"]
 source_references = ["Bellhop_origin/Bellhop/bdryMod.f90 LL geoacoustics", "Bellhop_origin/Bellhop/bellhop.f90 1D20 material conversion"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0

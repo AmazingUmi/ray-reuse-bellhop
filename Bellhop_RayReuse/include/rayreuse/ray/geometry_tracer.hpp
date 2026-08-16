@@ -29,8 +29,8 @@ class GeometryTracer {
   CLinearSsp soundSpeedProfile_;
   IntegratorSettings integrator_;
   std::vector<double> profileDepths_;
-  double seaSurfaceDepth_{};
-  double seabedDepth_{};
+  BoundaryModel seaSurfaceBoundary_;
+  BoundaryModel seabedBoundary_;
 };
 
 }  // namespace rayreuse

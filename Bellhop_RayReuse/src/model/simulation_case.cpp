@@ -91,19 +91,27 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       integrator_(integrator) {
   requireFinite(source_.depth, "source.depth");
   requireFinite(source_.amplitude, "source.amplitude");
-  if (source_.depth <= environment_.seaSurface().depth() ||
-      source_.depth >= environment_.seabed().depth()) {
+  const Vec2 sourcePosition{.range = 0.0, .depth = source_.depth};
+  if (environment_.seaSurface().geometry().interiorSignedDistance(
+          sourcePosition, 0U) <= 0.0 ||
+      environment_.seabed().geometry().interiorSignedDistance(sourcePosition,
+                                                              0U) <= 0.0) {
     throw ValidationError("source depth must be strictly inside the water");
   }
   if (source_.amplitude < 0.0) {
     throw ValidationError("source amplitude must be non-negative");
   }
 
-  for (double depth : receivers_.depths()) {
-    if (depth < environment_.seaSurface().depth() ||
-        depth > environment_.seabed().depth()) {
-      throw ValidationError(
-          "receiver depths must lie inside or on the water boundaries");
+  for (double range : receivers_.ranges()) {
+    for (double depth : receivers_.depths()) {
+      const Vec2 receiverPosition{.range = range, .depth = depth};
+      if (environment_.seaSurface().geometry().interiorSignedDistance(
+              receiverPosition, 0U) < 0.0 ||
+          environment_.seabed().geometry().interiorSignedDistance(
+              receiverPosition, 0U) < 0.0) {
+        throw ValidationError(
+            "receiver grid must lie inside or on the water boundaries");
+      }
     }
   }
 

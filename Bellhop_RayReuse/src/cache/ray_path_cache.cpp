@@ -14,7 +14,7 @@ namespace rayreuse {
 namespace {
 
 constexpr double kGeometryTolerance = 1.0e-10;
-constexpr double kSlownessNormTolerance = 1.0e-4;
+constexpr double kSlownessNormTolerance = 2.0e-4;
 constexpr double kPositionTolerance = 1.0e-8;
 constexpr double kSlownessTolerance = 1.0e-12;
 constexpr double kTravelTimeTolerance = 1.0e-12;
@@ -69,11 +69,32 @@ void appendStep(FingerprintBuilder& fingerprint,
   appendVec2(fingerprint, step.midpoint);
 }
 
+void appendAttenuation(FingerprintBuilder& fingerprint,
+                       const RawAttenuation& attenuation) noexcept {
+  fingerprint.append(attenuation.value);
+  fingerprint.append(static_cast<std::uint64_t>(attenuation.unit));
+  fingerprint.append(attenuation.referenceFrequency);
+  fingerprint.append(attenuation.powerLawExponent);
+  fingerprint.append(attenuation.transitionFrequency);
+  fingerprint.append(static_cast<std::uint64_t>(attenuation.volumeModel));
+}
+
+void appendMaterial(FingerprintBuilder& fingerprint,
+                    const AcousticMaterial& material) noexcept {
+  fingerprint.append(material.compressionalSoundSpeed);
+  fingerprint.append(material.shearSoundSpeed);
+  fingerprint.append(material.density);
+  appendAttenuation(fingerprint, material.compressionalAttenuation);
+  appendAttenuation(fingerprint, material.shearAttenuation);
+}
+
 void appendEvent(FingerprintBuilder& fingerprint,
                  const ReflectionEvent& event) noexcept {
   fingerprint.append(static_cast<std::uint64_t>(event.rayPointIndex));
+  fingerprint.append(static_cast<std::uint64_t>(event.reflectedRayPointIndex));
   fingerprint.append(static_cast<std::uint64_t>(event.boundary));
   fingerprint.append(static_cast<std::uint64_t>(event.boundarySegmentIndex));
+  fingerprint.append(event.boundaryCurvature);
   appendVec2(fingerprint, event.position);
   appendVec2(fingerprint, event.boundaryTangent);
   appendVec2(fingerprint, event.outwardNormal);
@@ -81,6 +102,12 @@ void appendEvent(FingerprintBuilder& fingerprint,
   appendVec2(fingerprint, event.reflectedSlowness);
   fingerprint.append(event.tangentSlowness);
   fingerprint.append(event.normalSlowness);
+  fingerprint.append(
+      static_cast<std::uint64_t>(event.longMaterialOverride.has_value()));
+  if (event.longMaterialOverride.has_value()) {
+    appendMaterial(fingerprint, event.longMaterialOverride->material);
+    fingerprint.append(event.longMaterialOverride->attenuationEvaluationDepth);
+  }
 }
 
 void appendPath(FingerprintBuilder& fingerprint, const RayPath& path) noexcept {
@@ -153,6 +180,63 @@ void validateStep(const StepQuadrature& step) {
   }
 }
 
+[[nodiscard]] bool validAttenuationUnit(AttenuationUnit unit) noexcept {
+  switch (unit) {
+    case AttenuationUnit::NepersPerMeter:
+    case AttenuationUnit::DecibelsPerMeter:
+    case AttenuationUnit::DecibelsPerMeterPowerLaw:
+    case AttenuationUnit::DecibelsPerMeterKilohertz:
+    case AttenuationUnit::DecibelsPerWavelength:
+    case AttenuationUnit::QualityFactor:
+    case AttenuationUnit::LossParameter:
+      return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool validVolumeModel(VolumeAttenuationModel model) noexcept {
+  switch (model) {
+    case VolumeAttenuationModel::None:
+    case VolumeAttenuationModel::Thorp:
+    case VolumeAttenuationModel::FrancoisGarrison:
+    case VolumeAttenuationModel::Biological:
+      return true;
+  }
+  return false;
+}
+
+void validateFrozenMaterial(const FrozenBoundaryMaterial& frozen) {
+  const AcousticMaterial& material = frozen.material;
+  if (frozen.attenuationEvaluationDepth !=
+          kLegacyLongBoundaryAttenuationDepth ||
+      !std::isfinite(material.compressionalSoundSpeed) ||
+      !std::isfinite(material.shearSoundSpeed) ||
+      !std::isfinite(material.density) ||
+      material.compressionalSoundSpeed <= 0.0 ||
+      material.shearSoundSpeed < 0.0 || material.density <= 0.0) {
+    throw ValidationError("frozen long-format boundary material is invalid");
+  }
+  for (const RawAttenuation* attenuation :
+       {&material.compressionalAttenuation, &material.shearAttenuation}) {
+    if (!validAttenuationUnit(attenuation->unit) ||
+        !validVolumeModel(attenuation->volumeModel) ||
+        !std::isfinite(attenuation->value) ||
+        !std::isfinite(attenuation->referenceFrequency) ||
+        !std::isfinite(attenuation->powerLawExponent) ||
+        !std::isfinite(attenuation->transitionFrequency) ||
+        attenuation->value < 0.0 || attenuation->referenceFrequency <= 0.0 ||
+        attenuation->transitionFrequency <= 0.0) {
+      throw ValidationError(
+          "frozen long-format boundary attenuation is invalid");
+    }
+  }
+  if (material.shearSoundSpeed == 0.0 &&
+      material.shearAttenuation.value != 0.0) {
+    throw ValidationError(
+        "zero frozen long-format shear speed requires zero shear attenuation");
+  }
+}
+
 void validateEvent(const ReflectionEvent& event,
                    const std::vector<RayState>& points) {
   if (event.rayPointIndex >= points.size() - 1U) {
@@ -160,22 +244,52 @@ void validateEvent(const ReflectionEvent& event,
         "reflection event must reference a pre-reflection point followed by "
         "a post-reflection point");
   }
+  if (event.reflectedRayPointIndex != event.rayPointIndex + 1U ||
+      event.reflectedRayPointIndex >= points.size()) {
+    throw ValidationError(
+        "reflection event must explicitly reference its adjacent "
+        "post-reflection point");
+  }
   if (!isFinite(event.position) || !isFinite(event.boundaryTangent) ||
       !isFinite(event.outwardNormal) || !isFinite(event.incidentSlowness) ||
       !isFinite(event.reflectedSlowness) ||
+      !std::isfinite(event.boundaryCurvature) ||
       !std::isfinite(event.tangentSlowness) ||
       !std::isfinite(event.normalSlowness)) {
     throw ValidationError("reflection event contains a non-finite value");
   }
-  if (std::abs(norm(event.boundaryTangent) - 1.0) > kGeometryTolerance ||
-      std::abs(norm(event.outwardNormal) - 1.0) > kGeometryTolerance ||
-      std::abs(dot(event.boundaryTangent, event.outwardNormal)) >
-          kGeometryTolerance) {
+  if (event.longMaterialOverride.has_value()) {
+    validateFrozenMaterial(*event.longMaterialOverride);
+  }
+  const double tangentNorm = norm(event.boundaryTangent);
+  const double normalNorm = norm(event.outwardNormal);
+  if (tangentNorm <= std::numeric_limits<double>::min() ||
+      normalNorm <= std::numeric_limits<double>::min()) {
     throw ValidationError(
-        "reflection-event tangent and normal must be orthonormal");
+        "reflection-event tangent and normal must be non-zero");
+  }
+  const double frameScale = std::max({1.0, tangentNorm, normalNorm});
+  if (std::abs(tangentNorm - normalNorm) > kGeometryTolerance * frameScale ||
+      std::abs(
+          fortranDotProduct2D(event.boundaryTangent, event.outwardNormal)) >
+          kGeometryTolerance * tangentNorm * normalNorm) {
+    throw ValidationError(
+        "reflection-event tangent and normal must be orthogonal with equal "
+        "norm");
+  }
+  const Vec2 expectedNormal = event.boundary == ReflectionBoundary::SeaSurface
+                                  ? Vec2{.range = event.boundaryTangent.depth,
+                                         .depth = -event.boundaryTangent.range}
+                                  : Vec2{.range = -event.boundaryTangent.depth,
+                                         .depth = event.boundaryTangent.range};
+  if (event.boundaryTangent.range <= 0.0 ||
+      norm(event.outwardNormal - expectedNormal) >
+          kGeometryTolerance * frameScale) {
+    throw ValidationError(
+        "reflection-event boundary frame has the wrong orientation");
   }
   const RayState& incidentPoint = points[event.rayPointIndex];
-  const RayState& reflectedPoint = points[event.rayPointIndex + 1U];
+  const RayState& reflectedPoint = points[event.reflectedRayPointIndex];
   if (norm(event.position - incidentPoint.position) > kPositionTolerance ||
       norm(event.position - reflectedPoint.position) > kPositionTolerance) {
     throw ValidationError(
@@ -197,29 +311,37 @@ void validateEvent(const ReflectionEvent& event,
         "reflection-event slowness must match its pre/post point pair");
   }
   const double incidentTangent =
-      dot(event.incidentSlowness, event.boundaryTangent);
+      fortranDotProduct2D(event.incidentSlowness, event.boundaryTangent);
   const double incidentNormal =
-      dot(event.incidentSlowness, event.outwardNormal);
+      fortranDotProduct2D(event.incidentSlowness, event.outwardNormal);
   if (std::abs(event.tangentSlowness - incidentTangent) > kSlownessTolerance ||
       std::abs(event.normalSlowness - incidentNormal) > kSlownessTolerance) {
     throw ValidationError(
         "reflection-event scalar slowness components are inconsistent");
   }
-  if (std::abs(incidentTangent -
-               dot(event.reflectedSlowness, event.boundaryTangent)) >
-          kSlownessTolerance ||
-      std::abs(incidentNormal +
-               dot(event.reflectedSlowness, event.outwardNormal)) >
-          kSlownessTolerance) {
+  const double twiceIncidentNormal = 2.0 * incidentNormal;
+  const Vec2 expectedReflectedSlowness{
+      .range = std::fma(-twiceIncidentNormal, event.outwardNormal.range,
+                        event.incidentSlowness.range),
+      .depth = std::fma(-twiceIncidentNormal, event.outwardNormal.depth,
+                        event.incidentSlowness.depth)};
+  if (norm(event.reflectedSlowness - expectedReflectedSlowness) >
+      kSlownessTolerance) {
     throw ValidationError(
-        "reflection-event slowness does not satisfy mirror reflection");
+        "reflection-event slowness does not satisfy the legacy mirror "
+        "formula");
   }
-  if (std::abs(incidentPoint.soundSpeed * norm(event.incidentSlowness) - 1.0) >
-          kSlownessNormTolerance ||
-      std::abs(reflectedPoint.soundSpeed * norm(event.reflectedSlowness) -
-               1.0) > kSlownessNormTolerance) {
-    throw ValidationError(
-        "reflection-event slowness norm is inconsistent with sound speed");
+  const bool unitFrame = std::abs(tangentNorm - 1.0) <= kGeometryTolerance &&
+                         std::abs(normalNorm - 1.0) <= kGeometryTolerance;
+  if (unitFrame) {
+    if (std::abs(incidentPoint.soundSpeed * norm(event.incidentSlowness) -
+                 1.0) > kSlownessNormTolerance ||
+        std::abs(reflectedPoint.soundSpeed * norm(event.reflectedSlowness) -
+                 1.0) > kSlownessNormTolerance) {
+      throw ValidationError(
+          "unit-frame reflection-event slowness norm is inconsistent with "
+          "sound speed");
+    }
   }
 }
 

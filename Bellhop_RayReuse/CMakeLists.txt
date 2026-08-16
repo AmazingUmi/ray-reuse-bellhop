@@ -78,6 +78,7 @@ add_library(
     src/io/command_line.cpp
     src/io/environment_parser.cpp
     src/io/shd_writer.cpp
+    src/model/boundary_geometry.cpp
     src/model/c_linear_frequency_ssp.cpp
     src/model/c_linear_ssp.cpp
     src/model/environment.cpp

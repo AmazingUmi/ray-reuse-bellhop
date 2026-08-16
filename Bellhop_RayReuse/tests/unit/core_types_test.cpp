@@ -128,6 +128,7 @@ RayPath makeReflectedRayPath() {
   };
   path.events = {
       {.rayPointIndex = 1U,
+       .reflectedRayPointIndex = 2U,
        .boundary = rayreuse::ReflectionBoundary::SeaSurface,
        .boundarySegmentIndex = 0U,
        .position = {10.0, 0.0},
@@ -286,6 +287,28 @@ void testRayPathCache(Context& context) {
   context.check(changedEventCache.contentFingerprint() !=
                     reflectedCache.contentFingerprint(),
                 "ReflectionEvent semantic fields affect the fingerprint");
+
+  RayPath longMaterialPath = makeReflectedRayPath();
+  longMaterialPath.events.front().longMaterialOverride =
+      rayreuse::FrozenBoundaryMaterial{
+          .material = {.compressionalSoundSpeed = 1800.0,
+                       .shearSoundSpeed = 600.0,
+                       .density = 1.8,
+                       .compressionalAttenuation = {.value = 0.2},
+                       .shearAttenuation = {.value = 0.4}},
+          .attenuationEvaluationDepth =
+              rayreuse::kLegacyLongBoundaryAttenuationDepth};
+  RayPathCache longMaterialCache;
+  longMaterialCache.append(longMaterialPath);
+  longMaterialCache.freeze();
+
+  longMaterialPath.events.front().longMaterialOverride->material.density = 1.9;
+  RayPathCache changedLongMaterialCache;
+  changedLongMaterialCache.append(std::move(longMaterialPath));
+  changedLongMaterialCache.freeze();
+  context.check(changedLongMaterialCache.contentFingerprint() !=
+                    longMaterialCache.contentFingerprint(),
+                "frozen long-boundary raw material affects the fingerprint");
 
   RayPathCache orderedCache;
   orderedCache.append(makeRayPath());

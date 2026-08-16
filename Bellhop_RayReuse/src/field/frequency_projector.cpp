@@ -130,9 +130,24 @@ RayFrequencyState FrequencyProjector::project(const RayPath& path,
       segmentIndex = waterSample.segmentIndex;
       const BoundaryModel& boundary =
           boundaryForEvent(environment_, event.boundary);
-      const BoundaryAcousticsResult acoustics = evaluateBoundaryAcoustics(
-          boundary, frequency, waterSample.density, event.tangentSlowness,
-          event.normalSlowness);
+      const bool useFrozenLongMaterial =
+          boundary.kind() == BoundaryKind::AcousticHalfSpace &&
+          event.longMaterialOverride.has_value();
+      const BoundaryAcousticsResult acoustics =
+          boundary.kind() == BoundaryKind::GrainSizeHalfSpace
+              ? evaluateGrainSizeHalfSpaceAcoustics(
+                    *boundary.grainSizeMaterial(), frequency,
+                    waterSample.soundSpeed, waterSample.density,
+                    event.tangentSlowness, event.normalSlowness)
+          : useFrozenLongMaterial
+              ? evaluateAcousticHalfSpaceAcoustics(
+                    event.longMaterialOverride->material, frequency,
+                    waterSample.density, event.tangentSlowness,
+                    event.normalSlowness)
+              : evaluateBoundaryAcoustics(boundary, event.boundarySegmentIndex,
+                                          frequency, waterSample.density,
+                                          event.tangentSlowness,
+                                          event.normalSlowness);
       next.amplitude *= acoustics.amplitudeMultiplier;
       next.reflectionPhase += acoustics.phaseIncrement;
       next.active = current.active && amplitudeRemainsActive(next.amplitude);
