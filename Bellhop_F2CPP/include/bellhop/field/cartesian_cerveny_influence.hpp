@@ -3,6 +3,7 @@
 #include <array>
 #include <complex>
 #include <cstddef>
+#include <memory>
 #include <optional>
 
 #include "bellhop/field/frequency_workspace.hpp"
@@ -23,6 +24,8 @@ struct CartesianCervenySettings {
   std::size_t imageCount{3U};
   int beamWindow{5};
 };
+
+inline constexpr std::size_t kMaximumCartesianCervenyThreadCount = 256U;
 
 struct CartesianCervenyDiagnosticRequest {
   std::size_t receiverRangeIndex{};
@@ -90,7 +93,16 @@ class CartesianCervenyInfluence {
       BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
       SourceGeometry sourceGeometry = SourceGeometry::Point,
       SimulationRunMode runMode =
-          SimulationRunMode::CoherentTransmissionLoss);
+          SimulationRunMode::CoherentTransmissionLoss,
+      std::size_t threadCount = 1U);
+
+  ~CartesianCervenyInfluence();
+
+  CartesianCervenyInfluence(const CartesianCervenyInfluence&) = delete;
+  CartesianCervenyInfluence& operator=(
+      const CartesianCervenyInfluence&) = delete;
+
+  [[nodiscard]] std::size_t threadCount() const noexcept;
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
@@ -108,6 +120,8 @@ class CartesianCervenyInfluence {
           diagnosticRequest = std::nullopt) const;
 
  private:
+  class DeterministicDepthTeam;
+
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateImpl(
       FrequencyWorkspace* pressureWorkspace,
       IntensityWorkspace* intensityWorkspace, const RayPath& path,
@@ -125,6 +139,8 @@ class CartesianCervenyInfluence {
       SimulationRunMode::CoherentTransmissionLoss};
   GeometrySspEvaluator soundSpeedProfile_;
   double receiverRangeDelta_{};
+  std::size_t threadCount_{1U};
+  mutable std::unique_ptr<DeterministicDepthTeam> depthTeam_;
 };
 
 }  // namespace bellhop

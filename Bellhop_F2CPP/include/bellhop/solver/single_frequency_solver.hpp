@@ -34,6 +34,7 @@ struct SingleFrequencyResult {
   std::size_t rayCount{};
   std::size_t totalRayPointCount{};
   std::size_t rayCacheBytes{};
+  std::size_t influenceThreadCount{1U};
   SingleFrequencyTimings timings;
 
   [[nodiscard]] std::size_t sourceCount() const noexcept;
@@ -49,7 +50,8 @@ class SingleFrequencySolver {
       CartesianCervenySettings influenceSettings = {},
       BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
       BoundaryCurvatureMode curvatureMode =
-          BoundaryCurvatureMode::Standard);
+          BoundaryCurvatureMode::Standard,
+      std::size_t influenceThreadCount = 1U);
 };
 
 }  // namespace bellhop

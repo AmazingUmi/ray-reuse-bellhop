@@ -29,6 +29,7 @@
 | 波束与声源 | Cerveny `F/M/W × D/S/Z`、1～3 images、point/line source、`.sbp`；A/a/E 使用 G/g/B |
 | 文件与生命周期 | PRT、SHD、RAY、ARR；布局/顺序/数值按各冻结 Origin oracle 验收；模式切换清理陈旧异类产品 |
 | 研究架构 | 完整只读 `RayPathCache`；复走时、active mask、反射幅相、pressure/intensity 仅存在于逐频临时状态 |
+| 线程执行 | 默认串行；单 source Cartesian Cerveny TL 可用 `F2CPP_THREADS` 选择持久 receiver-depth team，保持每 cell 累加顺序与 SHD bitwise 一致 |
 
 Cartesian Cerveny 的 `P/V/H` 和 Cartesian irregular receiver 深度选择保留
 Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结的 legacy
@@ -77,7 +78,9 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
    fused sincos 和一次 exp，重复参数仅 `0.484%` 上界，因而没有接受新的
    scalar 改动。P4-01 的真实输入原型进一步排除 SIMD 首选路线：精确 vForce
    不能保持 bitwise，而确定性 receiver-depth 线程分区已有 `2.0～2.5×` 绝对
-   wall 潜力且 RSS 近似不变。正式持久线程 team 仍需单独批准；数据布局没有
-   重构依据。
+   wall 潜力且 RSS 近似不变。P4-02 已将其正式化为持久 team：4-thread 在
+   50/250 Hz Munk 上分别达到 `2.276×/2.117×`，所有线程档 SHD bitwise
+   一致，最大 RSS 增量低于 `0.21 MiB`。当前 F2CPP 性能阶段暂停，数据布局
+   仍没有重构依据。
    详细结果见
    [`PERFORMANCE.md`](./PERFORMANCE.md)。

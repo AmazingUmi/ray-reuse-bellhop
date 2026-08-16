@@ -73,8 +73,9 @@ I0～I8 与 I9-B1～B3 已全部验收并冻结，I9-B4 已完成二维单频复
 标准案例 65/65；详细数值证据见[当前进度](./doc/PROGRESS.md)。
 
 当前可正式声明的范围、兼容语义及明确延期项以
-[二维单频支持矩阵](./doc/FEATURE_SUPPORT_MATRIX.md)为准。后续工作进入基于
-profile 的性能阶段；P1 基线与 P2 局部热循环优化结果见
-[性能阶段记录](./doc/PERFORMANCE.md)。除非发现真实 correctness bug，不再
-重新打开已冻结 iteration，也不在 F2CPP 中顺带实现 3D、N×2D、beam shift
-或宽带调度。
+[二维单频支持矩阵](./doc/FEATURE_SUPPORT_MATRIX.md)为准。P1～P4-02 性能阶段
+已完成并暂停；单 source Cartesian Cerveny TL 可通过 `F2CPP_THREADS` 使用
+保持 SHD bitwise 一致的确定性 receiver-depth team，详见
+[性能阶段记录](./doc/PERFORMANCE.md)与[完整使用说明](./doc/USAGE.md)。除非
+发现真实 correctness bug，不再重新打开已冻结 iteration，也不在 F2CPP 中
+顺带实现 3D、N×2D、beam shift 或宽带调度。

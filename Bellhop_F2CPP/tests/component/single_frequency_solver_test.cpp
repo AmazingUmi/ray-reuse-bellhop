@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -170,6 +171,32 @@ void testCoordinateSystemsShareGeometryMetrics(Context& context) {
               rayCentered.totalRayPointCount &&
           cartesian.rayCacheBytes == rayCentered.rayCacheBytes,
       "Cartesian and ray-centered influence reuse identical traced geometry");
+}
+
+void testDeterministicThreadedSolve(Context& context) {
+  const SimulationCase simulation = makeSimulation(1000U);
+  const SingleFrequencyResult serial =
+      SingleFrequencySolver::solve(simulation, 1.0, 500.0);
+  for (const std::size_t threadCount :
+       std::array<std::size_t, 2>{2U, 4U}) {
+    const SingleFrequencyResult parallel = SingleFrequencySolver::solve(
+        simulation, 1.0, 500.0, {},
+        bellhop::BeamWidthMode::MinimumWidth,
+        bellhop::BoundaryCurvatureMode::Standard, threadCount);
+    context.check(
+        parallel.influenceThreadCount == threadCount,
+        "solver reports the effective Cartesian influence thread count");
+    context.check(
+        parallel.rayCount == serial.rayCount &&
+            parallel.totalRayPointCount == serial.totalRayPointCount &&
+            parallel.rayCacheBytes == serial.rayCacheBytes,
+        "threaded solver preserves frozen ray metrics");
+    context.check(
+        std::equal(parallel.workspace.pressure().begin(),
+                   parallel.workspace.pressure().end(),
+                   serial.workspace.pressure().begin()),
+        "threaded solver preserves exact coherent pressure order");
+  }
 }
 
 void testCoherenceModesShareGeometryAndSeparateFieldLaws(
@@ -400,6 +427,14 @@ void testMultipleSourceSolveMatchesIndependentSlices(Context& context) {
   context.expectThrows<ValidationError>(
       [&] { static_cast<void>(multiResult.sourceWorkspace(2U)); },
       "multi-source result rejects an out-of-range source slice");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(SingleFrequencySolver::solve(
+            multi, 1.0, 500.0, {},
+            bellhop::BeamWidthMode::MinimumWidth,
+            bellhop::BoundaryCurvatureMode::Standard, 2U));
+      },
+      "multi-source solve rejects nested inner influence parallelism");
 }
 
 void testSourceBeamPatternScalesProjectionOnly(Context& context) {
@@ -630,6 +665,7 @@ int main() {
   testNonCervenyRequiresStandardCurvature(context);
   testEndToEndSolve(context);
   testCoordinateSystemsShareGeometryMetrics(context);
+  testDeterministicThreadedSolve(context);
   testCoherenceModesShareGeometryAndSeparateFieldLaws(context);
   testSourceGeometryChangesFieldOnly(context);
   testQuadrilateralSspEndToEndSolve(context);

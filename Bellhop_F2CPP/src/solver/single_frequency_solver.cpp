@@ -113,10 +113,25 @@ SingleFrequencyResult SingleFrequencySolver::solve(
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
     BeamWidthMode widthMode,
-    BoundaryCurvatureMode curvatureMode) {
+    BoundaryCurvatureMode curvatureMode,
+    std::size_t influenceThreadCount) {
   if (!isTransmissionLossMode(simulation.runMode())) {
     throw ValidationError(
         "single-frequency field solver requires a transmission-loss run mode");
+  }
+  if (influenceThreadCount == 0U ||
+      influenceThreadCount > kMaximumCartesianCervenyThreadCount) {
+    throw ValidationError(
+        "influence thread count must lie in [1, 256]");
+  }
+  if (influenceThreadCount > 1U &&
+      (simulation.sourceCount() != 1U ||
+       simulation.beamFamily() != BeamFamily::CervenyGaussian ||
+       simulation.cervenyCoordinateSystem() !=
+           CervenyCoordinateSystem::Cartesian)) {
+    throw ValidationError(
+        "inner influence parallelism requires one source and Cartesian "
+        "Cerveny beams");
   }
   switch (simulation.beamFamily()) {
     case BeamFamily::CervenyGaussian:
@@ -171,7 +186,7 @@ SingleFrequencyResult SingleFrequencySolver::solve(
         cartesianInfluence.emplace(
             simulation.environment(), simulation.receivers(),
             influenceSettings, widthMode, simulation.sourceGeometry(),
-            simulation.runMode());
+            simulation.runMode(), influenceThreadCount);
         break;
       case CervenyCoordinateSystem::RayCentered:
         rayCenteredInfluence.emplace(
@@ -352,6 +367,10 @@ SingleFrequencyResult SingleFrequencySolver::solve(
       .rayCount = rayCount,
       .totalRayPointCount = totalRayPointCount,
       .rayCacheBytes = peakRayCacheBytes,
+      .influenceThreadCount =
+          cartesianInfluence.has_value()
+              ? cartesianInfluence->threadCount()
+              : 1U,
       .timings =
           SingleFrequencyTimings{
               .traceSeconds = traceSeconds,

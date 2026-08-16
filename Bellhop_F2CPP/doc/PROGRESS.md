@@ -2,7 +2,8 @@
 
 > 更新日期：2026-08-16
 > 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I0～I8 与 I9-B1～B4 已完成并冻结；二维单频复刻正式封板。
+> 当前施工状态：I0～I8 与 I9-B1～B4 已完成并冻结；二维单频复刻正式封板；
+> Performance P1～P4-02 已完成并暂停。
 
 ## 1. 已完成范围
 
@@ -165,6 +166,15 @@
   AppleClang clean Release 完整编译通过；补入仓库级共享标准案例 fixture
   后隔离 CTest 37/37。生产源码无 TODO/FIXME，未支持输入在 parser/model/
   solver 边界显式报错，未发现 correctness blocker 或 silent fallback。
+- P4-02 确定性线程并行：Cartesian Cerveny 使用持久 `std::thread` team 和
+  receiver-depth 静态 stripe，每 ray 只准备一份共享只读状态并在 barrier 后
+  前进；worker 异常汇合后由调用线程重抛。50 Hz/1000-ray 的 1/2/4/8-thread
+  wall 为 `1.3924/0.8979/0.6119/0.5506 s`，250 Hz/5000-ray 为
+  `4.5203/2.9482/2.1350/2.1490 s`；4-thread speedup 分别为
+  `2.276×/2.117×`。全部线程档 SHD 与 replication baseline bitwise 一致，
+  最大 RSS 增量低于 `0.21 MiB`。AppleClang/GCC CTest 37/37、Debug sanitizer
+  focused 2/2、TSan focused 2/2、regression 37/37+14/14、full
+  145/145+37/37+65/65 均通过。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 [`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
@@ -191,8 +201,8 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 - [`DERIVATION_MANIFEST.md`](./DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
   历史派生快照，继续用于追溯当时批准 RayReuse 的源码和性能门，不代表当前
   I0～I8 扩展树的哈希。
-- [`PERFORMANCE.md`](./PERFORMANCE.md) 记录复刻封板后的 P1 基线、P2
-  Cartesian Cerveny 热循环优化证据和后续性能入口。
+- [`PERFORMANCE.md`](./PERFORMANCE.md) 记录复刻封板后的 P1 基线、P2/P3
+  scalar 优化、P4 路线决策与确定性线程实现证据。
 
 ## 5. 下一步
 
@@ -251,3 +261,12 @@ cell 内 ray 顺序的 receiver-depth stripe OpenMP 原型在 50 Hz/1000-ray 与
 饱和。原型源码已移除，focused 2/2、Munk 与 regression 37/37+14/14 通过。
 推荐下一阶段只正式化持久 team、静态 depth tiles 和异常汇合，不实施 SIMD，
 也不允许与 BARR/RayReuse 外层 frequency/source 并行嵌套。
+
+P4-02 已完成上述正式化。默认 `F2CPP_THREADS=1` 保持串行；单 source
+Cartesian Cerveny TL 可选择持久 receiver-depth team，其他 family、多 source
+和 R/A/E 明确拒绝大于 1 的内层线程数。4-thread 在两个 Munk workload 上有
+`2.12～2.28×` wall 收益，1-thread 已消除原型的 per-ray parallel-region
+开销，1/2/4/8-thread 均保持 SHD bitwise 一致，TSan 与 full 均通过。
+当前 F2CPP Performance Phase 按停止条件暂停，不自动进入 SIMD、数据布局、
+更多微优化或 BARR/RayReuse；若后续重启，必须以新 profile 明确收益并维持
+全局唯一 parallel owner。

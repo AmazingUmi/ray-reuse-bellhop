@@ -728,6 +728,78 @@ void testTerminalInactivePointIsRetained(Context& context) {
                 "suffix starting from inactive point is suppressed");
 }
 
+void testDeterministicDepthTeam(Context& context) {
+  const Environment environment = makeDirectEnvironment();
+  const ReceiverGrid receivers(
+      linearGrid(400.0, 600.0, 9U),
+      linearGrid(100.0, 5000.0, 51U));
+  const IntegratorSettings integrator{
+      .stepLength = 10.0,
+      .rangeLimit = 5100.0,
+      .depthLimit = 1100.0,
+      .maximumRayPoints = 10000U};
+  const GeometryTracer tracer(environment, integrator);
+  const FrequencyProjector projector(environment);
+  const CartesianCervenyInfluence serial(environment, receivers);
+  const CartesianCervenyInfluence parallel(
+      environment, receivers, {}, BeamWidthMode::MinimumWidth,
+      SourceGeometry::Point,
+      SimulationRunMode::CoherentTransmissionLoss, 4U);
+  context.check(parallel.threadCount() == 4U,
+                "parallel influence retains the requested worker count");
+
+  FrequencyWorkspace serialWorkspace(50.0, receivers);
+  FrequencyWorkspace parallelWorkspace(50.0, receivers);
+  for (const double launchAngle :
+       std::array<double, 3>{kDirectLaunchAngle, -0.04, 0.03}) {
+    const RayPath path =
+        tracer.trace(Source{.depth = 500.0}, launchAngle);
+    const RayFrequencyState state = projector.project(path, 50.0, 1.0);
+    const auto epsilon =
+        pickMinimumWidthEpsilon(50.0, 1500.0, 2500.0, 1.0);
+    static_cast<void>(serial.accumulate(
+        serialWorkspace, path, state, epsilon.value));
+    static_cast<void>(parallel.accumulate(
+        parallelWorkspace, path, state, epsilon.value));
+  }
+  context.check(
+      std::equal(serialWorkspace.pressure().begin(),
+                 serialWorkspace.pressure().end(),
+                 parallelWorkspace.pressure().begin()),
+      "persistent depth team preserves exact multi-ray order");
+
+  const RayPath failurePath =
+      tracer.trace(Source{.depth = 500.0}, kDirectLaunchAngle);
+  RayFrequencyState failureState =
+      projector.project(failurePath, 50.0, 1.0);
+  for (RayFrequencyPoint& point : failureState.points) {
+    point.amplitude = std::numeric_limits<double>::max();
+  }
+  const auto epsilon =
+      pickMinimumWidthEpsilon(50.0, 1500.0, 2500.0, 1.0);
+  context.expectThrows<ValidationError>(
+      [&] {
+        FrequencyWorkspace workspace(50.0, receivers);
+        static_cast<void>(parallel.accumulate(
+            workspace, failurePath, failureState, epsilon.value));
+      },
+      "worker exception is rethrown by the calling thread");
+
+  const RayFrequencyState recoveryState =
+      projector.project(failurePath, 50.0, 1.0);
+  FrequencyWorkspace recoverySerial(50.0, receivers);
+  FrequencyWorkspace recoveryParallel(50.0, receivers);
+  static_cast<void>(serial.accumulate(
+      recoverySerial, failurePath, recoveryState, epsilon.value));
+  static_cast<void>(parallel.accumulate(
+      recoveryParallel, failurePath, recoveryState, epsilon.value));
+  context.check(
+      std::equal(recoverySerial.pressure().begin(),
+                 recoverySerial.pressure().end(),
+                 recoveryParallel.pressure().begin()),
+      "depth team remains reusable after a worker exception");
+}
+
 void testBranchCutAndHermitePrimitives(Context& context) {
   context.check(
       updateCervenyKmah(
@@ -821,6 +893,22 @@ void testValidationContracts(Context& context) {
             static_cast<SourceGeometry>(999)));
       },
       "invalid source geometry is rejected by influence");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(CartesianCervenyInfluence(
+            environment, ReceiverGrid({40.0, 50.0}, {0.0, 10.0}), {},
+            BeamWidthMode::MinimumWidth, SourceGeometry::Point,
+            SimulationRunMode::CoherentTransmissionLoss, 0U));
+      },
+      "zero influence thread count is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(CartesianCervenyInfluence(
+            environment, ReceiverGrid({40.0, 50.0}, {0.0, 10.0}), {},
+            BeamWidthMode::MinimumWidth, SourceGeometry::Point,
+            SimulationRunMode::CoherentTransmissionLoss, 257U));
+      },
+      "excessive influence thread count is rejected");
 
   const ReceiverGrid receivers({50.0}, {0.0, 10.0});
   const CartesianCervenyInfluence influence(
@@ -967,6 +1055,7 @@ int main() {
   testMunkOracles(context);
   testRigidReflectionOracle(context);
   testTerminalInactivePointIsRetained(context);
+  testDeterministicDepthTeam(context);
   testValidationContracts(context);
 
   if (context.failureCount() != 0) {

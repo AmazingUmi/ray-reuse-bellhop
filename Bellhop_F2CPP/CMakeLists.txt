@@ -8,6 +8,7 @@ project(
 )
 
 include(CTest)
+find_package(Threads REQUIRED)
 
 option(
   F2CPP_ENABLE_SANITIZERS
@@ -131,6 +132,8 @@ target_link_libraries(
   bellhop_f2cpp_core
   PUBLIC
     bellhop_f2cpp_project_options
+  PRIVATE
+    Threads::Threads
 )
 
 add_executable(bellhop_f2cpp app/main.cpp)

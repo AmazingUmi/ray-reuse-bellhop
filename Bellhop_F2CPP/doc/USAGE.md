@@ -284,7 +284,29 @@ python3 test/standard_cases/codes/standard_cases.py validate \
   --profile single
 ```
 
-### 5.4 退出状态
+### 5.4 Cartesian Cerveny 确定性线程数
+
+默认使用完全串行的 Cartesian Cerveny Influence。单 source 的
+`CC`/`IC`/`SC` 计算可以通过环境变量启用 receiver-depth 并行，例如：
+
+```bash
+F2CPP_THREADS=4 \
+  Bellhop_F2CPP/build/release/bellhop_f2cpp "$f2cpp_case_root"
+```
+
+允许值为 `1`～`256` 的整数；`1` 是默认值，实际 worker 数不会超过 receiver
+depth 数，并会写入 PRT 的 `Influence threads =`。2/4 threads 是当前建议的
+首选计量档，最大线程数不保证最快。不同 worker 只写互不重叠的 receiver rows，
+每个 cell 内仍保持与串行相同的 ray/image/coherent accumulation 顺序，因此
+已验收的 1/2/4/8-thread SHD 逐字节一致。
+
+该开关不适用于多 source、ray-centered 或其他 beam family，也不适用于
+R/A/a/E；这些组合在值大于 1 时会明确报错，不会静默回退。如果未来由外层
+source/frequency/BARR/RayReuse 调度拥有并行，本值必须保持为 `1`，避免 nested
+parallelism 和 oversubscription。该实现使用持久 `std::thread` team，
+`OMP_NUM_THREADS` 不控制它。
+
+### 5.5 退出状态
 
 | 状态码 | 含义 |
 |---:|---|

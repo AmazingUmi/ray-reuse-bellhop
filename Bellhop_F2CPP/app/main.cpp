@@ -1,5 +1,7 @@
+#include <charconv>
 #include <chrono>
 #include <complex>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -40,7 +42,27 @@ void printUsage(std::ostream& stream) {
          << "\n"
          << "Reads <file-root>.env and writes <file-root>.prt plus "
             "<file-root>.shd for coherent-TL runs or <file-root>.ray "
-            "for ray-trace/eigenray runs or <file-root>.arr for arrivals.\n";
+            "for ray-trace/eigenray runs or <file-root>.arr for arrivals.\n"
+         << "Set F2CPP_THREADS=N to enable deterministic Cartesian "
+            "Cerveny receiver-depth parallelism; the default is 1.\n";
+}
+
+std::size_t influenceThreadCountFromEnvironment() {
+  const char* const rawValue = std::getenv("F2CPP_THREADS");
+  if (rawValue == nullptr) {
+    return 1U;
+  }
+  const std::string_view value(rawValue);
+  std::size_t threadCount = 0U;
+  const auto [end, error] =
+      std::from_chars(value.data(), value.data() + value.size(), threadCount);
+  if (value.empty() || error != std::errc{} ||
+      end != value.data() + value.size() || threadCount == 0U ||
+      threadCount > bellhop::kMaximumCartesianCervenyThreadCount) {
+    throw bellhop::ValidationError(
+        "F2CPP_THREADS must be an integer in [1, 256]");
+  }
+  return threadCount;
 }
 
 std::string_view attenuationUnitLabel(bellhop::AttenuationUnit unit) {
@@ -422,6 +444,15 @@ int main(int argumentCount, char* arguments[]) {
         bellhop::EnvironmentParser::parseFile(
             environmentPath);
     writeConfigurationSummary(printLog, parsed);
+    const std::size_t influenceThreadCount =
+        influenceThreadCountFromEnvironment();
+    if (influenceThreadCount > 1U &&
+        !bellhop::isTransmissionLossMode(
+            parsed.simulationCase.runMode())) {
+      throw bellhop::ValidationError(
+          "F2CPP_THREADS > 1 is supported only for Cartesian Cerveny "
+          "transmission loss");
+    }
 
     if (parsed.simulationCase.runMode() ==
         bellhop::SimulationRunMode::RayTrace) {
@@ -552,7 +583,8 @@ int main(int argumentCount, char* arguments[]) {
             parsed.beam.loopRange,
             parsed.beam.influence,
             parsed.beam.widthMode,
-            parsed.beam.curvatureMode);
+            parsed.beam.curvatureMode,
+            influenceThreadCount);
 
     const Clock::time_point writeBegin = Clock::now();
     bellhop::ShdWriter::writeSingleFrequency(
@@ -573,6 +605,8 @@ int main(int argumentCount, char* arguments[]) {
         << result.totalRayPointCount << '\n'
         << "ray cache bytes = "
         << result.rayCacheBytes << '\n'
+        << "Influence threads = "
+        << result.influenceThreadCount << '\n'
         << "Trace seconds = "
         << result.timings.traceSeconds << '\n'
         << "Project seconds = "

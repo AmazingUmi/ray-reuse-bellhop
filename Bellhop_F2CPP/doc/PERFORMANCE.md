@@ -1,7 +1,7 @@
 # Bellhop F2CPP 性能阶段
 
-> 当前状态：P1～P3 scalar 优化与 P4-01 SIMD/线程并行可行性评估已完成；
-> 尚未进入正式 SIMD、OpenMP 或数据布局实现。
+> 当前状态：P1～P3 scalar 优化、P4-01 路线评估与 P4-02 确定性线程并行
+> 已完成；F2CPP 当前性能阶段暂停，不进入 SIMD 或数据布局重构。
 > 基线日期：2026-08-16。
 
 ## P1 目标与边界
@@ -410,3 +410,65 @@ P4-01 的结论是优先线程并行而非 SIMD：它在两个真实 workload �
 默认/回退，但需新的明确批准。本阶段恢复原始源码后，focused CTest 2/2、
 Munk 标准案例、`f2cpp-regression`（CTest 37/37、案例 14/14）及
 `git diff --check` 均通过。
+
+## P4-02 Deterministic thread parallelism
+
+P4-02 将 P4-01 的逐 ray OpenMP 原型替换为正式的持久 `std::thread` team。
+`CartesianCervenyInfluence` 在 solver/source 生命周期内只建立一次 team；每条
+ray 仍由调用线程完成输入校验、逐点 `p/q/gamma/KMAH` 预计算和全部稳定量
+准备，再通过 generation + condition-variable barrier 发布一个只读 prepared
+state。worker 按连续 receiver-depth 静态 stripe 消费，写入互不重叠的完整
+workspace rows；所有 worker 完成本 ray 后调用线程才进入下一 ray。因此每个
+cell 的 ray、image 与 coherent accumulation 顺序和串行实现完全相同，没有
+ray reduction、per-thread field workspace、RayPathCache 复制或 nested OpenMP。
+
+worker 边界捕获任意异常，在同一 barrier 内完成所有 worker 的汇合后由调用
+线程重抛第一个异常；组件测试同时验证了重抛与异常后的 team 复用。默认
+`F2CPP_THREADS=1` 完全走串行；大于 1 只允许单 source Cartesian Cerveny TL，
+其他 family、多 source、R/A/E 均明确拒绝。实际 worker 数取请求值与 receiver
+depth 数的较小者并写入 PRT。未来 source/frequency/BARR/RayReuse 外层若拥有
+并行，必须把内层值保持为 1，禁止两个 parallel owner 嵌套。
+
+正式二进制为 AppleClang Release，SHA-256
+`1689973a0caf22d91c734681025a27e096b8faa95e6868e0bc1f479e61ef03e9`。
+继续使用 P4-01 的两个输入、固定独立子进程与 1 次 warmup；50 Hz 每档 5 次、
+250 Hz 每档 3 次正式计量。Speedup/efficiency 相对本实现的 1-thread；RSS 单位
+KiB。
+
+| Workload | Threads | Wall (s) | Influence (s) | Peak RSS | Speedup | Efficiency |
+|---|---:|---:|---:|---:|---:|---:|
+| 50 Hz / 1000 rays | 1 | 1.3924 | 1.3228 | 65760 | 1.000× | 100.0% |
+| | 2 | 0.8979 | 0.8260 | 65840 | 1.551× | 77.5% |
+| | 4 | 0.6119 | 0.5377 | 65904 | 2.276× | 56.9% |
+| | 8 | 0.5506 | 0.4743 | 65968 | 2.529× | 31.6% |
+| 250 Hz / 5000 rays | 1 | 4.5203 | 4.1949 | 311936 | 1.000× | 100.0% |
+| | 2 | 2.9482 | 2.6281 | 311968 | 1.533× | 76.7% |
+| | 4 | 2.1350 | 1.8066 | 312064 | 2.117× | 52.9% |
+| | 8 | 2.1490 | 1.8082 | 312128 | 2.103× | 26.3% |
+
+正式 1-thread 相对 P4-01 原始串行的 `1.4156/4.6380 s` 没有 parallel-region
+开销，反而分别快约 `1.6%/2.5%`。这是把 prepared context 的稳定成员显式
+缓存为 kernel locals、并保持原先直接贡献 helper 内联后恢复的代码生成；物理
+表达式、检查位置和累加顺序未改变。4-thread 在两个 workload 上均有稳定的
+`2.12～2.28×` 收益；250 Hz 的 8-thread 已略慢于 4-thread，确认本机 4 个
+performance cores 后继续扩线程没有价值。
+
+50/250 Hz 的所有线程档 SHD SHA-256 分别保持
+`be3e6257bee54a021a0be5c983e2dd495fe2f1d0b5109ed32dc3e9636a8ba033`
+与 `a7fb6b38edd6f55f66cd41b117e97b14d496a17da2789fd57a4210ab4593e825`，
+相对 replication baseline 和彼此均逐字节一致。最大 RSS 增量分别只有
+`208/192 KiB`。ignored JSON
+`f2cpp_p402_munk_50hz.json`、`f2cpp_p402_munk_250hz.json` 的 SHA-256 为
+`babd2febd8fb23bcc1729392963a158990684f1dc0dc4d4835b4fd023ffcdc8c`、
+`aa056bea6d7f5512c88076bacbc046106f321cb1aa3194d9970a7f648169997a`。
+
+验收结果：AppleClang Release 与 GCC 14 Release/Werror 均为 CTest 37/37；
+Debug ASan/UBSan focused Influence/solver 2/2；独立 AppleClang ThreadSanitizer
+focused 2/2；Munk 标准案例通过；`f2cpp-regression` 为 CTest 37/37、案例
+14/14；`f2cpp-full` 为 Python 145/145、CTest 37/37、单频案例 65/65；所有
+性能档输出 bitwise 一致，`git diff --check` 通过。
+
+P4-02 满足停止条件：4-thread 有显著、确定性收益，RSS 和线程安全均无阻塞
+问题。当前 F2CPP Performance Phase 正式暂停；不自动进入 SIMD、数据布局、
+更多 scalar 微优化或 BARR/RayReuse。若未来重启，必须先以新的 workload/profile
+证明收益，并重新决定全局唯一 parallel owner。
