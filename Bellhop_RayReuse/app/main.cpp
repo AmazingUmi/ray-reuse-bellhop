@@ -1,11 +1,14 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -13,11 +16,17 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/io/arrival_writer.hpp"
 #include "rayreuse/io/command_line.hpp"
+#include "rayreuse/io/eigenray_writer.hpp"
 #include "rayreuse/io/environment_parser.hpp"
+#include "rayreuse/io/ray_writer.hpp"
 #include "rayreuse/io/shd_writer.hpp"
+#include "rayreuse/solver/arrival_solver.hpp"
 #include "rayreuse/solver/broadband_nonreuse_solver.hpp"
+#include "rayreuse/solver/eigenray_solver.hpp"
 #include "rayreuse/solver/parallel_ray_reuse_solver.hpp"
+#include "rayreuse/solver/ray_trace_product.hpp"
 #include "rayreuse/solver/serial_ray_reuse_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 
@@ -36,8 +45,8 @@ void printUsage(std::ostream& stream) {
             "[--output-queue-capacity <count>] "
             "[--memory-budget-mib <MiB>]\n"
          << "\n"
-         << "Reads <file-root>.env and writes <file-root>.prt and "
-            "<file-root>.shd.\n"
+         << "Reads <file-root>.env and writes <file-root>.prt plus the "
+            "mode-specific product.\n"
          << "Without --frequencies-hz, the scalar or strictly increasing "
             "frequency list in the .env file is used.\n"
          << "With --frequencies-hz, the strictly increasing list "
@@ -56,6 +65,162 @@ void printUsage(std::ostream& stream) {
             "worker count defaults to hardware concurrency, the output "
             "queue defaults to 2, and a zero/unset memory budget means "
             "no explicit budget.\n";
+}
+
+[[nodiscard]] std::string runModeName(rayreuse::SimulationRunMode mode) {
+  switch (mode) {
+    case rayreuse::SimulationRunMode::Coherent:
+      return "coherent TL (SHD)";
+    case rayreuse::SimulationRunMode::RayTrace:
+      return "ray trace (RAY)";
+    case rayreuse::SimulationRunMode::AsciiArrivals:
+      return "ASCII arrivals (ARR)";
+    case rayreuse::SimulationRunMode::BinaryArrivals:
+      return "binary arrivals (ARR)";
+    case rayreuse::SimulationRunMode::Eigenray:
+      return "eigenray (RAY)";
+  }
+  throw rayreuse::ValidationError("unknown simulation run mode");
+}
+
+[[nodiscard]] std::string frequencyToken(double frequency) {
+  std::ostringstream stream;
+  stream << std::setprecision(12) << std::defaultfloat << frequency;
+  std::string token = stream.str();
+  for (char& character : token) {
+    if (character == '.') {
+      character = 'p';
+    } else if (character == '+') {
+      character = 'p';
+    } else if (character == '-') {
+      character = 'm';
+    }
+  }
+  return token;
+}
+
+[[nodiscard]] std::filesystem::path productPath(const std::string& fileRoot,
+                                                std::size_t frequencyIndex,
+                                                std::size_t frequencyCount,
+                                                double frequency,
+                                                std::string_view extension) {
+  if (frequencyCount == 1U) {
+    return std::filesystem::path(fileRoot + std::string(extension));
+  }
+  std::ostringstream suffix;
+  suffix << "_f" << std::setw(3) << std::setfill('0') << frequencyIndex << '_'
+         << frequencyToken(frequency) << "Hz" << extension;
+  return std::filesystem::path(fileRoot + suffix.str());
+}
+
+void removeArtifact(const std::filesystem::path& path) {
+  std::error_code error;
+  const bool removed = std::filesystem::remove(path, error);
+  if (error) {
+    throw rayreuse::BellhopError("unable to remove stale product " +
+                                 path.string() + ": " + error.message());
+  }
+  static_cast<void>(removed);
+}
+
+void removeProductArtifacts(const std::string& fileRoot) {
+  const std::filesystem::path root(fileRoot);
+  const std::filesystem::path directory =
+      root.has_parent_path() ? root.parent_path() : std::filesystem::path(".");
+  const std::string underscorePrefix = root.filename().string() + "_f";
+  const std::string legacyDotPrefix = root.filename().string() + ".f";
+  removeArtifact(std::filesystem::path(fileRoot + ".shd"));
+  removeArtifact(std::filesystem::path(fileRoot + ".ray"));
+  removeArtifact(std::filesystem::path(fileRoot + ".arr"));
+  removeArtifact(std::filesystem::path(fileRoot + ".shd.tmp"));
+  removeArtifact(std::filesystem::path(fileRoot + ".ray.tmp"));
+  removeArtifact(std::filesystem::path(fileRoot + ".arr.tmp"));
+
+  std::error_code iteratorError;
+  for (const std::filesystem::directory_entry& entry :
+       std::filesystem::directory_iterator(directory, iteratorError)) {
+    if (iteratorError) {
+      break;
+    }
+    const std::string name = entry.path().filename().string();
+    const bool usesUnderscorePrefix = name.starts_with(underscorePrefix);
+    const bool usesLegacyDotPrefix = name.starts_with(legacyDotPrefix);
+    if (!usesUnderscorePrefix && !usesLegacyDotPrefix) {
+      continue;
+    }
+    const std::size_t prefixLength =
+        usesUnderscorePrefix ? underscorePrefix.size() : legacyDotPrefix.size();
+    const std::size_t separator = name.find('_', prefixLength);
+    if (separator == std::string::npos) {
+      continue;
+    }
+    const std::string index =
+        name.substr(prefixLength, separator - prefixLength);
+    if (index.empty() ||
+        !std::all_of(index.begin(), index.end(),
+                     [](char value) { return value >= '0' && value <= '9'; })) {
+      continue;
+    }
+    const std::string suffix = name.substr(separator);
+    if ((suffix.size() > 5U && suffix.ends_with(".arr")) ||
+        (suffix.size() > 5U && suffix.ends_with(".ray")) ||
+        (suffix.size() > 9U && suffix.ends_with(".arr.tmp")) ||
+        (suffix.size() > 9U && suffix.ends_with(".ray.tmp"))) {
+      removeArtifact(entry.path());
+    }
+  }
+  if (iteratorError) {
+    throw rayreuse::BellhopError("unable to scan stale products for " +
+                                 fileRoot + ": " + iteratorError.message());
+  }
+}
+
+void removeProductArtifactsNoThrow(const std::string& fileRoot) noexcept {
+  try {
+    removeProductArtifacts(fileRoot);
+  } catch (...) {
+  }
+}
+
+void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
+                            const rayreuse::CommandLineOptions& options) {
+  const rayreuse::SimulationRunMode mode = parsed.simulationCase.runMode();
+  const bool unsupportedParallelTuning =
+      options.outputQueueCapacitySpecified || options.memoryBudgetSpecified;
+  if (mode == rayreuse::SimulationRunMode::RayTrace) {
+    if (parsed.simulationCase.frequencies().size() != 1U) {
+      throw rayreuse::ValidationError(
+          "multi-frequency R products are not supported by the executable");
+    }
+    if (options.executionModeSpecified &&
+        options.executionMode != rayreuse::BroadbandExecutionMode::NonReuse) {
+      throw rayreuse::ValidationError(
+          "--execution-mode reuse/parallel is not defined for R products");
+    }
+    if (options.profileInfluence || options.profileFrequencyTasks ||
+        options.workerCountSpecified || unsupportedParallelTuning) {
+      throw rayreuse::ValidationError(
+          "profiling and parallel tuning options are only supported for TL");
+    }
+    return;
+  }
+  if (mode == rayreuse::SimulationRunMode::Coherent &&
+      parsed.simulationCase.frequencies().size() == 1U &&
+      options.executionModeSpecified &&
+      options.executionMode != rayreuse::BroadbandExecutionMode::NonReuse) {
+    throw rayreuse::ValidationError(
+        "--execution-mode reuse/parallel requires a multi-frequency TL run");
+  }
+  if (mode == rayreuse::SimulationRunMode::AsciiArrivals ||
+      mode == rayreuse::SimulationRunMode::BinaryArrivals ||
+      mode == rayreuse::SimulationRunMode::Eigenray) {
+    if (options.profileInfluence || options.profileFrequencyTasks ||
+        unsupportedParallelTuning) {
+      throw rayreuse::ValidationError(
+          "Influence profiling and parallel tuning options are not supported "
+          "for arrival/eigenray products");
+    }
+  }
 }
 
 void printVersion(std::ostream& stream) {
@@ -115,9 +280,62 @@ void writeConfigurationSummary(std::ostream& stream,
   }
   stream << "design frequency = " << simulation.frequencies().designFrequency()
          << " Hz\n"
-         << "Coherent TL calculation\n"
-         << "Cartesian beams\n"
-         << "Point source (cylindrical coordinates)\n"
+         << "run mode = " << runModeName(simulation.runMode()) << '\n'
+         << "beam family = ";
+  switch (simulation.beamFamily()) {
+    case rayreuse::BeamFamily::CervenyGaussian:
+      stream << "Cerveny Gaussian\n";
+      break;
+    case rayreuse::BeamFamily::GeometricHat:
+      stream << "geometric hat\n";
+      break;
+    case rayreuse::BeamFamily::GeometricGaussian:
+      stream << "geometric Gaussian\n";
+      break;
+  }
+  stream << "source beam pattern = "
+         << (simulation.sourceBeamPattern().isDirectional() ? "directional"
+                                                            : "omnidirectional")
+         << '\n'
+         << "Cartesian beams\n";
+  switch (simulation.runMode()) {
+    case rayreuse::SimulationRunMode::Coherent:
+      stream << "Coherent TL calculation\n";
+      break;
+    case rayreuse::SimulationRunMode::RayTrace:
+      stream << "Ray trace run\n";
+      break;
+    case rayreuse::SimulationRunMode::AsciiArrivals:
+      stream << "Arrivals calculation\n";
+      stream << "Arrivals calculation, ASCII  file output\n";
+      break;
+    case rayreuse::SimulationRunMode::BinaryArrivals:
+      stream << "Arrivals calculation\n"
+             << "Arrivals calculation, binary file output\n";
+      break;
+    case rayreuse::SimulationRunMode::Eigenray:
+      stream << "Eigenray trace run\n";
+      break;
+  }
+  switch (simulation.beamFamily()) {
+    case rayreuse::BeamFamily::CervenyGaussian:
+      stream << "Cerveny beams in Cartesian coordinates\n";
+      break;
+    case rayreuse::BeamFamily::GeometricHat:
+      stream << "Geometric hat beams in Cartesian coordinates\n"
+             << "Geometric hat beams\n";
+      break;
+    case rayreuse::BeamFamily::GeometricGaussian:
+      stream << "Geometric gaussian beams in Cartesian coordinates\n"
+             << "Geometric gaussian beams\n";
+      break;
+  }
+  if (simulation.sourceBeamPattern().isDirectional()) {
+    stream << "Using source beam pattern file\n"
+           << "Number of source beam pattern points = "
+           << simulation.sourceBeamPattern().size() << '\n';
+  }
+  stream << "Point source (cylindrical coordinates)\n"
          << "Rectilinear receiver grid\n";
   writeBoundarySummary(stream, environment.seaSurface(), "top");
   writeBoundarySummary(stream, environment.seabed(), "bottom");
@@ -226,6 +444,31 @@ void writeFrequencyTaskTimings(
   return memoryBudgetMiB * bytesPerMiB;
 }
 
+void writeProductExecutionMode(std::ostream& stream,
+                               rayreuse::BroadbandExecutionMode mode,
+                               std::size_t frequencyCount) {
+  if (frequencyCount == 1U) {
+    stream << "execution mode = single-frequency ";
+  } else {
+    stream << "execution mode = broadband ";
+  }
+  switch (mode) {
+    case rayreuse::BroadbandExecutionMode::NonReuse:
+      stream << "non-reuse\n";
+      break;
+    case rayreuse::BroadbandExecutionMode::Reuse:
+      stream << "reuse\n";
+      break;
+    case rayreuse::BroadbandExecutionMode::Parallel:
+      stream << "parallel reuse\n";
+      break;
+  }
+  stream << "Trace passes = "
+         << (mode == rayreuse::BroadbandExecutionMode::NonReuse ? frequencyCount
+                                                                : 1U)
+         << '\n';
+}
+
 }  // namespace
 
 int main(int argumentCount, char* arguments[]) {
@@ -266,17 +509,167 @@ int main(int argumentCount, char* arguments[]) {
   }
   printLog << std::setprecision(17);
 
+  bool productsPrepared = false;
   try {
     const rayreuse::ParsedEnvironment parsed =
         rayreuse::EnvironmentParser::parseFile(
             environmentPath, std::move(options.frequencyOverrideHz));
+    validateProductOptions(parsed, options);
+    // Product files are mode-owned.  Remove every known product for this
+    // root before solving so switching modes cannot expose stale output.
+    removeProductArtifacts(fileRoot);
+    productsPrepared = true;
     writeConfigurationSummary(printLog, parsed);
     rayreuse::CartesianCervenySettings influenceSettings =
         parsed.beam.influence;
     influenceSettings.collectStatistics = options.profileInfluence;
 
     const Clock::time_point solveBegin = Clock::now();
-    if (parsed.simulationCase.frequencies().size() == 1U) {
+    const rayreuse::SimulationRunMode runMode = parsed.simulationCase.runMode();
+    if (runMode == rayreuse::SimulationRunMode::RayTrace) {
+      const double frequency =
+          parsed.simulationCase.frequencies().values().front();
+      const rayreuse::RayPathCache cache =
+          rayreuse::traceRayProduct(parsed.simulationCase);
+      const std::uint64_t fingerprintBefore = cache.contentFingerprint();
+      const std::filesystem::path output =
+          productPath(fileRoot, 0U, 1U, frequency, ".ray");
+      rayreuse::RayWriter writer(output, parsed.title, parsed.simulationCase,
+                                 frequency);
+      writer.append(cache);
+      writer.finalize();
+      const std::uint64_t fingerprintAfter = cache.contentFingerprint();
+      if (options.verifyCache && fingerprintBefore != fingerprintAfter) {
+        throw rayreuse::ValidationError(
+            "R product modified the frozen ray cache");
+      }
+      printLog << "product = " << output << '\n'
+               << "ray count = " << cache.size() << '\n'
+               << "ray cache bytes = " << cache.memoryFootprintBytes() << '\n'
+               << "cache fingerprint verification = "
+               << (options.verifyCache ? "enabled\n" : "disabled\n");
+      if (options.verifyCache) {
+        printLog << "cache fingerprint before = " << fingerprintBefore << '\n'
+                 << "cache fingerprint after = " << fingerprintAfter << '\n';
+      }
+    } else if (runMode == rayreuse::SimulationRunMode::AsciiArrivals ||
+               runMode == rayreuse::SimulationRunMode::BinaryArrivals) {
+      const rayreuse::ArrivalEncoding encoding =
+          runMode == rayreuse::SimulationRunMode::AsciiArrivals
+              ? rayreuse::ArrivalEncoding::Ascii
+              : rayreuse::ArrivalEncoding::Binary;
+      const std::string_view extension = ".arr";
+      const auto consumer = [&](std::size_t frequencyIndex,
+                                const rayreuse::RayPathCache& cache,
+                                const rayreuse::ArrivalWorkspace& workspace) {
+        const std::uint64_t before = cache.contentFingerprint();
+        const double frequency = workspace.frequency();
+        const std::filesystem::path output = productPath(
+            fileRoot, frequencyIndex,
+            parsed.simulationCase.frequencies().size(), frequency, extension);
+        rayreuse::ArrivalWriter::write(
+            output, parsed.title, parsed.simulationCase, workspace, encoding);
+        const std::uint64_t after = cache.contentFingerprint();
+        if (options.verifyCache && before != after) {
+          throw rayreuse::ValidationError(
+              "arrival product modified the frozen ray cache");
+        }
+        printLog << "frequency product index = " << frequencyIndex
+                 << " frequency Hz = " << frequency << '\n'
+                 << "product = " << output << '\n';
+        if (options.verifyCache) {
+          printLog << "cache fingerprint before = " << before << '\n'
+                   << "cache fingerprint after = " << after << '\n';
+        }
+      };
+      const std::size_t workers = resolvedWorkerCount(options.workerCount);
+      rayreuse::ArrivalSolverStatistics statistics;
+      if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
+        statistics = rayreuse::ArrivalSolver::solveNonReuse(
+            parsed.simulationCase, consumer, options.verifyCache);
+      } else if (options.executionMode ==
+                 rayreuse::BroadbandExecutionMode::Reuse) {
+        statistics = rayreuse::ArrivalSolver::solve(
+            parsed.simulationCase, consumer, options.verifyCache);
+      } else {
+        statistics = rayreuse::ArrivalSolver::solveParallel(
+            parsed.simulationCase, consumer, workers, options.verifyCache);
+      }
+      writeProductExecutionMode(printLog, options.executionMode,
+                                statistics.frequencyCount);
+      printLog << "frequency count = " << statistics.frequencyCount << '\n'
+               << "ray count = " << statistics.rayCount << '\n'
+               << "arrival candidate count = " << statistics.candidateCount
+               << '\n'
+               << "arrival consume seconds = " << statistics.consumeSeconds
+               << '\n';
+      if (statistics.cacheFingerprintVerified) {
+        printLog << "cache fingerprint verification = enabled\n"
+                 << "solver cache fingerprint before = "
+                 << statistics.cacheFingerprintBefore << '\n'
+                 << "solver cache fingerprint after = "
+                 << statistics.cacheFingerprintAfter << '\n';
+      } else {
+        printLog << "cache fingerprint verification = disabled\n";
+      }
+    } else if (runMode == rayreuse::SimulationRunMode::Eigenray) {
+      const auto consumer =
+          [&](std::size_t frequencyIndex, const rayreuse::RayPathCache& cache,
+              const std::vector<std::pair<std::size_t, rayreuse::EigenrayHit>>&
+                  hits) {
+            const std::uint64_t before = cache.contentFingerprint();
+            const double frequency =
+                parsed.simulationCase.frequencies().values().at(frequencyIndex);
+            const std::filesystem::path output = productPath(
+                fileRoot, frequencyIndex,
+                parsed.simulationCase.frequencies().size(), frequency, ".ray");
+            rayreuse::EigenrayWriter::write(output, parsed.title,
+                                            parsed.simulationCase, frequency,
+                                            cache, hits);
+            const std::uint64_t after = cache.contentFingerprint();
+            if (options.verifyCache && before != after) {
+              throw rayreuse::ValidationError(
+                  "eigenray product modified the frozen ray cache");
+            }
+            printLog << "frequency product index = " << frequencyIndex
+                     << " frequency Hz = " << frequency << '\n'
+                     << "product = " << output << '\n'
+                     << "eigenray hit count = " << hits.size() << '\n';
+            if (options.verifyCache) {
+              printLog << "cache fingerprint before = " << before << '\n'
+                       << "cache fingerprint after = " << after << '\n';
+            }
+          };
+      const std::size_t workers = resolvedWorkerCount(options.workerCount);
+      rayreuse::EigenraySolverStatistics statistics;
+      if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
+        statistics = rayreuse::EigenraySolver::solveNonReuse(
+            parsed.simulationCase, consumer, options.verifyCache);
+      } else if (options.executionMode ==
+                 rayreuse::BroadbandExecutionMode::Reuse) {
+        statistics = rayreuse::EigenraySolver::solve(
+            parsed.simulationCase, consumer, options.verifyCache);
+      } else {
+        statistics = rayreuse::EigenraySolver::solveParallel(
+            parsed.simulationCase, consumer, workers, options.verifyCache);
+      }
+      writeProductExecutionMode(printLog, options.executionMode,
+                                statistics.frequencyCount);
+      printLog << "frequency count = " << statistics.frequencyCount << '\n'
+               << "ray count = " << statistics.rayCount << '\n'
+               << "eigenray hit count = " << statistics.totalHitCount << '\n'
+               << "eigenray consume seconds = " << statistics.consumeSeconds
+               << '\n';
+      if (statistics.cacheFingerprintVerified) {
+        printLog << "cache fingerprint verification = enabled\n"
+                 << "solver cache fingerprint before = "
+                 << statistics.cacheFingerprintBefore << '\n'
+                 << "solver cache fingerprint after = "
+                 << statistics.cacheFingerprintAfter << '\n';
+      } else {
+        printLog << "cache fingerprint verification = disabled\n";
+      }
+    } else if (parsed.simulationCase.frequencies().size() == 1U) {
       const rayreuse::SingleFrequencyResult result =
           rayreuse::SingleFrequencySolver::solve(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
@@ -479,7 +872,7 @@ int main(int argumentCount, char* arguments[]) {
       }
     }
 
-    printLog << "Total solver and SHD seconds = "
+    printLog << "Total solver and product seconds = "
              << std::chrono::duration<double>(Clock::now() - solveBegin).count()
              << '\n'
              << "Bellhop RayReuse completed successfully\n";
@@ -490,6 +883,9 @@ int main(int argumentCount, char* arguments[]) {
     }
     return 0;
   } catch (const std::exception& error) {
+    if (productsPrepared) {
+      removeProductArtifactsNoThrow(fileRoot);
+    }
     printLog << "\nFATAL ERROR: " << error.what() << '\n';
     printLog.close();
     std::cerr << "bellhop_rayreuse: " << error.what() << '\n';

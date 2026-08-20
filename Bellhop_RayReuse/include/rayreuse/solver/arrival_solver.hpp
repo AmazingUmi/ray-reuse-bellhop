@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 
 #include "rayreuse/cache/ray_path_cache.hpp"
@@ -22,6 +23,9 @@ struct ArrivalSolverStatistics {
   double projectSeconds{};
   double influenceSeconds{};
   double consumeSeconds{};
+  bool cacheFingerprintVerified{};
+  std::uint64_t cacheFingerprintBefore{};
+  std::uint64_t cacheFingerprintAfter{};
 };
 
 using FrozenFrequencyArrivalConsumer = std::function<void(
@@ -31,13 +35,14 @@ class ArrivalSolver {
  public:
   [[nodiscard]] static ArrivalSolverStatistics solve(
       const SimulationCase& simulation,
-      const FrozenFrequencyArrivalConsumer& consumer);
+      const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache = false);
   [[nodiscard]] static ArrivalSolverStatistics solveNonReuse(
       const SimulationCase& simulation,
-      const FrozenFrequencyArrivalConsumer& consumer);
+      const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache = false);
   [[nodiscard]] static ArrivalSolverStatistics solveParallel(
       const SimulationCase& simulation,
-      const FrozenFrequencyArrivalConsumer& consumer, std::size_t workerCount);
+      const FrozenFrequencyArrivalConsumer& consumer, std::size_t workerCount,
+      bool verifyCache = false);
 };
 
 }  // namespace rayreuse

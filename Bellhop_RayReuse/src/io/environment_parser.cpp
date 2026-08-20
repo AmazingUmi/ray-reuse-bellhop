@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/io/ray_writer.hpp"
 
 namespace rayreuse {
 namespace {
@@ -588,26 +589,76 @@ struct ParsedBoundaryFile {
                             .longMaterials = std::move(longMaterials)};
 }
 
-[[nodiscard]] std::string canonicalRunType(const Record& record,
-                                           const std::string& sourceName) {
+struct ParsedRunType {
+  SimulationRunMode runMode{};
+  BeamFamily beamFamily{};
+  bool usesSourceBeamPattern{};
+};
+
+[[nodiscard]] ParsedRunType canonicalRunType(const Record& record,
+                                             const std::string& sourceName) {
   requireTokenCount(record, 1U, sourceName, "run type");
   std::string runType = record.tokens.front();
   if (runType.size() > 7U) {
     fail(sourceName, record.lineNumber, "run type exceeds seven characters");
   }
   runType.resize(7U, ' ');
-  if (runType[0U] != 'C' || runType[1U] != 'C' || runType[2U] != ' ' ||
-      (runType[3U] != ' ' && runType[3U] != 'R') ||
-      (runType[4U] != ' ' && runType[4U] != 'R') ||
-      (runType[5U] != ' ' && runType[5U] != '2') || runType[6U] != ' ') {
+  const bool commonOptionsValid =
+      (runType[2U] == ' ' || runType[2U] == 'O' || runType[2U] == '*') &&
+      (runType[3U] == ' ' || runType[3U] == 'R' || runType[3U] == 'X') &&
+      (runType[4U] == ' ' || runType[4U] == 'R' || runType[4U] == 'I') &&
+      (runType[5U] == ' ' || runType[5U] == '2') && runType[6U] == ' ';
+  const bool coherent = runType[0U] == 'C' && runType[1U] == 'C';
+  const bool rayTrace =
+      runType[0U] == 'R' && (runType[1U] == ' ' || runType[1U] == 'G');
+  const bool arrivals = (runType[0U] == 'A' || runType[0U] == 'a') &&
+                        (runType[1U] == 'G' || runType[1U] == 'B');
+  const bool eigenray =
+      runType[0U] == 'E' && (runType[1U] == 'G' || runType[1U] == 'B');
+  if (!commonOptionsValid ||
+      (!coherent && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
-         "only coherent Cartesian point-source rectilinear 2-D "
-         "run type 'CC' is supported");
+         "only coherent Cartesian 'CC', unshifted point-source 'R/RG/RGO', "
+         "or Cartesian geometric 'AG/aG/AB/aB/EG/EB' run types are "
+         "supported");
+  }
+  if (runType[3U] == 'X') {
+    fail(sourceName, record.lineNumber,
+         "line-source run types are not supported by RayReuse");
+  }
+  if (runType[4U] == 'I') {
+    fail(sourceName, record.lineNumber,
+         "irregular receiver grids are not supported by RayReuse");
+  }
+  if (arrivals || eigenray) {
+    if (runType[1U] != 'G' && runType[1U] != 'B') {
+      fail(sourceName, record.lineNumber,
+           "arrival and eigenray run types require Cartesian G or B beams");
+    }
+  }
+  if (coherent && runType[1U] != 'C') {
+    fail(sourceName, record.lineNumber,
+         "coherent RayReuse TL requires Cartesian Cerveny 'CC'");
   }
   runType[3U] = 'R';
   runType[4U] = 'R';
   runType[5U] = '2';
-  return runType;
+  const SimulationRunMode mode =
+      rayTrace   ? SimulationRunMode::RayTrace
+      : arrivals ? (runType[0U] == 'A' ? SimulationRunMode::AsciiArrivals
+                                       : SimulationRunMode::BinaryArrivals)
+      : eigenray ? SimulationRunMode::Eigenray
+                 : SimulationRunMode::Coherent;
+  BeamFamily beamFamily = BeamFamily::CervenyGaussian;
+  if (rayTrace && runType[1U] == 'G') {
+    beamFamily = BeamFamily::GeometricHat;
+  } else if (arrivals || eigenray) {
+    beamFamily = runType[1U] == 'G' ? BeamFamily::GeometricHat
+                                    : BeamFamily::GeometricGaussian;
+  }
+  return ParsedRunType{.runMode = mode,
+                       .beamFamily = beamFamily,
+                       .usesSourceBeamPattern = runType[2U] == '*'};
 }
 
 }  // namespace
@@ -892,10 +943,22 @@ struct ParsedBoundaryFile {
   std::vector<double> receiverRanges =
       parseVector(reader, receiverRangeCount, "receiver ranges", false,
                   kKilometersToMeters);
-  requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
-
   const Record runTypeRecord = reader.require("run type");
-  static_cast<void>(canonicalRunType(runTypeRecord, source));
+  const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
+  if (runType.runMode == SimulationRunMode::Coherent) {
+    requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
+  }
+
+  SourceBeamPattern sourceBeamPattern = SourceBeamPattern::omnidirectional();
+  if (runType.usesSourceBeamPattern) {
+    if (!environmentPath.has_value()) {
+      fail(source, runTypeRecord.lineNumber,
+           "source beam pattern run type requires parseFile with a sibling "
+           ".sbp file");
+    }
+    sourceBeamPattern =
+        readSourceBeamPattern(boundaryPath(*environmentPath, ".sbp"));
+  }
 
   const Record launchCountRecord = reader.require("launch-angle count");
   requireTokenCount(launchCountRecord, 1U, source, "launch-angle count");
@@ -903,11 +966,25 @@ struct ParsedBoundaryFile {
       parseCount(launchCountRecord, 0U, source, "launch-angle count", true);
 
   const Record launchAngleRecord = reader.require("launch-angle endpoints");
-  requireTokenCount(launchAngleRecord, 2U, source, "launch-angle endpoints");
+  const bool singleRayTraceAngle =
+      runType.runMode == SimulationRunMode::RayTrace &&
+      requestedLaunchCount == 1U;
+  if (singleRayTraceAngle) {
+    if (launchAngleRecord.tokens.size() != 1U &&
+        launchAngleRecord.tokens.size() != 2U) {
+      fail(source, launchAngleRecord.lineNumber,
+           "one explicit ray-trace angle requires one angle or an endpoint "
+           "pair");
+    }
+  } else {
+    requireTokenCount(launchAngleRecord, 2U, source, "launch-angle endpoints");
+  }
   const double minimumLaunchAngleDegrees =
       parseDouble(launchAngleRecord, 0U, source, "minimum launch angle");
   const double maximumLaunchAngleDegrees =
-      parseDouble(launchAngleRecord, 1U, source, "maximum launch angle");
+      launchAngleRecord.tokens.size() == 1U
+          ? minimumLaunchAngleDegrees
+          : parseDouble(launchAngleRecord, 1U, source, "maximum launch angle");
   const double degreesToRadians = std::numbers::pi / 180.0;
 
   const Record integratorRecord = reader.require("integrator settings");
@@ -926,32 +1003,35 @@ struct ParsedBoundaryFile {
     stepLength = (bottomDepth - surfaceDepth) / 10.0;
   }
 
-  const Record beamRecord = reader.require("Cerveny beam settings");
-  requireTokenCount(beamRecord, 3U, source, "Cerveny beam settings");
-  if (beamRecord.tokens.front() != "MS") {
-    fail(source, beamRecord.lineNumber,
-         "only minimum-width, standard-curvature beam type 'MS' "
-         "is supported");
-  }
-  const double epsilonMultiplier =
-      parseDouble(beamRecord, 1U, source, "epsilon multiplier");
-  const double loopRange =
-      parseDouble(beamRecord, 2U, source, "beam loop range") *
-      kKilometersToMeters;
-  if (epsilonMultiplier <= 0.0 || loopRange <= 0.0) {
-    fail(source, beamRecord.lineNumber,
-         "epsilon multiplier and beam loop range must be positive");
-  }
+  double epsilonMultiplier = 1.0;
+  double loopRange = 1.0;
+  std::size_t imageCount = 1U;
+  int beamWindow = 1;
+  if (runType.runMode == SimulationRunMode::Coherent) {
+    const Record beamRecord = reader.require("Cerveny beam settings");
+    requireTokenCount(beamRecord, 3U, source, "Cerveny beam settings");
+    if (beamRecord.tokens.front() != "MS") {
+      fail(source, beamRecord.lineNumber,
+           "only minimum-width, standard-curvature beam type 'MS' "
+           "is supported");
+    }
+    epsilonMultiplier =
+        parseDouble(beamRecord, 1U, source, "epsilon multiplier");
+    loopRange = parseDouble(beamRecord, 2U, source, "beam loop range") *
+                kKilometersToMeters;
+    if (epsilonMultiplier <= 0.0 || loopRange <= 0.0) {
+      fail(source, beamRecord.lineNumber,
+           "epsilon multiplier and beam loop range must be positive");
+    }
 
-  const Record imageRecord = reader.require("image/window settings");
-  requireTokenCount(imageRecord, 3U, source, "image/window settings");
-  const std::size_t imageCount =
-      parseCount(imageRecord, 0U, source, "image count", false, 3U);
-  const int beamWindow =
-      parsePositiveInt(imageRecord, 1U, source, "beam window");
-  if (imageRecord.tokens[2U] != "P") {
-    fail(source, imageRecord.lineNumber,
-         "only pressure component 'P' is supported");
+    const Record imageRecord = reader.require("image/window settings");
+    requireTokenCount(imageRecord, 3U, source, "image/window settings");
+    imageCount = parseCount(imageRecord, 0U, source, "image count", false, 3U);
+    beamWindow = parsePositiveInt(imageRecord, 1U, source, "beam window");
+    if (imageRecord.tokens[2U] != "P") {
+      fail(source, imageRecord.lineNumber,
+           "only pressure component 'P' is supported");
+    }
   }
   reader.requireEnd();
 
@@ -978,7 +1058,8 @@ struct ParsedBoundaryFile {
       IntegratorSettings{.stepLength = stepLength,
                          .rangeLimit = rangeLimit,
                          .depthLimit = depthLimit,
-                         .maximumRayPoints = kMaximumRayPoints});
+                         .maximumRayPoints = kMaximumRayPoints},
+      std::move(sourceBeamPattern), runType.runMode, runType.beamFamily);
 
   return ParsedEnvironment{
       .title = std::move(title),

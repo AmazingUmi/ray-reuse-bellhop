@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <utility>
 #include <vector>
@@ -23,6 +24,9 @@ struct EigenraySolverStatistics {
   double projectSeconds{};
   double influenceSeconds{};
   double consumeSeconds{};
+  bool cacheFingerprintVerified{};
+  std::uint64_t cacheFingerprintBefore{};
+  std::uint64_t cacheFingerprintAfter{};
 };
 
 using FrozenFrequencyEigenrayConsumer = std::function<void(
@@ -33,13 +37,16 @@ class EigenraySolver {
  public:
   [[nodiscard]] static EigenraySolverStatistics solve(
       const SimulationCase& simulation,
-      const FrozenFrequencyEigenrayConsumer& consumer);
+      const FrozenFrequencyEigenrayConsumer& consumer,
+      bool verifyCache = false);
   [[nodiscard]] static EigenraySolverStatistics solveNonReuse(
       const SimulationCase& simulation,
-      const FrozenFrequencyEigenrayConsumer& consumer);
+      const FrozenFrequencyEigenrayConsumer& consumer,
+      bool verifyCache = false);
   [[nodiscard]] static EigenraySolverStatistics solveParallel(
       const SimulationCase& simulation,
-      const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount);
+      const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount,
+      bool verifyCache = false);
 };
 
 }  // namespace rayreuse

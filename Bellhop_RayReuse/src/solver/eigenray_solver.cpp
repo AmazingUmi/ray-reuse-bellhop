@@ -88,7 +88,7 @@ FrequencyHits collectHits(const SimulationCase& simulation,
 
 EigenraySolverStatistics EigenraySolver::solve(
     const SimulationCase& simulation,
-    const FrozenFrequencyEigenrayConsumer& consumer) {
+    const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache) {
   validateEigenraySimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -116,6 +116,10 @@ EigenraySolverStatistics EigenraySolver::solve(
   stats.traceSeconds = elapsed(traceBegin, Clock::now());
   stats.rayCount = cache.size();
   stats.peakRayCacheBytes = cache.memoryFootprintBytes();
+  if (verifyCache) {
+    stats.cacheFingerprintVerified = true;
+    stats.cacheFingerprintBefore = cache.contentFingerprint();
+  }
   for (std::size_t fi = 0U; fi < simulation.frequencies().size(); ++fi) {
     const double frequency = simulation.frequencies().values()[fi];
     const FrequencyProjector projector(simulation.environment());
@@ -162,12 +166,18 @@ EigenraySolverStatistics EigenraySolver::solve(
     stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
     ++stats.frequencyCount;
   }
+  if (verifyCache) {
+    stats.cacheFingerprintAfter = cache.contentFingerprint();
+    if (stats.cacheFingerprintAfter != stats.cacheFingerprintBefore)
+      throw ValidationError(
+          "eigenray projection modified the frozen ray cache");
+  }
   return stats;
 }
 
 EigenraySolverStatistics EigenraySolver::solveNonReuse(
     const SimulationCase& simulation,
-    const FrozenFrequencyEigenrayConsumer& consumer) {
+    const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache) {
   validateEigenraySimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -179,6 +189,17 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
   EigenraySolverStatistics stats;
   for (std::size_t fi = 0U; fi < simulation.frequencies().size(); ++fi) {
     RayPathCache cache = traceCache(simulation);
+    const std::uint64_t fingerprintBefore =
+        verifyCache ? cache.contentFingerprint() : 0U;
+    if (verifyCache) {
+      if (!stats.cacheFingerprintVerified) {
+        stats.cacheFingerprintVerified = true;
+        stats.cacheFingerprintBefore = fingerprintBefore;
+      } else if (fingerprintBefore != stats.cacheFingerprintBefore) {
+        throw ValidationError(
+            "eigenray non-reuse traces produced inconsistent frozen caches");
+      }
+    }
     stats.rayCount += cache.size();
     stats.peakRayCacheBytes =
         std::max(stats.peakRayCacheBytes, cache.memoryFootprintBytes());
@@ -192,6 +213,12 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
     }
     const auto consumeBegin = Clock::now();
     consumer(fi, cache, hits.hits);
+    if (verifyCache) {
+      stats.cacheFingerprintAfter = cache.contentFingerprint();
+      if (stats.cacheFingerprintAfter != fingerprintBefore)
+        throw ValidationError(
+            "eigenray projection modified a frozen non-reuse cache");
+    }
     stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
     stats.projectedRayCount += cache.size();
     ++stats.frequencyCount;
@@ -201,7 +228,8 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
 
 EigenraySolverStatistics EigenraySolver::solveParallel(
     const SimulationCase& simulation,
-    const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount) {
+    const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount,
+    bool verifyCache) {
   validateEigenraySimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -213,6 +241,8 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
   if (workerCount == 0U)
     throw ValidationError("eigenray worker count must be positive");
   RayPathCache cache = traceCache(simulation);
+  const std::uint64_t fingerprintBefore =
+      verifyCache ? cache.contentFingerprint() : 0U;
   const std::size_t count = simulation.frequencies().size();
   std::vector<FrequencyHits> results(count);
   std::atomic<std::size_t> next{0U};
@@ -241,6 +271,8 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
   stats.frequencyCount = count;
   stats.rayCount = cache.size();
   stats.peakRayCacheBytes = cache.memoryFootprintBytes();
+  stats.cacheFingerprintVerified = verifyCache;
+  stats.cacheFingerprintBefore = fingerprintBefore;
   for (std::size_t fi = 0U; fi < count; ++fi) {
     stats.projectedRayCount += cache.size();
     for (const auto& [launchIndex, hit] : results[fi].hits) {
@@ -253,6 +285,12 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
     const auto consumeBegin = Clock::now();
     consumer(fi, cache, results[fi].hits);
     stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
+  }
+  if (verifyCache) {
+    stats.cacheFingerprintAfter = cache.contentFingerprint();
+    if (stats.cacheFingerprintAfter != stats.cacheFingerprintBefore)
+      throw ValidationError(
+          "parallel eigenray projection modified the frozen ray cache");
   }
   return stats;
 }

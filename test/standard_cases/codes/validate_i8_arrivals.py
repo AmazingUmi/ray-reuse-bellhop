@@ -29,6 +29,11 @@ CASES = (
     "arrival_line_directional_multisource",
     "arrival_zero",
 )
+RAYREUSE_CASES = (
+    "arrival_geometric_hat_ascii",
+    "arrival_geometric_hat_binary",
+    "arrival_zero",
+)
 ULP_LIMIT = 8
 CODES_ROOT = Path(__file__).resolve().parent
 STANDARD_CASES_ROOT = CODES_ROOT.parent
@@ -183,7 +188,9 @@ def _path_classes(product: ArrivalsProduct) -> dict[str, int]:
     return counts
 
 
-def _effects(products: dict[str, ArrivalsProduct]) -> dict[str, object]:
+def _effects(
+    products: dict[str, ArrivalsProduct], *, full_matrix: bool = True
+) -> dict[str, object]:
     all_arrivals = [arrival for product in products.values() for cell in product.cells for arrival in cell.arrivals]
     if not all_arrivals:
         raise ValueError("arrival matrix produced no non-zero products")
@@ -194,6 +201,27 @@ def _effects(products: dict[str, ArrivalsProduct]) -> dict[str, object]:
         raise ValueError("arrival matrix did not observe a reflected path")
     if max((source.maximum_arrivals for product in products.values() for source in product.sources), default=0) < 2:
         raise ValueError("arrival matrix did not observe multi-arrival cells")
+    if not full_matrix:
+        return {
+            "zero_cells": len(zero.cells),
+            "reflected_arrivals": sum(
+                bool(a.top_bounces or a.bottom_bounces)
+                for a in all_arrivals
+            ),
+            "maximum_arrivals": max(
+                (
+                    source.maximum_arrivals
+                    for product in products.values()
+                    for source in product.sources
+                ),
+                default=0,
+            ),
+            "path_class_counts": {
+                case_id: _path_classes(product)
+                for case_id, product in products.items()
+            },
+            "scope": "rayreuse representative shared cases",
+        }
     ray_centered = products["arrival_geometric_hat_ray_centered"]
     if not any(abs(arrival.phase_degrees) > 180.0 for cell in ray_centered.cells for arrival in cell.arrivals):
         raise ValueError("ray-centered case did not observe unwrapped/caustic phase")
@@ -209,15 +237,23 @@ def _effects(products: dict[str, ArrivalsProduct]) -> dict[str, object]:
     return {"zero_cells": len(zero.cells), "reflected_arrivals": sum(bool(a.top_bounces or a.bottom_bounces) for a in all_arrivals), "maximum_arrivals": max(source.maximum_arrivals for product in products.values() for source in product.sources), "line_directional_amplitude_values": len({float32_bits(value) for value in amplitudes}), "irregular_cells": len(irregular.sources[0].cells), "path_class_counts": {case_id: _path_classes(product) for case_id, product in products.items()}, "observed_but_not_isolated": ["multiple stored arrivals do not independently prove duplicate merge behavior", "the frozen six-case matrix has no otherwise-identical point-source control, so point-vs-line scaling is not isolated", "the directional companion and amplitude variation are structural evidence, not an omnidirectional numerical control"]}
 
 
-def validate(results_root: Path, origin_executable: Path, f2cpp_executable: Path) -> dict[str, object]:
+def validate(
+    results_root: Path,
+    origin_executable: Path,
+    f2cpp_executable: Path,
+    rayreuse_executable: Path | None = None,
+) -> dict[str, object]:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
     implementations = {"origin": origin_executable.resolve(), "f2cpp": f2cpp_executable.resolve()}
+    if rayreuse_executable is not None:
+        implementations["rayreuse"] = rayreuse_executable.resolve()
     products: dict[str, dict[str, ArrivalsProduct]] = {name: {} for name in implementations}
     provenance: dict[str, object] = {}
     comparison: dict[str, object] = {}
     for version, executable in implementations.items():
+        version_cases = RAYREUSE_CASES if version == "rayreuse" else CASES
         version_info: dict[str, object] = {"executable": str(executable), "executable_sha256": sha256(executable), "executable_mtime_ns": executable.stat().st_mtime_ns}
-        for case_id in CASES:
+        for case_id in version_cases:
             definition = definitions[case_id]
             manifest_path, manifest = _manifest(results_root, version, case_id)
             _require_executable_identity(manifest, executable, manifest_path)
@@ -227,12 +263,22 @@ def validate(results_root: Path, origin_executable: Path, f2cpp_executable: Path
             products[version][case_id] = product
             version_info[case_id] = {"product_sha256": sha256(product_path), "environment_sha256": sha256(environment_path), "source_references": list(definition.source_references), "source_sha256": source_hashes(definition.source_references), "arrival_count": sum(cell.count for cell in product.cells)}
         provenance[version] = version_info
-        _effects(products[version])
+        _effects(products[version], full_matrix=version != "rayreuse")
     for case_id in CASES:
         comparison[case_id] = compare_arrival_products(products["origin"][case_id], products["f2cpp"][case_id], case_id)
     for version in implementations:
         comparison[f"{version}_ascii_binary"] = compare_arrival_products(products[version][CASES[0]], products[version][CASES[1]], f"{version} A/a encoding pair")
-    return {"schema": "bellhop.i8.arrivals.parity.v1", "status": "passed", "ulp_limit": ULP_LIMIT, "cases": list(CASES), "provenance": provenance, "effects": {version: _effects(products[version]) for version in implementations}, "comparison": comparison}
+    if "rayreuse" in implementations:
+        for case_id in RAYREUSE_CASES:
+            comparison[f"origin_vs_rayreuse_{case_id}"] = compare_arrival_products(
+                products["origin"][case_id], products["rayreuse"][case_id],
+                f"Origin/RayReuse {case_id}",
+            )
+            comparison[f"f2cpp_vs_rayreuse_{case_id}"] = compare_arrival_products(
+                products["f2cpp"][case_id], products["rayreuse"][case_id],
+                f"F2CPP/RayReuse {case_id}",
+            )
+    return {"schema": "bellhop.i8.arrivals.parity.v1", "status": "passed", "ulp_limit": ULP_LIMIT, "cases": list(CASES), "cases_by_version": {version: list(RAYREUSE_CASES if version == "rayreuse" else CASES) for version in implementations}, "provenance": provenance, "effects": {version: _effects(products[version], full_matrix=version != "rayreuse") for version in implementations}, "comparison": comparison}
 
 
 def main() -> int:
@@ -240,10 +286,14 @@ def main() -> int:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
+    parser.add_argument("--rayreuse-executable", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    report = validate(args.results_root, args.origin_executable, args.f2cpp_executable)
-    report["command"] = ["validate_i8_arrivals.py", "--results-root", "<results-root>", "--origin-executable", "<origin-executable>", "--f2cpp-executable", "<f2cpp-executable>", "--output", "<report>"]
+    report = validate(args.results_root, args.origin_executable, args.f2cpp_executable, args.rayreuse_executable)
+    report["command"] = ["validate_i8_arrivals.py", "--results-root", "<results-root>", "--origin-executable", "<origin-executable>", "--f2cpp-executable", "<f2cpp-executable>"]
+    if args.rayreuse_executable is not None:
+        report["command"].extend(["--rayreuse-executable", "<rayreuse-executable>"])
+    report["command"].extend(["--output", "<report>"])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return 0

@@ -6,7 +6,7 @@ companion_files = ["origin.sbp", "origin.trc"]
 source_references = ["Bellhop_origin/Bellhop/bellhop.f90 TraceRay2D amplitude cutoff", "Bellhop_origin/misc/beampattern.f90 ReadPat", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0

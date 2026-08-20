@@ -188,6 +188,21 @@ def frequency_label(index: int, frequency_hz: float) -> str:
     return f"f{index:03d}_{value}Hz"
 
 
+def frequency_product_name(
+    file_root: str, index: int, frequency_hz: float, extension: str
+) -> str:
+    if not extension.startswith("."):
+        raise ValueError("frequency product extension must start with '.'")
+    # Keep this aligned with the executable and the existing directory label.
+    value = (
+        format(frequency_hz, ".12g")
+        .replace(".", "p")
+        .replace("+", "p")
+        .replace("-", "m")
+    )
+    return f"{file_root}_f{index:03d}_{value}Hz{extension}"
+
+
 def format_frequency_csv(frequencies_hz: Sequence[float]) -> str:
     frequencies = tuple(float(value) for value in frequencies_hz)
     if not frequencies:
@@ -412,6 +427,87 @@ def validate_broadband_output(
         validate_pressure_slice(definition, reader, frequency_index)
 
 
+def validate_broadband_product_outputs(
+    definition: CaseDefinition,
+    frequencies_hz: Sequence[float],
+    execution_mode: str,
+    print_path: Path,
+    product_paths: Sequence[Path],
+) -> None:
+    """Validate independent per-frequency ARR/E products from one run."""
+    require_rayreuse_execution_mode(execution_mode)
+    validate_print_output(definition, print_path)
+    print_lines = {
+        line.strip() for line in print_path.read_text(errors="replace").splitlines()
+    }
+    expected_mode_marker = {
+        "nonreuse": "execution mode = broadband non-reuse",
+        "reuse": "execution mode = broadband reuse",
+        "parallel": "execution mode = broadband parallel reuse",
+    }[execution_mode]
+    expected_trace_passes = (
+        len(frequencies_hz) if execution_mode == "nonreuse" else 1
+    )
+    for marker in (
+        expected_mode_marker,
+        f"Trace passes = {expected_trace_passes}",
+    ):
+        if marker not in print_lines:
+            raise RuntimeError(
+                f"{definition.case_id}: broadband {execution_mode} PRT "
+                f"marker missing: {marker!r}"
+            )
+    if len(product_paths) != len(frequencies_hz):
+        raise RuntimeError(
+            f"{definition.case_id}: expected one product per frequency"
+        )
+    for path, frequency_hz in zip(product_paths, frequencies_hz):
+        if not path.is_file() or path.stat().st_size == 0:
+            raise RuntimeError(f"missing frequency product output: {path}")
+        if definition.output_kind == "eigenray":
+            result = parse_eigenray(path)
+        elif definition.output_kind == "arrivals_ascii":
+            result = parse_ascii_arrivals(
+                path,
+                receiver_cell_count=definition.arrival_receiver_cell_count,
+            )
+        elif definition.output_kind == "arrivals_binary":
+            result = parse_binary_arrivals(
+                path,
+                receiver_cell_count=definition.arrival_receiver_cell_count,
+            )
+        else:
+            raise ValueError(
+                "independent broadband products require ARR or Eigenray output"
+            )
+        if not np.isclose(result.header.frequency_hz, frequency_hz):
+            raise RuntimeError(
+                f"{definition.case_id}: frequency product header mismatch"
+            )
+    expected_products = {path.resolve() for path in product_paths}
+    file_root = print_path.stem
+    published_products = {
+        candidate.resolve()
+        for pattern in (
+            f"{file_root}_f*.arr",
+            f"{file_root}_f*.ray",
+            f"{file_root}.f*.arr",
+            f"{file_root}.f*.ray",
+        )
+        for candidate in print_path.parent.glob(pattern)
+    }
+    unexpected_products = published_products - expected_products
+    if unexpected_products:
+        raise RuntimeError(
+            f"{definition.case_id}: unexpected stale frequency products: "
+            f"{sorted(str(path) for path in unexpected_products)}"
+        )
+    for temporary in print_path.parent.glob("*.tmp"):
+        raise RuntimeError(
+            f"{definition.case_id}: unexpected temporary product: {temporary}"
+        )
+
+
 def process_rayreuse_broadband(
     definition: CaseDefinition,
     profile_name: str,
@@ -422,8 +518,21 @@ def process_rayreuse_broadband(
     launch_angle_counts: dict[str, int],
     execution_mode: str,
 ) -> Path:
-    if definition.output_kind != "shd":
-        raise ValueError("RayReuse broadband runner requires SHD output")
+    if definition.output_kind == "ray":
+        raise ValueError(
+            f"{definition.case_id}/{profile_name}: multi-frequency R products "
+            "are explicitly unsupported"
+        )
+    if definition.output_kind not in {
+        "shd",
+        "arrivals_ascii",
+        "arrivals_binary",
+        "eigenray",
+    }:
+        raise ValueError(
+            f"{definition.case_id}: unsupported RayReuse broadband output kind "
+            f"{definition.output_kind!r}"
+        )
     require_rayreuse_execution_mode(execution_mode)
     if len(frequencies) < 2:
         raise ValueError(
@@ -441,6 +550,16 @@ def process_rayreuse_broadband(
     print_path = run_directory / f"{file_root}.prt"
     shade_path = run_directory / f"{file_root}.shd"
     ray_path = run_directory / f"{file_root}.ray"
+    product_extension = (
+        ".ray" if definition.output_kind == "eigenray" else ".arr"
+    )
+    product_paths = tuple(
+        run_directory
+        / frequency_product_name(
+            file_root, index, frequency_hz, product_extension
+        )
+        for index, frequency_hz in enumerate(frequencies)
+    )
     manifest_path = case_result_root / "run_manifest.json"
     if stage in ("run", "test"):
         manifest_path.unlink(missing_ok=True)
@@ -471,6 +590,13 @@ def process_rayreuse_broadband(
             Path(str(ray_path) + ".tmp"),
         ):
             stale_output.unlink(missing_ok=True)
+        for product_path in product_paths:
+            product_path.unlink(missing_ok=True)
+            Path(str(product_path) + ".tmp").unlink(missing_ok=True)
+        for pattern in (f"{file_root}_f*", f"{file_root}.f*"):
+            for stale_product in run_directory.glob(pattern):
+                if stale_product.suffix in {".arr", ".ray", ".tmp"}:
+                    stale_product.unlink(missing_ok=True)
         adapter.run_broadband(
             run_directory,
             file_root,
@@ -480,13 +606,22 @@ def process_rayreuse_broadband(
         status = "completed"
 
     if stage in ("validate", "test"):
-        validate_broadband_output(
-            definition,
-            frequencies,
-            execution_mode,
-            print_path,
-            shade_path,
-        )
+        if definition.output_kind == "shd":
+            validate_broadband_output(
+                definition,
+                frequencies,
+                execution_mode,
+                print_path,
+                shade_path,
+            )
+        else:
+            validate_broadband_product_outputs(
+                definition,
+                frequencies,
+                execution_mode,
+                print_path,
+                product_paths,
+            )
         status = "passed"
 
     relative_environment = str(
@@ -511,9 +646,24 @@ def process_rayreuse_broadband(
             environment_file=relative_environment,
             print_file=relative_print,
             shade_file=relative_shade,
-            ray_file=None,
+            ray_file=(
+                str(product_paths[index].relative_to(case_result_root))
+                if definition.output_kind == "eigenray"
+                and product_paths[index].is_file()
+                else None
+            ),
             status=status,
-            product_sha256=product_hash,
+            arrival_file=(
+                str(product_paths[index].relative_to(case_result_root))
+                if definition.output_kind in {"arrivals_ascii", "arrivals_binary"}
+                and product_paths[index].is_file()
+                else None
+            ),
+            product_sha256=(
+                sha256_file(product_paths[index])
+                if product_paths[index].is_file()
+                else product_hash
+            ),
         )
         for index, frequency_hz in enumerate(frequencies)
     ]
@@ -550,7 +700,14 @@ def process_rayreuse_broadband(
             "frequencies_argument": frequency_csv,
             "execution_mode_argument": execution_mode,
             "expected_solver_invocations": 1,
-            "frequency_slices_share_output": True,
+            "frequency_slices_share_output": definition.output_kind == "shd",
+            "frequency_products_independent": definition.output_kind != "shd",
+            "frequency_product_pattern": (
+                f"{file_root}_fNNN_<frequency>Hz"
+                if definition.output_kind != "shd"
+                else None
+            ),
+            "publish_order_is_frequency_order": True,
         },
         "runs": [asdict(record) for record in records],
     }

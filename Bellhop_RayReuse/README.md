@@ -1,11 +1,19 @@
 # Bellhop RayReuse
 
-本目录用于在已验收 `Bellhop_F2CPP` 代码基础上派生并重构面向固定环境、固定收发位置的 C++ 宽带 Bellhop Ray-Reuse，负责项目里程碑 M3～M5：
+本目录是独立的 C++20 多频 Bellhop RayReuse 实现，面向固定环境、固定收发
+位置的 trace-once / per-frequency projection。除多频 TL/SHD 外，当前正式
+入口也支持单频 R、A/a、E，以及逐频独立的多频 A/a/E 产品。
 
 1. 保留并验证从 F2CPP 派生的单频计算链；
 2. 实现每频完整追踪的宽带非复用基线；
 3. 沿用 F2CPP 已验证的完整声线轨迹缓存，逐频重算吸收、反射、波束参数和复压力；
 4. 在串行结果稳定后，实现有界频率并行与单 writer 输出。
+
+当前支持范围、封板结果和完整用法见：
+
+- [`doc/FEATURE_SUPPORT_MATRIX.md`](./doc/FEATURE_SUPPORT_MATRIX.md)
+- [`doc/PROGRESS.md`](./doc/PROGRESS.md)
+- [`doc/USAGE.md`](./doc/USAGE.md)
 
 ## 工程边界
 
@@ -49,8 +57,8 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
-该入口依次执行 Debug ASan/UBSan、Release、两套 25 项 CTest、Conda `py`
-下 69 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
+该入口依次执行 Debug ASan/UBSan、Release、两套 28 项 CTest、Conda `py`
+下 148 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
 动态链接独立性扫描，以及无 F2CPP 目录的 Release 隔离构建。GitHub Actions
 使用固定的 Python 3.12.9 和 NumPy 2.2.6 调用同一脚本；本地默认仍严格使用
 名为 `py` 的 Conda 环境。
@@ -106,6 +114,9 @@ modified-box 求积子集和反射顺序；F2CPP 契约见
 Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root>
 ```
 
+产品由 ENV run type 决定：`CC` 写 SHD，`R/E` 写 RAY，`A/a` 写 ARR。多频
+`A/a/E` 按 `<root>_fNNN_<frequency>Hz` 逐频发布；多频 R 明确拒绝。
+
 宽带调用保留同一 `.env`，由严格升序逗号列表覆盖频率：
 
 ```bash
@@ -126,7 +137,8 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
   --memory-budget-mib 4096
 ```
 
-`--workers` 未给出时采用硬件并发数；完成队列容量只能为 1 或 2，默认 2。
+`--workers` 未给出时采用硬件并发数，不设置 4T/8T 程序级上限；完成队列
+容量只能为 1 或 2，默认 2，它限制的是 SHD 完成队列而不是线程数。
 内存预算未给出时不施加显式预算，给出后会限制活动频率数，连一个活动频率
 都无法容纳时直接拒绝运行。预算覆盖射线缓存及有界频率工作区，不等同于
 进程全部 RSS。三个模式均保留为数值与性能对照入口。

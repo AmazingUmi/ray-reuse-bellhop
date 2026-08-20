@@ -96,21 +96,25 @@ void testArrivalModes(Context& context) {
   std::vector<bool> serialUnchanged(2U), nonreuseUnchanged(2U),
       parallelUnchanged(2U);
   const ArrivalSolverStatistics reuse = ArrivalSolver::solve(
-      simulation, [&](std::size_t index, const RayPathCache& cache,
-                      const ArrivalWorkspace& workspace) {
+      simulation,
+      [&](std::size_t index, const RayPathCache& cache,
+          const ArrivalWorkspace& workspace) {
         const std::uint64_t before = cache.contentFingerprint();
         serial[index] = snapshot(workspace);
         serialFingerprint[index] = cache.contentFingerprint();
         serialUnchanged[index] = before == serialFingerprint[index];
-      });
+      },
+      true);
   const ArrivalSolverStatistics nonreuseStats = ArrivalSolver::solveNonReuse(
-      simulation, [&](std::size_t index, const RayPathCache& cache,
-                      const ArrivalWorkspace& workspace) {
+      simulation,
+      [&](std::size_t index, const RayPathCache& cache,
+          const ArrivalWorkspace& workspace) {
         const std::uint64_t before = cache.contentFingerprint();
         nonreuse[index] = snapshot(workspace);
         nonreuseFingerprint[index] = cache.contentFingerprint();
         nonreuseUnchanged[index] = before == nonreuseFingerprint[index];
-      });
+      },
+      true);
   const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveParallel(
       simulation,
       [&](std::size_t index, const RayPathCache& cache,
@@ -120,11 +124,21 @@ void testArrivalModes(Context& context) {
         parallelFingerprint[index] = cache.contentFingerprint();
         parallelUnchanged[index] = before == parallelFingerprint[index];
       },
-      2U);
+      2U, true);
   context.check(reuse.frequencyCount == 2U &&
                     nonreuseStats.frequencyCount == 2U &&
                     parallelStats.frequencyCount == 2U,
                 "arrival modes process every frequency");
+  context.check(
+      reuse.cacheFingerprintVerified &&
+          nonreuseStats.cacheFingerprintVerified &&
+          parallelStats.cacheFingerprintVerified &&
+          reuse.cacheFingerprintBefore == reuse.cacheFingerprintAfter &&
+          nonreuseStats.cacheFingerprintBefore ==
+              nonreuseStats.cacheFingerprintAfter &&
+          parallelStats.cacheFingerprintBefore ==
+              parallelStats.cacheFingerprintAfter,
+      "arrival solver verification spans trace-once projection and consume");
   for (std::size_t frequency = 0U; frequency < 2U; ++frequency) {
     bool recordsEqual =
         serial[frequency].size() == nonreuse[frequency].size() &&
@@ -220,7 +234,8 @@ void testEigenrayModes(Context& context) {
                                 hit.receiverDepthIndex, hit.prefixPointCount);
         reuseFingerprint[f] = cache.contentFingerprint();
         reuseUnchanged[f] = before == reuseFingerprint[f];
-      });
+      },
+      true);
   const EigenraySolverStatistics nonreuseStats = EigenraySolver::solveNonReuse(
       simulation,
       [&](std::size_t f, const RayPathCache& cache, const auto& hits) {
@@ -231,7 +246,8 @@ void testEigenrayModes(Context& context) {
                                    hit.prefixPointCount);
         nonreuseFingerprint[f] = cache.contentFingerprint();
         nonreuseUnchanged[f] = before == nonreuseFingerprint[f];
-      });
+      },
+      true);
   const EigenraySolverStatistics parallelStats = EigenraySolver::solveParallel(
       simulation,
       [&](std::size_t f, const RayPathCache& cache, const auto& hits) {
@@ -243,11 +259,22 @@ void testEigenrayModes(Context& context) {
         parallelFingerprint[f] = cache.contentFingerprint();
         parallelUnchanged[f] = before == parallelFingerprint[f];
       },
-      2U);
+      2U, true);
   context.check(reuseStats.frequencyCount == 2U &&
                     nonreuseStats.frequencyCount == 2U &&
                     parallelStats.frequencyCount == 2U,
                 "eigenray modes process every frequency");
+  context.check(
+      reuseStats.cacheFingerprintVerified &&
+          nonreuseStats.cacheFingerprintVerified &&
+          parallelStats.cacheFingerprintVerified &&
+          reuseStats.cacheFingerprintBefore ==
+              reuseStats.cacheFingerprintAfter &&
+          nonreuseStats.cacheFingerprintBefore ==
+              nonreuseStats.cacheFingerprintAfter &&
+          parallelStats.cacheFingerprintBefore ==
+              parallelStats.cacheFingerprintAfter,
+      "eigenray solver verification spans trace-once projection and consume");
   for (std::size_t frequency = 0U; frequency < 2U; ++frequency) {
     context.check(reuse[frequency] == nonreuse[frequency] &&
                       reuse[frequency] == parallel[frequency],

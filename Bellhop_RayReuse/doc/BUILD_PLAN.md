@@ -7,6 +7,13 @@
 conda run -n py python --version
 ```
 
+2026-08-20 的 RayReuse Feature Sync RR-B1～RR-B4 已另行完成并封板；当前
+支持矩阵、验收结果和路线关闭状态分别见
+[`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md)、
+[`PROGRESS.md`](./PROGRESS.md) 和
+[`RAYREUSE_FEATURE_SYNC.md`](./plans/RAYREUSE_FEATURE_SYNC.md)。本文后续 A～H
+内容继续作为派生、宽带复用和历史工程阶段记录，不应解释为当前待办。
+
 阶段必须按 A → B → C → D → E 推进；阶段 F 在这些正确性和并行契约冻结后
 按小步性能提交推进。每一阶段只有在出口条件关闭后，才进入下一阶段。命令块
 是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
@@ -35,7 +42,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
 脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
-Release、25 项 CTest、69 项标准工具测试、9 项 PlotRead 测试、独立性扫描
+Release、28 项 CTest、148 项标准工具测试、9 项 PlotRead 测试、独立性扫描
 和无 F2CPP 隔离副本构建。CI 通过
 `RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
 门，避免本地与云端验收逻辑分叉。

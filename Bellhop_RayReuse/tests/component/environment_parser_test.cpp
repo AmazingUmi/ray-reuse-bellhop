@@ -22,6 +22,7 @@
 namespace {
 
 using rayreuse::AttenuationUnit;
+using rayreuse::BeamFamily;
 using rayreuse::BellhopError;
 using rayreuse::BoundaryKind;
 using rayreuse::EnvironmentParser;
@@ -30,6 +31,7 @@ using rayreuse::GeometryTracer;
 using rayreuse::ParsedEnvironment;
 using rayreuse::RayPath;
 using rayreuse::RayPathCache;
+using rayreuse::SimulationRunMode;
 using rayreuse::ValidationError;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
@@ -97,7 +99,8 @@ class TemporaryStandardCase {
     environment.close();
 
     const std::filesystem::path source = kCasesRoot / caseName;
-    for (const std::string extension : {".ati", ".bty", ".trc", ".brc"}) {
+    for (const std::string extension :
+         {".ati", ".bty", ".trc", ".brc", ".sbp"}) {
       const std::filesystem::path companion = source / ("origin" + extension);
       if (std::filesystem::exists(companion)) {
         std::filesystem::copy_file(companion,
@@ -401,6 +404,85 @@ void testAttenuationCases(Context& context) {
                 "5 kHz phase criterion determines launch count");
 }
 
+void testRrB4ProductRunTypes(Context& context) {
+  const TemporaryStandardCase ray("ray_trace_directional_tabulated", 1000.0,
+                                  1U);
+  const ParsedEnvironment parsedRay =
+      EnvironmentParser::parseFile(ray.environmentPath());
+  context.check(
+      parsedRay.simulationCase.runMode() == SimulationRunMode::RayTrace &&
+          parsedRay.simulationCase.beamFamily() ==
+              BeamFamily::CervenyGaussian &&
+          parsedRay.simulationCase.sourceBeamPattern().isDirectional() &&
+          parsedRay.simulationCase.launchFanPlan().launchAngleCount == 1U &&
+          parsedRay.simulationCase.launchFanPlan().launchAngles.size() == 1U,
+      "R parser selects RayTrace, reads directional SBP, and accepts one "
+      "explicit angle");
+
+  const TemporaryStandardCase coherentPattern("source_beam_pattern_directional",
+                                              1000.0, 80U);
+  const ParsedEnvironment parsedCoherentPattern =
+      EnvironmentParser::parseFile(coherentPattern.environmentPath());
+  context.check(
+      parsedCoherentPattern.simulationCase.runMode() ==
+              SimulationRunMode::Coherent &&
+          parsedCoherentPattern.simulationCase.beamFamily() ==
+              BeamFamily::CervenyGaussian &&
+          parsedCoherentPattern.simulationCase.sourceBeamPattern()
+              .isDirectional(),
+      "CC* parser loads directional SBP without changing the coherent mode");
+
+  const ParsedEnvironment ascii =
+      parseText(renderCase("arrival_geometric_hat_ascii", 1000.0, 80U),
+                "arrival_geometric_hat_ascii.env");
+  context.check(
+      ascii.simulationCase.runMode() == SimulationRunMode::AsciiArrivals &&
+          ascii.simulationCase.beamFamily() == BeamFamily::GeometricHat,
+      "AG parser selects ASCII arrivals and Cartesian geometric hat");
+
+  const ParsedEnvironment binary =
+      parseText(renderCase("arrival_geometric_hat_binary", 1000.0, 80U),
+                "arrival_geometric_hat_binary.env");
+  context.check(
+      binary.simulationCase.runMode() == SimulationRunMode::BinaryArrivals &&
+          binary.simulationCase.beamFamily() == BeamFamily::GeometricHat,
+      "aG parser selects binary arrivals and Cartesian geometric hat");
+
+  const ParsedEnvironment gaussianEigenray =
+      parseText(renderCase("eigenray_geometric_gaussian", 1000.0, 80U),
+                "eigenray_geometric_gaussian.env");
+  context.check(gaussianEigenray.simulationCase.runMode() ==
+                        SimulationRunMode::Eigenray &&
+                    gaussianEigenray.simulationCase.beamFamily() ==
+                        BeamFamily::GeometricGaussian,
+                "EB parser selects eigenray and Cartesian geometric Gaussian");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("arrival_geometric_hat_ascii", 1000.0, 80U);
+        replaceFirst(contents, "'AG RR'", "'Ag RR'");
+        static_cast<void>(parseText(contents, "ray_centered_arrival.env"));
+      },
+      "ray-centered geometric arrivals are explicitly rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("arrival_geometric_hat_ascii", 1000.0, 80U);
+        replaceFirst(contents, "'AG RR'", "'AC RR'");
+        static_cast<void>(parseText(contents, "cerveny_arrival.env"));
+      },
+      "Cerveny arrivals are explicitly rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("arrival_geometric_hat_ascii", 1000.0, 80U);
+        replaceFirst(contents, "'AG RR'", "'AG RI'");
+        static_cast<void>(parseText(contents, "irregular_arrival.env"));
+      },
+      "irregular receiver arrivals are explicitly rejected");
+}
+
 void testMunkCase(Context& context) {
   const ParsedEnvironment parsed = parseText(
       renderCase("munk_cerveny_cc", 50.0, 1000U), "munk_cerveny_cc.env");
@@ -522,6 +604,7 @@ int main() {
   testBoundaryCases(context);
   testRrB1BoundarySidecarsAndFrozenEvents(context);
   testAttenuationCases(context);
+  testRrB4ProductRunTypes(context);
   testMunkCase(context);
   testFortranNumericSpelling(context);
   testUnsupportedAndMalformedInput(context);

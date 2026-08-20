@@ -23,6 +23,7 @@ from standard_cases import (
     build_parser,
     default_adapters,
     format_frequency_csv,
+    frequency_product_name,
     process_case,
     validate_print_output,
     validate_output,
@@ -298,6 +299,69 @@ class StandardCasesAdapterTests(unittest.TestCase):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertNotIn("execution_mode", manifest)
             self.assertNotIn("broadband_run", manifest)
+
+    def test_rayreuse_product_manifest_uses_frequency_scoped_outputs(self) -> None:
+        definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
+        expected = {
+            "ray_trace_directional_tabulated": "ray_file",
+            "arrival_geometric_hat_ascii": "arrival_file",
+            "arrival_geometric_hat_binary": "arrival_file",
+            "arrival_zero": "arrival_file",
+            "eigenray_geometric_gaussian": "ray_file",
+            "eigenray_zero": "ray_file",
+        }
+        adapter = default_adapters(None)["rayreuse"]
+        for case_id, product_field in expected.items():
+            with self.subTest(case=case_id):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    manifest_path = process_case(
+                        definitions[case_id],
+                        "single",
+                        adapter,
+                        "generate",
+                        Path(temporary_directory),
+                    )
+                    manifest = json.loads(
+                        manifest_path.read_text(encoding="utf-8")
+                    )
+                    self.assertEqual(manifest["version"], "rayreuse")
+                    self.assertEqual(manifest["frequencies_hz"], [1000.0])
+                    self.assertEqual(len(manifest["runs"]), 1)
+                    run = manifest["runs"][0]
+                    self.assertEqual(run["frequency_index"], 0)
+                    self.assertEqual(run["frequency_hz"], 1000.0)
+                    self.assertTrue(run["environment_file"].startswith("f000_"))
+                    other_product = (
+                        "arrival_file"
+                        if product_field == "ray_file"
+                        else "ray_file"
+                    )
+                    self.assertIsNone(run[product_field])
+                    self.assertIsNone(run[other_product])
+
+    def test_rayreuse_broadband_product_name_is_frequency_stable(self) -> None:
+        self.assertEqual(
+            frequency_product_name(
+                "arrival_geometric_hat_ascii_broadband", 0, 50.0, ".arr"
+            ),
+            "arrival_geometric_hat_ascii_broadband_f000_50Hz.arr",
+        )
+        self.assertEqual(
+            frequency_product_name(
+                "eigenray_geometric_gaussian_broadband", 2, 250.0, ".ray"
+            ),
+            "eigenray_geometric_gaussian_broadband_f002_250Hz.ray",
+        )
+        self.assertEqual(
+            frequency_product_name(
+                "arrival_geometric_hat_ascii_broadband", 1, 50.5, ".arr"
+            ),
+            "arrival_geometric_hat_ascii_broadband_f001_50p5Hz.arr",
+        )
+        self.assertEqual(
+            frequency_product_name("arrival", 3, 1.0e-6, ".arr"),
+            "arrival_f003_1em06Hz.arr",
+        )
 
     def test_ray_case_generate_records_ray_output_contract(self) -> None:
         definition = discover_cases(

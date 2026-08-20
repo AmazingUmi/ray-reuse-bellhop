@@ -8,6 +8,10 @@
 
 | 目的 | 文档 |
 |---|---|
+| 查看当前功能支持与延期边界 | [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) |
+| 查看 Feature Sync 验收基线 | [`PROGRESS.md`](./PROGRESS.md) |
+| 查看 R/A/a/E 与多频用法 | [`USAGE.md`](./USAGE.md) |
+| 查看 RR-B1～RR-B4 封板状态 | [`plans/RAYREUSE_FEATURE_SYNC.md`](./plans/RAYREUSE_FEATURE_SYNC.md) |
 | 查看当前阶段与验收出口 | [`BUILD_PLAN.md`](./BUILD_PLAN.md) |
 | 查看跨编译器历史计划 | [`plans/CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) |
 | 复现性能测试 | [`guides/BENCHMARKING.md`](./guides/BENCHMARKING.md) |
@@ -15,7 +19,8 @@
 | 查看当前三模型数值矩阵 | [`reports/MODEL_MATRIX_RESULTS_06E390F.md`](./reports/MODEL_MATRIX_RESULTS_06E390F.md) |
 | 查看 H4 跨编译器结果 | [`reports/CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md) |
 
-当前 A～G、F1/F2 和 H1～H4 矩阵已完成。GNU Fortran/gfortran 是唯一支持
+当前 A～G、F1/F2、H1～H4 和 RayReuse Feature Sync RR-B1～RR-B4 均已完成。
+GNU Fortran/gfortran 是唯一支持
 的 Fortran oracle 工具链；不再等待第二套 Fortran 编译器。远端推送、云端
 CI 首跑和分支保护等待用户决定，不作为当前本地开发中的活动计划。
 
@@ -29,10 +34,13 @@ CI 首跑和分支保护等待用户决定，不作为当前本地开发中的�
 
 ### plans
 
+- [`RAYREUSE_FEATURE_SYNC.md`](./plans/RAYREUSE_FEATURE_SYNC.md)：RR-B1～RR-B4
+  已完成路线、依赖和关闭判据；
 - [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md)：已完成的 H4 C++
   操作计划；第二 Fortran 编译器项已按后续项目决策关闭。
 
-总实施状态仍集中在 [`BUILD_PLAN.md`](./BUILD_PLAN.md)，避免多个活动总计划并存。
+历史派生总计划仍集中在 [`BUILD_PLAN.md`](./BUILD_PLAN.md)；Feature Sync 的
+当前验收状态以 [`PROGRESS.md`](./PROGRESS.md) 为准，不存在第二个活动总计划。
 
 ### decisions
 

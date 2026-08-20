@@ -140,6 +140,7 @@ CommandLineOptions parseCommandLine(
             "'parallel'");
       }
       executionModeSpecified = true;
+      options.executionModeSpecified = true;
       continue;
     }
     if (argument == "--verify-cache") {
@@ -176,6 +177,7 @@ CommandLineOptions parseCommandLine(
       }
       options.workerCount = parsePositiveSize(arguments[++index], "--workers");
       workerCountSpecified = true;
+      options.workerCountSpecified = true;
       continue;
     }
     if (argument == "--output-queue-capacity") {
@@ -193,6 +195,7 @@ CommandLineOptions parseCommandLine(
         throw ValidationError("--output-queue-capacity must be 1 or 2");
       }
       outputQueueCapacitySpecified = true;
+      options.outputQueueCapacitySpecified = true;
       continue;
     }
     if (argument == "--memory-budget-mib") {
@@ -206,6 +209,7 @@ CommandLineOptions parseCommandLine(
       options.memoryBudgetMiB =
           parsePositiveSize(arguments[++index], "--memory-budget-mib");
       memoryBudgetSpecified = true;
+      options.memoryBudgetSpecified = true;
       continue;
     }
     if (argument.starts_with('-')) {

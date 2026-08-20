@@ -21,12 +21,16 @@ struct CommandLineOptions {
   std::string fileRoot;
   std::optional<std::vector<double>> frequencyOverrideHz;
   BroadbandExecutionMode executionMode{BroadbandExecutionMode::NonReuse};
+  bool executionModeSpecified{};
   bool verifyCache{};
   bool profileInfluence{};
   bool profileFrequencyTasks{};
   std::size_t workerCount{};
   std::size_t outputQueueCapacity{2U};
   std::size_t memoryBudgetMiB{};
+  bool workerCountSpecified{};
+  bool outputQueueCapacitySpecified{};
+  bool memoryBudgetSpecified{};
 };
 
 [[nodiscard]] CommandLineOptions parseCommandLine(

@@ -371,6 +371,22 @@ class CaseModelTests(unittest.TestCase):
             5,
         )
 
+    def test_rayreuse_product_cases_are_in_shared_manifest(self) -> None:
+        expected = {
+            "ray_trace_directional_tabulated": "ray",
+            "arrival_geometric_hat_ascii": "arrivals_ascii",
+            "arrival_geometric_hat_binary": "arrivals_binary",
+            "arrival_zero": "arrivals_ascii",
+            "eigenray_geometric_gaussian": "eigenray",
+            "eigenray_zero": "eigenray",
+        }
+        for case_id, output_kind in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                self.assertEqual(definition.output_kind, output_kind)
+                self.assertIn("rayreuse", definition.supported_versions)
+                self.assertEqual(definition.frequencies("single"), (1000.0,))
+
     def test_shd_output_remains_the_default(self) -> None:
         direct = self.cases["constant_speed_direct"]
         self.assertEqual(direct.output_kind, "shd")

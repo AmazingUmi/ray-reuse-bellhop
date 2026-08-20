@@ -32,6 +32,8 @@ void testSingleFrequencyCompatibility(Context& context) {
                 "single invocation leaves the environment frequency unchanged");
   context.check(options.executionMode == BroadbandExecutionMode::NonReuse,
                 "non-reuse remains the default during the baseline gate");
+  context.check(!options.executionModeSpecified,
+                "single invocation does not mark execution mode explicit");
   context.check(!options.verifyCache,
                 "cache fingerprint verification is disabled by default");
   context.check(!options.profileInfluence,
@@ -46,6 +48,8 @@ void testExecutionMode(Context& context) {
              "reuse", "--verify-cache", "--profile-influence"});
   context.check(options.executionMode == BroadbandExecutionMode::Reuse,
                 "reuse execution mode is selected explicitly");
+  context.check(options.executionModeSpecified,
+                "explicit execution mode is tracked for product validation");
   context.check(options.verifyCache,
                 "cache fingerprint verification is selected explicitly");
   context.check(options.profileInfluence,
@@ -63,6 +67,10 @@ void testExecutionMode(Context& context) {
                 "parallel memory budget is parsed");
   context.check(parallel.profileFrequencyTasks,
                 "frequency-task profiling is selected explicitly");
+  context.check(parallel.workerCountSpecified &&
+                    parallel.outputQueueCapacitySpecified &&
+                    parallel.memoryBudgetSpecified,
+                "parallel tuning option presence is tracked");
 }
 
 void testFrequencyOverride(Context& context) {
