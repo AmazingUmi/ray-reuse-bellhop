@@ -29,22 +29,22 @@
 命令默认从仓库根目录运行：
 
 ```bash
-cmake --preset debug -S Bellhop_RayReuse
-cmake --build Bellhop_RayReuse/build/debug --parallel
-ctest --test-dir Bellhop_RayReuse/build/debug --output-on-failure
+uv run cmake --preset debug -S Bellhop_RayReuse
+uv run cmake --build Bellhop_RayReuse/build/debug --parallel
+uv run ctest --test-dir Bellhop_RayReuse/build/debug --output-on-failure
 
-cmake --preset release -S Bellhop_RayReuse
-cmake --build Bellhop_RayReuse/build/release --parallel
-ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
+uv run cmake --preset release -S Bellhop_RayReuse
+uv run cmake --build Bellhop_RayReuse/build/release --parallel
+uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
 ```
 
-Python 工具统一使用 Conda 的 `py` 环境。例如：
+Python 工具统一通过仓库根目录的 uv 环境运行。例如：
 
 ```bash
-conda run -n py python -m unittest discover \
+uv run python -m unittest discover \
   -s test/standard_cases/codes/tests -p 'test_*.py'
 
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case all \
   --profile single \
@@ -54,19 +54,18 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 提交前的完整质量门可从仓库根目录一次运行：
 
 ```bash
-RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
+RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
-该入口依次执行 Debug ASan/UBSan、Release、两套 28 项 CTest、Conda `py`
-下 148 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
+该入口依次执行 Debug ASan/UBSan、Release、两套 28 项 CTest、uv 环境中的
+148 项标准算例工具测试和 9 项 PlotRead 测试、F2CPP 源码/生成构建元数据/
 动态链接独立性扫描，以及无 F2CPP 目录的 Release 隔离构建。GitHub Actions
-使用固定的 Python 3.12.9 和 NumPy 2.2.6 调用同一脚本；本地默认仍严格使用
-名为 `py` 的 Conda 环境。
+使用同一 `.python-version` 和 `uv.lock` 调用同一脚本。
 
 格式、静态分析和内部发布包的工程门为：
 
 ```bash
-RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
+RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 ```
 
 该入口检查全量 C++ 格式，按 compilation database 运行 Clang static

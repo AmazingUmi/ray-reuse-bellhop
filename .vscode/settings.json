@@ -1,5 +1,4 @@
 {
-  "python.defaultInterpreterPath": "${userHome}/miniconda3/envs/py/bin/python",
   "python.terminal.activateEnvironment": true,
 
   "fortran.linter.compiler": "gfortran",

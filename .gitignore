@@ -17,6 +17,8 @@
 !/test/standard_cases/results/reference/**
 
 # Python caches and local editable-install metadata
+/.venv/
+/.pytest_cache/
 __pycache__/
 *.py[cod]
 *.egg-info/

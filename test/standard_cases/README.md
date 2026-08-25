@@ -76,29 +76,29 @@ A/a/E 案例直接位于 `cases/`，不在 `Bellhop_F2CPP` 内维护第二套输
 
 ## 统一用法
 
-默认 Python 为 `conda` 的 `py` 环境。先查看版本、算例与 profiles：
+默认通过根目录 uv 环境运行。先查看版本、算例与 profiles：
 
 ```bash
-make -C test/standard_cases list
+uv run make -C test/standard_cases list
 ```
 
 针对一个版本、一个算例和一个 profile，可独立执行任意环节：
 
 ```bash
 # 只生成输入
-make -C test/standard_cases generate \
+uv run make -C test/standard_cases generate \
   VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
 # 只运行已经生成的输入
-make -C test/standard_cases run \
+uv run make -C test/standard_cases run \
   VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
 # 只校验已有 PRT/SHD
-make -C test/standard_cases validate \
+uv run make -C test/standard_cases validate \
   VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
 # 从生成到校验的一体化测试
-make -C test/standard_cases test \
+uv run make -C test/standard_cases test \
   VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 ```
 
@@ -110,9 +110,9 @@ make -C test/standard_cases test \
 代表性 standard cases：
 
 ```bash
-make -C test/standard_cases feature SET=arrival
-make -C test/standard_cases feature SET=eigenray
-make -C test/standard_cases feature SET=ssp
+uv run make -C test/standard_cases feature SET=arrival
+uv run make -C test/standard_cases feature SET=eigenray
+uv run make -C test/standard_cases feature SET=ssp
 ```
 
 ### 推荐的三层入口
@@ -120,26 +120,26 @@ make -C test/standard_cases feature SET=ssp
 功能局部测试，用于修改单一功能时：
 
 ```bash
-make -C test/standard_cases feature SET=<功能集合>
+uv run make -C test/standard_cases feature SET=<功能集合>
 ```
 
 F2CPP 常规回归，运行完整 CTest 和 12 个高信息量代表案例：
 
 ```bash
-make -C test/standard_cases f2cpp-regression
+uv run make -C test/standard_cases f2cpp-regression
 ```
 
 F2CPP 全量验证，运行标准算例工具测试、完整 CTest 和全部 62 个 F2CPP 单频
 案例，用于 checkpoint、重要合并和 release：
 
 ```bash
-make -C test/standard_cases f2cpp-full
+uv run make -C test/standard_cases f2cpp-full
 ```
 
 只有在重新确认 Origin 兼容契约时，才额外运行双方全量单频集合：
 
 ```bash
-make -C test/standard_cases batch \
+uv run make -C test/standard_cases batch \
   VERSIONS=origin,f2cpp PROFILES=single
 ```
 
@@ -147,28 +147,28 @@ make -C test/standard_cases batch \
 默认覆盖单频和两频 smoke：
 
 ```bash
-make -C test/standard_cases batch
+uv run make -C test/standard_cases batch
 ```
 
 也可缩小或扩大批量范围：
 
 ```bash
-make -C test/standard_cases batch \
+uv run make -C test/standard_cases batch \
   VERSIONS=origin PROFILES=single,broadband_smoke
 ```
 
 Makefile 只是轻量入口；脚本也可直接调用：
 
 ```bash
-conda run -n py python test/standard_cases/codes/standard_cases.py \
+uv run python test/standard_cases/codes/standard_cases.py \
   test --version origin --case munk_cerveny_cc --profile single
 
-conda run -n py python test/standard_cases/codes/standard_cases.py \
+uv run python test/standard_cases/codes/standard_cases.py \
   test --version rayreuse --case munk_cerveny_cc \
   --profile broadband_smoke --rayreuse-execution-mode nonreuse
 
 # 验证一次追踪、多频投影的复用路径
-conda run -n py python test/standard_cases/codes/standard_cases.py \
+uv run python test/standard_cases/codes/standard_cases.py \
   test --version rayreuse --case munk_cerveny_cc \
   --profile broadband_smoke --rayreuse-execution-mode reuse
 ```
@@ -215,7 +215,7 @@ mode；`nonreuse` 的 `Trace passes` 必须等于频率数，`reuse` 和
 比较两个 SHD 频率切片：
 
 ```bash
-make -C test/standard_cases compare \
+uv run make -C test/standard_cases compare \
   REFERENCE=/path/reference.shd CANDIDATE=/path/candidate.shd
 ```
 
@@ -251,7 +251,7 @@ profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调�
 因为 F2CPP 按设计忽略 ENV 显式 NAlpha。运行入口为：
 
 ```bash
-conda run -n py python test/standard_cases/codes/model_matrix.py
+uv run python test/standard_cases/codes/model_matrix.py
 ```
 
 迁移前的 `test_origin_bellhop` 和 `test_ray_reuse` 位于 `test/legacy/`，

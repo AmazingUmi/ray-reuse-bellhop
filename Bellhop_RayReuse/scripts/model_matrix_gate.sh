@@ -5,19 +5,12 @@ set -euo pipefail
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_directory}/../.." && pwd)"
 
-python_mode="${RAYREUSE_PYTHON_MODE:-conda-py}"
-case "${python_mode}" in
-  conda-py)
-    python_command=(conda run -n py python)
-    ;;
-  system)
-    python_command=(python)
-    ;;
-  *)
-    echo "RAYREUSE_PYTHON_MODE must be 'conda-py' or 'system'" >&2
-    exit 2
-    ;;
-esac
+python_executable="${PYTHON:-python3}"
+if ! command -v "${python_executable}" >/dev/null 2>&1; then
+  echo "Python interpreter not found: ${python_executable}" >&2
+  exit 2
+fi
+python_command=("${python_executable}")
 
 profiles="${RAYREUSE_MATRIX_PROFILES:-single,broadband_smoke}"
 modes="${RAYREUSE_MATRIX_MODES:-nonreuse,reuse,parallel}"

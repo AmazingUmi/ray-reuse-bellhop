@@ -28,11 +28,9 @@
     {
       "label": "Prepare Munk Standard Case",
       "type": "process",
-      "command": "${userHome}/miniconda3/condabin/conda",
+      "command": "uv",
       "args": [
         "run",
-        "-n",
-        "py",
         "python",
         "${workspaceFolder}/test/standard_cases/codes/standard_cases.py",
         "generate",

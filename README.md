@@ -21,24 +21,28 @@ demo/                 按 cases/codes/results/figures 分类的可靠性与多�
 
 结果读取与绘图已集中到 `test/PlotRead/bellhop_io_py/`，相关测试与 MATLAB 格式参考也统一放在 `test/PlotRead/`。运行不再依赖 MATLAB。
 
-项目中的 VS Code Python 解释器和 PlotRead Makefile 默认使用 Conda 的 `py` 环境。首次使用时，在项目根目录安装命令：
+项目使用仓库根目录的 uv 环境，Python 固定为 `.python-version` 中的版本。
+首次使用和完整 Python 回归从项目根目录运行：
 
 ```bash
-make -C test/PlotRead setup-python
+uv sync
+uv run pytest
 ```
 
-Makefile 实际执行 `conda run -n py python`，不要求提前激活环境；如需在终端直接调用 `bellhop-shd`，仍应先执行 `conda activate py`。
+`uv sync` 会以 editable 方式安装仓库内的 PlotRead 组件。Makefile 和脚本从
+`PATH` 发现 `python3`，通过 `uv run` 执行时会自动使用项目环境，不要求手动
+激活，也不硬编码 `.venv` 路径。
 
 生成一个标准结果后无需设置 `PYTHONPATH`：
 
 ```bash
-make -C test/standard_cases test \
+uv run make -C test/standard_cases test \
   VERSION=origin CASE=munk_cerveny_cc PROFILE=single
 
-bellhop-shd info \
+uv run bellhop-shd info \
   test/standard_cases/results/origin/munk_cerveny_cc/single/f000_50Hz/munk_cerveny_cc_f000_50Hz.shd
 
-bellhop-shd plot \
+uv run bellhop-shd plot \
   test/standard_cases/results/origin/munk_cerveny_cc/single/f000_50Hz/munk_cerveny_cc_f000_50Hz.shd \
   -o /tmp/munk.png
 ```
@@ -47,10 +51,10 @@ Python 的 `--frequency-index` 从 **0** 开始；`--frequency` 按最接近的 
 
 ## 回归测试
 
-完成一次 `make -C test/PlotRead setup-python` 后：
+完成一次 `uv sync` 后：
 
 ```bash
-make -C test/PlotRead test
+uv run make -C test/PlotRead test
 ```
 
 兼容显式名称 `make -C test/PlotRead test-plotread`；它与 `test` 执行相同的 PlotRead 回归。

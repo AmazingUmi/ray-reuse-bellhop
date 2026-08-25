@@ -22,7 +22,7 @@ demo/
 ```
 
 输入文件保留在 Git 中；`results/` 和 `figures/` 都是可重新生成的展示产物，
-不进入 Git。Python 默认使用 Conda `py` 环境。
+不进入 Git。Python 默认通过仓库根目录的 uv 环境运行。
 
 ## 1. 一致性（可靠性）展示
 
@@ -34,19 +34,19 @@ demo/
 
 ```bash
 # 检查输入和三套程序
-make -C demo check
+uv run make -C demo check
 
 # 一键计算三套程序并绘图
-make -C demo all
+uv run make -C demo all
 
 # 单独计算并展示某个版本
-make -C demo origin
-make -C demo f2cpp
-make -C demo rayreuse
+uv run make -C demo origin
+uv run make -C demo f2cpp
+uv run make -C demo rayreuse
 
 # 将计算与绘图拆开
-make -C demo run VERSIONS=origin,f2cpp,rayreuse
-make -C demo plot VERSIONS=origin,f2cpp,rayreuse
+uv run make -C demo run VERSIONS=origin,f2cpp,rayreuse
+uv run make -C demo plot VERSIONS=origin,f2cpp,rayreuse
 ```
 
 默认可执行文件：
@@ -98,14 +98,14 @@ demo/figures/reliability/
 
 ```bash
 # 一键计算全部频率并绘制 50、150、250 Hz
-make -C demo rayreuse-multifrequency
+uv run make -C demo rayreuse-multifrequency
 
 # 自定义要绘制的频率索引
-make -C demo rayreuse-multifrequency MULTI_INDEXES=0,1,3,4
+uv run make -C demo rayreuse-multifrequency MULTI_INDEXES=0,1,3,4
 
 # 将计算与绘图拆开
-make -C demo multifrequency-run
-make -C demo multifrequency-plot MULTI_INDEXES=0,2,4
+uv run make -C demo multifrequency-run
+uv run make -C demo multifrequency-plot MULTI_INDEXES=0,2,4
 ```
 
 对应的原生调用是：
@@ -136,6 +136,6 @@ demo/figures/rayreuse_multifrequency/
 ## 验证
 
 ```bash
-make -C demo test
-make -C test/PlotRead test
+uv run make -C demo test
+uv run make -C test/PlotRead test
 ```

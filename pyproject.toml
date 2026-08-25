@@ -1,0 +1,38 @@
+[project]
+name = "ray-reuse-bellhop"
+version = "0.1.0"
+requires-python = ">=3.12.11"
+dependencies = [
+    "bellhop-io",
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+]
+
+[dependency-groups]
+dev = [
+    "cmake>=3.24",
+    "pytest>=8",
+]
+
+[tool.uv.workspace]
+members = [
+    "test/PlotRead",
+]
+
+[tool.uv.sources]
+bellhop-io = { workspace = true, editable = true }
+
+[tool.pytest.ini_options]
+testpaths = [
+    "Bellhop_F2CPP/tests/tools",
+    "test/standard_cases/codes/tests",
+    "test/PlotRead/tests",
+    "demo/codes/tests",
+]
+pythonpath = [
+    "Bellhop_F2CPP/tests/tools",
+    "test/standard_cases/codes",
+    "test/PlotRead",
+    "test/PlotRead/tests",
+    "demo/codes",
+]

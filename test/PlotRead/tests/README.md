@@ -13,9 +13,9 @@ PlotRead 的安装、CLI、Python API 和仓库关系见
 从仓库根目录运行：
 
 ```bash
-make -C test/PlotRead test
+uv run make -C test/PlotRead test
 ```
 
-该 Makefile 默认使用 Conda 环境 `py`（`conda run -n py python`）；可用 `PYTHON=...` 显式覆盖。
+该 Makefile 默认从 `PATH` 发现 `python3`；可用 `PYTHON=...` 显式覆盖。
 
 新增测试应放入对应文件；只有出现新的独立职责时才新增 `test_*.py`。

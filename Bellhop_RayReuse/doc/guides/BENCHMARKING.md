@@ -12,7 +12,7 @@ wall 覆盖范围并不完全相同，不应用它计算跨模式加速比。
 
 ## 正式运行前提
 
-1. 使用 Conda `py` 环境和 Release 可执行程序。
+1. 使用根目录 uv 环境和 Release 可执行程序。
 2. Git 工作区必须干净；默认会拒绝未提交更改。
 3. 固定算例 profile、workers、队列和内存预算。
 4. 每个配置至少预热一次、计量五次，以中位数为主要结果。
@@ -21,7 +21,7 @@ wall 覆盖范围并不完全相同，不应用它计算跨模式加速比。
 示例：
 
 ```bash
-conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
+uv run python test/standard_cases/codes/benchmark_rayreuse.py \
   --case constant_speed_direct \
   --case munk_cerveny_cc \
   --profile broadband_regression \
@@ -44,7 +44,7 @@ conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
 Project/Influence/Scale/total 计时保存到样本 JSON；该开关默认关闭：
 
 ```bash
-conda run -n py python test/standard_cases/codes/benchmark_rayreuse.py \
+uv run python test/standard_cases/codes/benchmark_rayreuse.py \
   --case munk_cerveny_cc \
   --profile broadband_regression \
   --modes parallel \
@@ -96,7 +96,7 @@ sum(各配置单次 wall) × (warmups + repeats)
 ## 报告内容
 
 JSON 记录 Git commit/tree/dirty 状态、可执行文件 SHA-256、平台、CPU/内存、
-Python、NumPy、Conda 环境、CMake/C++ 工具版本、完整配置和轮换顺序。
+Python、NumPy、环境信息、CMake/C++ 工具版本、完整配置和轮换顺序。
 在 macOS 等无法可靠查询具体芯片型号的平台，应通过 `--machine-label` 补充
 可读硬件身份；系统探测字段仍会独立保留。
 每个配置保留预热与原始计量样本，并汇总 wall、RSS 和 PRT 阶段时间的

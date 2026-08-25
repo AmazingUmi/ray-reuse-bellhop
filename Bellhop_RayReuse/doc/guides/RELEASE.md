@@ -17,7 +17,7 @@ core、公共头文件或 CMake package config，也不承诺 C++ ABI。
 从仓库根目录运行：
 
 ```bash
-RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
+RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 ```
 
 该入口依次执行：
@@ -28,8 +28,7 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 4. 安装目录内 `bellhop_rayreuse --version` 烟测；
 5. TGZ SHA-256 输出。
 
-本地默认通过 Conda 环境 `py` 运行 Python 驱动；CI 使用
-`RAYREUSE_PYTHON_MODE=system`。
+本地和 CI 均通过根目录 uv 环境运行 Python 驱动。
 
 ## 已验证的内部产物
 

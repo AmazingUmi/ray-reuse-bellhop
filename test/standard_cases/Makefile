@@ -1,4 +1,4 @@
-PYTHON ?= conda run -n py python
+PYTHON ?= python3
 VERSION ?= origin
 CASE ?= all
 PROFILE ?= single

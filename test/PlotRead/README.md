@@ -67,36 +67,29 @@ Bellhop_origin / Bellhop_F2CPP / Bellhop_RayReuse
 
 ## 4. 首次安装
 
-以下命令均从仓库根目录执行。默认使用 Conda 环境 `py`：
+以下命令均从仓库根目录执行。项目环境由 uv 统一同步：
 
 ```bash
-make -C test/PlotRead setup-python
+uv sync
 ```
 
-该目标执行 editable install。源码仍位于 `test/PlotRead/bellhop_io_py/`，
-修改 Python 文件后无需重新安装。
+根项目将 PlotRead 作为 editable workspace 成员安装。源码仍位于
+`test/PlotRead/bellhop_io_py/`，修改 Python 文件后无需重新安装。
 
 如需使用其他 Python：
 
 ```bash
-make -C test/PlotRead setup-python PYTHON=/path/to/python
+uv sync --python /path/to/python
 ```
 
 ## 5. 命令行使用
 
 ### 5.1 环境调用方式
 
-激活环境后可直接使用：
+无需激活环境，直接通过 uv 使用：
 
 ```bash
-conda activate py
-bellhop-shd --help
-```
-
-不激活环境时：
-
-```bash
-conda run -n py bellhop-shd --help
+uv run bellhop-shd --help
 ```
 
 ### 5.2 查看文件信息
@@ -210,16 +203,16 @@ field = read_shd("result.shd", frequency_index=7)
 PlotRead 测试不要求先生成标准算例：
 
 ```bash
-make -C test/PlotRead test
+uv run make -C test/PlotRead test
 ```
 
 等价的显式目标：
 
 ```bash
-make -C test/PlotRead test-plotread
+uv run make -C test/PlotRead test-plotread
 ```
 
-默认通过 `conda run -n py python` 执行。覆盖解释器：
+Makefile 从 `PATH` 发现 `python3`。覆盖解释器：
 
 ```bash
 make -C test/PlotRead test PYTHON=/path/to/python

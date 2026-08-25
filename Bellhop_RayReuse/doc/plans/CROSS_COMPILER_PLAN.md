@@ -40,24 +40,24 @@ Bellhop_RayReuse/build/toolchain/gcc14-release
 AppleClang：
 
 ```bash
-cmake -S Bellhop_F2CPP \
+uv run cmake -S Bellhop_F2CPP \
   -B Bellhop_F2CPP/build/toolchain/appleclang-release \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
   -DF2CPP_WARNINGS_AS_ERRORS=ON \
   -DBUILD_TESTING=ON
-cmake --build Bellhop_F2CPP/build/toolchain/appleclang-release --parallel 4
-ctest --test-dir Bellhop_F2CPP/build/toolchain/appleclang-release \
+uv run cmake --build Bellhop_F2CPP/build/toolchain/appleclang-release --parallel 4
+uv run ctest --test-dir Bellhop_F2CPP/build/toolchain/appleclang-release \
   --output-on-failure
 
-cmake -S Bellhop_RayReuse \
+uv run cmake -S Bellhop_RayReuse \
   -B Bellhop_RayReuse/build/toolchain/appleclang-release \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
   -DRAYREUSE_WARNINGS_AS_ERRORS=ON \
   -DBUILD_TESTING=ON
-cmake --build Bellhop_RayReuse/build/toolchain/appleclang-release --parallel 4
-ctest --test-dir Bellhop_RayReuse/build/toolchain/appleclang-release \
+uv run cmake --build Bellhop_RayReuse/build/toolchain/appleclang-release --parallel 4
+uv run ctest --test-dir Bellhop_RayReuse/build/toolchain/appleclang-release \
   --output-on-failure
 ```
 
@@ -80,7 +80,7 @@ test/standard_cases/results/toolchain/model_matrix_gcc14.json
 以 GCC 轮为例：
 
 ```bash
-conda run -n py python test/standard_cases/codes/model_matrix.py \
+uv run python test/standard_cases/codes/model_matrix.py \
   --origin-executable Bellhop_origin/bin/bellhop \
   --f2cpp-executable \
     Bellhop_F2CPP/build/toolchain/gcc14-release/bellhop_f2cpp \

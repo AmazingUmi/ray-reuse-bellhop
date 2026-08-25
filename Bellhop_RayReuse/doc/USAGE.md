@@ -5,10 +5,10 @@
 从仓库根目录运行：
 
 ```bash
-cmake --preset release -S Bellhop_RayReuse
-cmake --build Bellhop_RayReuse/build/release --parallel
-ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
-make -C test/standard_cases test-unit
+uv run cmake --preset release -S Bellhop_RayReuse
+uv run cmake --build Bellhop_RayReuse/build/release --parallel
+uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
+uv run make -C test/standard_cases test-unit
 ```
 
 支持边界以 [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 为准。
@@ -74,7 +74,7 @@ worker 不直接写文件；主 consumer 按 frequency index 稳定发布。
 单频产品入口：
 
 ```bash
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case arrival_geometric_hat_ascii \
   --profile single \
@@ -84,7 +84,7 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 两频产品入口：
 
 ```bash
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case eigenray_geometric_gaussian \
   --profile broadband_smoke \

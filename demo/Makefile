@@ -1,4 +1,4 @@
-PYTHON ?= conda run -n py python
+PYTHON ?= python3
 ENV ?= cases/reliability/munk_cerveny_cc.env
 VERSIONS ?= origin,f2cpp,rayreuse
 DPI ?= 180

@@ -1,16 +1,16 @@
-PYTHON ?= conda run -n py python
+PYTHON ?= python3
 
 .PHONY: help setup-python test test-plotread
 
 help:
 	@echo "PlotRead commands"
-	@echo "  Python default: conda environment 'py' (override with PYTHON=...)"
-	@echo "  make setup-python  Install bellhop-shd into the configured Python environment"
+	@echo "  Python default: python3 from PATH (override with PYTHON=...)"
+	@echo "  make setup-python  Sync the project-level uv environment"
 	@echo "  make test          Run SHD reader and plotting tests"
 	@echo "  make test-plotread Alias for make test"
 
 setup-python:
-	$(PYTHON) -m pip install -e .
+	uv sync --project ../..
 
 test: test-plotread
 

@@ -724,8 +724,8 @@ R/A/a/E 或切回 CC 时，成功后会删除其他模式的陈旧产品；启�
 
 ### `No module named numpy`
 
-当前 Python 环境没有 NumPy。安装 NumPy 或切换到项目已有的 Python/conda
-测试环境。
+当前 Python 环境没有 NumPy。在仓库根目录执行 `uv sync`，再通过 `uv run`
+运行命令。
 
 ### `Could not read presets`
 

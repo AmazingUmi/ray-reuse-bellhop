@@ -27,14 +27,14 @@ single、nonreuse、reuse 和 parallel 的被验收对象。快照只冻结共�
 生成前先运行原版单频算例：
 
 ```bash
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version origin --case all --profile single
 ```
 
 再对每个 `run_manifest.json` 调用：
 
 ```bash
-conda run -n py python test/standard_cases/codes/reference_snapshots.py \
+uv run python test/standard_cases/codes/reference_snapshots.py \
   generate /path/to/run_manifest.json /path/to/reference.json \
   --source-revision <verified-commit>
 ```
@@ -45,14 +45,14 @@ conda run -n py python test/standard_cases/codes/reference_snapshots.py \
 检查一个或多个参考文件的 schema 与派生量内部一致性：
 
 ```bash
-conda run -n py python test/standard_cases/codes/reference_snapshots.py \
+uv run python test/standard_cases/codes/reference_snapshots.py \
   check test/standard_cases/results/reference/origin/single/*.json
 ```
 
 将任意候选 SHD 的频率切片与参考比较并可选保存 JSON 报告：
 
 ```bash
-conda run -n py python test/standard_cases/codes/reference_snapshots.py \
+uv run python test/standard_cases/codes/reference_snapshots.py \
   validate /path/to/reference.json /path/to/candidate.shd \
   --candidate-frequency-index 0 --report /path/to/report.json
 ```

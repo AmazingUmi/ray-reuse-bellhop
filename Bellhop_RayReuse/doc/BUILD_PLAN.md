@@ -1,10 +1,10 @@
 # Bellhop RayReuse 构建与验收计划
 
 本文记录 `Bellhop_RayReuse` 从独立派生到有界频率并行的实施顺序。所有命令
-默认从仓库根目录运行；Python 固定使用 Conda 的 `py` 环境：
+默认从仓库根目录运行；Python 使用项目级 uv 环境：
 
 ```bash
-conda run -n py python --version
+uv run python --version
 ```
 
 2026-08-20 的 RayReuse Feature Sync RR-B1～RR-B4 已另行完成并封板；当前
@@ -38,19 +38,19 @@ segment 端点与插值差值缓存、receiver-depth 数量与连续数据指针
 里程碑后的统一质量门为：
 
 ```bash
-RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/quality_gate.sh
+RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/quality_gate.sh
 ```
 
-脚本默认以 `conda run -n py python` 执行 Python 测试，并包含 Debug、
+脚本从 `PATH` 发现 uv 提供的 Python，并包含 Debug、
 Release、28 项 CTest、148 项标准工具测试、9 项 PlotRead 测试、独立性扫描
 和无 F2CPP 隔离副本构建。CI 通过
-`RAYREUSE_PYTHON_MODE=system` 使用固定版本 Python/NumPy，但调用同一质量
-门，避免本地与云端验收逻辑分叉。
+CI 通过同一 `.python-version` 和 `uv.lock` 同步依赖并调用同一质量门，避免
+本地与云端验收逻辑分叉。
 
 本地工程化验收为：
 
 ```bash
-RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
+RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 ```
 
 它完成格式检查、静态分析、Release 安装、版本烟测、TGZ 打包和 SHA-256
@@ -80,13 +80,13 @@ RAYREUSE_BUILD_JOBS=4 Bellhop_RayReuse/scripts/engineering_gate.sh
 ### 验收命令
 
 ```bash
-cmake --preset debug -S Bellhop_RayReuse
-cmake --build Bellhop_RayReuse/build/debug --parallel
-ctest --test-dir Bellhop_RayReuse/build/debug --output-on-failure
+uv run cmake --preset debug -S Bellhop_RayReuse
+uv run cmake --build Bellhop_RayReuse/build/debug --parallel
+uv run ctest --test-dir Bellhop_RayReuse/build/debug --output-on-failure
 
-cmake --preset release -S Bellhop_RayReuse
-cmake --build Bellhop_RayReuse/build/release --parallel
-ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
+uv run cmake --preset release -S Bellhop_RayReuse
+uv run cmake --build Bellhop_RayReuse/build/release --parallel
+uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
 
 rg -n \
   'Bellhop_F2CPP|bellhop_f2cpp|add_subdirectory.*F2CPP|include_directories.*F2CPP' \
@@ -123,10 +123,10 @@ rg -n \
 ### 验收命令
 
 ```bash
-conda run -n py python -m unittest discover \
+uv run python -m unittest discover \
   -s test/standard_cases/codes/tests -p 'test_*.py'
 
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case all \
   --profile single \
@@ -136,7 +136,7 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 逐个 SHD 对照使用同一比较入口：
 
 ```bash
-conda run -n py python test/standard_cases/codes/compare_fields.py \
+uv run python test/standard_cases/codes/compare_fields.py \
   /path/to/reference.shd \
   /path/to/rayreuse.shd
 ```
@@ -174,13 +174,13 @@ conda run -n py python test/standard_cases/codes/compare_fields.py \
 可运行为通过条件。
 
 ```bash
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case all \
   --profile broadband_smoke \
   --executable Bellhop_RayReuse/build/release/bellhop_rayreuse
 
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case all \
   --profile broadband_regression \
@@ -192,7 +192,7 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 并继续使用：
 
 ```bash
-conda run -n py python test/standard_cases/codes/compare_fields.py \
+uv run python test/standard_cases/codes/compare_fields.py \
   /path/to/independent-single-frequency.shd \
   /path/to/broadband.shd \
   --candidate-frequency-index 0
@@ -224,11 +224,11 @@ conda run -n py python test/standard_cases/codes/compare_fields.py \
 ### 预定验收命令
 
 ```bash
-ctest --test-dir Bellhop_RayReuse/build/release \
+uv run ctest --test-dir Bellhop_RayReuse/build/release \
   -L reuse \
   --output-on-failure
 
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case all \
   --profile broadband_regression \
@@ -265,11 +265,11 @@ conda run -n py python test/standard_cases/codes/standard_cases.py test \
 ### 预定验收命令
 
 ```bash
-ctest --test-dir Bellhop_RayReuse/build/release \
+uv run ctest --test-dir Bellhop_RayReuse/build/release \
   -L parallel \
   --output-on-failure
 
-conda run -n py python test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case constant_speed_direct \
   --profile broadband_stress \

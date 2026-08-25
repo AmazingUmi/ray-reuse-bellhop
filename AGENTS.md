@@ -177,13 +177,16 @@ Arrival、Eigenray、传播损失、复压力、相位、走时、反射和二�
 - 结果路径、可执行文件、频率、执行模式和状态进入清单；
 - 展示同时说明“直接可用”和“横向对比”，而不是依赖隐藏步骤。
 
-Python 默认使用 Conda `py` 环境。Makefile 和脚本优先采用：
+Python 默认使用仓库根目录的 uv 环境。首次使用和日常测试采用：
 
 ```bash
-conda run -n py python ...
+uv sync
+uv run pytest
 ```
 
-不要求用户预先激活环境；不要重新引入 MATLAB 运行依赖。
+Makefile 和脚本通过 `python3`/`PYTHON` 从 `PATH` 发现解释器；在 uv 环境中
+运行时使用 `uv run ...`，不要硬编码 `.venv` 或 Conda 路径，也不要重新引入
+MATLAB 运行依赖。
 
 ## 架构、重构与范围控制
 
@@ -226,19 +229,19 @@ conda run -n py python ...
 
 ```bash
 # F2CPP / RayReuse C++ 回归
-ctest --test-dir Bellhop_F2CPP/build/release --output-on-failure
-ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
+uv run ctest --test-dir Bellhop_F2CPP/build/release --output-on-failure
+uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
 
 # 标准算例工具和共享算例
-make -C test/standard_cases test-unit
-make -C test/standard_cases test VERSION=f2cpp CASE=<case> PROFILE=single
-make -C test/standard_cases batch
+uv run make -C test/standard_cases test-unit
+uv run make -C test/standard_cases test VERSION=f2cpp CASE=<case> PROFILE=single
+uv run make -C test/standard_cases batch
 
 # SHD 读取绘图与工程展示
-make -C test/PlotRead test
-make -C demo test
-make -C demo all
-make -C demo rayreuse-multifrequency
+uv run make -C test/PlotRead test
+uv run make -C demo test
+uv run make -C demo all
+uv run make -C demo rayreuse-multifrequency
 ```
 
 不要机械地为局部改动运行所有昂贵组合；涉及公共解析、核心数值、输出布局、
