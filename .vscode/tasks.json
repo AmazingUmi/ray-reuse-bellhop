@@ -28,7 +28,7 @@
     {
       "label": "Prepare Munk Standard Case",
       "type": "process",
-      "command": "/Users/luyiyang/miniconda3/condabin/conda",
+      "command": "${userHome}/miniconda3/condabin/conda",
       "args": [
         "run",
         "-n",
