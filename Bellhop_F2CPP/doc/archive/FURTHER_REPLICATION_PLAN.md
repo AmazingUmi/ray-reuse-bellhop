@@ -238,7 +238,7 @@ sanitizer/Release 与 GCC 14 Release/Werror CTest 均为 26/26，Python 基础
 共享发射扇修正为真实最大接收距离 1900 m 后，最终场最大复压力绝对误差
 `1.23751187e-9`、最大相对误差 `4.31240835e-7`、最大 TL 差 `0 dB`。
 完整汇总、输入与可执行文件哈希见
-[`validation/i3_piecewise_oracle_report.json`](./validation/i3_piecewise_oracle_report.json)。
+[`validation/i3_piecewise_oracle_report.json`](../reports/validation/i3_piecewise_oracle_report.json)。
 
 I3-05 于 2026-08-09 完成：canonical `C` 短格式、节点反射帧、实际生效的
 `Dss=Dxx*t_r^3` 曲率、Top/Bottom 动态跳跃、非单位 legacy 镜像、缓存冻结
@@ -246,7 +246,7 @@ I3-05 于 2026-08-09 完成：canonical `C` 短格式、节点反射帧、实际
 459/459 条射线逐点通过，共 19056 点、14600 步、3997 次反射；最坏连续量
 绝对误差为 `3.33e-16`。最终场最大复声压绝对误差 `8.33e-10`、最大相对
 误差 `5.70e-7`、最大 TL 差 `7.63e-6 dB`。冻结报告见
-`doc/validation/i3_curvilinear_fortran_oracle_report.json`。
+`doc/reports/validation/i3_curvilinear_fortran_oracle_report.json`。
 
 I3-06 于 2026-08-09 完成：`.ati/.bty` 的 `LL` 七列节点记录现在都会解析
 并校验；当前真空海面的 ATI 材料按边界条件忽略，声学海底的 BTY 保留原始
@@ -256,7 +256,7 @@ RayReuse 逐频投影不重新定位 segment，也不写回轨迹。组件门覆
 node 映射、列数/elastic 拒绝、ENV 回退优先级、biological 深度语义和双频
 投影；1000 Hz 标准场通过 Origin/F2CPP 对照，最大复压力绝对误差
 `4.66e-11`、最大相对误差 `4.57e-7`、最大 TL 差 `7.63e-6 dB`。冻结报告见
-`doc/validation/i3_long_format_materials_report.json`。
+`doc/reports/validation/i3_long_format_materials_report.json`。
 
 ### I4：边界声学与衰减扩展
 
@@ -282,7 +282,7 @@ I4-01 于 2026-08-09 完成：ENV `TopOpt` 第三字符的六种大写单位现�
 `F/W/Q/L` 的线性频率行为。六个独立 5 kHz 标准案例均通过 Origin/F2CPP
 最终场门，最大复压力绝对误差 `8.41e-9`、最大相对误差 `2.06e-6`、最大
 TL 差 `1.91e-5 dB`；等效输入在各实现内部产生逐字节相同的六份场。
-冻结报告见 `doc/validation/i4_attenuation_units_report.json`。小写幂律 `m`
+冻结报告见 `doc/reports/validation/i4_attenuation_units_report.json`。小写幂律 `m`
 没有提前开放。
 
 I4-02 于 2026-08-09 完成：`TopOpt` 第四字符 `F/B` 的附加记录进入唯一的
@@ -293,7 +293,7 @@ I4-02 于 2026-08-09 完成：`TopOpt` 第四字符 `F/B` 的附加记录进入�
 换算再累加顺序，均由独立 gfortran 锚固定。两个新案例共六个单频/多频
 Origin–F2CPP 场切片全部通过，最坏复压力绝对误差 `1.01e-7`、最大相对误差
 `9.98e-5`、最大 TL 差 `5.57e-4 dB`；两种实现的两种模型均显著区别于同一
-无损控制场。冻结报告见 `doc/validation/i4_volume_attenuation_report.json`。
+无损控制场。冻结报告见 `doc/reports/validation/i4_volume_attenuation_report.json`。
 
 I4-03 于 2026-08-09 完成普通 ENV `A` 型弹性海床纵切：parser 保留 P/S
 波速、两套 raw attenuation 和密度，projector 在每个频率分别执行 CRCI 后
@@ -302,7 +302,7 @@ I4-03 于 2026-08-09 完成普通 ENV `A` 型弹性海床纵切：parser 保留 
 几何。弹性场及同几何 fluid control 共六个 Origin/F2CPP 场切片全部通过，
 最大复压力绝对误差 `1.69e-8`、最大 TL 差 `2.59e-4 dB`，两端的 shear
 非空操作门均通过。冻结报告见
-`doc/validation/i4_elastic_halfspace_report.json`。顶部 `A` 半空间和弹性
+`doc/reports/validation/i4_elastic_halfspace_report.json`。顶部 `A` 半空间和弹性
 `LL/CL` 仍明确延期，不属于本纵切。
 
 I4-04 于 2026-08-11 完成 bottom `G` grain-size 纵切：不可变环境保存 `Mz`
@@ -311,11 +311,11 @@ I4-04 于 2026-08-11 完成 bottom `G` grain-size 纵切：不可变环境保存
 体积衰减。组件门逐位锚定 default-REAL 常量、全部分段边界与 0/30/60 度
 反射系数，双频投影不写回轨迹。原 2D Fortran 漏写粒径派生参数，会产生
 NaN；oracle 仅补入与同仓库 3D 路径一致的三项初始化，并在
-`Bellhop_origin/ORACLE_DIAGNOSTICS.md` 明示。grain-size 场与等价普通流体
+`Bellhop_origin/doc/guides/ORACLE_DIAGNOSTICS.md` 明示。grain-size 场与等价普通流体
 control 共六个 Origin/F2CPP 场切片全部通过，最大复压力绝对误差
 `1.68e-8`、最大相对误差 `2.56e-6`、最大 TL 差 `2.29e-5 dB`；两端 `G`
 与 control 的压力均逐位一致。冻结报告见
-`doc/validation/i4_grain_size_report.json`。顶部 `G` 与 `G+LL` 继续延期。
+`doc/reports/validation/i4_grain_size_report.json`。顶部 `G` 与 `G+LL` 继续延期。
 
 I4-05 于 2026-08-11 完成 bottom `F` tabulated-reflection 纵切：parser 从
 同根 `.brc` 读取严格递增的 `grazing_angle_deg magnitude phase_deg`，将表
@@ -330,7 +330,7 @@ short bathymetry 组合、`F+LL` 拒绝和双频缓存只读。tabulated 场与 
 control 共六个 Origin/F2CPP 场切片全部通过，最大复压力绝对误差
 `1.68e-8`、最大相对误差 `6.35e-6`、最大 TL 差 `3.82e-5 dB`，两端的
 table-effect 非空操作门均通过。冻结报告见
-`doc/validation/i4_tabulated_reflection_report.json`。顶部 `F/.trc` 延期；
+`doc/reports/validation/i4_tabulated_reflection_report.json`。顶部 `F/.trc` 延期；
 源码审计确认当前 2D `P` 只读未消费的 `.irc`，`W` 只打印提示却不写表，
 两者首次实际反射均无完整实现，故不列为已支持能力。
 
@@ -354,8 +354,8 @@ table-effect 非空操作门均通过。冻结报告见
 逐频参考 SSP 损耗、range/depth 双索引、range-cell 限步、梯度跳跃和
 ASan/UBSan 组件门。代表射线 715 点/714 步逐点 gfortran oracle、两个 Q
 案例共六个最终场切片、范围相关 effect guard 及双频冻结缓存门均已通过；
-报告见 `doc/validation/i5_q_geometry_oracle_report.json` 与
-`doc/validation/i5_quadrilateral_ssp_report.json`。
+报告见 `doc/reports/validation/i5_q_geometry_oracle_report.json` 与
+`doc/reports/validation/i5_quadrilateral_ssp_report.json`。
 
 ### I6：source、receiver 与射线产品
 
@@ -386,7 +386,7 @@ depth，求解器以共享 launch fan 逐源建立/释放缓存并产生独立 w
 SHD writer 写真实 `NSz`、深度向量和 source-major 场记录。乱序三源标准例
 在 1/2 kHz 的最大复压力绝对误差为 `2.24e-8`、最大 TL 差为
 `3.82e-5 dB`，冻结报告为
-`doc/validation/i6_multi_source_report.json`。随后进入 I6-02。
+`doc/reports/validation/i6_multi_source_report.json`。随后进入 I6-02。
 
 I6-02 于 2026-08-11 完成：run-type 第 5 字符 `I` 进入独立 receiver layout，
 workspace 每个 range 仅保存一个压力值，SHD 头保留等数量 depth/range 轴并
@@ -394,14 +394,14 @@ workspace 每个 range 仅保存一个压力值，SHD 头保留等数量 depth/r
 `InfluenceCervenyCart` 实际对所有 range 使用 `Rz(1)`，而非注释所称的
 `Rz(ir)` 配对；F2CPP 冻结该 legacy 行为，修正后的真正配对 CC 场不在同一
 兼容选项下偷换。1/2 kHz 最大复压力绝对误差 `3.80e-9`，报告为
-`doc/validation/i6_irregular_receivers_report.json`。
+`doc/reports/validation/i6_irregular_receivers_report.json`。
 
 I6-03 于 2026-08-11 完成：run-type 第 3 字符 `*` 读取同根 `.sbp`，节点 dB
 按 `10^(dB/20)` 转为线性压力幅度后，以 Origin 的严格左段选择和首末段外推
 顺序逐发射角求值。方向图只进入逐频 projector，不修改 source、轨迹或冻结
 缓存；1/2 kHz 最终场最大复压力绝对误差 `1.68e-8`、最大 TL 差
 `2.29e-5 dB`，报告为
-`doc/validation/i6_source_beam_pattern_report.json`。
+`doc/reports/validation/i6_source_beam_pattern_report.json`。
 
 I6-04 于 2026-08-11 完成：parser 接受安全范围内的 `R/RG/RGO`，限全向源、
 真空海面/刚性海底、无 beam shift 与无损耗前缀；显式 `Nalpha` 原样使用，
@@ -409,7 +409,7 @@ I6-04 于 2026-08-11 完成：parser 接受安全范围内的 `R/RG/RGO`，限�
 直接消费冻结 `RayPathCache`，输出 PRT/RAY 而不生成 SHD。标准案例的 2 source
 × 5 angles 共 10 条射线、5934 个点，top/bottom bounce 各 19 次；相对 Origin
 坐标最大绝对误差为 `0 m`，source/angle 顺序与语义哈希一致，报告为
-`doc/validation/i6_ray_trace_report.json`。收口时 AppleClang Debug sanitizer
+`doc/reports/validation/i6_ray_trace_report.json`。收口时 AppleClang Debug sanitizer
 和 Release CTest 当时均为 27/27，Python 标准工具 82/82，单频端到端案例
 33/33；其中新增 ray-trace 案例不是 SHD 场案例。
 
@@ -420,7 +420,7 @@ record 号和总文件偏移；CC 压力 workspace 与两种模式总射线数�
 CC→R→CC 会移除异类产品和陈旧临时文件，标准案例的单频/宽带运行也不会
 复用旧 manifest 或输出。最终 AppleClang Debug/Release 与 GCC14 Werror
 均为 28/28 CTest，Python 标准工具 86/86，单频端到端案例保持 33/33；
-冻结摘要为 `doc/validation/i6_output_safety_report.json`。随后 I7-01～I7-06
+冻结摘要为 `doc/reports/validation/i6_output_safety_report.json`。随后 I7-01～I7-06
 与 I8-01～I8-04 也已完成并冻结。
 
 ### I7：场分量、相干类型与 beam family
@@ -447,7 +447,7 @@ I7-01 于 2026-08-11 完成。模型与 ENV parser 现保存大写 `P/V/H`，PRT
 各自均逐字节相同且非零。三个组件的 Origin↔F2CPP 最大复压力绝对误差为
 `1.494685086811387e-08`、最大相对误差为 `2.8521849344542716e-06`、最大 TL
 差为 `7.62939453125e-06 dB`；冻结报告为
-`doc/validation/i7_cartesian_components_report.json`。最终 AppleClang
+`doc/reports/validation/i7_cartesian_components_report.json`。最终 AppleClang
 Debug/Release 与 GCC14 Werror 均为 28/28 CTest，Python 标准工具 90/90，
 单频标准案例 36/36。该阶段随后进入 I7-02；不得把 ray-centered 的 `V/H` 公式提前
 移植到 Cartesian influence。
@@ -460,7 +460,7 @@ Influence 的逐点和接收距离插值两处按 real(q) 过零更新 KMAH。D/
 精确一致；五例矩阵跨实现最大复压力绝对误差 `1.31708899342442e-09`、最大
 相对误差 `1.6340760566890822e-06`、最大 TL 差
 `1.1444091796875e-05 dB`，且 12 个宽度/曲率效果门全部非空。冻结报告为
-`doc/validation/i7_beam_options_report.json`；最终 Debug/Release/GCC14
+`doc/reports/validation/i7_beam_options_report.json`；最终 Debug/Release/GCC14
 Werror CTest 28/28、Python 95/95、单频案例 40/40。该阶段随后进入 I7-03。
 
 I7-03 于 2026-08-11 完成。run-type 第 4 字符现以 case 级
@@ -470,7 +470,7 @@ I7-03 于 2026-08-11 完成。run-type 第 4 字符现以 case 级
 point/line 最大复压力差均为 `0.2273859679698944`，三组跨实现最大复压力
 绝对误差 `1.6408202441198227e-7`、最大 TL 差
 `9.5367431640625e-6 dB`。冻结报告为
-`doc/validation/i7_source_geometry_report.json`；最终 Debug/Release/GCC14
+`doc/reports/validation/i7_source_geometry_report.json`；最终 Debug/Release/GCC14
 Werror CTest 28/28、Python 100/100、单频案例 42/42。该阶段随后进入 I7-04，
 并已由下一段关闭。
 
@@ -486,7 +486,7 @@ mirror 幅度，再沿用 I 的强度路径。I/S 在最终缩放前取累积强
 最大压力差约 `0.0022908477`、TL 差中位数约 `23.8819 dB`；I/S Lloyd
 effect 的最大压力差为 `1.7811398720368743e-6`，TL 差中位数为 Origin
 `0.0492249 dB`、F2CPP `0.0492172 dB`。冻结报告为
-`doc/validation/i7_coherence_modes_report.json`；最终 Debug/Release/GCC14
+`doc/reports/validation/i7_coherence_modes_report.json`；最终 Debug/Release/GCC14
 Werror CTest 28/28、Python 106/106、单频案例 44/44（43 SHD + 1 RAY）。
 该阶段随后进入 I7-05，并已由下一段关闭。
 
@@ -498,7 +498,7 @@ Cerveny，并与 Cartesian 共享同一冻结射线几何；Influence 按局部�
 `8.186953891708981e-06`、最大 TL 差 `6.103515625e-05 dB`，四个 family/
 component 独立效果门均非空。ENV/PRT family/component、可执行文件路径、
 mtime/hash 与 Origin 公式来源均已绑定，冻结报告为
-`doc/validation/i7_ray_centered_components_report.json`。首个纵切只接受规则
+`doc/reports/validation/i7_ray_centered_components_report.json`。首个纵切只接受规则
 接收网格并明确拒绝 ray-centered irregular receiver grid；最终
 Debug/Release/GCC14 Werror CTest 29/29、Python 112/112、单频案例 47/47
 （46 SHD + 1 RAY）。随后进入 I7-06，并已由下一段关闭。
@@ -512,7 +512,7 @@ G/B/S 三例使用相同 300 条发射射线与场布局，Origin/F2CPP 最大�
 误差 `1.30385160446167e-08`、最大相对误差
 `2.107042291754624e-06`、最大 TL 差 `2.288818359375e-05 dB`；两实现内部
 三组两两 family effect 均通过非空门。冻结报告为
-`doc/validation/i7_gaussian_beams_report.json`。最终 AppleClang Debug
+`doc/reports/validation/i7_gaussian_beams_report.json`。最终 AppleClang Debug
 ASan/UBSan、AppleClang Release 与 GCC14 Werror CTest 均为 32/32，Python
 标准工具 123/123，单频案例 52/52（51 SHD + 1 RAY）。I8 架构审查与任务
 拆分随后完成，并已由下一段的 I8 完成记录关闭。
@@ -589,7 +589,7 @@ material，并按 `1e20 m` 深度逐频换算；新案例最大复压力绝对/�
 CTest 37/37、F2CPP 单频 65/65。
 
 B4 于 2026-08-14 完成。closure 发布
-[`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md)，明确区分 supported、
+[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md)，明确区分 supported、
 intentional divergence 与 deferred/out-of-scope；同步更新首页、使用说明、
 进度和项目级入口。生产源码扫描无 TODO/FIXME，未支持组合均在 parser、model
 或 solver 边界显式拒绝，未发现 silent fallback。AppleClang Debug

@@ -332,6 +332,6 @@ evidence. Codex reviews `git diff`, stages explicit paths or hunks (never
   failure, and leak no `.tmp` files.
 - Unsupported `C/R/S` arrival/eigenray combinations, 3D, N×2D, and beam shift
   fail explicitly.
-- Machine-readable reports are generated in `doc/validation`, project progress
+- Machine-readable reports are generated in `doc/reports/validation`, project progress
   and usage documents are updated, `git diff --check` passes, and the working
   tree is clean.

@@ -98,7 +98,7 @@ def generate(
                 "bellhop_f2cpp_geometry_oracle_probe "
                 "--output-root <temporary-output-root> "
                 "--report-output "
-                "Bellhop_F2CPP/doc/validation/"
+                "Bellhop_F2CPP/doc/reports/validation/"
                 "i5_q_geometry_oracle_report.json"
             ),
             "oracle_source_index": 1,

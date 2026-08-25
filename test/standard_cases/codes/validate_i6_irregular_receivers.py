@@ -210,7 +210,7 @@ def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
                 "--results-root <results-root> "
                 "--origin-executable Bellhop_origin/bin/bellhop "
                 "--f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp "
-                "--output Bellhop_F2CPP/doc/validation/"
+                "--output Bellhop_F2CPP/doc/reports/validation/"
                 "i6_irregular_receivers_report.json"
             ),
         },

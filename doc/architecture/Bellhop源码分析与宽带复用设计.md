@@ -1,6 +1,6 @@
 # 01 Bellhop 源码分析与宽带 Ray-Reuse 设计
 
-> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [04 基础变量、单位与数值规范](./04-基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
+> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [基础变量、单位与数值规范](../reference/基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
 
 ## 1. 文档目标与分析范围
 
@@ -12,7 +12,7 @@
 4. 当前真正参与构建的二维代码与仓库中的三维扩展代码有何区别；
 5. 后续进行 ray-reuse 重构时，应如何划分模块边界。
 
-分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 的优化单频实现和 `Bellhop_RayReuse/` 的宽带轨迹复用实现均已完成本地数值验收；RayReuse 从已验证的 F2CPP 代码派生后独立构建和运行。当前实施状态见 [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md)。
+分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 的优化单频实现和 `Bellhop_RayReuse/` 的宽带轨迹复用实现均已完成本地数值验收；RayReuse 从已验证的 F2CPP 代码派生后独立构建和运行。当前实施状态见 [`Bellhop_RayReuse/doc/README.md`](../../Bellhop_RayReuse/doc/README.md)。
 
 ## 2. 总体功能分层
 
@@ -563,7 +563,7 @@ ReadEnvironment
 
 ### 16.1 理论来源和实现优先级
 
-本项目以 [03 射线轨迹方程以及动态射线追踪方程推导](./03-射线轨迹方程以及动态射线追踪方程推导.html) 作为二维射线理论参考。该文档已经修订竖直慢度导数和动态方程符号问题。
+本项目以 [射线轨迹方程以及动态射线追踪方程推导](../reference/射线轨迹方程以及动态射线追踪方程推导.html) 作为二维射线理论参考。该文档已经修订竖直慢度导数和动态方程符号问题。
 
 实现和验收采用以下优先级：
 

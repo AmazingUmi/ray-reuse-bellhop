@@ -73,7 +73,7 @@ RayReuse parser 的实际限制见
 [`environment_parser.cpp`](../../src/io/environment_parser.cpp)：`CC` 才能进入 TL；
 `AG/aG/AB/aB/EG/EB` 进入 arrival/eigenray；line source、irregular receiver 和
 ray-centered `g` 明确拒绝。冻结支持表也将 I/S 和未列出的 beam/coherence 组合
-列为 deferred（[`FEATURE_SUPPORT_MATRIX.md`](../FEATURE_SUPPORT_MATRIX.md)）。
+列为 deferred（[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md)）。
 
 ### 2.2 生命周期与所有权
 

@@ -11,7 +11,7 @@ uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
 uv run make -C test/standard_cases test-unit
 ```
 
-支持边界以 [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 为准。
+支持边界以 [`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 为准。
 
 ## 命令格式
 

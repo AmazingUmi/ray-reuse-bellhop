@@ -96,7 +96,7 @@ v1 是“中间几何状态”契约，不是完整中间状态 bundle。Fortran
 当前基础自动矩阵选择 source 1、launch angle index 150，并覆盖 direct、
 vacuum/rigid 和 Munk；I3 的 F2CPP 专用 probe 另提供 `i3-piecewise` 和
 `i3-curvilinear`。前者 497 个、后者 459 个发射角均已通过 gfortran 逐点
-轨迹对照；冻结汇总分别见 `doc/validation/i3_piecewise_oracle_report.json`
-和 `doc/validation/i3_curvilinear_fortran_oracle_report.json`。
+轨迹对照；冻结汇总分别见 `doc/reports/validation/i3_piecewise_oracle_report.json`
+和 `doc/reports/validation/i3_curvilinear_fortran_oracle_report.json`。
 F2CPP 与 RayReuse 的共同 probe CSV 要求逐字节一致；两者
 相对 Fortran 使用 `compare_f2cpp_geometry_oracle.py` 中冻结的逐字段组合容差。

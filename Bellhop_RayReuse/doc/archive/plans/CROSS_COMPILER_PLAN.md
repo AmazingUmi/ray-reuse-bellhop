@@ -1,7 +1,7 @@
 # H4 本地跨编译器验证操作计划
 
 > 执行状态（2026-08-07）：H4-0～H4-4 的 C++ AppleClang↔GCC 矩阵已完成，
-> 结果见 [`CROSS_COMPILER_RESULTS_H4.md`](../reports/CROSS_COMPILER_RESULTS_H4.md)。
+> 结果见 [`CROSS_COMPILER_RESULTS_H4.md`](../../reports/CROSS_COMPILER_RESULTS_H4.md)。
 > 后续项目决策将 GNU Fortran/gfortran 冻结为唯一支持的 Fortran oracle
 > 工具链，H4-5 已取消；本计划是历史记录，不再是活动待办。
 

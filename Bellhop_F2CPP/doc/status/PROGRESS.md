@@ -84,27 +84,27 @@
 - I6 ray-trace 案例：2 source × 5 angles 共 10 条射线、5934 个写出点，
   top/bottom bounce 各 19 次；相对 Origin 的坐标最大绝对误差为 `0 m`，
   source-major/launch-angle-major 语义哈希一致。冻结报告为
-  [`validation/i6_ray_trace_report.json`](./validation/i6_ray_trace_report.json)。
+  [`validation/i6_ray_trace_report.json`](../reports/validation/i6_ray_trace_report.json)。
 - I6 输出安全门：规则与 irregular SHD 均在分配/写文件前冻结 record 数、
   record bytes、最终 record 号和总文件字节；SHD/RAY 采用临时文件完整关闭后
   发布。CLI 的 CC→R→CC 同根切换不会留下异类产品或 `.tmp`，失败输入保留
   旧有效 SHD 并在 PRT 记录 FATAL；报告为
-  [`validation/i6_output_safety_report.json`](./validation/i6_output_safety_report.json)。
+  [`validation/i6_output_safety_report.json`](../reports/validation/i6_output_safety_report.json)。
 - I7 Cartesian component 案例：Origin 与 F2CPP 各自的 P/V/H SHD 均逐字节
   相同且场非零；三组跨实现比较的最大复压力绝对误差 `1.50e-8`、最大相对
   误差 `2.86e-6`、最大 TL 差 `7.63e-6 dB`。报告为
-  [`validation/i7_cartesian_components_report.json`](./validation/i7_cartesian_components_report.json)。
+  [`validation/i7_cartesian_components_report.json`](../reports/validation/i7_cartesian_components_report.json)。
 - I7 beam-option 五例矩阵：FS/MS/WS 的首射线 HalfWidth 与 epsilon 均和
   Origin 精确一致；MD/MS/MZ 的曲率效果在两实现中均非空。五组跨实现比较的
   最大复压力绝对误差 `1.32e-9`、最大相对误差 `1.64e-6`、最大 TL 差
   `1.1444091796875e-05 dB`。报告为
-  [`validation/i7_beam_options_report.json`](./validation/i7_beam_options_report.json)。
+  [`validation/i7_beam_options_report.json`](../reports/validation/i7_beam_options_report.json)。
 - I7 source-geometry 三例矩阵：默认空白 point 与显式 `R` point 在 Origin、
   F2CPP 内部分别逐位相同；`X` line 与 point 的最大复压力差均为
   `0.2273859679698944`，TL 差中位数分别为 `51.082218 dB` 与
   `51.082214 dB`。三组跨实现最大复压力绝对误差为 `1.64e-7`、最大 TL
   差为 `9.54e-6 dB`。报告为
-  [`validation/i7_source_geometry_report.json`](./validation/i7_source_geometry_report.json)。
+  [`validation/i7_source_geometry_report.json`](../reports/validation/i7_source_geometry_report.json)。
 - I7 coherence-mode 三例矩阵：C/I/S 共用相同的 300 条冻结射线几何；I 对
   每条 beam 的复贡献取强度后累加，S 在逐频投影中先施加 Lloyd mirror，
   两者最终取累积强度平方根并执行 point/line 扩散缩放。I/S SHD 与 C 使用
@@ -113,7 +113,7 @@
   `1.52587890625e-5 dB`；C/I 最大压力差为 `0.0022908477`、TL 差中位数约
   `23.8819 dB`，I/S Lloyd effect 最大压力差为 `1.7811398720368743e-6`、
   TL 差中位数为 Origin `0.0492249 dB`、F2CPP `0.0492172 dB`。报告为
-  [`validation/i7_coherence_modes_report.json`](./validation/i7_coherence_modes_report.json)。
+  [`validation/i7_coherence_modes_report.json`](../reports/validation/i7_coherence_modes_report.json)。
 - I7 ray-centered 四例矩阵：CC/P control 与 CR/P、CR/V、CR/H 使用除此
   之外相同的非零场输入；ray-centered 路径消费 Origin 的局部法向、插值
   `p/q`、KMAH 与 `P/V/H` 投影公式。四组跨实现最大复压力绝对误差
@@ -122,7 +122,7 @@
   CR/V↔CR/H 的最大压力效果分别为 `0.0115372753`、`0.0872854739`、
   `0.1365610510`、`0.1562754959`，均通过独立非空门。首个纵切仅支持规则
   接收网格并明确拒绝 ray-centered irregular receiver grid。报告为
-  [`validation/i7_ray_centered_components_report.json`](./validation/i7_ray_centered_components_report.json)。
+  [`validation/i7_ray_centered_components_report.json`](../reports/validation/i7_ray_centered_components_report.json)。
 - I7 Gaussian-family 三例矩阵：Cartesian geometric hat (`G`)、geometric
   Gaussian (`B`) 和 simple Gaussian (`S`) 使用相同的 300 条发射射线及
   1 kHz 场布局。三组 Origin/F2CPP 最大复压力绝对误差为
@@ -130,25 +130,25 @@
   `2.288818359375e-05 dB`；两实现内部的 G/B/S 三组两两 family effect 均
   通过独立非空门。Origin 明确不提供 ray-centered geometric Gaussian，
   F2CPP 在 parser 边界保持相同拒绝。报告为
-  [`validation/i7_gaussian_beams_report.json`](./validation/i7_gaussian_beams_report.json)。
+  [`validation/i7_gaussian_beams_report.json`](../reports/validation/i7_gaussian_beams_report.json)。
 - I8 Arrival accumulator：直接链接真实 `ArrMod::AddArr` 的 15 个固定场景
   产生 24 个存储到达，计数、顺序、bounce 和全部 144 个 float 字段逐位一致；
   覆盖严格 delay/phase 边界、last-only duplicate、weighted merge、signed
   axial-cusp guard、first-minimum tie、容量替换/丢弃和零到达。报告为
-  [`validation/i8_arrival_accumulator_report.json`](./validation/i8_arrival_accumulator_report.json)。
+  [`validation/i8_arrival_accumulator_report.json`](../reports/validation/i8_arrival_accumulator_report.json)。
 - I8 ARR 六例矩阵覆盖 `A/a`、G/g/B、规则/不规则接收、多 source、反射多径、
   unwrapped phase 和零到达；Origin/F2CPP 的 source/cell/arrival 顺序、计数、
   bounce 以及全部存储字段一致，最坏误差 `0 ULP`，并包含 984 个反射到达和
   单 cell 最大 123 个到达。报告为
-  [`validation/i8_arrivals_report.json`](./validation/i8_arrivals_report.json)。
+  [`validation/i8_arrivals_report.json`](../reports/validation/i8_arrivals_report.json)。
 - I8 E 四例矩阵覆盖 G/g/B、多 source、重复 launch angle、反射 prefix 与零命中；
   2200 个 EOF block、876191 个 prefix 点、2830/2830 次 top/bottom bounce
   的结构和坐标全部一致，最大坐标误差 `0 m`。报告为
-  [`validation/i8_eigenrays_report.json`](./validation/i8_eigenrays_report.json)。
+  [`validation/i8_eigenrays_report.json`](../reports/validation/i8_eigenrays_report.json)。
 - I8 输出安全门验证 `CC -> R -> A -> a -> E -> CC`、header-only 零命中 E、
   陈旧 SHD/RAY/ARR 和 `.tmp` 清理，以及 parse、solver 和 publish 三阶段失败
   对旧正式产品的保留。报告为
-  [`validation/i8_output_safety_report.json`](./validation/i8_output_safety_report.json)。
+  [`validation/i8_output_safety_report.json`](../reports/validation/i8_output_safety_report.json)。
 - I9-B1 top-F/bottom-V 对照：top `.trc` 和 bottom vacuum 均由 Origin/F2CPP
   端到端消费；最大复压力绝对误差 `1.73985413e-8`、最大相对误差
   `1.40428056e-5`、最大 TL 差 `1.14440918e-4 dB`。B1 checkpoint 的
@@ -179,7 +179,7 @@
   environment，不构成程序推荐值或扩展上限。
 
 I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
-[`validation/`](./validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
+[`validation/`](../reports/validation/)。I3-06 和 I4-03 的验证器输出均与对应冻结
 报告逐字节一致；I4-04、I4-05 报告均由各自验证器直接生成。
 
 ## 3. 缓存与逐频状态
@@ -195,21 +195,21 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 ## 4. 文档角色
 
 - 本文件记录当前施工进度和最新验证基线；
-- [`FURTHER_REPLICATION_PLAN.md`](./FURTHER_REPLICATION_PLAN.md) 记录后续二维
+- [`FURTHER_REPLICATION_PLAN.md`](../archive/FURTHER_REPLICATION_PLAN.md) 记录后续二维
   功能的依赖顺序和逐项完成证据；
-- [`USAGE.md`](./USAGE.md) 记录当前可实际使用的输入范围；
-- [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 是复刻封板后的
+- [`USAGE.md`](../guides/USAGE.md) 记录当前可实际使用的输入范围；
+- [`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 是复刻封板后的
   supported、intentional divergence 与 deferred/out-of-scope 唯一分类表；
-- [`DERIVATION_MANIFEST.md`](./DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
+- [`DERIVATION_MANIFEST.md`](../archive/DERIVATION_MANIFEST.md) 是 2026-07-29 的 M2
   历史派生快照，继续用于追溯当时批准 RayReuse 的源码和性能门，不代表当前
   I0～I8 扩展树的哈希。
-- [`PERFORMANCE.md`](./PERFORMANCE.md) 记录复刻封板后的 P1 基线、P2/P3
+- [`PERFORMANCE.md`](../reports/PERFORMANCE.md) 记录复刻封板后的 P1 基线、P2/P3
   scalar 优化、P4 路线决策与确定性线程实现证据。
 
 ## 5. 下一步
 
 I0～I8 与 B1～B4 已全部冻结，不再以“剩余复刻功能”继续扩张。支持范围和
-延期项以 [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 为准；
+延期项以 [`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 为准；
 `P/W`、`CS/CL`、`G/F + LL`、ray-centered irregular receiver、3D、N×2D、
 beam shift、analytic SSP 和 F2CPP 多频调度均不属于本次 closure。
 
@@ -217,7 +217,7 @@ P1 已在 TL、R、A、E 四个代表性 workload 上完成 1 次 warmup + 5 次
 测量。Munk TL 外部 wall 中位数为 `2.6761 s`，其中 Cartesian Cerveny
 Influence 为 `2.6030 s`（`97.27%`）；peak RSS 为 `64.27 MiB`。四例产品哈希
 在重复测量与独立标准案例验证之间完全一致，`f2cpp-regression` 为 CTest
-37/37、案例 14/14。详细证据见 [`PERFORMANCE.md`](./PERFORMANCE.md)。
+37/37、案例 14/14。详细证据见 [`PERFORMANCE.md`](../reports/PERFORMANCE.md)。
 
 P2 已完成 Cartesian Cerveny Influence 的局部低风险优化：hoist 稳定循环量与
 边界读取、缓存 receiver 布局/深度访问，并在入口维度验证后直接访问连续

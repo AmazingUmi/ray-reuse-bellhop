@@ -2,9 +2,9 @@
 
 > 规划日期：2026-07-27  
 > 适用范围：`Bellhop_F2CPP` 的 M1（组件级单频）与 M2（端到端单频）  
-> 依据：仓库根目录的 [01 设计文档](../../doc/01-Bellhop源码分析与宽带复用设计.md)、
-> [02 实施待办](../../doc/02-项目实施待办.md)、
-> [04 数值规范](../../doc/04-基础变量单位与数值规范.md)、原二维 Fortran
+> 依据：仓库根目录的 [01 设计文档](../../../doc/architecture/Bellhop源码分析与宽带复用设计.md)、
+> [02 实施待办](../../../doc/archive/项目实施清单-2026-08-14.md)、
+> [04 数值规范](../../../doc/reference/基础变量单位与数值规范.md)、原二维 Fortran
 > 构建链和共享标准算例
 
 ## 1. 目标与完成边界
@@ -26,7 +26,7 @@
 7. 六个共享单频算例均能由统一测试入口运行，并按复压力而不是只按 TL
    通过 Fortran oracle 对比；
 8. 输出 SHD 可由
-   [`test/PlotRead/bellhop_io_py/`](../../test/PlotRead/README.md) 读取；
+   [`test/PlotRead/bellhop_io_py/`](../../../test/PlotRead/README.md) 读取；
 9. 建立单线程耗时、峰值内存和 `RayPathCache` 大小基线；
 10. M2 验收点可作为以后复制/派生 `Bellhop_RayReuse` 的稳定快照。
 
@@ -212,7 +212,7 @@ M1 出口条件：
 - `RayPathCache` 离开追踪器后仍独立保有全部状态；
 - 冻结缓存的结构与事件逐字段校验已通过；投影器完成后在 M2 再执行投影
   前后哈希检查；
-- 组件误差使用仓库根 [数值规范](../../doc/04-基础变量单位与数值规范.md)
+- 组件误差使用仓库根 [数值规范](../../../doc/reference/基础变量单位与数值规范.md)
   第 9 节暂定容差，任何放宽必须记录最大误差位置。
 
 `constant_speed_direct` 的 alpha=150 已完成 C++/Fortran 全轨迹逐字段对照：

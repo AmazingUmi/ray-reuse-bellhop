@@ -11,9 +11,9 @@
 
 当前支持范围、封板结果和完整用法见：
 
-- [`doc/FEATURE_SUPPORT_MATRIX.md`](./doc/FEATURE_SUPPORT_MATRIX.md)
-- [`doc/PROGRESS.md`](./doc/PROGRESS.md)
-- [`doc/USAGE.md`](./doc/USAGE.md)
+- [`doc/reference/FEATURE_SUPPORT_MATRIX.md`](./doc/reference/FEATURE_SUPPORT_MATRIX.md)
+- [`doc/status/PROGRESS.md`](./doc/status/PROGRESS.md)
+- [`doc/guides/USAGE.md`](./doc/guides/USAGE.md)
 
 ## 工程边界
 
@@ -103,7 +103,7 @@ Bellhop_RayReuse/scripts/intermediate_state_gate.sh
 
 它覆盖 direct、vacuum/rigid、Munk 的位置、慢度、动态 `p/q`、实走时、
 modified-box 求积子集和反射顺序；F2CPP 契约见
-[`../Bellhop_F2CPP/doc/INTERMEDIATE_STATE_CONTRACT.md`](../Bellhop_F2CPP/doc/INTERMEDIATE_STATE_CONTRACT.md)。
+[`../Bellhop_F2CPP/doc/reference/INTERMEDIATE_STATE_CONTRACT.md`](../Bellhop_F2CPP/doc/reference/INTERMEDIATE_STATE_CONTRACT.md)。
 
 ## 运行入口
 
@@ -211,9 +211,9 @@ SHD 一致；64频保留 8 workers。紧预算与逐频诊断进一步确认固�
 ## 文档
 
 - [`doc/README.md`](./doc/README.md)：RayReuse 内部文档总入口和目录规则；
-- [`doc/BUILD_PLAN.md`](./doc/BUILD_PLAN.md)：已完成阶段、当前 H4 工作和验收命令；
+- [`doc/archive/BUILD_PLAN.md`](./doc/archive/BUILD_PLAN.md)：已完成阶段和验收命令的历史记录；
 - [`doc/guides/BENCHMARKING.md`](./doc/guides/BENCHMARKING.md)：可重复性能基准协议；
 - [`doc/reports/LOCAL_VALIDATION_RESULTS_C417095.md`](./doc/reports/LOCAL_VALIDATION_RESULTS_C417095.md)：当前本地验证基线；
-- [`../doc/01-Bellhop源码分析与宽带复用设计.md`](../doc/01-Bellhop源码分析与宽带复用设计.md)：总体设计；
-- [`../doc/02-项目实施待办.md`](../doc/02-项目实施待办.md)：项目实施任务；
+- [`../doc/architecture/Bellhop源码分析与宽带复用设计.md`](../doc/architecture/Bellhop源码分析与宽带复用设计.md)：总体设计；
+- [`../doc/plans/CURRENT_WORK.md`](../doc/plans/CURRENT_WORK.md)：当前工作与待决事项；
 - [`../test/standard_cases/README.md`](../test/standard_cases/README.md)：共享标准算例入口。

@@ -98,6 +98,6 @@ C++ 样本变异系数均低于 5%，但结果只用于识别工具链性能差�
 
 下一步不继续扩大本机编译器别名矩阵。获得独立 LLVM Flang 或另一目标平台
 Fortran 编译器后，再按
-[`CROSS_COMPILER_PLAN.md`](../plans/CROSS_COMPILER_PLAN.md) 的 H4-5 执行
+[`CROSS_COMPILER_PLAN.md`](../archive/plans/CROSS_COMPILER_PLAN.md) 的 H4-5 执行
 原版 single、schema v2 中间状态和资源矩阵；远端 CI 与发布平台矩阵仍单独
 等待用户决定。

@@ -64,4 +64,4 @@ uv run make -C test/PlotRead test
 三套求解器的工程演示和结果绘图见 [demo/README.md](demo/README.md)。
 
 F2CPP 复刻封板后的 supported、intentional divergence 与 deferred 范围见
-[二维单频支持矩阵](Bellhop_F2CPP/doc/FEATURE_SUPPORT_MATRIX.md)。
+[二维单频支持矩阵](Bellhop_F2CPP/doc/reference/FEATURE_SUPPORT_MATRIX.md)。

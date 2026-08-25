@@ -1,7 +1,7 @@
 # Bellhop RayReuse 派生记录
 
 本文保存 `Bellhop_RayReuse` 的来源身份、独立工程边界、输入契约决策和阶段
-验收状态。构建步骤及 A～E 阶段出口见 [`BUILD_PLAN.md`](../BUILD_PLAN.md)。
+验收状态。构建步骤及 A～E 阶段出口见 [`BUILD_PLAN.md`](./BUILD_PLAN.md)。
 
 ## 1. 来源身份
 
@@ -391,7 +391,7 @@ G4 为原版二维 Fortran 增加 `BELLHOP_PROFILE_STAGES=1` 显式开关，默�
 `0.01580/2.63189/0.000030/0.000721 s`，总 CPU `2.65 s`。Munk Influence
 占已分类阶段约 99%。direct 开启/关闭及 Munk profiled SHD 与冻结 oracle
 逐字节一致；使用方法见
-[`../../../Bellhop_origin/STAGE_PROFILING.md`](../../../Bellhop_origin/STAGE_PROFILING.md)。
+[`../../../Bellhop_origin/doc/guides/STAGE_PROFILING.md`](../../../Bellhop_origin/doc/guides/STAGE_PROFILING.md)。
 
 G5 在干净提交 `06e390fc9338e2b94c29b9492027c3a59391dd5d` 关闭本地出口。
 完整质量门通过 Debug/Release/隔离构建各 25/25 CTest、标准 Python 62/62、
@@ -442,4 +442,4 @@ RayReuse CSV 均逐字节一致。完整结果见
 
 H4 只计划本地跨编译器验证。当前先执行 AppleClang 21↔GCC 14 C++ 矩阵；
 第二 Fortran 编译器尚不可用，不能宣称已完成 Fortran 跨编译器支持。具体
-命令、容差和出口见 [`CROSS_COMPILER_PLAN.md`](../plans/CROSS_COMPILER_PLAN.md)。
+命令、容差和出口见 [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md)。

@@ -5,7 +5,7 @@ PlotRead 是仓库内独立的 Python 小项目，用于读取 Acoustic Toolbox/
 MATLAB。
 
 上级文档：[仓库总览](../../README.md) ·
-[设计文档索引](../../doc/00-文档索引.md) ·
+[项目文档索引](../../doc/README.md) ·
 [共享标准算例](../standard_cases/README.md)
 
 ## 1. 项目职责

@@ -522,7 +522,7 @@ def validate(
                 "--origin-executable Bellhop_origin/bin/bellhop "
                 "--f2cpp-executable "
                 "Bellhop_F2CPP/build/release/bellhop_f2cpp "
-                "--output Bellhop_F2CPP/doc/validation/"
+                "--output Bellhop_F2CPP/doc/reports/validation/"
                 "i7_coherence_modes_report.json"
             ),
         },

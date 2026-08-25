@@ -38,7 +38,7 @@ F2CPP 一次运行只接受一个频率。多频调度、实际轨迹复用和�
 - Python 3.11 或更高版本；
 - NumPy；
 - 仓库自带的
-  [`test/PlotRead/bellhop_io_py`](../../test/PlotRead/README.md)，标准算例会直接
+  [`test/PlotRead/bellhop_io_py`](../../../test/PlotRead/README.md)，标准算例会直接
   引用源码；人工使用 `bellhop-shd` 时按 PlotRead 文档完成一次 editable install。
 
 检查常用工具：
@@ -165,8 +165,8 @@ python3 test/standard_cases/codes/standard_cases.py test \
 该命令运行当前 65 个单频案例，覆盖 SHD、RAY、ASCII/binary ARR 与 eigenray
 产品，以及 I0～I8 和 B1～B3 的代表性输入。案例定义与 profile 的唯一清单
 位于 `test/standard_cases/cases/` 和 `coverage.toml`；逐 iteration 的数值误差、
-Origin oracle 与冻结哈希见 [`PROGRESS.md`](./PROGRESS.md) 和
-[`validation/`](./validation/)，不在本使用文档重复维护案例枚举。
+Origin oracle 与冻结哈希见 [`PROGRESS.md`](../status/PROGRESS.md) 和
+[`validation/`](../reports/validation/)，不在本使用文档重复维护案例枚举。
 结果写入：
 
 ```text
@@ -327,7 +327,7 @@ layer，并把其他层保持串行，以避免 nested parallelism 和 oversubsc
 ## 6. 支持的输入范围
 
 复刻封板的 supported / intentional divergence / deferred 分类以
-[`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) 为准。下表给出
+[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 为准。下表给出
 实际可输入范围：
 
 | 项目 | 支持范围 |
@@ -423,8 +423,8 @@ component 元数据，因此 Cartesian 下三种选择会产生同一个压力�
 Origin/F2CPP 三控制例逐字节冻结的 legacy 行为，不代表已经计算了物理垂直/
 水平分量。ray-centered Cerveny 则真实消费该字段：`P` 保留标量压力贡献，
 `V`、`H` 使用局部射线切向/法向与 Origin 相同的梯度投影公式。两组验证报告
-分别见 `doc/validation/i7_cartesian_components_report.json` 与
-`doc/validation/i7_ray_centered_components_report.json`。
+分别见 `doc/reports/validation/i7_cartesian_components_report.json` 与
+`doc/reports/validation/i7_ray_centered_components_report.json`。
 
 ### 6.5 Cartesian Cerveny beam width 与反射曲率
 
@@ -499,7 +499,7 @@ Influence 累加和最终场缩放，中心射线、动态射线、反射事件�
 C/I/S 写出相同 frequency/source/depth/range 布局的 SHD。C 保存复压力；
 I/S 仍占用兼容的复数槽，但虚部严格为零，当前 Origin 兼容负缩放使其非零
 实部为负。三例最终场与效果门见
-`doc/validation/i7_coherence_modes_report.json`。
+`doc/reports/validation/i7_coherence_modes_report.json`。
 
 ### 6.9 Ray-centered Cerveny
 
@@ -515,7 +515,7 @@ pressure 使用 `CR`，incoherent/semi-coherent 分别使用 `IR`/`SR`。该 fam
 模型边界明确拒绝；这项限制避免把 ray-centered 的逐 range 求交静默替换为
 Cartesian irregular 的 Origin legacy `Rz(1)` 语义。CC/P、CR/P、CR/V、
 CR/H 四例的冻结验证见
-`doc/validation/i7_ray_centered_components_report.json`。
+`doc/reports/validation/i7_ray_centered_components_report.json`。
 
 ### 6.10 Q 型范围相关 SSP
 
@@ -678,7 +678,7 @@ SHD 保存单频复压力场：
 - 内部累加使用 `complex<double>`；
 - 仅在 writer 边界量化为 `complex<float>`；
 - 布局可由仓库的
-  [`test/PlotRead/bellhop_io_py`](../../test/PlotRead/README.md) 读取；
+  [`test/PlotRead/bellhop_io_py`](../../../test/PlotRead/README.md) 读取；
 - 维度顺序为 frequency/source depth/receiver depth/range。
 
 SHD 由 C/I/S TL 模式生成，三者使用相同布局；I/S 的复数压力槽虚部为零。
@@ -748,8 +748,8 @@ R/A/a/E 或切回 CC 时，成功后会删除其他模式的陈旧产品；启�
 
 ## 9. 相关文档
 
-- [F2CPP 文档索引](./README.md)
-- [构建与实施计划](./BUILD_PLAN.md)
-- [最终派生清单](./DERIVATION_MANIFEST.md)
-- [共享标准算例说明](../../test/standard_cases/README.md)
-- [全项目基础变量、单位与数值规范](../../doc/04-基础变量单位与数值规范.md)
+- [F2CPP 文档索引](../README.md)
+- [构建与实施计划](../archive/BUILD_PLAN.md)
+- [最终派生清单](../archive/DERIVATION_MANIFEST.md)
+- [共享标准算例说明](../../../test/standard_cases/README.md)
+- [全项目基础变量、单位与数值规范](../../../doc/reference/基础变量单位与数值规范.md)

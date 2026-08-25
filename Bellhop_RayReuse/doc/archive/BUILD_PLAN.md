@@ -9,15 +9,15 @@ uv run python --version
 
 2026-08-20 的 RayReuse Feature Sync RR-B1～RR-B4 已另行完成并封板；当前
 支持矩阵、验收结果和路线关闭状态分别见
-[`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md)、
-[`PROGRESS.md`](./PROGRESS.md) 和
+[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md)、
+[`PROGRESS.md`](../status/PROGRESS.md) 和
 [`RAYREUSE_FEATURE_SYNC.md`](./plans/RAYREUSE_FEATURE_SYNC.md)。本文后续 A～H
 内容继续作为派生、宽带复用和历史工程阶段记录，不应解释为当前待办。
 
 阶段必须按 A → B → C → D → E 推进；阶段 F 在这些正确性和并行契约冻结后
 按小步性能提交推进。每一阶段只有在出口条件关闭后，才进入下一阶段。命令块
 是对应阶段的验收入口，不等同于已经通过；实际结果统一记录在
-[`archive/DERIVATION_RECORD.md`](./archive/DERIVATION_RECORD.md) 和对应基准记录中。
+[`archive/DERIVATION_RECORD.md`](./DERIVATION_RECORD.md) 和对应基准记录中。
 
 截至 2026-08-01，A～E、F1 和 F2 均已关闭。F2 的 range-major 临时布局和
 range-batch 换序因 2频回退而回滚；`eedc790` 的图像专化和 `fe6b33f` 的
@@ -27,7 +27,7 @@ Hermite 内部快路径、Release 末端有限性校验和 `7ce9c7d` 的只读�
 segment 端点与插值差值缓存、receiver-depth 数量与连续数据指针及
 64-depth tile 均因 2频回退已回滚。Munk 64频精选矩阵已完成，p8/p10
 相对 reuse 为 `3.543×/3.513×`，当前保留 8 workers。详见
-[`BENCHMARK_RESULTS_FDAAF56.md`](./archive/benchmarks/BENCHMARK_RESULTS_FDAAF56.md)。
+[`BENCHMARK_RESULTS_FDAAF56.md`](./benchmarks/BENCHMARK_RESULTS_FDAAF56.md)。
 
 里程碑后的本地工程化也已关闭：全量 clang-format 门、compilation database
 驱动的 Clang static analyzer、版本 `0.1.0`、安装烟测和 CPack TGZ 已合并为
@@ -55,8 +55,8 @@ RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 
 它完成格式检查、静态分析、Release 安装、版本烟测、TGZ 打包和 SHA-256
 输出。产物当前定位为内部验证包；公开发行限制见
-[`RELEASE.md`](./guides/RELEASE.md)，HDF5 决策见
-[`HDF5_SCHEMA_DECISION.md`](./decisions/HDF5_SCHEMA_DECISION.md)。
+[`RELEASE.md`](../guides/RELEASE.md)，HDF5 决策见
+[`HDF5_SCHEMA_DECISION.md`](../decisions/HDF5_SCHEMA_DECISION.md)。
 
 ## 阶段 A：独立派生工程
 
@@ -285,7 +285,7 @@ uv run python test/standard_cases/codes/standard_cases.py test \
 正式性能记录使用
 `test/standard_cases/codes/benchmark_rayreuse.py`，由其固定并记录配置、
 轮换多轮样本、测量外部 wall/隔离 max RSS，并执行 ENV/SHD 哈希门；完整协议
-见 [`BENCHMARKING.md`](./guides/BENCHMARKING.md)。
+见 [`BENCHMARKING.md`](../guides/BENCHMARKING.md)。
 
 ### 出口
 
@@ -425,7 +425,7 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 6. [x] 运行完整回归、记录本机工具链/RSS 并关闭阶段文档。
 
 契约和显式更新命令见
-[`../../test/standard_cases/REFERENCE_SNAPSHOTS.md`](../../test/standard_cases/REFERENCE_SNAPSHOTS.md)。
+[`../../test/standard_cases/REFERENCE_SNAPSHOTS.md`](../../../test/standard_cases/REFERENCE_SNAPSHOTS.md)。
 首批快照以原版可执行文件 SHA-256
 `f77b7bb60509fdb5e0f22b03a71c27ad4998718ba864e5206e5e48bd461ddcee`
 和来源提交 `f35bbdd` 标识，不提交完整 SHD。
@@ -450,7 +450,7 @@ Fortran 是场结果主要 oracle，F2CPP 是单频 C++ 派生一致性参考，
 - [x] 工具链、二进制哈希、误差上限和内部制品哈希已进入阶段关闭记录。
 
 最终本机矩阵证据见
-[`MODEL_MATRIX_RESULTS_06E390F.md`](./reports/MODEL_MATRIX_RESULTS_06E390F.md)。远端
+[`MODEL_MATRIX_RESULTS_06E390F.md`](../reports/MODEL_MATRIX_RESULTS_06E390F.md)。远端
 CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件，不属于 G 阶段本地
 数值加固出口。
 
@@ -469,11 +469,11 @@ CI、许可证、签名/公证和跨平台发布仍是外部发布前置条件�
    Fortran/gfortran 冻结为唯一 Fortran oracle 工具链。
 
 干净提交 `c417095` 的中位数和逐点比较结果见
-[`LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md)。
+[`LOCAL_VALIDATION_RESULTS_C417095.md`](../reports/LOCAL_VALIDATION_RESULTS_C417095.md)。
 geometry schema v1 明确不包含完整反射声学、逐频投影或 Influence image 表；
 这些扩展必须使用新 schema 版本，不能静默扩大 v1。
 
 H4 C++ 关闭证据见
-[`CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md)。两套
+[`CROSS_COMPILER_RESULTS_H4.md`](../reports/CROSS_COMPILER_RESULTS_H4.md)。两套
 工具链内测试与数值门全部通过。后续项目决策已取消第二 Fortran 编译器项；
 本项目不宣称 gfortran 之外的 Fortran 编译器支持。

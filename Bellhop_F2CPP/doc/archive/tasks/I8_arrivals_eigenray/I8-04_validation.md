@@ -142,7 +142,7 @@ into Python is not an oracle.
   CMake target registration needed to expose the accepted accumulator.
 - New `test/standard_cases/codes/validate_i8_arrival_accumulator.py`.
 - New Python unit tests for the validator/parser.
-- A generated report under `Bellhop_F2CPP/doc/validation` only after Codex
+- A generated report under `Bellhop_F2CPP/doc/reports/validation` only after Codex
   verifies it.
 
 ### Do Not Modify
@@ -185,7 +185,7 @@ into Python is not an oracle.
 make -C Bellhop_origin arrival-accumulator-probe
 cmake --build Bellhop_F2CPP/build/release -j 8 --target bellhop_f2cpp_arrival_accumulator_probe
 /Users/luyiyang/miniconda3/envs/py/bin/python -m unittest test.standard_cases.codes.tests.test_validate_i8_arrival_accumulator
-/Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/validate_i8_arrival_accumulator.py --origin-probe Bellhop_origin/bin/arrival_accumulator_probe --f2cpp-probe Bellhop_F2CPP/build/release/bellhop_f2cpp_arrival_accumulator_probe --output Bellhop_F2CPP/doc/validation/i8_arrival_accumulator_report.json
+/Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/validate_i8_arrival_accumulator.py --origin-probe Bellhop_origin/bin/arrival_accumulator_probe --f2cpp-probe Bellhop_F2CPP/build/release/bellhop_f2cpp_arrival_accumulator_probe --output Bellhop_F2CPP/doc/reports/validation/i8_arrival_accumulator_report.json
 ```
 
 ### Deliverables
@@ -242,7 +242,7 @@ observable.
 - Its Python unit tests.
 - `case_model.py`/`standard_cases.py` only for defects exposed by the accepted
   T1 design.
-- Generated `Bellhop_F2CPP/doc/validation/i8_arrivals_report.json` after
+- Generated `Bellhop_F2CPP/doc/reports/validation/i8_arrivals_report.json` after
   successful validation.
 
 ### Do Not Modify
@@ -299,7 +299,7 @@ observable.
 /Users/luyiyang/miniconda3/envs/py/bin/python -m unittest test.standard_cases.codes.tests.test_validate_i8_arrivals
 /Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/standard_cases.py test --version origin --case i8_arrivals_geometric_hat_ascii --case i8_arrivals_geometric_hat_binary --case i8_arrivals_geometric_hat_ray_centered --case i8_arrivals_geometric_gaussian_irregular --case i8_arrivals_line_directional_multisource --case i8_arrivals_zero --profile single --executable Bellhop_origin/bin/bellhop --results-root /tmp/i8_arrivals
 /Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/standard_cases.py test --version f2cpp --case i8_arrivals_geometric_hat_ascii --case i8_arrivals_geometric_hat_binary --case i8_arrivals_geometric_hat_ray_centered --case i8_arrivals_geometric_gaussian_irregular --case i8_arrivals_line_directional_multisource --case i8_arrivals_zero --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root /tmp/i8_arrivals
-/Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/validate_i8_arrivals.py --results-root /tmp/i8_arrivals --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i8_arrivals_report.json
+/Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/validate_i8_arrivals.py --results-root /tmp/i8_arrivals --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/reports/validation/i8_arrivals_report.json
 ```
 
 ### Deliverables
@@ -362,7 +362,7 @@ Parity therefore compares the ordered EOF stream and every written prefix.
 - New I8 eigenray cases under `test/standard_cases/cases`.
 - New `test/standard_cases/codes/validate_i8_eigenrays.py`.
 - Its Python unit tests.
-- Generated `Bellhop_F2CPP/doc/validation/i8_eigenrays_report.json` after
+- Generated `Bellhop_F2CPP/doc/reports/validation/i8_eigenrays_report.json` after
   successful validation.
 
 ### Do Not Modify
@@ -411,7 +411,7 @@ Parity therefore compares the ordered EOF stream and every written prefix.
 /Users/luyiyang/miniconda3/envs/py/bin/python -m unittest test.standard_cases.codes.tests.test_validate_i8_eigenrays
 /Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/standard_cases.py test --version origin --case i8_eigenray_geometric_hat --case i8_eigenray_geometric_hat_ray_centered --case i8_eigenray_geometric_gaussian --case i8_eigenray_zero --case ray_trace_vacuum_rigid --profile single --executable Bellhop_origin/bin/bellhop --results-root /tmp/i8_eigenrays
 /Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/standard_cases.py test --version f2cpp --case i8_eigenray_geometric_hat --case i8_eigenray_geometric_hat_ray_centered --case i8_eigenray_geometric_gaussian --case i8_eigenray_zero --case ray_trace_vacuum_rigid --profile single --executable Bellhop_F2CPP/build/release/bellhop_f2cpp --results-root /tmp/i8_eigenrays
-/Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/validate_i8_eigenrays.py --results-root /tmp/i8_eigenrays --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/validation/i8_eigenrays_report.json
+/Users/luyiyang/miniconda3/envs/py/bin/python test/standard_cases/codes/validate_i8_eigenrays.py --results-root /tmp/i8_eigenrays --origin-executable Bellhop_origin/bin/bellhop --f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp --output Bellhop_F2CPP/doc/reports/validation/i8_eigenrays_report.json
 ```
 
 ### Deliverables
@@ -468,10 +468,10 @@ status updates and commits after independently rerunning the evidence.
 - CLI output-safety fixtures/tests if a specified I8 lifecycle case is not yet
   covered.
 - Generated reports:
-  `doc/validation/i8_arrival_accumulator_report.json`,
-  `doc/validation/i8_arrivals_report.json`,
-  `doc/validation/i8_eigenrays_report.json`, and
-  `doc/validation/i8_output_safety_report.json`.
+  `doc/reports/validation/i8_arrival_accumulator_report.json`,
+  `doc/reports/validation/i8_arrivals_report.json`,
+  `doc/reports/validation/i8_eigenrays_report.json`, and
+  `doc/reports/validation/i8_output_safety_report.json`.
 
 ### Do Not Modify
 

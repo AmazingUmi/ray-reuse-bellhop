@@ -1,69 +1,31 @@
-# Bellhop RayReuse 内部文档
+# Bellhop RayReuse 文档索引
 
-本目录只保存 RayReuse 的实施、验证和工程决策资料。构建与运行方法先看
-[`../README.md`](../README.md)；跨工程总体设计仍以仓库级
-[`../../doc/00-文档索引.md`](../../doc/00-文档索引.md) 为入口。
+RayReuse 是独立的 C++20 多频轨迹复用实现。A～H 与 RR-B1～RR-B4 已完成；
+当前没有已批准的下一实施阶段，研究候选统一从项目级当前工作清单进入。
 
-## 从这里开始
+## 当前文档
 
 | 目的 | 文档 |
 |---|---|
-| 查看当前功能支持与延期边界 | [`FEATURE_SUPPORT_MATRIX.md`](./FEATURE_SUPPORT_MATRIX.md) |
-| 查看 Feature Sync 验收基线 | [`PROGRESS.md`](./PROGRESS.md) |
-| 查看 R/A/a/E 与多频用法 | [`USAGE.md`](./USAGE.md) |
-| 查看 RR-B1～RR-B4 封板状态 | [`plans/RAYREUSE_FEATURE_SYNC.md`](./plans/RAYREUSE_FEATURE_SYNC.md) |
-| 查看当前阶段与验收出口 | [`BUILD_PLAN.md`](./BUILD_PLAN.md) |
-| 查看跨编译器历史计划 | [`plans/CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md) |
-| 复现性能测试 | [`guides/BENCHMARKING.md`](./guides/BENCHMARKING.md) |
-| 查看当前本地验证基线 | [`reports/LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md) |
-| 查看当前三模型数值矩阵 | [`reports/MODEL_MATRIX_RESULTS_06E390F.md`](./reports/MODEL_MATRIX_RESULTS_06E390F.md) |
-| 查看 H4 跨编译器结果 | [`reports/CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md) |
+| R/A/a/E 与多频运行 | [`guides/USAGE.md`](./guides/USAGE.md) |
+| 性能基准 | [`guides/BENCHMARKING.md`](./guides/BENCHMARKING.md) |
+| 单线程三模型微基准 | [`guides/SINGLE_THREAD_MICROBENCHMARK.md`](./guides/SINGLE_THREAD_MICROBENCHMARK.md) |
+| 内部发布验证 | [`guides/RELEASE.md`](./guides/RELEASE.md) |
+| 支持、差异与延期边界 | [`reference/FEATURE_SUPPORT_MATRIX.md`](./reference/FEATURE_SUPPORT_MATRIX.md) |
+| 当前状态 | [`status/PROGRESS.md`](./status/PROGRESS.md) |
+| 验证、矩阵与审计报告 | [`reports/README.md`](./reports/README.md) |
+| HDF5 延后决策 | [`decisions/HDF5_SCHEMA_DECISION.md`](./decisions/HDF5_SCHEMA_DECISION.md) |
+| 已完成计划和历史基准 | [`archive/README.md`](./archive/README.md) |
 
-当前 A～G、F1/F2、H1～H4 和 RayReuse Feature Sync RR-B1～RR-B4 均已完成。
-GNU Fortran/gfortran 是唯一支持
-的 Fortran oracle 工具链；不再等待第二套 Fortran 编译器。远端推送、云端
-CI 首跑和分支保护等待用户决定，不作为当前本地开发中的活动计划。
+项目级下一步见
+[`doc/plans/CURRENT_WORK.md`](../../doc/plans/CURRENT_WORK.md)。Influence 频率复用
+审计给出了 IG-0/FI-0 候选路线，但在用户选择前仍属于报告结论，不是活动计划。
 
-## 分类
+## 目录语义
 
-### guides
-
-- [`BENCHMARKING.md`](./guides/BENCHMARKING.md)：性能采样、分级运行和报告规则；
-- [`SINGLE_THREAD_MICROBENCHMARK.md`](./guides/SINGLE_THREAD_MICROBENCHMARK.md)：三模型单线程阶段微基准；
-- [`RELEASE.md`](./guides/RELEASE.md)：内部包验证与公开发布前置条件。
-
-### plans
-
-- [`RAYREUSE_FEATURE_SYNC.md`](./plans/RAYREUSE_FEATURE_SYNC.md)：RR-B1～RR-B4
-  已完成路线、依赖和关闭判据；
-- [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md)：已完成的 H4 C++
-  操作计划；第二 Fortran 编译器项已按后续项目决策关闭。
-
-历史派生总计划仍集中在 [`BUILD_PLAN.md`](./BUILD_PLAN.md)；Feature Sync 的
-当前验收状态以 [`PROGRESS.md`](./PROGRESS.md) 为准，不存在第二个活动总计划。
-
-### decisions
-
-- [`HDF5_SCHEMA_DECISION.md`](./decisions/HDF5_SCHEMA_DECISION.md)：HDF5 schema 候选与延后实现决策。
-
-### reports
-
-- [`LOCAL_VALIDATION_RESULTS_C417095.md`](./reports/LOCAL_VALIDATION_RESULTS_C417095.md)：H1～H3 本地验证结果；
-- [`MODEL_MATRIX_RESULTS_06E390F.md`](./reports/MODEL_MATRIX_RESULTS_06E390F.md)：当前三模型 single/宽带数值矩阵。
-- [`CROSS_COMPILER_RESULTS_H4.md`](./reports/CROSS_COMPILER_RESULTS_H4.md)：
-  AppleClang/GCC 构建、数值、中间状态、性能与资源结果。
-
-### archive
-
-历史材料用于追溯，不代表当前操作指南：
-
-- [`archive/README.md`](./archive/README.md)：派生记录、旧模型矩阵和性能历史入口；
-- [`archive/benchmarks/README.md`](./archive/benchmarks/README.md)：F1/F2 benchmark 报告索引。
-
-## 维护规则
-
-1. `doc/` 根目录只保留本索引和唯一的总实施计划；
-2. 可复用操作方法放入 `guides/`，尚未执行的专项计划放入 `plans/`；
-3. 已冻结的架构选择放入 `decisions/`，当前有效的验证结果放入 `reports/`；
-4. 被新报告取代的结果和阶段性实验记录移入 `archive/`，不删除历史证据；
-5. 新文档必须从本索引或所属分类索引可达，并使用相对链接。
+- `guides/`：当前可执行的操作方法；
+- `reference/`：稳定支持边界；
+- `status/`：当前封板状态；
+- `reports/`：带日期/提交身份的验证结果和审计；
+- `decisions/`：已冻结工程决策；
+- `archive/`：完成计划、派生记录和被替代的性能/矩阵证据。
