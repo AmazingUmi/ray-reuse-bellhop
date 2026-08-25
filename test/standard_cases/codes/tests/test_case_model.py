@@ -76,6 +76,9 @@ class CaseModelTests(unittest.TestCase):
                 "geometric_hat_cartesian",
                 "geometric_hat_ray_centered",
                 "geometric_hat_cartesian_safe_control",
+                "geometric_hat_incoherent",
+                "geometric_hat_semicoherent",
+                "geometric_hat_directional",
                 "geometric_gaussian_cartesian",
                 "simple_gaussian_cartesian",
                 "arrival_geometric_hat_ascii",
@@ -120,9 +123,7 @@ class CaseModelTests(unittest.TestCase):
             "ray_centered_component_pressure",
             "ray_centered_component_vertical",
             "ray_centered_component_horizontal",
-            "geometric_hat_cartesian",
             "geometric_hat_ray_centered",
-            "geometric_hat_cartesian_safe_control",
             "geometric_gaussian_cartesian",
             "simple_gaussian_cartesian",
         ):
@@ -136,6 +137,11 @@ class CaseModelTests(unittest.TestCase):
             "source_beam_pattern_omni_control",
             "incoherent_direct",
             "semicoherent_direct",
+            "geometric_hat_cartesian",
+            "geometric_hat_cartesian_safe_control",
+            "geometric_hat_incoherent",
+            "geometric_hat_semicoherent",
+            "geometric_hat_directional",
             "grain_size_flat",
             "grain_size_equivalent_acoustic_control",
             "tabulated_reflection_bottom",
@@ -244,6 +250,29 @@ class CaseModelTests(unittest.TestCase):
                     rendered.replace(f"'{run_type}'", "'<FAMILY>'")
                 )
         self.assertEqual(len(rendered_inputs), 3)
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_cartesian_geometric_hat_fixtures_only_change_mode(self) -> None:
+        expected = {
+            "geometric_hat_cartesian_safe_control": "CG",
+            "geometric_hat_incoherent": "IG",
+            "geometric_hat_semicoherent": "SG",
+        }
+        normalized: set[str] = set()
+        for case_id, run_type in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (1000.0,))
+                rendered = definition.render_origin_environment(
+                    frequencies[0],
+                    definition.shared_launch_angle_count(frequencies),
+                )
+                self.assertIn(f"'{run_type}'", rendered)
+                self.assertNotIn("'MS'", rendered)
+                normalized.add(
+                    rendered.replace(f"'{run_type}'", "'<MODE>G'")
+                )
         self.assertEqual(len(normalized), 1)
 
     def test_i7_c_i_s_fixtures_only_change_run_mode(self) -> None:

@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "rayreuse/cache/ray_path_cache.hpp"
@@ -551,13 +552,46 @@ void testUnsupportedAndMalformedInput(Context& context) {
           semiCoherent.simulationCase.beamFamily() ==
               BeamFamily::CervenyGaussian,
       "IC/SC select Cartesian Cerveny intensity accumulation modes");
+  const std::string hat =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CG", SimulationRunMode::Coherent},
+           {"IG", SimulationRunMode::Incoherent},
+           {"SG", SimulationRunMode::SemiCoherent},
+           {"C^", SimulationRunMode::Coherent},
+           {"C", SimulationRunMode::Coherent}}) {
+    std::string contents = hat;
+    replaceFirst(contents, "'CG'", "'" + runType + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, "cartesian_hat_" + runType + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat,
+        "G/caret/blank aliases select the Cartesian GeoHat C/I/S path");
+  }
+  std::string nonuniformHat = hat;
+  replaceFirst(nonuniformHat, "\n21\n0.02  0.25 /",
+               "\n3\n0.02  0.08  0.25 /");
+  const ParsedEnvironment parsedNonuniformHat =
+      parseText(nonuniformHat, "nonuniform_cartesian_hat.env");
+  context.check(
+      parsedNonuniformHat.simulationCase.receivers().rangeCount() == 3U,
+      "Cartesian GeoHat accepts nonuniform rectilinear receiver ranges");
   context.expectThrows<ValidationError>(
       [&] {
-        std::string contents = direct;
-        replaceFirst(contents, "'CC'", "'IG'");
-        static_cast<void>(parseText(contents, "incoherent_hat.env"));
+        std::string contents = hat;
+        replaceFirst(contents, "'CG'", "'CB'");
+        static_cast<void>(parseText(contents, "geometric_gaussian.env"));
       },
-      "unimplemented incoherent TL beam families remain rejected");
+      "unimplemented Cartesian GeoGaussian remains rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = hat;
+        contents += "'MS' 1.0 2.5\n";
+        static_cast<void>(parseText(contents, "hat_with_cerveny_tail.env"));
+      },
+      "Cartesian GeoHat rejects a Cerveny-only option tail");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;

@@ -1,10 +1,10 @@
-id = "geometric_hat_cartesian_safe_control"
-description = "Finite constant-speed Cartesian geometric-hat control for I7-06 beam shapes"
+id = "geometric_hat_incoherent"
+description = "Incoherent Cartesian geometric-hat field"
 origin_template = "origin.env.in"
 source_references = [
-  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 non-Cerveny beam grammar",
-  "Bellhop_origin/Bellhop/bellhop.f90 geometric-hat dispatch",
-  "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart",
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 C/I/S and Cartesian geometric-hat grammar",
+  "Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart intensity accumulation",
+  "Bellhop_F2CPP/src/field/geometric_hat_influence.cpp production contribution order",
 ]
 
 [compatibility]
@@ -21,20 +21,19 @@ policy = "shared_fmax"
 [validation]
 shd_dimensions = [1, 1, 1, 1, 1, 7, 21]
 prt_markers = [
-  "VACUUM",
-  "Perfectly RIGID",
+  "Incoherent TL calculation",
   "Geometric hat beams in Cartesian coordinates",
   "Geometric hat beams",
+  "Point source (cylindrical coordinates)",
+  "VACUUM",
+  "Perfectly RIGID",
 ]
 prt_forbidden_markers = [
-  "THORP volume attenuation added",
-  "Geometric gaussian beams in Cartesian coordinates",
-  "Simple gaussian beams",
+  "Semi-coherent TL calculation",
   "Cartesian beams",
   "Ray centered beams",
-  "Type of beam =",
-  "Component",
-  "Number of images",
+  "Geometric gaussian beams in Cartesian coordinates",
+  "Simple gaussian beams",
 ]
 
 [profiles.single]

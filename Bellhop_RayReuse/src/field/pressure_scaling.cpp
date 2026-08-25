@@ -24,10 +24,13 @@ void requireFiniteComplex(std::complex<double> value, const std::string& name) {
 
 }  // namespace
 
-void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
-                                         const ReceiverGrid& receivers,
-                                         double launchAngleSpacingRadians,
-                                         double sourceSoundSpeed) {
+namespace {
+
+void scaleCoherentPointPressure(FrequencyWorkspace& workspace,
+                                const ReceiverGrid& receivers,
+                                double launchAngleSpacingRadians,
+                                double sourceSoundSpeed,
+                                bool geometricNormalization) {
   requireFinite(launchAngleSpacingRadians, "launch-angle spacing");
   if (launchAngleSpacingRadians <= 0.0) {
     throw ValidationError("launch-angle spacing must be positive");
@@ -46,8 +49,10 @@ void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
   }
 
   const double beamScale =
-      (-launchAngleSpacingRadians * std::sqrt(workspace.frequency())) /
-      sourceSoundSpeed;
+      geometricNormalization
+          ? -1.0
+          : (-launchAngleSpacingRadians * std::sqrt(workspace.frequency())) /
+                sourceSoundSpeed;
   requireFinite(beamScale, "Cartesian point-source beam scale");
   if (beamScale == 0.0) {
     throw ValidationError(
@@ -88,9 +93,10 @@ void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
   }
 }
 
-FrequencyWorkspace scaleCartesianPointIntensityToPressure(
+FrequencyWorkspace scalePointIntensityToPressure(
     const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
-    double launchAngleSpacingRadians, double sourceSoundSpeed) {
+    double launchAngleSpacingRadians, double sourceSoundSpeed,
+    bool geometricNormalization) {
   if (workspace.depthCount() != receivers.depthCount() ||
       workspace.rangeCount() != receivers.rangeCount()) {
     throw ValidationError(
@@ -116,10 +122,43 @@ FrequencyWorkspace scaleCartesianPointIntensityToPressure(
       pressure.at(depthIndex, rangeIndex) = {root, 0.0};
     }
   }
-  scaleCoherentCartesianPointPressure(pressure, receivers,
-                                      launchAngleSpacingRadians,
-                                      sourceSoundSpeed);
+  scaleCoherentPointPressure(pressure, receivers, launchAngleSpacingRadians,
+                             sourceSoundSpeed, geometricNormalization);
   return pressure;
+}
+
+}  // namespace
+
+void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
+                                         const ReceiverGrid& receivers,
+                                         double launchAngleSpacingRadians,
+                                         double sourceSoundSpeed) {
+  scaleCoherentPointPressure(workspace, receivers, launchAngleSpacingRadians,
+                             sourceSoundSpeed, false);
+}
+
+void scaleCoherentGeometricPointPressure(FrequencyWorkspace& workspace,
+                                         const ReceiverGrid& receivers,
+                                         double launchAngleSpacingRadians,
+                                         double sourceSoundSpeed) {
+  scaleCoherentPointPressure(workspace, receivers, launchAngleSpacingRadians,
+                             sourceSoundSpeed, true);
+}
+
+FrequencyWorkspace scaleCartesianPointIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed) {
+  return scalePointIntensityToPressure(
+      workspace, receivers, launchAngleSpacingRadians, sourceSoundSpeed,
+      false);
+}
+
+FrequencyWorkspace scaleGeometricPointIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed) {
+  return scalePointIntensityToPressure(
+      workspace, receivers, launchAngleSpacingRadians, sourceSoundSpeed,
+      true);
 }
 
 }  // namespace rayreuse

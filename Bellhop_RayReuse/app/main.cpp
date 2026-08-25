@@ -215,6 +215,13 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
     throw rayreuse::ValidationError(
         "--execution-mode reuse/parallel requires a multi-frequency TL run");
   }
+  if (rayreuse::isTransmissionLossMode(mode) && options.profileInfluence &&
+      parsed.simulationCase.beamFamily() !=
+          rayreuse::BeamFamily::CervenyGaussian) {
+    throw rayreuse::ValidationError(
+        "--profile-influence is currently defined only for Cartesian "
+        "Cerveny TL");
+  }
   if (mode == rayreuse::SimulationRunMode::AsciiArrivals ||
       mode == rayreuse::SimulationRunMode::BinaryArrivals ||
       mode == rayreuse::SimulationRunMode::Eigenray) {
@@ -300,8 +307,11 @@ void writeConfigurationSummary(std::ostream& stream,
   stream << "source beam pattern = "
          << (simulation.sourceBeamPattern().isDirectional() ? "directional"
                                                             : "omnidirectional")
-         << '\n'
-         << "Cartesian beams\n";
+         << '\n';
+  if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian ||
+      !rayreuse::isTransmissionLossMode(simulation.runMode())) {
+    stream << "Cartesian beams\n";
+  }
   switch (simulation.runMode()) {
     case rayreuse::SimulationRunMode::Coherent:
       stream << "Coherent TL calculation\n";

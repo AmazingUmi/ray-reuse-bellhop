@@ -10,7 +10,16 @@ void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
                                          double launchAngleSpacingRadians,
                                          double sourceSoundSpeed);
 
+void scaleCoherentGeometricPointPressure(FrequencyWorkspace& workspace,
+                                         const ReceiverGrid& receivers,
+                                         double launchAngleSpacingRadians,
+                                         double sourceSoundSpeed);
+
 [[nodiscard]] FrequencyWorkspace scaleCartesianPointIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed);
+
+[[nodiscard]] FrequencyWorkspace scaleGeometricPointIntensityToPressure(
     const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
     double launchAngleSpacingRadians, double sourceSoundSpeed);
 

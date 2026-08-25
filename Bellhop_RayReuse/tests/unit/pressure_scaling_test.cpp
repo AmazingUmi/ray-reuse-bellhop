@@ -19,6 +19,8 @@ using rayreuse::IntensityWorkspace;
 using rayreuse::ReceiverGrid;
 using rayreuse::scaleCartesianPointIntensityToPressure;
 using rayreuse::scaleCoherentCartesianPointPressure;
+using rayreuse::scaleCoherentGeometricPointPressure;
+using rayreuse::scaleGeometricPointIntensityToPressure;
 using rayreuse::ValidationError;
 using rayreuse::test::Context;
 
@@ -134,6 +136,41 @@ void testIntensityToPressureScaling(Context& context) {
       "intensity conversion rejects a receiver-grid size mismatch");
 }
 
+void testGeometricPointScaling(Context& context) {
+  const ReceiverGrid receivers({10.0}, {0.0, 1000.0, 4000.0});
+  FrequencyWorkspace coherent(100.0, receivers);
+  coherent.at(0U, 0U) = {2.0, -1.0};
+  coherent.at(0U, 1U) = {3.0, -4.0};
+  coherent.at(0U, 2U) = {-5.0, 2.0};
+  scaleCoherentGeometricPointPressure(coherent, receivers, 0.001, 1500.0);
+  checkComplexNear(context, coherent.at(0U, 0U), {}, 0.0,
+                   "geometric point scaling preserves zero-range rule");
+  checkComplexNear(context, coherent.at(0U, 1U),
+                   {3.0 * (-1.0 / std::sqrt(1000.0)),
+                    -4.0 * (-1.0 / std::sqrt(1000.0))},
+                   0.0, "geometric point pressure uses -1/sqrt(range)");
+  checkComplexNear(context, coherent.at(0U, 2U),
+                   {-5.0 * (-1.0 / std::sqrt(4000.0)),
+                    2.0 * (-1.0 / std::sqrt(4000.0))},
+                   0.0,
+                   "geometric normalization omits Cerveny frequency scale");
+
+  IntensityWorkspace intensity(100.0, receivers);
+  intensity.add(0U, 0U, 4.0);
+  intensity.add(0U, 1U, 9.0);
+  intensity.add(0U, 2U, 25.0);
+  const FrequencyWorkspace pressure = scaleGeometricPointIntensityToPressure(
+      intensity, receivers, 0.001, 1500.0);
+  checkComplexNear(context, pressure.at(0U, 0U), {}, 0.0,
+                   "geometric intensity preserves zero-range rule");
+  checkComplexNear(context, pressure.at(0U, 1U),
+                   {3.0 * (-1.0 / std::sqrt(1000.0)), 0.0}, 0.0,
+                   "geometric intensity takes sqrt before range scaling");
+  checkComplexNear(context, pressure.at(0U, 2U),
+                   {5.0 * (-1.0 / std::sqrt(4000.0)), 0.0}, 0.0,
+                   "geometric intensity applies geometric normalization");
+}
+
 void testValidation(Context& context) {
   const ReceiverGrid receivers({10.0}, {0.0, 1000.0});
 
@@ -199,6 +236,7 @@ int main() {
   testSmallMatrix(context);
   testO1ContributionAnchors(context);
   testIntensityToPressureScaling(context);
+  testGeometricPointScaling(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

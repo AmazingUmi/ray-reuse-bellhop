@@ -12,6 +12,7 @@
 #include "rayreuse/error.hpp"
 #include "rayreuse/field/beam_epsilon.hpp"
 #include "rayreuse/field/frequency_projector.hpp"
+#include "rayreuse/field/geometric_hat_influence.hpp"
 #include "rayreuse/field/pressure_scaling.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/ray/geometry_tracer.hpp"
@@ -137,8 +138,17 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
       soundSpeedProfile
           .evaluate(Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U)
           .soundSpeed;
-  const BeamEpsilon epsilon = pickMinimumWidthEpsilon(
-      frequency, sourceSoundSpeed, loopRange, epsilonMultiplier);
+  if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
+      simulation.beamFamily() != BeamFamily::GeometricHat) {
+    throw ValidationError(
+        "single-frequency TL solver supports only Cartesian Cerveny and "
+        "Cartesian geometric hat beams");
+  }
+  std::optional<BeamEpsilon> epsilon;
+  if (simulation.beamFamily() == BeamFamily::CervenyGaussian) {
+    epsilon.emplace(pickMinimumWidthEpsilon(
+        frequency, sourceSoundSpeed, loopRange, epsilonMultiplier));
+  }
 
   std::optional<FrequencyWorkspace> coherentWorkspace;
   std::optional<IntensityWorkspace> intensityWorkspace;
@@ -154,8 +164,14 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
           "field solver cannot accumulate a non-field run mode");
   }
   const FrequencyProjector projector(simulation.environment());
-  const CartesianCervenyInfluence influence(
-      simulation.environment(), simulation.receivers(), influenceSettings);
+  std::optional<CartesianCervenyInfluence> cervenyInfluence;
+  std::optional<GeometricHatInfluence> geometricHatInfluence;
+  if (simulation.beamFamily() == BeamFamily::GeometricHat) {
+    geometricHatInfluence.emplace(simulation.receivers());
+  } else {
+    cervenyInfluence.emplace(simulation.environment(), simulation.receivers(),
+                             influenceSettings);
+  }
 
   double projectSeconds = 0.0;
   double influenceSeconds = 0.0;
@@ -183,16 +199,25 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const RayFrequencyState frequencyState =
         projector.project(path, frequency, projectedSourceAmplitude);
     const Clock::time_point projectEnd = Clock::now();
-    if (coherentWorkspace.has_value()) {
-      static_cast<void>(influence.accumulatePrevalidated(
-          *coherentWorkspace, path, frequencyState, epsilon.value,
+    if (geometricHatInfluence.has_value() &&
+        coherentWorkspace.has_value()) {
+      static_cast<void>(geometricHatInfluence->accumulate(
+          *coherentWorkspace, path, frequencyState,
+          launchFan.launchAngleStep));
+    } else if (geometricHatInfluence.has_value()) {
+      static_cast<void>(geometricHatInfluence->accumulateIntensity(
+          *intensityWorkspace, path, frequencyState,
+          launchFan.launchAngleStep));
+    } else if (coherentWorkspace.has_value()) {
+      static_cast<void>(cervenyInfluence->accumulatePrevalidated(
+          *coherentWorkspace, path, frequencyState, epsilon->value,
           influenceSettings.collectStatistics ? &influenceStatistics
-                                              : nullptr));
+                                               : nullptr));
     } else {
-      static_cast<void>(influence.accumulateIntensityPrevalidated(
-          *intensityWorkspace, path, frequencyState, epsilon.value,
+      static_cast<void>(cervenyInfluence->accumulateIntensityPrevalidated(
+          *intensityWorkspace, path, frequencyState, epsilon->value,
           influenceSettings.collectStatistics ? &influenceStatistics
-                                              : nullptr));
+                                               : nullptr));
     }
     const Clock::time_point influenceEnd = Clock::now();
     projectSeconds += elapsedSeconds(projectBegin, projectEnd);
@@ -200,16 +225,31 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   }
 
   const Clock::time_point scaleBegin = Clock::now();
-  FrequencyWorkspace workspace =
-      coherentWorkspace.has_value()
-          ? std::move(*coherentWorkspace)
-          : scaleCartesianPointIntensityToPressure(
-                *intensityWorkspace, simulation.receivers(),
-                launchFan.launchAngleStep, sourceSoundSpeed);
+  const bool geometricHat =
+      simulation.beamFamily() == BeamFamily::GeometricHat;
+  FrequencyWorkspace workspace = coherentWorkspace.has_value()
+                                     ? std::move(*coherentWorkspace)
+                                 : geometricHat
+                                     ? scaleGeometricPointIntensityToPressure(
+                                           *intensityWorkspace,
+                                           simulation.receivers(),
+                                           launchFan.launchAngleStep,
+                                           sourceSoundSpeed)
+                                     : scaleCartesianPointIntensityToPressure(
+                                           *intensityWorkspace,
+                                           simulation.receivers(),
+                                           launchFan.launchAngleStep,
+                                           sourceSoundSpeed);
   if (coherentWorkspace.has_value()) {
-    scaleCoherentCartesianPointPressure(workspace, simulation.receivers(),
-                                        launchFan.launchAngleStep,
-                                        sourceSoundSpeed);
+    if (geometricHat) {
+      scaleCoherentGeometricPointPressure(
+          workspace, simulation.receivers(), launchFan.launchAngleStep,
+          sourceSoundSpeed);
+    } else {
+      scaleCoherentCartesianPointPressure(
+          workspace, simulation.receivers(), launchFan.launchAngleStep,
+          sourceSoundSpeed);
+    }
   }
   const Clock::time_point scaleEnd = Clock::now();
 

@@ -610,7 +610,8 @@ struct ParsedRunType {
       (runType[5U] == ' ' || runType[5U] == '2') && runType[6U] == ' ';
   const bool transmissionLoss =
       (runType[0U] == 'C' || runType[0U] == 'I' || runType[0U] == 'S') &&
-      runType[1U] == 'C';
+      (runType[1U] == 'C' || runType[1U] == 'G' || runType[1U] == '^' ||
+       runType[1U] == ' ');
   const bool rayTrace =
       runType[0U] == 'R' && (runType[1U] == ' ' || runType[1U] == 'G');
   const bool arrivals = (runType[0U] == 'A' || runType[0U] == 'a') &&
@@ -620,9 +621,10 @@ struct ParsedRunType {
   if (!commonOptionsValid ||
       (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
-         "only Cartesian Cerveny 'CC/IC/SC', unshifted point-source "
-         "'R/RG/RGO', or Cartesian geometric 'AG/aG/AB/aB/EG/EB' run "
-         "types are supported");
+         "only Cartesian Cerveny 'CC/IC/SC', Cartesian geometric-hat "
+         "'CG/IG/SG' (including '^' and blank aliases), unshifted "
+         "point-source 'R/RG/RGO', or Cartesian geometric "
+         "'AG/aG/AB/aB/EG/EB' run types are supported");
   }
   if (runType[3U] == 'X') {
     fail(sourceName, record.lineNumber,
@@ -637,10 +639,6 @@ struct ParsedRunType {
       fail(sourceName, record.lineNumber,
            "arrival and eigenray run types require Cartesian G or B beams");
     }
-  }
-  if (transmissionLoss && runType[1U] != 'C') {
-    fail(sourceName, record.lineNumber,
-         "RayReuse TL requires Cartesian Cerveny 'CC/IC/SC'");
   }
   runType[3U] = 'R';
   runType[4U] = 'R';
@@ -668,7 +666,9 @@ struct ParsedRunType {
     }
   }
   BeamFamily beamFamily = BeamFamily::CervenyGaussian;
-  if (rayTrace && runType[1U] == 'G') {
+  if (transmissionLoss && runType[1U] != 'C') {
+    beamFamily = BeamFamily::GeometricHat;
+  } else if (rayTrace && runType[1U] == 'G') {
     beamFamily = BeamFamily::GeometricHat;
   } else if (arrivals || eigenray) {
     beamFamily = runType[1U] == 'G' ? BeamFamily::GeometricHat
@@ -963,7 +963,8 @@ struct ParsedRunType {
                   kKilometersToMeters);
   const Record runTypeRecord = reader.require("run type");
   const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
-  if (isTransmissionLossMode(runType.runMode)) {
+  if (isTransmissionLossMode(runType.runMode) &&
+      runType.beamFamily == BeamFamily::CervenyGaussian) {
     requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
   }
 
@@ -1025,7 +1026,8 @@ struct ParsedRunType {
   double loopRange = 1.0;
   std::size_t imageCount = 1U;
   int beamWindow = 1;
-  if (isTransmissionLossMode(runType.runMode)) {
+  if (isTransmissionLossMode(runType.runMode) &&
+      runType.beamFamily == BeamFamily::CervenyGaussian) {
     const Record beamRecord = reader.require("Cerveny beam settings");
     requireTokenCount(beamRecord, 3U, source, "Cerveny beam settings");
     if (beamRecord.tokens.front() != "MS") {
