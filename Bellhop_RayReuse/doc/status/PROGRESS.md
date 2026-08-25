@@ -1,6 +1,6 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-08-20
+> 更新日期：2026-08-25
 > 当前状态：RayReuse Feature Sync 的 RR-B1～RR-B4 已关闭；暂停等待下一阶段决定。
 
 ## 已完成范围
@@ -43,6 +43,8 @@ reflection event。以下内容不得写回 cache：
 
 ## 下一步
 
-Feature Sync 已满足关闭条件。下一阶段应先由用户选择研究目标；可考虑 BARR
-研究或基于真实 profile 的新性能阶段，但本次不自动启动，也不预先改变缓存、
-并行所有权或文件格式。
+Feature Sync 已满足关闭条件，当前没有获批的新实施阶段。最新 Influence
+审计建议先评估无损的 Influence Geometry Reuse（IG-0），再决定是否进入带
+误差预算的频率重建（FI-0）；两者仍是候选路线，不自动启动。统一入口见
+[`CURRENT_WORK.md`](../../../doc/plans/CURRENT_WORK.md)，技术证据见
+[`INFLUENCE_FREQUENCY_AUDIT.md`](../reports/INFLUENCE_FREQUENCY_AUDIT.md)。

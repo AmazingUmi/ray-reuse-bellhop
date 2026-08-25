@@ -1,4 +1,10 @@
-# 01 Bellhop 源码分析与宽带 Ray-Reuse 设计
+# Bellhop 源码分析与宽带 Ray-Reuse 设计
+
+> 文档状态：架构基线，2026-08-25 完成现状复核。本文保留首版范围、里程碑和
+> go/no-go 决策的形成过程；它们不是当前待办或功能支持表。当前能力以
+> [`F2CPP 支持矩阵`](../../Bellhop_F2CPP/doc/reference/FEATURE_SUPPORT_MATRIX.md)
+> 和 [`RayReuse 支持矩阵`](../../Bellhop_RayReuse/doc/reference/FEATURE_SUPPORT_MATRIX.md)
+> 为准，当前工作只从 [`CURRENT_WORK.md`](../plans/CURRENT_WORK.md) 进入。
 
 > 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [基础变量、单位与数值规范](../reference/基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
 
@@ -201,7 +207,7 @@ PROGRAM BELLHOP
 - `ReadRayElevationAngles`：二维发射仰角；
 - 三维代码还使用 `ReadRayBearingAngles` 读取方位角。
 
-注意：源码中出现的 `freqVec` 并不是本仓库原始 Bellhop 基线已经具备宽带能力的证据。该部分来自此前多频计算尝试时拷入的实验文件；当前 `BellhopCore` 仍围绕全局标量 `freq/omega` 运行。后续实现应把这些代码视为实验参考，不能直接视为已验证基础设施。
+注意：源码中出现的 `freqVec` 并不是本仓库原始 Bellhop 基线已经具备宽带能力的证据。该部分来自此前多频计算尝试时拷入的实验文件；当前 `BellhopCore` 仍围绕全局标量 `freq/omega` 运行。已完成的 C++ 实现只把这些代码作为实验参考，没有将其视为已验证基础设施。
 
 ## 6. 模块三：射线轨迹跟踪
 
@@ -748,7 +754,11 @@ wall 的 `2.13%`；Influence 为 `279.429 s`，占 `97.42%`。串行 reuse 将
 - 不同频率使用不同环境几何或发射角集合；
 - 需要 3D/N×2D、arrivals、eigenray 或其他未支持模式。
 
-## 18. 首版范围与数据模型
+## 18. 首版范围与数据模型（历史设计基线）
+
+本节记录最初用于控制迁移风险的范围，不代表封板后的完整支持能力。R、A/a、
+E、I/S、更多 beam family 和接收布局后来已按独立迭代实现，正式边界以组件
+支持矩阵为准。
 
 本章的数据模型不是 RayReuse 阶段才追加的设计，而是 `Bellhop_F2CPP` 的强制基础设计。F2CPP 虽然只计算一个频率，也必须生成并消费完整、可冻结的 `RayPathCache`，严格分离频率无关轨迹与逐频声学状态。若 M1/M2 仍依赖追踪器局部数组、边追踪边累加且不保留求积/反射信息，则不能视为 F2CPP 验收通过，也不能据此派生 RayReuse。
 
@@ -1154,7 +1164,7 @@ Bellhop_RayReuse/
 宽带实测。若实际宽带原型未通过，先检查任务划分和数据布局；仍不通过时，
 应保留 Fortran 并实施同样的算法模块化，而不是为语言选择继续扩大风险。
 
-当前阶段 A～E 已关闭，正式 Munk 16频五轮基准的 8/10-worker 中位加速为
+阶段 A～E 关闭时，正式 Munk 16频五轮基准的 8/10-worker 中位加速为
 `4.424×/4.643×`，因此 go/no-go 门已通过。后续 Influence 优化属于在数值
 契约冻结后的性能工程，不回滚 C++/RayReuse 采用结论；如果优化不能稳定改善
 wall，则保留显式 execution mode/worker 配置，不为追求线程数线性加速而
@@ -1192,7 +1202,9 @@ wall，则保留显式 execution mode/worker 配置，不为追求线程数线�
   reuse vs 非复用复压力
 ```
 
-### 21.6 分阶段验收里程碑
+### 21.6 分阶段验收里程碑（历史计划）
+
+M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再表示未完成工作。
 
 | 里程碑 | 验收内容 | 主要对照 |
 |---|---|---|
@@ -1208,14 +1220,20 @@ wall，则保留显式 execution mode/worker 配置，不为追求线程数线�
 
 当前仓库状态为：
 
-- `Bellhop_origin/Makefile` 已能可重现构建二维 release/static `Bellhop_origin/bin/bellhop.exe`；
-- `Bellhop_F2CPP/` 已完成优化单频复刻，`Bellhop_RayReuse/` 已完成独立宽带 nonreuse、串行 reuse 和有界频率并行实现；
-- 当前代码基线应视为原始、单频 Bellhop 模型；
+- `Bellhop_origin/Makefile` 在当前 macOS 工具链上可重现构建二维
+  `Bellhop_origin/bin/bellhop`；目录中的 `.exe` 只作为旧平台制品保留；
+- `Bellhop_F2CPP/` 已完成二维单频复刻并封板，`Bellhop_RayReuse/` 已完成
+  独立宽带 nonreuse、串行 reuse、有界频率并行及 RR-B1～RR-B4 Feature Sync；
+- Fortran oracle 的权威基线仍是原始二维单频 Bellhop，不把实验文件解释为
+  原模型的正式宽带实现；
 - `freqVec`、部分多频 SHD 头处理和测试目录中的宽带结果，是此前尝试多频计算时直接拷入的实验文件，不代表原始模型已经具备或验证了宽带基础设施；
-- 后续实现可以参考这些实验文件，但验证链必须依次使用可重现的原始单频 Bellhop、C++ 单频复刻和宽带非复用基线；
-- 六例标准算例、独立 Python SHD 读取、完整场/中间状态门和分阶段计时均已建立；当前下一步是 RayReuse H4 本地跨编译器验证。
+- 验证链依次使用可重现的原始单频 Bellhop、C++ 单频复刻和宽带非复用基线；
+  H4 本地跨编译器验证和后续 Feature Sync 均已完成；
+- 当前没有获批的新数值实施阶段；研究候选和外部发布决策见
+  [`CURRENT_WORK.md`](../plans/CURRENT_WORK.md)。
 
-最终架构决策如下：
+以下是已经落实的架构基线和首版范围决策；封板后的新增能力仍以组件支持矩阵
+为准：
 
 - 使用双精度保存轨迹、动态状态和复相位；
 - 环境不可变，频率显式传参；

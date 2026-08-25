@@ -21,16 +21,16 @@ PRT/RAY，arrival 模式输出 PRT/ARR。
 
 程序保留完整、频率无关、冻结只读的射线轨迹缓存；复走时、衰减、反射
 幅相和压力只存在于逐频临时状态。F2CPP 一次运行只计算一个频率，实际多频
-调度和轨迹复用由后续独立的 `Bellhop_RayReuse` 工程实现。
+调度和轨迹复用由独立的 `Bellhop_RayReuse` 工程实现。
 
 ## 快速开始
 
 从本目录编译并测试 Release：
 
 ```bash
-cmake --preset release
-cmake --build --preset release --parallel
-ctest --preset release
+uv run cmake --preset release
+uv run cmake --build --preset release --parallel
+uv run ctest --preset release
 ```
 
 可执行文件：
@@ -69,8 +69,10 @@ build/release/bellhop_f2cpp
 ## 当前状态
 
 I0～I8 与 I9-B1～B3 已全部验收并冻结，I9-B4 已完成二维单频复刻封板。
-当前基线为 AppleClang/GCC 14 CTest 37/37、Python 145/145 和 F2CPP 单频
-标准案例 65/65；详细数值证据见[当前进度](./doc/status/PROGRESS.md)。
+封板快照为 AppleClang/GCC 14 CTest 37/37、当时的 Python 145/145 和
+F2CPP 单频标准案例 65/65；这些是 2026-08-16 的验收记录，不是动态的当前
+测试总数。详细数值证据见[封板状态](./doc/status/PROGRESS.md)，当前 Python
+回归从仓库根目录运行 `uv run pytest`。
 
 当前可正式声明的范围、兼容语义及明确延期项以
 [二维单频支持矩阵](./doc/reference/FEATURE_SUPPORT_MATRIX.md)为准。P1～P4-02 性能阶段

@@ -22,7 +22,7 @@ PRT/SHD，ray-trace 与 eigenray 写出 PRT/RAY，arrivals 写出 PRT/ARR。
 ```
 
 F2CPP 一次运行只接受一个频率。多频调度、实际轨迹复用和多频 SHD 属于
-后续独立的 `Bellhop_RayReuse` 工程。
+已完成的独立 `Bellhop_RayReuse` 工程。
 
 ## 2. 环境要求
 
@@ -35,7 +35,7 @@ F2CPP 一次运行只接受一个频率。多频调度、实际轨迹复用和�
 
 标准算例、SHD 校验和场比较还需要：
 
-- Python 3.11 或更高版本；
+- Python 3.12.11（由仓库根目录 `.python-version` 固定）；
 - NumPy；
 - 仓库自带的
   [`test/PlotRead/bellhop_io_py`](../../../test/PlotRead/README.md)，标准算例会直接
@@ -44,14 +44,16 @@ F2CPP 一次运行只接受一个频率。多频调度、实际轨迹复用和�
 检查常用工具：
 
 ```bash
-cmake --version
+uv run cmake --version
 c++ --version
 make --version
-python3 --version
-python3 -c "import numpy; print(numpy.__version__)"
+uv run python --version
+uv run python -c "import numpy; print(numpy.__version__)"
 ```
 
-当前最终快照在 macOS arm64、Apple Clang 21、CMake 4.0.2 上通过验证。
+首次使用先从仓库根目录运行 `uv sync`。本文的 Python、CMake 和 CTest 命令
+均通过 `uv run` 使用项目环境；macOS arm64、Apple Clang 21、CMake 4.0.2
+是封板时的已验证工具链快照，不表示唯一支持版本。
 
 ## 3. 编译
 
@@ -66,8 +68,8 @@ cd Bellhop_F2CPP
 Release 用于正式计算和性能测试：
 
 ```bash
-cmake --preset release
-cmake --build --preset release --parallel
+uv run cmake --preset release
+uv run cmake --build --preset release --parallel
 ```
 
 生成：
@@ -82,8 +84,8 @@ Debug preset 开启高警告、`-Werror`、AddressSanitizer 和
 UndefinedBehaviorSanitizer：
 
 ```bash
-cmake --preset debug
-cmake --build --preset debug --parallel
+uv run cmake --preset debug
+uv run cmake --build --preset debug --parallel
 ```
 
 生成：
@@ -99,14 +101,14 @@ Debug 版本用于诊断，不应用于性能基线。
 修改 CMake 配置后重新运行对应 configure preset：
 
 ```bash
-cmake --preset release
-cmake --build --preset release --parallel
+uv run cmake --preset release
+uv run cmake --build --preset release --parallel
 ```
 
 要求清理目标后再编译时：
 
 ```bash
-cmake --build --preset release --clean-first --parallel
+uv run cmake --build --preset release --clean-first --parallel
 ```
 
 本工程没有安装步骤；直接使用 `build/<配置>/bellhop_f2cpp`。
@@ -118,20 +120,20 @@ cmake --build --preset release --clean-first --parallel
 先完成相应配置和构建，再执行：
 
 ```bash
-ctest --preset debug
-ctest --preset release
+uv run ctest --preset debug
+uv run ctest --preset release
 ```
 
 显示失败测试的完整输出：
 
 ```bash
-ctest --preset release --output-on-failure
+uv run ctest --preset release --output-on-failure
 ```
 
 只运行某一类测试：
 
 ```bash
-ctest --test-dir build/release \
+uv run ctest --test-dir build/release \
   -R 'frequency_projector|single_frequency_solver' \
   --output-on-failure
 ```
@@ -144,18 +146,20 @@ Release/Werror 均为 37/37 CTest。
 以下命令从仓库根目录运行：
 
 ```bash
-python3 -m unittest discover \
+uv run python -m unittest discover \
   -s test/standard_cases/codes/tests -p 'test_*.py'
 ```
 
-当前项目基线为 145/145。
+所有发现的测试都必须通过。封板时的 145/145 是 2026-08-16 的历史快照；
+当前全项目 Python 回归统一使用仓库根目录的 `uv run pytest`，不在操作指南
+中固化会随测试新增而变化的数量。
 
 ### 4.3 六十五个单频端到端案例
 
 从仓库根目录运行：
 
 ```bash
-python3 test/standard_cases/codes/standard_cases.py test \
+uv run python test/standard_cases/codes/standard_cases.py test \
   --version f2cpp \
   --case all \
   --profile single \
@@ -176,14 +180,14 @@ test/standard_cases/results/f2cpp/<case>/single/
 只校验已有结果而不重新计算：
 
 ```bash
-python3 test/standard_cases/codes/standard_cases.py validate \
+uv run python test/standard_cases/codes/standard_cases.py validate \
   --version f2cpp --case all --profile single
 ```
 
 ### 4.4 与 Fortran SHD 比较
 
 ```bash
-python3 test/standard_cases/codes/compare_fields.py \
+uv run python test/standard_cases/codes/compare_fields.py \
   /path/to/reference.shd \
   /path/to/f2cpp.shd
 ```
@@ -196,9 +200,9 @@ python3 test/standard_cases/codes/compare_fields.py \
 先运行六个单频标准案例，然后从 `Bellhop_F2CPP/` 执行：
 
 ```bash
-python3 tests/tools/test_evaluate_amortized_performance.py
+uv run python tests/tools/test_evaluate_amortized_performance.py
 
-python3 tests/tools/evaluate_amortized_performance.py \
+uv run python tests/tools/evaluate_amortized_performance.py \
   --frequency-count 16 \
   --minimum-savings-percent 1 \
   ../test/standard_cases/results/f2cpp/*/single/f000_*/*.prt
@@ -269,7 +273,7 @@ eigenray 写 `<file-root>.ray`；`A/a` arrivals 写 `<file-root>.arr`。每次�
 从仓库根目录执行：
 
 ```bash
-python3 test/standard_cases/codes/standard_cases.py generate \
+uv run python test/standard_cases/codes/standard_cases.py generate \
   --version f2cpp \
   --case constant_speed_direct \
   --profile single
@@ -278,7 +282,7 @@ f2cpp_case_root="test/standard_cases/results/f2cpp/constant_speed_direct/single/
 
 Bellhop_F2CPP/build/release/bellhop_f2cpp "$f2cpp_case_root"
 
-python3 test/standard_cases/codes/standard_cases.py validate \
+uv run python test/standard_cases/codes/standard_cases.py validate \
   --version f2cpp \
   --case constant_speed_direct \
   --profile single
@@ -718,9 +722,10 @@ R/A/a/E 或切回 CC 时，成功后会删除其他模式的陈旧产品；启�
 
 ## 8. 常见问题
 
-### `No module named tomllib`
+### Python 版本不符合项目要求
 
-当前 `python3` 低于 3.11。切换到 Python 3.11 或更高版本。
+执行 `uv run python --version`；版本必须与根目录 `.python-version` 一致。
+若不一致，重新执行 `uv sync`，不要切换回系统 Python 或共享 Conda 环境。
 
 ### `No module named numpy`
 
@@ -730,6 +735,19 @@ R/A/a/E 或切回 CC 时，成功后会删除其他模式的陈旧产品；启�
 ### `Could not read presets`
 
 确认当前目录是 `Bellhop_F2CPP/`，并检查 CMake 版本不低于 3.24。
+
+### `CMakeCache.txt directory ... is different`
+
+构建目录由另一个仓库挂载路径生成，缓存中的绝对路径已经失效。从
+`Bellhop_F2CPP/` 重新生成缓存并构建：
+
+```bash
+uv run cmake --preset release --fresh
+uv run cmake --build --preset release --parallel
+```
+
+`--fresh` 只重建生成式 CMake cache，不修改源码；Debug 构建使用 `debug`
+preset 执行同样操作。
 
 ### 程序提示 `unable to open environment file`
 

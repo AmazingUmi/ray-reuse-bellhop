@@ -1,9 +1,10 @@
-# Bellhop F2CPP 当前进度
+# Bellhop F2CPP 封板状态
 
-> 更新日期：2026-08-16
-> 当前主路线：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
-> 当前施工状态：I0～I8 与 I9-B1～B4 已完成并冻结；二维单频复刻正式封板；
-> Performance P1～P4-02 已完成并暂停。
+> 封板日期：2026-08-16
+> 状态核对：2026-08-25
+> 封板范围：二维单频复刻；3D、N×2D 和 beam shift 默认排除。
+> I0～I8、I9-B1～B4 与 Performance P1～P4-02 均已完成；本文件中的测试
+> 数量和性能数据是各阶段关闭时的历史快照，不等同于当前全仓测试总数。
 
 ## 1. 已完成范围
 
@@ -45,7 +46,7 @@
 | I9-B3 | 完成 | top/bottom acoustic `LL` elastic P/S、事件材料冻结与 `1e20 m` 逐频换算 |
 | I9-B4 | 完成 | supported/divergence/deferred 矩阵、文档统一、双编译器与隔离构建封板 |
 
-## 2. 当前验证基线
+## 2. 封板验证基线（2026-08-16）
 
 - AppleClang Debug ASan/UBSan：37/37 CTest；
 - AppleClang Release：37/37 CTest；
@@ -194,9 +195,9 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 
 ## 4. 文档角色
 
-- 本文件记录当前施工进度和最新验证基线；
-- [`FURTHER_REPLICATION_PLAN.md`](../archive/FURTHER_REPLICATION_PLAN.md) 记录后续二维
-  功能的依赖顺序和逐项完成证据；
+- 本文件记录封板范围和阶段关闭时的验证基线；
+- [`FURTHER_REPLICATION_PLAN.md`](../archive/FURTHER_REPLICATION_PLAN.md) 记录已完成二维
+  功能的依赖顺序和逐项关闭证据；
 - [`USAGE.md`](../guides/USAGE.md) 记录当前可实际使用的输入范围；
 - [`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 是复刻封板后的
   supported、intentional divergence 与 deferred/out-of-scope 唯一分类表；
@@ -206,7 +207,7 @@ I3/I4/I5/I6 的逐项输入、可执行文件与场结果哈希位于
 - [`PERFORMANCE.md`](../reports/PERFORMANCE.md) 记录复刻封板后的 P1 基线、P2/P3
   scalar 优化、P4 路线决策与确定性线程实现证据。
 
-## 5. 下一步
+## 5. 维护边界
 
 I0～I8 与 B1～B4 已全部冻结，不再以“剩余复刻功能”继续扩张。支持范围和
 延期项以 [`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 为准；

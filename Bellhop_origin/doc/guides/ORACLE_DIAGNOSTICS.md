@@ -4,6 +4,9 @@ The original 2-D Bellhop executable contains an optional, single-ray diagnostic
 for validating the F2CPP port. It is disabled by default: an ordinary run opens
 no diagnostic files and follows the original `Step2D` call path.
 
+Run repository Python validators from the repository root after `uv sync`;
+the commands below use the project environment through `uv run`.
+
 ## Sound-speed profile diagnostic
 
 The independent SSP oracle evaluates requested depths through the original
@@ -128,7 +131,7 @@ become true together.
 The repository includes a dependency-free schema/finite-value check:
 
 ```bash
-python3 test/standard_cases/codes/validate_ray_oracle.py \
+uv run python test/standard_cases/codes/validate_ray_oracle.py \
   /tmp/bellhop-oracle
 ```
 
@@ -136,7 +139,7 @@ After building the F2CPP Debug preset, a full direct-ray state comparison can
 be run against a `constant_speed_direct` oracle:
 
 ```bash
-python3 test/standard_cases/codes/compare_f2cpp_geometry_oracle.py \
+uv run python test/standard_cases/codes/compare_f2cpp_geometry_oracle.py \
   /tmp/bellhop-oracle \
   Bellhop_F2CPP/build/debug/bellhop_f2cpp_geometry_oracle_probe
 ```
@@ -150,7 +153,7 @@ For the repository's `constant_speed_vacuum_rigid` case, use the same probe
 with its reflected-path configuration:
 
 ```bash
-python3 test/standard_cases/codes/compare_f2cpp_geometry_oracle.py \
+uv run python test/standard_cases/codes/compare_f2cpp_geometry_oracle.py \
   /tmp/bellhop-oracle \
   Bellhop_F2CPP/build/debug/bellhop_f2cpp_geometry_oracle_probe \
   --probe-configuration vacuum-rigid
@@ -162,7 +165,7 @@ integrated-step/reflection-edge sequence.
 For `munk_cerveny_cc`, select the matching 27-node C-linear fixture:
 
 ```bash
-python3 test/standard_cases/codes/compare_f2cpp_geometry_oracle.py \
+uv run python test/standard_cases/codes/compare_f2cpp_geometry_oracle.py \
   /tmp/bellhop-oracle \
   Bellhop_F2CPP/build/debug/bellhop_f2cpp_geometry_oracle_probe \
   --probe-configuration munk
@@ -210,7 +213,7 @@ and replays interpolation, BranchCut, window/Hermite, image summation,
 `const * sum`, and complex64 quantization:
 
 ```bash
-python3 test/standard_cases/codes/validate_influence_oracle.py \
+uv run python test/standard_cases/codes/validate_influence_oracle.py \
   /tmp/bellhop-oracle
 ```
 
