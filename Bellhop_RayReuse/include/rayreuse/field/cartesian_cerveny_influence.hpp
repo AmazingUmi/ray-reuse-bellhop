@@ -92,6 +92,7 @@ struct CartesianCervenyDiagnostic {
   std::array<CartesianCervenyImageDiagnostic, 3> images{};
   std::complex<double> rawImageSum{};
   std::complex<double> finalContribution{};
+  double intensityIncrement{};
 };
 
 [[nodiscard]] int updateCervenyKmah(std::complex<double> qLeft,
@@ -113,6 +114,13 @@ class CartesianCervenyInfluence {
           std::nullopt,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateIntensity(
+      IntensityWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest =
+          std::nullopt,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
  private:
   friend class SingleFrequencySolver;
 
@@ -122,17 +130,25 @@ class CartesianCervenyInfluence {
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
+  accumulateIntensityPrevalidated(
+      IntensityWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
   template <bool CollectStatistics>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
   accumulateWithImageCount(
-      FrequencyWorkspace& workspace, const RayPath& path,
+      FrequencyWorkspace* pressureWorkspace,
+      IntensityWorkspace* intensityWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
       CartesianCervenyStatistics* statistics) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateImpl(
-      FrequencyWorkspace& workspace, const RayPath& path,
+      FrequencyWorkspace* pressureWorkspace,
+      IntensityWorkspace* intensityWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
       CartesianCervenyStatistics* statistics) const;

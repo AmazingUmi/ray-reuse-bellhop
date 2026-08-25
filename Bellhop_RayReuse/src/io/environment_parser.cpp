@@ -608,7 +608,9 @@ struct ParsedRunType {
       (runType[3U] == ' ' || runType[3U] == 'R' || runType[3U] == 'X') &&
       (runType[4U] == ' ' || runType[4U] == 'R' || runType[4U] == 'I') &&
       (runType[5U] == ' ' || runType[5U] == '2') && runType[6U] == ' ';
-  const bool coherent = runType[0U] == 'C' && runType[1U] == 'C';
+  const bool transmissionLoss =
+      (runType[0U] == 'C' || runType[0U] == 'I' || runType[0U] == 'S') &&
+      runType[1U] == 'C';
   const bool rayTrace =
       runType[0U] == 'R' && (runType[1U] == ' ' || runType[1U] == 'G');
   const bool arrivals = (runType[0U] == 'A' || runType[0U] == 'a') &&
@@ -616,11 +618,11 @@ struct ParsedRunType {
   const bool eigenray =
       runType[0U] == 'E' && (runType[1U] == 'G' || runType[1U] == 'B');
   if (!commonOptionsValid ||
-      (!coherent && !rayTrace && !arrivals && !eigenray)) {
+      (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
-         "only coherent Cartesian 'CC', unshifted point-source 'R/RG/RGO', "
-         "or Cartesian geometric 'AG/aG/AB/aB/EG/EB' run types are "
-         "supported");
+         "only Cartesian Cerveny 'CC/IC/SC', unshifted point-source "
+         "'R/RG/RGO', or Cartesian geometric 'AG/aG/AB/aB/EG/EB' run "
+         "types are supported");
   }
   if (runType[3U] == 'X') {
     fail(sourceName, record.lineNumber,
@@ -636,19 +638,35 @@ struct ParsedRunType {
            "arrival and eigenray run types require Cartesian G or B beams");
     }
   }
-  if (coherent && runType[1U] != 'C') {
+  if (transmissionLoss && runType[1U] != 'C') {
     fail(sourceName, record.lineNumber,
-         "coherent RayReuse TL requires Cartesian Cerveny 'CC'");
+         "RayReuse TL requires Cartesian Cerveny 'CC/IC/SC'");
   }
   runType[3U] = 'R';
   runType[4U] = 'R';
   runType[5U] = '2';
-  const SimulationRunMode mode =
-      rayTrace   ? SimulationRunMode::RayTrace
-      : arrivals ? (runType[0U] == 'A' ? SimulationRunMode::AsciiArrivals
-                                       : SimulationRunMode::BinaryArrivals)
-      : eigenray ? SimulationRunMode::Eigenray
-                 : SimulationRunMode::Coherent;
+  SimulationRunMode mode = SimulationRunMode::RayTrace;
+  if (arrivals) {
+    mode = runType[0U] == 'A' ? SimulationRunMode::AsciiArrivals
+                              : SimulationRunMode::BinaryArrivals;
+  } else if (eigenray) {
+    mode = SimulationRunMode::Eigenray;
+  } else if (transmissionLoss) {
+    switch (runType[0U]) {
+      case 'C':
+        mode = SimulationRunMode::Coherent;
+        break;
+      case 'I':
+        mode = SimulationRunMode::Incoherent;
+        break;
+      case 'S':
+        mode = SimulationRunMode::SemiCoherent;
+        break;
+      default:
+        fail(sourceName, record.lineNumber,
+             "unknown transmission-loss coherence mode");
+    }
+  }
   BeamFamily beamFamily = BeamFamily::CervenyGaussian;
   if (rayTrace && runType[1U] == 'G') {
     beamFamily = BeamFamily::GeometricHat;
@@ -945,7 +963,7 @@ struct ParsedRunType {
                   kKilometersToMeters);
   const Record runTypeRecord = reader.require("run type");
   const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
-  if (runType.runMode == SimulationRunMode::Coherent) {
+  if (isTransmissionLossMode(runType.runMode)) {
     requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
   }
 
@@ -1007,7 +1025,7 @@ struct ParsedRunType {
   double loopRange = 1.0;
   std::size_t imageCount = 1U;
   int beamWindow = 1;
-  if (runType.runMode == SimulationRunMode::Coherent) {
+  if (isTransmissionLossMode(runType.runMode)) {
     const Record beamRecord = reader.require("Cerveny beam settings");
     requireTokenCount(beamRecord, 3U, source, "Cerveny beam settings");
     if (beamRecord.tokens.front() != "MS") {

@@ -71,6 +71,10 @@ void printUsage(std::ostream& stream) {
   switch (mode) {
     case rayreuse::SimulationRunMode::Coherent:
       return "coherent TL (SHD)";
+    case rayreuse::SimulationRunMode::Incoherent:
+      return "incoherent TL (SHD)";
+    case rayreuse::SimulationRunMode::SemiCoherent:
+      return "semi-coherent TL (SHD)";
     case rayreuse::SimulationRunMode::RayTrace:
       return "ray trace (RAY)";
     case rayreuse::SimulationRunMode::AsciiArrivals:
@@ -204,7 +208,7 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
     }
     return;
   }
-  if (mode == rayreuse::SimulationRunMode::Coherent &&
+  if (rayreuse::isTransmissionLossMode(mode) &&
       parsed.simulationCase.frequencies().size() == 1U &&
       options.executionModeSpecified &&
       options.executionMode != rayreuse::BroadbandExecutionMode::NonReuse) {
@@ -301,6 +305,12 @@ void writeConfigurationSummary(std::ostream& stream,
   switch (simulation.runMode()) {
     case rayreuse::SimulationRunMode::Coherent:
       stream << "Coherent TL calculation\n";
+      break;
+    case rayreuse::SimulationRunMode::Incoherent:
+      stream << "Incoherent TL calculation\n";
+      break;
+    case rayreuse::SimulationRunMode::SemiCoherent:
+      stream << "Semi-coherent TL calculation\n";
       break;
     case rayreuse::SimulationRunMode::RayTrace:
       stream << "Ray trace run\n";

@@ -15,7 +15,9 @@
 namespace {
 
 using rayreuse::FrequencyWorkspace;
+using rayreuse::IntensityWorkspace;
 using rayreuse::ReceiverGrid;
+using rayreuse::scaleCartesianPointIntensityToPressure;
 using rayreuse::scaleCoherentCartesianPointPressure;
 using rayreuse::ValidationError;
 using rayreuse::test::Context;
@@ -98,6 +100,40 @@ void testO1ContributionAnchors(Context& context) {
                 "Munk branch legacy SNGL factor bits");
 }
 
+void testIntensityToPressureScaling(Context& context) {
+  const ReceiverGrid receivers({10.0}, {0.0, 1000.0, 4000.0});
+  IntensityWorkspace intensity(100.0, receivers);
+  intensity.add(0U, 0U, 4.0);
+  intensity.add(0U, 1U, 9.0);
+  intensity.add(0U, 2U, 25.0);
+
+  const FrequencyWorkspace pressure = scaleCartesianPointIntensityToPressure(
+      intensity, receivers, 0.001, 1500.0);
+  const double beamScale = -0.001 * std::sqrt(100.0) / 1500.0;
+  checkComplexNear(context, pressure.at(0U, 0U), {}, 0.0,
+                   "point intensity conversion preserves zero-range rule");
+  checkComplexNear(
+      context, pressure.at(0U, 1U),
+      {3.0 * beamScale / std::sqrt(1000.0), -0.0}, 1.0e-21,
+      "point intensity is square-rooted exactly once before scaling");
+  checkComplexNear(
+      context, pressure.at(0U, 2U),
+      {5.0 * beamScale / std::sqrt(4000.0), -0.0}, 1.0e-21,
+      "point intensity conversion keeps the range spreading factor");
+  context.check(intensity.at(0U, 0U) == 4.0 &&
+                    intensity.at(0U, 1U) == 9.0 &&
+                    intensity.at(0U, 2U) == 25.0,
+                "intensity conversion leaves its strong input unchanged");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(scaleCartesianPointIntensityToPressure(
+            intensity, ReceiverGrid({10.0, 20.0}, {0.0, 1000.0, 4000.0}),
+            0.001, 1500.0));
+      },
+      "intensity conversion rejects a receiver-grid size mismatch");
+}
+
 void testValidation(Context& context) {
   const ReceiverGrid receivers({10.0}, {0.0, 1000.0});
 
@@ -162,6 +198,7 @@ int main() {
   Context context;
   testSmallMatrix(context);
   testO1ContributionAnchors(context);
+  testIntensityToPressureScaling(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

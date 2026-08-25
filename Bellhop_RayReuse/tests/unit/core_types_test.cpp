@@ -294,6 +294,22 @@ void testSimulationProductMetadata(Context& context) {
                     arrivals.beamFamily() == BeamFamily::GeometricHat &&
                     arrivals.sourceBeamPattern().isDirectional(),
                 "SimulationCase preserves product metadata and beam pattern");
+  const SimulationCase incoherent = makeMetadataCase(
+      SimulationRunMode::Incoherent, BeamFamily::CervenyGaussian);
+  const SimulationCase semiCoherent = makeMetadataCase(
+      SimulationRunMode::SemiCoherent, BeamFamily::CervenyGaussian);
+  context.check(
+      incoherent.runMode() == SimulationRunMode::Incoherent &&
+          semiCoherent.runMode() == SimulationRunMode::SemiCoherent &&
+          rayreuse::isTransmissionLossMode(incoherent.runMode()) &&
+          rayreuse::isTransmissionLossMode(semiCoherent.runMode()) &&
+          rayreuse::fieldAccumulationKind(incoherent.runMode()) ==
+              rayreuse::FieldAccumulationKind::Intensity &&
+          rayreuse::fieldAccumulationKind(semiCoherent.runMode()) ==
+              rayreuse::FieldAccumulationKind::Intensity &&
+          !rayreuse::usesLloydMirror(incoherent.runMode()) &&
+          rayreuse::usesLloydMirror(semiCoherent.runMode()),
+      "SimulationCase preserves I/S mode and accumulation metadata");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(static_cast<SimulationRunMode>(999),
@@ -491,6 +507,23 @@ void testFrequencyWorkspace(Context& context) {
         static_cast<void>(rayreuse::FrequencyWorkspace(0.0, receivers));
       },
       "workspace rejects non-positive frequency");
+
+  rayreuse::IntensityWorkspace intensity(50.0, receivers);
+  intensity.add(1U, 2U, 3.0);
+  intensity.add(1U, 2U, 4.0);
+  context.check(intensity.intensity().size() == 6U &&
+                    intensity.at(1U, 2U) == 7.0,
+                "intensity workspace accumulates depth-major non-negative "
+                "power");
+  intensity.clear();
+  context.check(intensity.at(1U, 2U) == 0.0,
+                "intensity workspace clear resets power");
+  context.expectThrows<ValidationError>(
+      [&intensity] { intensity.add(0U, 0U, -1.0); },
+      "intensity workspace rejects negative contributions");
+  context.expectThrows<std::out_of_range>(
+      [&intensity] { static_cast<void>(intensity.at(2U, 0U)); },
+      "intensity workspace rejects an invalid depth index");
 }
 
 }  // namespace

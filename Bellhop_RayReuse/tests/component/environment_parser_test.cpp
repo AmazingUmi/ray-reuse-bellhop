@@ -534,13 +534,37 @@ void testUnsupportedAndMalformedInput(Context& context) {
         static_cast<void>(parseText(contents, "n2_ssp.env"));
       },
       "unsupported SSP interpolation is explicitly rejected");
+  std::string incoherentContents = direct;
+  replaceFirst(incoherentContents, "'CC'", "'IC'");
+  const ParsedEnvironment incoherent =
+      parseText(incoherentContents, "incoherent.env");
+  std::string semiCoherentContents = direct;
+  replaceFirst(semiCoherentContents, "'CC'", "'SC'");
+  const ParsedEnvironment semiCoherent =
+      parseText(semiCoherentContents, "semi_coherent.env");
+  context.check(
+      incoherent.simulationCase.runMode() == SimulationRunMode::Incoherent &&
+          semiCoherent.simulationCase.runMode() ==
+              SimulationRunMode::SemiCoherent &&
+          incoherent.simulationCase.beamFamily() ==
+              BeamFamily::CervenyGaussian &&
+          semiCoherent.simulationCase.beamFamily() ==
+              BeamFamily::CervenyGaussian,
+      "IC/SC select Cartesian Cerveny intensity accumulation modes");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;
-        replaceFirst(contents, "'CC'", "'IC'");
-        static_cast<void>(parseText(contents, "incoherent.env"));
+        replaceFirst(contents, "'CC'", "'IG'");
+        static_cast<void>(parseText(contents, "incoherent_hat.env"));
       },
-      "unsupported run type is explicitly rejected");
+      "unimplemented incoherent TL beam families remain rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "'CC'", "'IR'");
+        static_cast<void>(parseText(contents, "ray_centered_cerveny.env"));
+      },
+      "ray-centered Cerveny remains rejected");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;

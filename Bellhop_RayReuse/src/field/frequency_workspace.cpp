@@ -71,4 +71,61 @@ std::size_t FrequencyWorkspace::flatIndex(std::size_t depthIndex,
   return depthIndex * rangeCount_ + rangeIndex;
 }
 
+IntensityWorkspace::IntensityWorkspace(double frequency,
+                                       const ReceiverGrid& receivers)
+    : frequency_(frequency),
+      depthCount_(receivers.depthCount()),
+      rangeCount_(receivers.rangeCount()),
+      intensity_(checkedProduct(depthCount_, rangeCount_)) {
+  if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
+    throw ValidationError(
+        "intensity-workspace frequency must be positive and finite");
+  }
+}
+
+double IntensityWorkspace::frequency() const noexcept { return frequency_; }
+
+std::size_t IntensityWorkspace::depthCount() const noexcept {
+  return depthCount_;
+}
+
+std::size_t IntensityWorkspace::rangeCount() const noexcept {
+  return rangeCount_;
+}
+
+std::span<const double> IntensityWorkspace::intensity() const noexcept {
+  return intensity_;
+}
+
+double IntensityWorkspace::at(std::size_t depthIndex,
+                              std::size_t rangeIndex) const {
+  return intensity_.at(flatIndex(depthIndex, rangeIndex));
+}
+
+void IntensityWorkspace::add(std::size_t depthIndex,
+                             std::size_t rangeIndex, double contribution) {
+  const std::size_t index = flatIndex(depthIndex, rangeIndex);
+  if (!std::isfinite(contribution) || contribution < 0.0) {
+    throw ValidationError(
+        "intensity contribution must be finite and non-negative");
+  }
+  const double updated = intensity_[index] + contribution;
+  if (!std::isfinite(updated)) {
+    throw ValidationError("accumulated intensity must remain finite");
+  }
+  intensity_[index] = updated;
+}
+
+void IntensityWorkspace::clear() noexcept {
+  std::fill(intensity_.begin(), intensity_.end(), 0.0);
+}
+
+std::size_t IntensityWorkspace::flatIndex(std::size_t depthIndex,
+                                          std::size_t rangeIndex) const {
+  if (depthIndex >= depthCount_ || rangeIndex >= rangeCount_) {
+    throw std::out_of_range("intensity-workspace index is out of range");
+  }
+  return depthIndex * rangeCount_ + rangeIndex;
+}
+
 }  // namespace rayreuse

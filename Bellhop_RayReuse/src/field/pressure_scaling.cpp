@@ -88,4 +88,38 @@ void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
   }
 }
 
+FrequencyWorkspace scaleCartesianPointIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed) {
+  if (workspace.depthCount() != receivers.depthCount() ||
+      workspace.rangeCount() != receivers.rangeCount()) {
+    throw ValidationError(
+        "intensity-scaling workspace and receiver-grid sizes must match");
+  }
+  for (const double intensity : workspace.intensity()) {
+    if (!std::isfinite(intensity) || intensity < 0.0) {
+      throw ValidationError(
+          "unscaled workspace intensity must be finite and non-negative");
+    }
+  }
+
+  // Keep the strong intensity input separate. Origin takes SQRT(intensity)
+  // first and then applies the ordinary Cartesian point-source pressure
+  // scale; it does not reinterpret a coherent pressure field as power.
+  FrequencyWorkspace pressure(workspace.frequency(), receivers);
+  for (std::size_t rangeIndex = 0U; rangeIndex < workspace.rangeCount();
+       ++rangeIndex) {
+    for (std::size_t depthIndex = 0U; depthIndex < workspace.depthCount();
+         ++depthIndex) {
+      const double root = std::sqrt(workspace.at(depthIndex, rangeIndex));
+      requireFinite(root, "square root of workspace intensity");
+      pressure.at(depthIndex, rangeIndex) = {root, 0.0};
+    }
+  }
+  scaleCoherentCartesianPointPressure(pressure, receivers,
+                                      launchAngleSpacingRadians,
+                                      sourceSoundSpeed);
+  return pressure;
+}
+
 }  // namespace rayreuse

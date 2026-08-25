@@ -42,11 +42,24 @@ struct Source {
 
 enum class SimulationRunMode {
   Coherent,
+  Incoherent,
+  SemiCoherent,
   RayTrace,
   AsciiArrivals,
   BinaryArrivals,
   Eigenray,
 };
+
+enum class FieldAccumulationKind {
+  None,
+  ComplexPressure,
+  Intensity,
+};
+
+[[nodiscard]] bool isTransmissionLossMode(SimulationRunMode mode);
+[[nodiscard]] FieldAccumulationKind fieldAccumulationKind(
+    SimulationRunMode mode);
+[[nodiscard]] bool usesLloydMirror(SimulationRunMode mode);
 
 enum class BeamFamily {
   CervenyGaussian,

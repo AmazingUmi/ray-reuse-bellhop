@@ -10,4 +10,8 @@ void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
                                          double launchAngleSpacingRadians,
                                          double sourceSoundSpeed);
 
+[[nodiscard]] FrequencyWorkspace scaleCartesianPointIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed);
+
 }  // namespace rayreuse

@@ -1,6 +1,6 @@
 # Bellhop RayReuse 功能支持矩阵
 
-> 封板日期：2026-08-20
+> 封板日期：2026-08-20；FP-1A 更新：2026-08-25
 > 适用范围：当前二维、point-source、rectilinear-receiver 的 RayReuse 实现。
 > 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
 
@@ -18,7 +18,7 @@
 
 | 能力 | 当前范围 |
 |---|---|
-| TL | Cartesian Cerveny coherent `CC`；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
+| TL | point/single-source-depth/rectilinear/C-linear SSP 下的 Cartesian Cerveny `CC/IC/SC + MS + pressure`；C 使用 complex-pressure workspace，I/S 使用逐频 intensity workspace；directional `.sbp` 在逐 ray Project 前作用于 source amplitude；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
 | R | 单频 `R/RG/RGO`、directional `.sbp`、显式 `Nalpha=1`、逐频 active/terminal prefix、Origin-compatible `.ray` |
 | Arrivals | ASCII `A`、binary `a`；Cartesian geometric hat/Gaussian `G/B`；frequency-local `ArrivalWorkspace` 与 AddArr 语义 |
 | Eigenray | `E` 的 Cartesian `G/B` traversal；receiver hit 对应的冻结 ray prefix 与 `.ray` |
@@ -59,7 +59,7 @@ header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频�
 - 3D / N×2D；
 - beam shift；
 - ray-centered geometric Gaussian；
-- 本矩阵未列出的 coherence/beam family 组合；
+- Cartesian/ray-centered GeoHat TL、Cartesian GeoGaussian TL、Simple Gaussian、ray-centered Cerveny，以及本矩阵未列出的 beam/coordinate family；
 - 新 BARR 算法、SIMD、新性能优化；
 - F2CPP/RayReuse shared-library 重构。
 

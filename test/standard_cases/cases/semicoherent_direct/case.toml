@@ -9,7 +9,7 @@ source_references = [
 ]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0
@@ -26,3 +26,6 @@ prt_forbidden_markers = ["Incoherent TL calculation", "Line source (Cartesian co
 
 [profiles.single]
 frequencies_hz = [50.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [50.0, 250.0]

@@ -36,6 +36,7 @@ using rayreuse::FrequencyProjector;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometryTracer;
 using rayreuse::IntegratorSettings;
+using rayreuse::IntensityWorkspace;
 using rayreuse::pickMinimumWidthEpsilon;
 using rayreuse::RayFrequencyPoint;
 using rayreuse::RayFrequencyState;
@@ -336,6 +337,35 @@ void testRigidReflectionOracle(Context& context) {
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "rigid reflection oracle receiver is evaluated");
   const CartesianCervenyDiagnostic& value = diagnostic.value();
+  IntensityWorkspace intensityWorkspace(250.0, receivers);
+  const auto intensityDiagnostic =
+      CartesianCervenyInfluence(environment, receivers)
+          .accumulateIntensity(
+              intensityWorkspace, path, frequencyState, epsilon.value,
+              CartesianCervenyDiagnosticRequest{.receiverRangeIndex = 110U,
+                                                .receiverDepthIndex = 48U});
+  context.check(
+      intensityDiagnostic.has_value() && intensityDiagnostic->evaluated,
+      "rigid reflection intensity receiver is evaluated");
+  const double coherentMagnitude = std::abs(value.finalContribution);
+  const double coherentImageSumIntensity =
+      coherentMagnitude * coherentMagnitude;
+  context.checkNear(
+      intensityDiagnostic->intensityIncrement, coherentImageSumIntensity,
+      2.0e-10,
+      "rigid images sum coherently before beam intensity is formed");
+  context.checkNear(
+      intensityWorkspace.at(48U, 110U), coherentImageSumIntensity, 2.0e-10,
+      "intensity workspace adds the per-beam ABS squared increment");
+  double separateImageIntensity = 0.0;
+  for (const auto& image : value.images) {
+    const double imageMagnitude =
+        std::abs(value.constantCorrected * image.contribution);
+    separateImageIntensity += imageMagnitude * imageMagnitude;
+  }
+  context.check(
+      std::abs(separateImageIntensity - coherentImageSumIntensity) > 1.0,
+      "fixture distinguishes coherent image sum from per-image power");
   context.check(value.evaluationCount == 1U && value.leftPointIndex == 429U &&
                     value.rightPointIndex == 430U,
                 "rigid reflection receiver is owned by the oracle segment");

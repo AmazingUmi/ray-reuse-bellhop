@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <numbers>
+#include <optional>
 #include <vector>
 
 #include "rayreuse/cache/ray_path_cache.hpp"
@@ -35,6 +37,45 @@ void requireSimulationFrequency(const SimulationCase& simulation,
 }
 
 }  // namespace
+
+double semiCoherentLloydMirrorFactor(
+    double frequency, double sourceSoundSpeed, double sourceDepth,
+    double launchAngleRadians) {
+  return semiCoherentProjectedSourceAmplitude(
+      1.0, frequency, sourceSoundSpeed, sourceDepth, launchAngleRadians);
+}
+
+double semiCoherentProjectedSourceAmplitude(
+    double baseAmplitude, double frequency, double sourceSoundSpeed,
+    double sourceDepth, double launchAngleRadians) {
+  if (!std::isfinite(baseAmplitude) || baseAmplitude < 0.0) {
+    throw ValidationError(
+        "semi-coherent base source amplitude must be finite and non-negative");
+  }
+  if (!std::isfinite(frequency) || frequency <= 0.0) {
+    throw ValidationError(
+        "semi-coherent Lloyd frequency must be positive and finite");
+  }
+  if (!std::isfinite(sourceSoundSpeed) || sourceSoundSpeed <= 0.0) {
+    throw ValidationError(
+        "semi-coherent Lloyd source sound speed must be positive and finite");
+  }
+  if (!std::isfinite(sourceDepth) || !std::isfinite(launchAngleRadians)) {
+    throw ValidationError(
+        "semi-coherent Lloyd source depth and launch angle must be finite");
+  }
+  const double angularFrequency = 2.0 * std::numbers::pi * frequency;
+  const double argument = (angularFrequency / sourceSoundSpeed) * sourceDepth *
+                          std::sin(launchAngleRadians);
+  const double amplitude =
+      baseAmplitude * static_cast<double>(std::sqrt(2.0F)) *
+      std::abs(std::sin(argument));
+  if (!std::isfinite(amplitude)) {
+    throw ValidationError(
+        "semi-coherent projected source amplitude is invalid");
+  }
+  return amplitude;
+}
 
 SingleFrequencyResult SingleFrequencySolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
@@ -80,6 +121,11 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const RayPathCache& rayCache, double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings) {
   requireSimulationFrequency(simulation, frequency);
+  if (!isTransmissionLossMode(simulation.runMode())) {
+    throw ValidationError(
+        "single-frequency field solver requires a transmission-loss run "
+        "mode");
+  }
   if (!rayCache.frozen()) {
     throw ValidationError("frequency projection requires a frozen ray cache");
   }
@@ -94,7 +140,19 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   const BeamEpsilon epsilon = pickMinimumWidthEpsilon(
       frequency, sourceSoundSpeed, loopRange, epsilonMultiplier);
 
-  FrequencyWorkspace workspace(frequency, simulation.receivers());
+  std::optional<FrequencyWorkspace> coherentWorkspace;
+  std::optional<IntensityWorkspace> intensityWorkspace;
+  switch (fieldAccumulationKind(simulation.runMode())) {
+    case FieldAccumulationKind::ComplexPressure:
+      coherentWorkspace.emplace(frequency, simulation.receivers());
+      break;
+    case FieldAccumulationKind::Intensity:
+      intensityWorkspace.emplace(frequency, simulation.receivers());
+      break;
+    case FieldAccumulationKind::None:
+      throw ValidationError(
+          "field solver cannot accumulate a non-field run mode");
+  }
   const FrequencyProjector projector(simulation.environment());
   const CartesianCervenyInfluence influence(
       simulation.environment(), simulation.receivers(), influenceSettings);
@@ -106,21 +164,53 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   for (const RayPath& path : rayCache.paths()) {
     totalRayPointCount += path.points.size();
     const Clock::time_point projectBegin = Clock::now();
+    const double patternAmplitude =
+        simulation.sourceBeamPattern().amplitudeForLaunchAngle(
+            path.launchAngle);
+    const double baseSourceAmplitude =
+        simulation.source().amplitude * patternAmplitude;
+    const double projectedSourceAmplitude =
+        usesLloydMirror(simulation.runMode())
+            ? semiCoherentProjectedSourceAmplitude(
+                  baseSourceAmplitude, frequency, sourceSoundSpeed,
+                  simulation.source().depth, path.launchAngle)
+            : baseSourceAmplitude;
+    if (!std::isfinite(projectedSourceAmplitude) ||
+        projectedSourceAmplitude < 0.0) {
+      throw ValidationError(
+          "source beam pattern produced an invalid projected amplitude");
+    }
     const RayFrequencyState frequencyState =
-        projector.project(path, frequency, simulation.source().amplitude);
+        projector.project(path, frequency, projectedSourceAmplitude);
     const Clock::time_point projectEnd = Clock::now();
-    static_cast<void>(influence.accumulatePrevalidated(
-        workspace, path, frequencyState, epsilon.value,
-        influenceSettings.collectStatistics ? &influenceStatistics : nullptr));
+    if (coherentWorkspace.has_value()) {
+      static_cast<void>(influence.accumulatePrevalidated(
+          *coherentWorkspace, path, frequencyState, epsilon.value,
+          influenceSettings.collectStatistics ? &influenceStatistics
+                                              : nullptr));
+    } else {
+      static_cast<void>(influence.accumulateIntensityPrevalidated(
+          *intensityWorkspace, path, frequencyState, epsilon.value,
+          influenceSettings.collectStatistics ? &influenceStatistics
+                                              : nullptr));
+    }
     const Clock::time_point influenceEnd = Clock::now();
     projectSeconds += elapsedSeconds(projectBegin, projectEnd);
     influenceSeconds += elapsedSeconds(projectEnd, influenceEnd);
   }
 
   const Clock::time_point scaleBegin = Clock::now();
-  scaleCoherentCartesianPointPressure(workspace, simulation.receivers(),
-                                      launchFan.launchAngleStep,
-                                      sourceSoundSpeed);
+  FrequencyWorkspace workspace =
+      coherentWorkspace.has_value()
+          ? std::move(*coherentWorkspace)
+          : scaleCartesianPointIntensityToPressure(
+                *intensityWorkspace, simulation.receivers(),
+                launchFan.launchAngleStep, sourceSoundSpeed);
+  if (coherentWorkspace.has_value()) {
+    scaleCoherentCartesianPointPressure(workspace, simulation.receivers(),
+                                        launchFan.launchAngleStep,
+                                        sourceSoundSpeed);
+  }
   const Clock::time_point scaleEnd = Clock::now();
 
   return SingleFrequencyResult{

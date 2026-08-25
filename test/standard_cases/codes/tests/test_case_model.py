@@ -107,8 +107,6 @@ class CaseModelTests(unittest.TestCase):
             "q_range_independent_control",
             "multi_source_depths",
             "irregular_receiver_pairs",
-            "source_beam_pattern_directional",
-            "source_beam_pattern_omni_control",
             "ray_trace_vacuum_rigid",
             "cartesian_component_pressure",
             "cartesian_component_vertical",
@@ -119,8 +117,6 @@ class CaseModelTests(unittest.TestCase):
             "cerveny_curvature_zero",
             "source_geometry_point_explicit",
             "source_geometry_line",
-            "incoherent_direct",
-            "semicoherent_direct",
             "ray_centered_component_pressure",
             "ray_centered_component_vertical",
             "ray_centered_component_horizontal",
@@ -136,6 +132,10 @@ class CaseModelTests(unittest.TestCase):
                     ("origin", "f2cpp"),
                 )
         for case_id in (
+            "source_beam_pattern_directional",
+            "source_beam_pattern_omni_control",
+            "incoherent_direct",
+            "semicoherent_direct",
             "grain_size_flat",
             "grain_size_equivalent_acoustic_control",
             "tabulated_reflection_bottom",

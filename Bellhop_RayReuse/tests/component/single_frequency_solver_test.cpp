@@ -1,5 +1,6 @@
 #include "rayreuse/solver/single_frequency_solver.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -28,13 +29,16 @@ using rayreuse::LaunchFan;
 using rayreuse::RawAttenuation;
 using rayreuse::ReceiverGrid;
 using rayreuse::SimulationCase;
+using rayreuse::SimulationRunMode;
 using rayreuse::SingleFrequencyResult;
 using rayreuse::SingleFrequencySolver;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
+using rayreuse::SourceBeamPattern;
 using rayreuse::ValidationError;
 using rayreuse::VolumeAttenuationModel;
+using rayreuse::semiCoherentLloydMirrorFactor;
 using rayreuse::test::Context;
 
 std::vector<double> linearGrid(double first, double last, std::size_t count) {
@@ -62,7 +66,11 @@ Environment makeEnvironment() {
 }
 
 SimulationCase makeSimulation(std::size_t maximumRayPoints,
-                              std::vector<double> frequencies = {50.0}) {
+                              std::vector<double> frequencies = {50.0},
+                              SimulationRunMode runMode =
+                                  SimulationRunMode::Coherent,
+                              SourceBeamPattern sourceBeamPattern =
+                                  SourceBeamPattern::omnidirectional()) {
   return SimulationCase(
       makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
       ReceiverGrid(linearGrid(400.0, 600.0, 5U),
@@ -74,7 +82,31 @@ SimulationCase makeSimulation(std::size_t maximumRayPoints,
       IntegratorSettings{.stepLength = 10.0,
                          .rangeLimit = 1100.0,
                          .depthLimit = 1100.0,
-                         .maximumRayPoints = maximumRayPoints});
+                         .maximumRayPoints = maximumRayPoints},
+      std::move(sourceBeamPattern), runMode);
+}
+
+void testSemiCoherentLloydMirrorFactor(Context& context) {
+  const double angle = 30.0 * std::numbers::pi / 180.0;
+  const double factor =
+      semiCoherentLloydMirrorFactor(50.0, 1500.0, 100.0, angle);
+  context.checkNear(
+      factor, 1.2247448504309721, 0.0,
+      "semi-coherent Lloyd factor preserves Origin mixed precision");
+  context.checkNear(factor * factor, 1.4999999486571842, 0.0,
+                    "semi-coherent Lloyd power anchor");
+  context.checkNear(
+      semiCoherentLloydMirrorFactor(50.0, 1500.0, 100.0, 0.0), 0.0, 0.0,
+      "zero launch angle is a Lloyd null");
+  context.checkNear(
+      semiCoherentLloydMirrorFactor(50.0, 1500.0, 100.0, -angle), factor, 0.0,
+      "Lloyd factor is symmetric in launch angle");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(
+            semiCoherentLloydMirrorFactor(0.0, 1500.0, 100.0, 0.1));
+      },
+      "non-positive Lloyd frequency is rejected");
 }
 
 void testEndToEndSolve(Context& context) {
@@ -129,6 +161,91 @@ void testEndToEndSolve(Context& context) {
                     result.timings.influenceSeconds >= 0.0 &&
                     result.timings.scaleSeconds >= 0.0,
                 "solver exposes non-negative phase timings");
+}
+
+void testCoherenceModesShareGeometryAndSeparateFieldLaws(Context& context) {
+  const SingleFrequencyResult coherent = SingleFrequencySolver::solve(
+      makeSimulation(1000U, {50.0}, SimulationRunMode::Coherent), 1.0,
+      500.0);
+  const SingleFrequencyResult incoherent = SingleFrequencySolver::solve(
+      makeSimulation(1000U, {50.0}, SimulationRunMode::Incoherent), 1.0,
+      500.0);
+  const SingleFrequencyResult semiCoherent = SingleFrequencySolver::solve(
+      makeSimulation(1000U, {50.0}, SimulationRunMode::SemiCoherent), 1.0,
+      500.0);
+  context.check(
+      coherent.rayCount == incoherent.rayCount &&
+          coherent.rayCount == semiCoherent.rayCount &&
+          coherent.totalRayPointCount == incoherent.totalRayPointCount &&
+          coherent.totalRayPointCount == semiCoherent.totalRayPointCount &&
+          coherent.rayCacheBytes == incoherent.rayCacheBytes &&
+          coherent.rayCacheBytes == semiCoherent.rayCacheBytes,
+      "C/I/S modes share the same frozen geometry");
+
+  bool coherentHasImaginaryPressure = false;
+  bool incoherentHasPressure = false;
+  bool semiCoherentHasPressure = false;
+  bool lloydChangesField = false;
+  for (std::size_t index = 0U;
+       index < coherent.workspace.pressure().size(); ++index) {
+    const std::complex<double> c = coherent.workspace.pressure()[index];
+    const std::complex<double> i = incoherent.workspace.pressure()[index];
+    const std::complex<double> s = semiCoherent.workspace.pressure()[index];
+    coherentHasImaginaryPressure =
+        coherentHasImaginaryPressure || c.imag() != 0.0;
+    context.check(i.imag() == 0.0 && s.imag() == 0.0,
+                  "I/S final pressure amplitudes are purely real");
+    context.check(i.real() <= 0.0 && s.real() <= 0.0,
+                  "point-source I/S scaling preserves the Origin sign");
+    incoherentHasPressure = incoherentHasPressure || i.real() != 0.0;
+    semiCoherentHasPressure = semiCoherentHasPressure || s.real() != 0.0;
+    lloydChangesField = lloydChangesField || i != s;
+  }
+  context.check(coherentHasImaginaryPressure,
+                "coherent mode retains complex interference");
+  context.check(incoherentHasPressure && semiCoherentHasPressure,
+                "I/S modes produce non-empty final pressure amplitudes");
+  context.check(lloydChangesField,
+                "semi-coherent Lloyd weighting distinguishes S from I");
+}
+
+void testSourceBeamPatternScalesAllCoherenceModes(Context& context) {
+  const double amplitude = std::pow(10.0, -6.0 / 20.0);
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    // I/S apply ABS, square, ray-wise accumulation, and SQRT before the final
+    // scale, so multiplying the finished field is only an algebraic oracle,
+    // not the same floating-point operation order. Reuse the existing
+    // Cartesian contribution tolerance for that check; the executable oracle
+    // cases separately require exact F2CPP equality.
+    const double tolerance = mode == SimulationRunMode::Coherent
+                                 ? 2.0e-15
+                                 : 2.0e-11;
+    const SingleFrequencyResult omni = SingleFrequencySolver::solve(
+        makeSimulation(1000U, {50.0}, mode,
+                       SourceBeamPattern::omnidirectional()),
+        1.0, 500.0);
+    const SingleFrequencyResult directional = SingleFrequencySolver::solve(
+        makeSimulation(1000U, {50.0}, mode,
+                       SourceBeamPattern::directional(
+                           {{.angleDegrees = -10.0, .powerDecibels = -6.0},
+                            {.angleDegrees = 10.0, .powerDecibels = -6.0}})),
+        1.0, 500.0);
+    context.check(
+        directional.rayCount == omni.rayCount &&
+            directional.totalRayPointCount == omni.totalRayPointCount &&
+            directional.rayCacheBytes == omni.rayCacheBytes,
+        "source beam pattern leaves C/I/S frozen geometry unchanged");
+    for (std::size_t index = 0U;
+         index < omni.workspace.pressure().size(); ++index) {
+      context.checkNear(
+          std::abs(directional.workspace.pressure()[index] -
+                   amplitude * omni.workspace.pressure()[index]),
+          0.0, tolerance,
+          "constant source beam pattern scales C/I/S source amplitude");
+    }
+  }
 }
 
 void testAbnormalRayTerminationFails(Context& context) {
@@ -296,7 +413,10 @@ void testSixCaseSanitizerSmoke(Context& context) {
 
 int main() {
   Context context;
+  testSemiCoherentLloydMirrorFactor(context);
   testEndToEndSolve(context);
+  testCoherenceModesShareGeometryAndSeparateFieldLaws(context);
+  testSourceBeamPatternScalesAllCoherenceModes(context);
   testAbnormalRayTerminationFails(context);
   testExplicitFrequencyEntryPoint(context);
   testSixCaseSanitizerSmoke(context);

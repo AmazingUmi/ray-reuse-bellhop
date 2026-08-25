@@ -72,7 +72,12 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
   const std::size_t cellCount = checkedMultiply(
       simulation.receivers().depthCount(), simulation.receivers().rangeCount(),
       "frequency workspace cell count overflows size_t");
-  return checkedMultiply(cellCount, sizeof(std::complex<double>),
+  const std::size_t bytesPerCell =
+      fieldAccumulationKind(simulation.runMode()) ==
+              FieldAccumulationKind::Intensity
+          ? sizeof(std::complex<double>) + sizeof(double)
+          : sizeof(std::complex<double>);
+  return checkedMultiply(cellCount, bytesPerCell,
                          "frequency workspace byte count overflows size_t");
 }
 

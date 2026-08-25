@@ -35,6 +35,8 @@ void validateStrictlyIncreasing(const std::vector<double>& values,
 void validateRunMode(SimulationRunMode mode) {
   switch (mode) {
     case SimulationRunMode::Coherent:
+    case SimulationRunMode::Incoherent:
+    case SimulationRunMode::SemiCoherent:
     case SimulationRunMode::RayTrace:
     case SimulationRunMode::AsciiArrivals:
     case SimulationRunMode::BinaryArrivals:
@@ -55,6 +57,52 @@ void validateBeamFamily(BeamFamily family) {
 }
 
 }  // namespace
+
+bool isTransmissionLossMode(SimulationRunMode mode) {
+  switch (mode) {
+    case SimulationRunMode::Coherent:
+    case SimulationRunMode::Incoherent:
+    case SimulationRunMode::SemiCoherent:
+      return true;
+    case SimulationRunMode::RayTrace:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
+      return false;
+  }
+  throw ValidationError("simulation run mode is invalid");
+}
+
+FieldAccumulationKind fieldAccumulationKind(SimulationRunMode mode) {
+  switch (mode) {
+    case SimulationRunMode::Coherent:
+      return FieldAccumulationKind::ComplexPressure;
+    case SimulationRunMode::Incoherent:
+    case SimulationRunMode::SemiCoherent:
+      return FieldAccumulationKind::Intensity;
+    case SimulationRunMode::RayTrace:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
+      return FieldAccumulationKind::None;
+  }
+  throw ValidationError("simulation run mode is invalid");
+}
+
+bool usesLloydMirror(SimulationRunMode mode) {
+  switch (mode) {
+    case SimulationRunMode::Coherent:
+    case SimulationRunMode::Incoherent:
+    case SimulationRunMode::RayTrace:
+    case SimulationRunMode::AsciiArrivals:
+    case SimulationRunMode::BinaryArrivals:
+    case SimulationRunMode::Eigenray:
+      return false;
+    case SimulationRunMode::SemiCoherent:
+      return true;
+  }
+  throw ValidationError("simulation run mode is invalid");
+}
 
 ReceiverGrid::ReceiverGrid(std::vector<double> depths,
                            std::vector<double> ranges)
