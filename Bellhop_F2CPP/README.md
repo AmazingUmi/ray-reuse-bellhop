@@ -50,34 +50,34 @@ build/release/bellhop_f2cpp
 
 ## 文档
 
-- [完整使用说明](./doc/guides/USAGE.md)：环境、编译、测试、CLI、输入输出和排错；
-- [当前进度](./doc/status/PROGRESS.md)：已完成范围、最新验证基线和当前施工入口；
-- [二维单频支持矩阵](./doc/reference/FEATURE_SUPPORT_MATRIX.md)：supported、intentional
+- [完整使用说明](./doc/guides/GUIDE_USAGE.md)：环境、编译、测试、CLI、输入输出和排错；
+- [当前进度](./doc/status/STATUS_PROGRESS.md)：已完成范围、最新验证基线和当前施工入口；
+- [二维单频支持矩阵](./doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)：supported、intentional
   divergence 和 deferred/out-of-scope 的封板定义；
 - [F2CPP 文档索引](./doc/README.md)；
-- [历史构建与验收计划](./doc/archive/BUILD_PLAN.md)；
-- [历史二维功能复刻计划](./doc/archive/FURTHER_REPLICATION_PLAN.md)；
-- [最终派生清单](./doc/archive/DERIVATION_MANIFEST.md)；
-- [数值接口与中间状态契约 v1](./doc/reference/INTERMEDIATE_STATE_CONTRACT.md)。
+- [历史构建与验收计划](./doc/archive/PLAN_BUILD_ACCEPTANCE.md)；
+- [历史二维功能复刻计划](./doc/archive/PLAN_FEATURE_REPLICATION.md)；
+- [最终派生清单](./doc/archive/REPORT_DERIVATION_MANIFEST_2026-07-29.md)；
+- [数值接口与中间状态契约 v1](./doc/reference/REFERENCE_INTERMEDIATE_STATE_CONTRACT.md)。
 
 全项目设计与数值契约：
 
-- [Bellhop 源码分析与宽带复用设计](../doc/architecture/Bellhop源码分析与宽带复用设计.md)；
-- [当前工作与待决事项](../doc/plans/CURRENT_WORK.md)；
-- [基础变量、单位与数值规范](../doc/reference/基础变量单位与数值规范.md)。
+- [Bellhop 源码分析与宽带复用设计](../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)；
+- [当前工作与待决事项](../doc/plans/PLAN_CURRENT_WORK.md)；
+- [基础变量、单位与数值规范](../doc/reference/REFERENCE_NUMERICAL_CONVENTIONS.md)。
 
 ## 当前状态
 
 I0～I8 与 I9-B1～B3 已全部验收并冻结，I9-B4 已完成二维单频复刻封板。
 封板快照为 AppleClang/GCC 14 CTest 37/37、当时的 Python 145/145 和
 F2CPP 单频标准案例 65/65；这些是 2026-08-16 的验收记录，不是动态的当前
-测试总数。详细数值证据见[封板状态](./doc/status/PROGRESS.md)，当前 Python
+测试总数。详细数值证据见[封板状态](./doc/status/STATUS_PROGRESS.md)，当前 Python
 回归从仓库根目录运行 `uv run pytest`。
 
 当前可正式声明的范围、兼容语义及明确延期项以
-[二维单频支持矩阵](./doc/reference/FEATURE_SUPPORT_MATRIX.md)为准。P1～P4-02 性能阶段
+[二维单频支持矩阵](./doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)为准。P1～P4-02 性能阶段
 已完成并暂停；单 source Cartesian Cerveny TL 可通过 `F2CPP_THREADS` 使用
 保持 SHD bitwise 一致的确定性 receiver-depth team，详见
-[性能阶段记录](./doc/reports/PERFORMANCE.md)与[完整使用说明](./doc/guides/USAGE.md)。除非
+[性能阶段记录](./doc/reports/REPORT_PERFORMANCE_2026-08-16.md)与[完整使用说明](./doc/guides/GUIDE_USAGE.md)。除非
 发现真实 correctness bug，不再重新打开已冻结 iteration，也不在 F2CPP 中
 顺带实现 3D、N×2D、beam shift 或宽带调度。

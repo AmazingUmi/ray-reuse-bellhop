@@ -17,17 +17,30 @@
 契约，`status/` 是当前状态，`reports/` 是带基线身份的验证证据，`decisions/`
 是已冻结决策，`archive/` 是完成或被替代的过程材料。
 
+## 命名规则
+
+手写文档统一使用 ASCII 大写蛇形命名：`CATEGORY_TOPIC.md`。类别前缀采用
+`ARCHITECTURE`、`GUIDE`、`REFERENCE`、`PLAN`、`STATUS`、`DECISION`、
+`REPORT`、`RECORD` 或 `TASK`；主题应能脱离目录表达具体内容。
+
+报告是时间点证据，文件名末尾必须带 ISO 日期：`REPORT_TOPIC_YYYY-MM-DD.md`；
+需要保留提交身份时使用 `REPORT_TOPIC_COMMIT_YYYY-MM-DD.md`。持续更新的指南、
+参考、计划和状态文档不加日期，避免每次更新都改变链接。
+
+`README.md` 保留目录入口惯例名。验证器生成的 JSON 等机器证据保留生成器定义的
+稳定文件名，不纳入手写文档命名规则；不要仅为文档命名而修改验证接口。
+
 ## 从这里开始
 
-- 当前工作与待决事项：[`plans/CURRENT_WORK.md`](./plans/CURRENT_WORK.md)
+- 当前工作与待决事项：[`plans/PLAN_CURRENT_WORK.md`](./plans/PLAN_CURRENT_WORK.md)
 - 总体设计：
-  [`architecture/Bellhop源码分析与宽带复用设计.md`](./architecture/Bellhop源码分析与宽带复用设计.md)
+  [`architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md`](./architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)
 - 射线理论：
-  [`reference/射线轨迹方程以及动态射线追踪方程推导.html`](./reference/射线轨迹方程以及动态射线追踪方程推导.html)
+  [`reference/REFERENCE_RAY_DYNAMIC_EQUATIONS.html`](./reference/REFERENCE_RAY_DYNAMIC_EQUATIONS.html)
 - 数值规范：
-  [`reference/基础变量单位与数值规范.md`](./reference/基础变量单位与数值规范.md)
+  [`reference/REFERENCE_NUMERICAL_CONVENTIONS.md`](./reference/REFERENCE_NUMERICAL_CONVENTIONS.md)
 - 历史项目实施清单：
-  [`archive/项目实施清单-2026-08-14.md`](./archive/项目实施清单-2026-08-14.md)
+  [`archive/PLAN_PROJECT_IMPLEMENTATION_2026-08-14.md`](./archive/PLAN_PROJECT_IMPLEMENTATION_2026-08-14.md)
 
 ## 组件文档
 

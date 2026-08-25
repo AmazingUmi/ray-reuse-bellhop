@@ -5,12 +5,12 @@
 
 ## Guides
 
-- [`guides/编译学习笔记.md`](./guides/编译学习笔记.md)：gfortran、GNU Make、
+- [`guides/GUIDE_BUILD_TOOLCHAIN.md`](./guides/GUIDE_BUILD_TOOLCHAIN.md)：gfortran、GNU Make、
   VS Code 和日常构建流程；
-- [`guides/ORACLE_DIAGNOSTICS.md`](./guides/ORACLE_DIAGNOSTICS.md)：SSP、单射线、
+- [`guides/GUIDE_ORACLE_DIAGNOSTICS.md`](./guides/GUIDE_ORACLE_DIAGNOSTICS.md)：SSP、单射线、
   反射与 Influence oracle 导出；
-- [`guides/STAGE_PROFILING.md`](./guides/STAGE_PROFILING.md)：默认关闭的 Trace、
+- [`guides/GUIDE_STAGE_PROFILING.md`](./guides/GUIDE_STAGE_PROFILING.md)：默认关闭的 Trace、
   Influence、Scale 和 Output 分阶段计时。
 
-当前项目工作见 [`../../doc/plans/CURRENT_WORK.md`](../../doc/plans/CURRENT_WORK.md)，
+当前项目工作见 [`../../doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md)，
 标准算例见 [`../../test/standard_cases/README.md`](../../test/standard_cases/README.md)。

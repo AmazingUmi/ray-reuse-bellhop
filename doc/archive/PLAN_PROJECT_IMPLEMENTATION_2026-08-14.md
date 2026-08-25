@@ -2,8 +2,8 @@
 
 > 归档日期：2026-08-14。本文件全部阶段均已关闭，只保留实施顺序和验收证据，
 > 不再作为待办来源。源码分析、理论映射、宽带数据流和 C++ 性能决策见
-> [Bellhop 源码分析与宽带 Ray-Reuse 设计](../architecture/Bellhop源码分析与宽带复用设计.md)。
-> F2CPP 当前状态见[封板状态](../../Bellhop_F2CPP/doc/status/PROGRESS.md)，
+> [Bellhop 源码分析与宽带 Ray-Reuse 设计](../architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)。
+> F2CPP 当前状态见[封板状态](../../Bellhop_F2CPP/doc/status/STATUS_PROGRESS.md)，
 > RayReuse 当前状态见[组件索引](../../Bellhop_RayReuse/doc/README.md)。
 
 ## 1. 完成定义
@@ -42,7 +42,7 @@ Fortran 单频 oracle
 - [x] 复核 HTML 的中心射线与动态射线推导。
 - [x] 修正 HTML 中竖直导数和动态方程符号问题。
 - [x] 固化规范方程及变量命名，区分声压 `pressure`、慢度 `slowness` 和动态变量 `p`。
-- [x] 已建立并冻结 [04 基础变量、单位与数值规范](../reference/基础变量单位与数值规范.md) 的 D-01～D-06 基础版本约定。
+- [x] 已建立并冻结 [04 基础变量、单位与数值规范](../reference/REFERENCE_NUMERICAL_CONVENTIONS.md) 的 D-01～D-06 基础版本约定。
 
 验收：理论与范围评审通过，后续不再以“兼容 Bellhop 全模式”为隐含目标。
 
@@ -100,7 +100,7 @@ Fortran 单频 oracle
 - [x] 实现衰减单位转换和逐频复声速。
 - [x] 为常速和分段 C-linear 声速场编写解析插值、导数、密度和节点双侧测试；二次声速场等待扩展 Hessian 测试。
 - [x] 以 `munk_cerveny_cc` 多层轨迹逐点验证 C++ SSP 样本与 Fortran 一致。
-- [x] 按 [F2CPP 二维功能进一步复刻计划](../../Bellhop_F2CPP/doc/archive/FURTHER_REPLICATION_PLAN.md)
+- [x] 按 [F2CPP 二维功能进一步复刻计划](../../Bellhop_F2CPP/doc/archive/PLAN_FEATURE_REPLICATION.md)
   完成 PCHIP、N²-linear、Spline 及 Q 型二维范围相关 SSP；各分支均经过
   解析/Fortran 中间状态与最终场门。
 

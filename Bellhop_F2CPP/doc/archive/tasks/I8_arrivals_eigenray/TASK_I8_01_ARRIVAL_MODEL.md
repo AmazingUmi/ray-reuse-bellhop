@@ -47,7 +47,7 @@ are binary64. One workspace belongs to one source and one frequency.
 - Any accepted I0–I7 behavior or test expectation.
 - `Bellhop_RayReuse`.
 - Other I8 stages or public interfaces not named above.
-- I8 task documents, `PROGRESS.md`, or `FURTHER_REPLICATION_PLAN.md`.
+- I8 task documents, `STATUS_PROGRESS.md`, or `PLAN_FEATURE_REPLICATION.md`.
 
 ### Requirements
 

@@ -478,7 +478,7 @@ status updates and commits after independently rerunning the evidence.
 - Numerical implementation, public architecture, case tolerances, Origin
   semantics, or accepted I0–I7 code.
 - `Bellhop_RayReuse`.
-- I8 task documents, `PROGRESS.md`, `FURTHER_REPLICATION_PLAN.md`, or `USAGE.md`;
+- I8 task documents, `STATUS_PROGRESS.md`, `PLAN_FEATURE_REPLICATION.md`, or `GUIDE_USAGE.md`;
   Codex owns final documentation updates after acceptance.
 - Add unrelated formatting/refactoring.
 

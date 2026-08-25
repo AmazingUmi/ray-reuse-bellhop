@@ -2,9 +2,9 @@
 
 > 规划日期：2026-07-27  
 > 适用范围：`Bellhop_F2CPP` 的 M1（组件级单频）与 M2（端到端单频）  
-> 依据：仓库根目录的 [01 设计文档](../../../doc/architecture/Bellhop源码分析与宽带复用设计.md)、
-> [02 实施待办](../../../doc/archive/项目实施清单-2026-08-14.md)、
-> [04 数值规范](../../../doc/reference/基础变量单位与数值规范.md)、原二维 Fortran
+> 依据：仓库根目录的 [01 设计文档](../../../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)、
+> [02 实施待办](../../../doc/archive/PLAN_PROJECT_IMPLEMENTATION_2026-08-14.md)、
+> [04 数值规范](../../../doc/reference/REFERENCE_NUMERICAL_CONVENTIONS.md)、原二维 Fortran
 > 构建链和共享标准算例
 
 ## 1. 目标与完成边界
@@ -113,9 +113,9 @@ Bellhop_F2CPP/
 │   └── support/
 ├── doc/
 │   ├── README.md
-│   ├── USAGE.md
-│   ├── BUILD_PLAN.md
-│   └── DERIVATION_MANIFEST.md
+│   ├── GUIDE_USAGE.md
+│   ├── PLAN_BUILD_ACCEPTANCE.md
+│   └── REPORT_DERIVATION_MANIFEST_2026-07-29.md
 └── README.md
 ```
 
@@ -212,7 +212,7 @@ M1 出口条件：
 - `RayPathCache` 离开追踪器后仍独立保有全部状态；
 - 冻结缓存的结构与事件逐字段校验已通过；投影器完成后在 M2 再执行投影
   前后哈希检查；
-- 组件误差使用仓库根 [数值规范](../../../doc/reference/基础变量单位与数值规范.md)
+- 组件误差使用仓库根 [数值规范](../../../doc/reference/REFERENCE_NUMERICAL_CONVENTIONS.md)
   第 9 节暂定容差，任何放宽必须记录最大误差位置。
 
 `constant_speed_direct` 的 alpha=150 已完成 C++/Fortran 全轨迹逐字段对照：
@@ -451,5 +451,5 @@ Munk 缓存估算为 `62,718,712 B`，实测峰值 RSS 为 `66,125,824 B`。
 R-15 已确认保留完整冻结缓存。16 频 trace-once 摊销门六例全部通过，
 M2-14/M2-15 已关闭。独立 `Bellhop_RayReuse/` 已按派生清单建立；F2CPP
 后续仍保持单频定位，并按
-[二维功能进一步复刻计划](./FURTHER_REPLICATION_PLAN.md)继续扩展二维
+[二维功能进一步复刻计划](./PLAN_FEATURE_REPLICATION.md)继续扩展二维
 Bellhop 功能，不实施 3D、N×2D 或多频调度。

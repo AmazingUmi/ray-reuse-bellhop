@@ -46,5 +46,5 @@ reflection event。以下内容不得写回 cache：
 Feature Sync 已满足关闭条件，当前没有获批的新实施阶段。最新 Influence
 审计建议先评估无损的 Influence Geometry Reuse（IG-0），再决定是否进入带
 误差预算的频率重建（FI-0）；两者仍是候选路线，不自动启动。统一入口见
-[`CURRENT_WORK.md`](../../../doc/plans/CURRENT_WORK.md)，技术证据见
-[`INFLUENCE_FREQUENCY_AUDIT.md`](../reports/INFLUENCE_FREQUENCY_AUDIT.md)。
+[`PLAN_CURRENT_WORK.md`](../../../doc/plans/PLAN_CURRENT_WORK.md)，技术证据见
+[`REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md`](../reports/REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md)。

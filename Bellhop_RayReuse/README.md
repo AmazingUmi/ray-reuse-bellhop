@@ -11,9 +11,9 @@
 
 当前支持范围、封板结果和完整用法见：
 
-- [`doc/reference/FEATURE_SUPPORT_MATRIX.md`](./doc/reference/FEATURE_SUPPORT_MATRIX.md)
-- [`doc/status/PROGRESS.md`](./doc/status/PROGRESS.md)
-- [`doc/guides/USAGE.md`](./doc/guides/USAGE.md)
+- [`doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](./doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+- [`doc/status/STATUS_PROGRESS.md`](./doc/status/STATUS_PROGRESS.md)
+- [`doc/guides/GUIDE_USAGE.md`](./doc/guides/GUIDE_USAGE.md)
 
 ## 工程边界
 
@@ -71,7 +71,7 @@ RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 该入口检查全量 C++ 格式，按 compilation database 运行 Clang static
 analyzer，构建并安装 `0.1.0`，验证 `--version`，生成 CPack TGZ 并输出
 SHA-256。当前包只用于内部验证；许可证和目标平台契约冻结前不得作为公开
-发行包。具体限制见 [`doc/guides/RELEASE.md`](./doc/guides/RELEASE.md)。
+发行包。具体限制见 [`doc/guides/GUIDE_RELEASE.md`](./doc/guides/GUIDE_RELEASE.md)。
 
 原版 Bellhop、F2CPP 和 RayReuse 的本地数值矩阵为：
 
@@ -93,7 +93,7 @@ Bellhop_RayReuse/scripts/single_thread_microbenchmark.sh
 
 它以相同 single ENV 报告原始阶段和统一 `Trace + Project + Influence` 核心
 中位数；阶段边界限制见
-[`doc/guides/SINGLE_THREAD_MICROBENCHMARK.md`](./doc/guides/SINGLE_THREAD_MICROBENCHMARK.md)。
+[`doc/guides/GUIDE_SINGLE_THREAD_MICROBENCHMARK.md`](./doc/guides/GUIDE_SINGLE_THREAD_MICROBENCHMARK.md)。
 
 Fortran/F2CPP/RayReuse 中间几何状态门为：
 
@@ -103,7 +103,7 @@ Bellhop_RayReuse/scripts/intermediate_state_gate.sh
 
 它覆盖 direct、vacuum/rigid、Munk 的位置、慢度、动态 `p/q`、实走时、
 modified-box 求积子集和反射顺序；F2CPP 契约见
-[`../Bellhop_F2CPP/doc/reference/INTERMEDIATE_STATE_CONTRACT.md`](../Bellhop_F2CPP/doc/reference/INTERMEDIATE_STATE_CONTRACT.md)。
+[`../Bellhop_F2CPP/doc/reference/REFERENCE_INTERMEDIATE_STATE_CONTRACT.md`](../Bellhop_F2CPP/doc/reference/REFERENCE_INTERMEDIATE_STATE_CONTRACT.md)。
 
 ## 运行入口
 
@@ -189,7 +189,7 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
 max RSS 和 SHD 哈希门。正式运行默认要求干净工作区，并将提交、可执行文件
 哈希、机器、工具链、workers、频率、预算及原始样本统一写入 JSON。完整协议
-和命令见 [`doc/guides/BENCHMARKING.md`](./doc/guides/BENCHMARKING.md)。
+和命令见 [`doc/guides/GUIDE_BENCHMARKING.md`](./doc/guides/GUIDE_BENCHMARKING.md)。
 
 首轮正式 Munk 16频五轮结果为 parallel-8 `4.424×`、parallel-10
 `4.643×`，达到项目 `≥4×` 门槛；但 Influence 占 nonreuse wall 的
@@ -211,9 +211,9 @@ SHD 一致；64频保留 8 workers。紧预算与逐频诊断进一步确认固�
 ## 文档
 
 - [`doc/README.md`](./doc/README.md)：RayReuse 内部文档总入口和目录规则；
-- [`doc/archive/BUILD_PLAN.md`](./doc/archive/BUILD_PLAN.md)：已完成阶段和验收命令的历史记录；
-- [`doc/guides/BENCHMARKING.md`](./doc/guides/BENCHMARKING.md)：可重复性能基准协议；
-- [`doc/reports/LOCAL_VALIDATION_RESULTS_C417095.md`](./doc/reports/LOCAL_VALIDATION_RESULTS_C417095.md)：当前本地验证基线；
-- [`../doc/architecture/Bellhop源码分析与宽带复用设计.md`](../doc/architecture/Bellhop源码分析与宽带复用设计.md)：总体设计；
-- [`../doc/plans/CURRENT_WORK.md`](../doc/plans/CURRENT_WORK.md)：当前工作与待决事项；
+- [`doc/archive/PLAN_BUILD_ACCEPTANCE.md`](./doc/archive/PLAN_BUILD_ACCEPTANCE.md)：已完成阶段和验收命令的历史记录；
+- [`doc/guides/GUIDE_BENCHMARKING.md`](./doc/guides/GUIDE_BENCHMARKING.md)：可重复性能基准协议；
+- [`doc/reports/REPORT_LOCAL_VALIDATION_C417095_2026-08-01.md`](./doc/reports/REPORT_LOCAL_VALIDATION_C417095_2026-08-01.md)：当前本地验证基线；
+- [`../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md`](../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)：总体设计；
+- [`../doc/plans/PLAN_CURRENT_WORK.md`](../doc/plans/PLAN_CURRENT_WORK.md)：当前工作与待决事项；
 - [`../test/standard_cases/README.md`](../test/standard_cases/README.md)：共享标准算例入口。

@@ -1,7 +1,7 @@
 # Bellhop RayReuse 派生记录
 
 本文保存 `Bellhop_RayReuse` 的来源身份、独立工程边界、输入契约决策和阶段
-验收状态。构建步骤及 A～E 阶段出口见 [`BUILD_PLAN.md`](./BUILD_PLAN.md)。
+验收状态。构建步骤及 A～E 阶段出口见 [`PLAN_BUILD_ACCEPTANCE.md`](./PLAN_BUILD_ACCEPTANCE.md)。
 
 ## 1. 来源身份
 
@@ -213,7 +213,7 @@ Release 使用 Apple Clang 21.0.0、CMake 4.0.2。16 频单次实测如下：
 提交 `c77ff60` 增加可重复 benchmark 后，在干净工作区对 direct/Munk 16频
 执行 1 次预热 + 5 次计量、逐轮轮换配置的正式矩阵。完整身份、样本范围、
 ENV/SHD 哈希和报告 SHA-256 见
-[`BENCHMARK_RESULTS_C77FF60.md`](./benchmarks/BENCHMARK_RESULTS_C77FF60.md)。
+[`REPORT_OFFICIAL_BENCHMARK_C77FF60_2026-07-30.md`](./benchmarks/REPORT_OFFICIAL_BENCHMARK_C77FF60_2026-07-30.md)。
 
 Munk 四配置每组 wall 中位数合计约 `693.7 s`，六组预计 `69.4 min`，实际
 约 67 分钟；这是 24 次独立 solver 的总成本，不是单次 16频运行卡住。
@@ -254,14 +254,14 @@ nonreuse Trace 只占 wall 的 `2.13%`，Influence 占 `97.42%`；串行 reuse
 降至 `18.5109 s`（`-6.85%`），所有 SHD 继续逐字节一致。诊断运行确认
 10,000 次射线累积的完整射线点/工作区重复扫描计数均为 0，剩余约
 9.996 亿次 depth 和 29.987 亿次 image 评估集中在热循环。完整记录见
-[`BENCHMARK_RESULTS_96F23F8.md`](./benchmarks/BENCHMARK_RESULTS_96F23F8.md)。
+[`REPORT_F1_BASELINE_96F23F8_2026-07-30.md`](./benchmarks/REPORT_F1_BASELINE_96F23F8_2026-07-30.md)。
 
 提交 `4af3f7f` 随后以一次 depth-major 线性索引取得压力单元引用，替代同一
 贡献的两次 `workspace.at()`。Munk 2频 reuse 相对 `96f23f8` 再下降
 `10.17%`，F1 累计下降 `16.25%`。16频 reuse、parallel-8、parallel-10
 相对 `c77ff60` 分别下降 `18.04%`、`13.95%`、`10.68%`；三模式 SHD 与
 旧基线逐字节一致。完整记录见
-[`BENCHMARK_RESULTS_4AF3F7F.md`](./benchmarks/BENCHMARK_RESULTS_4AF3F7F.md)。
+[`REPORT_F1_PRESSURE_ACCESS_4AF3F7F_2026-07-30.md`](./benchmarks/REPORT_F1_PRESSURE_ACCESS_4AF3F7F_2026-07-30.md)。
 
 至此 F1 关闭，后续进入 F2 的 range-major 临时布局、receiver depth tile、
 SoA 和向量化独立实验。
@@ -279,7 +279,7 @@ range 累加为 `17.7544 s`，慢 `5.31%`。两者 SHD 均不变，但因无收�
 图像及射线贡献顺序。相对 F1，Munk 2频 reuse wall 下降 `26.17%`；16频
 reuse、parallel-8、parallel-10 分别下降 `29.62%`、`23.71%`、`27.05%`。
 三配置 SHD 逐字节一致，完整质量门通过。记录见
-[`BENCHMARK_RESULTS_EEDC790.md`](./benchmarks/BENCHMARK_RESULTS_EEDC790.md)。
+[`REPORT_F2_IMAGE_SPECIALIZATION_EEDC790_2026-07-31.md`](./benchmarks/REPORT_F2_IMAGE_SPECIALIZATION_EEDC790_2026-07-31.md)。
 
 F2 下一步先取得编译器向量化报告并审计已按字段分离的
 `PrecomputedRayValues`，再选择不改变复压力累加顺序的独立候选。
@@ -291,21 +291,21 @@ vector；depth 循环主要受诊断控制流、复指数/有限性检查调用�
 调用无重复参数校验。相对 `eedc790`，2频下降 `16.69%`；16频
 reuse/p8/p10 下降 `16.15%/14.98%/23.43%`，SHD 不变，完整质量门通过。
 记录见
-[`BENCHMARK_RESULTS_FE6B33F.md`](./benchmarks/BENCHMARK_RESULTS_FE6B33F.md)。
+[`REPORT_F2_HERMITE_FAST_PATH_FE6B33F_2026-07-31.md`](./benchmarks/REPORT_F2_HERMITE_FAST_PATH_FE6B33F_2026-07-31.md)。
 
 提交 `f1511b9` 进一步明确有限性检查所有权：Release solver 热路径不再
 逐图像/逐贡献检查，而由每频缩放入口扫描完整未缩放场；公共 API 返回前
 另行扫描，Debug 和详细诊断保留即时检查。有限输入触发计算溢出的回归确认
 公共 API 仍拒绝非有限结果。相对 `fe6b33f`，2频下降 `12.56%`；16频
 reuse/p8/p10 下降 `15.99%/17.93%/9.15%`，SHD 不变。记录见
-[`BENCHMARK_RESULTS_F1511B9.md`](./benchmarks/BENCHMARK_RESULTS_F1511B9.md)。
+[`REPORT_F2_FINITE_CHECKS_F1511B9_2026-07-31.md`](./benchmarks/REPORT_F2_FINITE_CHECKS_F1511B9_2026-07-31.md)。
 
 提交 `7ce9c7d` 将环境边界深度和当前 segment 右端幅度/相位显式提升出
 depth 热循环。AppleClang 21 在当前对象、span 与压力写入组合下未完成等价
 提升；局部标量使 2频相对 `f1511b9` 下降 `18.99%`，16频
 reuse/p8/p10 下降 `23.10%/14.05%/15.31%`。SHD 不变，完整质量门通过。
 记录见
-[`BENCHMARK_RESULTS_7CE9C7D.md`](./benchmarks/BENCHMARK_RESULTS_7CE9C7D.md)。
+[`REPORT_F2_LOOP_INVARIANTS_7CE9C7D_2026-07-31.md`](./benchmarks/REPORT_F2_LOOP_INVARIANTS_7CE9C7D_2026-07-31.md)。
 
 后续 segment 端点引用与 position/slowness/sound speed/q/tau/gamma 差值
 缓存使 2频 wall 回退 `3.69%`、Influence 回退 `3.71%`。这组额外局部对象
@@ -383,7 +383,7 @@ TL 差 `3.13e-4 dB`，紧凑点最大相位差 `1.11e-6 rad`。六例两频 smok
 NAlpha 并按当前单频规划，因此 broadband 只在 `fmax` 门控；12 个低频失败
 比较作为诊断保留，不影响原版→RayReuse 主门。Fortran 分阶段计时属于 G4。
 干净提交 `9f254bd` 的最终身份、二进制哈希和误差汇总见
-[`MODEL_MATRIX_RESULTS_9F254BD.md`](./MODEL_MATRIX_RESULTS_9F254BD.md)。
+[`REPORT_MODEL_MATRIX_9F254BD_2026-08-01.md`](./REPORT_MODEL_MATRIX_9F254BD_2026-08-01.md)。
 
 G4 为原版二维 Fortran 增加 `BELLHOP_PROFILE_STAGES=1` 显式开关，默认 PRT
 和求解路径保持原状。direct single 的 Trace/Influence/Scale/Output 为
@@ -391,7 +391,7 @@ G4 为原版二维 Fortran 增加 `BELLHOP_PROFILE_STAGES=1` 显式开关，默�
 `0.01580/2.63189/0.000030/0.000721 s`，总 CPU `2.65 s`。Munk Influence
 占已分类阶段约 99%。direct 开启/关闭及 Munk profiled SHD 与冻结 oracle
 逐字节一致；使用方法见
-[`../../../Bellhop_origin/doc/guides/STAGE_PROFILING.md`](../../../Bellhop_origin/doc/guides/STAGE_PROFILING.md)。
+[`../../../Bellhop_origin/doc/guides/GUIDE_STAGE_PROFILING.md`](../../../Bellhop_origin/doc/guides/GUIDE_STAGE_PROFILING.md)。
 
 G5 在干净提交 `06e390fc9338e2b94c29b9492027c3a59391dd5d` 关闭本地出口。
 完整质量门通过 Debug/Release/隔离构建各 25/25 CTest、标准 Python 62/62、
@@ -404,7 +404,7 @@ G4 插桩后的原版可执行文件 SHA-256 为
 默认输出及 profiled SHD 与冻结 oracle 逐字节一致，G0/G1 快照继续保留其
 生成时的 `f35bbdd` 来源和 `f77b7bb...` 可执行文件身份，不重新生成。最终
 三模型矩阵仍为 12/12 通过、门控失败 0，误差上限与 `9f254bd` 轮一致；详细
-身份见 [`MODEL_MATRIX_RESULTS_06E390F.md`](../reports/MODEL_MATRIX_RESULTS_06E390F.md)。
+身份见 [`REPORT_MODEL_MATRIX_06E390F_2026-08-01.md`](../reports/REPORT_MODEL_MATRIX_06E390F_2026-08-01.md)。
 
 本机工具链为 Apple clang/clang-format 21.0.0、GNU Fortran 14.2.0、CMake
 4.0.2、Conda `py` Python 3.12.9 和 NumPy 2.2.6。`/usr/bin/time -l` 对 Munk
@@ -438,8 +438,8 @@ RayReuse 独立实现 geometry probe schema v1。干净矩阵中 direct 512 点�
 vacuum/rigid 1,975 点相对 Fortran 公共字段零误差；Munk 366 点的最坏误差
 为 point 336 的 `h=3.5243e-12`，scaled error `6.9620e-5`。三例 F2CPP 与
 RayReuse CSV 均逐字节一致。完整结果见
-[`LOCAL_VALIDATION_RESULTS_C417095.md`](../reports/LOCAL_VALIDATION_RESULTS_C417095.md)。
+[`REPORT_LOCAL_VALIDATION_C417095_2026-08-01.md`](../reports/REPORT_LOCAL_VALIDATION_C417095_2026-08-01.md)。
 
 H4 只计划本地跨编译器验证。当前先执行 AppleClang 21↔GCC 14 C++ 矩阵；
 第二 Fortran 编译器尚不可用，不能宣称已完成 Fortran 跨编译器支持。具体
-命令、容差和出口见 [`CROSS_COMPILER_PLAN.md`](./plans/CROSS_COMPILER_PLAN.md)。
+命令、容差和出口见 [`PLAN_CROSS_COMPILER_H4.md`](./plans/PLAN_CROSS_COMPILER_H4.md)。

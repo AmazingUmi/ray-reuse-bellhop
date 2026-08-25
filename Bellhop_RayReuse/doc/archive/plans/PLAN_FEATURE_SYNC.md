@@ -30,5 +30,5 @@ RR-B1 Environment / Boundary Sync
 - standard cases 继续是唯一共享测试资产；
 - 未发现 correctness blocker。
 
-实际数值和测试计数见 [`../PROGRESS.md`](../../status/PROGRESS.md)，支持与延期边界见
-[`../FEATURE_SUPPORT_MATRIX.md`](../../reference/FEATURE_SUPPORT_MATRIX.md)。
+实际数值和测试计数见 [`../STATUS_PROGRESS.md`](../../status/STATUS_PROGRESS.md)，支持与延期边界见
+[`../REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)。

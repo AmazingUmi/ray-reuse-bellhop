@@ -2,7 +2,7 @@
 
 本目录保存完成阶段的性能与数值验证证据，不承担当前待办职责。
 
-- [`PERFORMANCE.md`](./PERFORMANCE.md)：P1～P4-02 的 profile、优化、并行决策
+- [`REPORT_PERFORMANCE_2026-08-16.md`](./REPORT_PERFORMANCE_2026-08-16.md)：P1～P4-02 的 profile、优化、并行决策
   与停止条件。
 - [`validation/`](./validation/)：验证器生成的冻结 JSON 报告。
 

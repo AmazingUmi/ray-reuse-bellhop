@@ -2,7 +2,7 @@
 
 > 初始规划日期：2026-08-07
 > 最近更新：2026-08-14
-> 状态依据：本文件、`PROGRESS.md`、`tasks/`、测试和验证报告，以 Git 内容为准
+> 状态依据：本文件、`STATUS_PROGRESS.md`、`tasks/`、测试和验证报告，以 Git 内容为准
 > 当前基线：F2CPP 已完成并冻结 I0～I8 与 I9-B1～B4；二维单频复刻已封板
 > 默认前提：不实现 3D，也不把 N×2D 作为二维功能纳入
 
@@ -311,7 +311,7 @@ I4-04 于 2026-08-11 完成 bottom `G` grain-size 纵切：不可变环境保存
 体积衰减。组件门逐位锚定 default-REAL 常量、全部分段边界与 0/30/60 度
 反射系数，双频投影不写回轨迹。原 2D Fortran 漏写粒径派生参数，会产生
 NaN；oracle 仅补入与同仓库 3D 路径一致的三项初始化，并在
-`Bellhop_origin/doc/guides/ORACLE_DIAGNOSTICS.md` 明示。grain-size 场与等价普通流体
+`Bellhop_origin/doc/guides/GUIDE_ORACLE_DIAGNOSTICS.md` 明示。grain-size 场与等价普通流体
 control 共六个 Origin/F2CPP 场切片全部通过，最大复压力绝对误差
 `1.68e-8`、最大相对误差 `2.56e-6`、最大 TL 差 `2.29e-5 dB`；两端 `G`
 与 control 的压力均逐位一致。冻结报告见
@@ -562,7 +562,7 @@ I0～I8 保持冻结，不重新拆分或修改其数值语义。剩余工作按
    - B2 与 B3 并行实现，batch 完成后统一 review 和集成。
 4. **B4 — Replication closure（ACCEPTED）**
    - 发布 `supported/intentional-divergence/deferred` feature matrix；
-   - 更新 `PROGRESS.md`、`USAGE.md` 和文档入口；M2 历史派生清单保持只读，
+   - 更新 `STATUS_PROGRESS.md`、`GUIDE_USAGE.md` 和文档入口；M2 历史派生清单保持只读，
      由 closure commit/tag 形成新的复刻基线；
    - 检查 F2CPP 与 RayReuse 的构建独立性，并执行最终 AppleClang/GCC、
      `f2cpp-full` 和 release/checkpoint 验收。
@@ -589,7 +589,7 @@ material，并按 `1e20 m` 深度逐频换算；新案例最大复压力绝对/�
 CTest 37/37、F2CPP 单频 65/65。
 
 B4 于 2026-08-14 完成。closure 发布
-[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md)，明确区分 supported、
+[`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)，明确区分 supported、
 intentional divergence 与 deferred/out-of-scope；同步更新首页、使用说明、
 进度和项目级入口。生产源码扫描无 TODO/FIXME，未支持组合均在 parser、model
 或 solver 边界显式拒绝，未发现 silent fallback。AppleClang Debug

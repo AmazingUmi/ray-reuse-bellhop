@@ -2,11 +2,11 @@
 
 > 文档状态：架构基线，2026-08-25 完成现状复核。本文保留首版范围、里程碑和
 > go/no-go 决策的形成过程；它们不是当前待办或功能支持表。当前能力以
-> [`F2CPP 支持矩阵`](../../Bellhop_F2CPP/doc/reference/FEATURE_SUPPORT_MATRIX.md)
-> 和 [`RayReuse 支持矩阵`](../../Bellhop_RayReuse/doc/reference/FEATURE_SUPPORT_MATRIX.md)
-> 为准，当前工作只从 [`CURRENT_WORK.md`](../plans/CURRENT_WORK.md) 进入。
+> [`F2CPP 支持矩阵`](../../Bellhop_F2CPP/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+> 和 [`RayReuse 支持矩阵`](../../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+> 为准，当前工作只从 [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md) 进入。
 
-> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [基础变量、单位与数值规范](../reference/基础变量单位与数值规范.md) 为准；本文件侧重算法和架构。
+> 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [基础变量、单位与数值规范](../reference/REFERENCE_NUMERICAL_CONVENTIONS.md) 为准；本文件侧重算法和架构。
 
 ## 1. 文档目标与分析范围
 
@@ -569,7 +569,7 @@ ReadEnvironment
 
 ### 16.1 理论来源和实现优先级
 
-本项目以 [射线轨迹方程以及动态射线追踪方程推导](../reference/射线轨迹方程以及动态射线追踪方程推导.html) 作为二维射线理论参考。该文档已经修订竖直慢度导数和动态方程符号问题。
+本项目以 [射线轨迹方程以及动态射线追踪方程推导](../reference/REFERENCE_RAY_DYNAMIC_EQUATIONS.html) 作为二维射线理论参考。该文档已经修订竖直慢度导数和动态方程符号问题。
 
 实现和验收采用以下优先级：
 
@@ -1230,7 +1230,7 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
 - 验证链依次使用可重现的原始单频 Bellhop、C++ 单频复刻和宽带非复用基线；
   H4 本地跨编译器验证和后续 Feature Sync 均已完成；
 - 当前没有获批的新数值实施阶段；研究候选和外部发布决策见
-  [`CURRENT_WORK.md`](../plans/CURRENT_WORK.md)。
+  [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md)。
 
 以下是已经落实的架构基线和首版范围决策；封板后的新增能力仍以组件支持矩阵
 为准：

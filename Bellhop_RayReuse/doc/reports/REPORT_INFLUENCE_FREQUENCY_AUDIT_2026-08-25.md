@@ -73,7 +73,7 @@ RayReuse parser 的实际限制见
 [`environment_parser.cpp`](../../src/io/environment_parser.cpp)：`CC` 才能进入 TL；
 `AG/aG/AB/aB/EG/EB` 进入 arrival/eigenray；line source、irregular receiver 和
 ray-centered `g` 明确拒绝。冻结支持表也将 I/S 和未列出的 beam/coherence 组合
-列为 deferred（[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md)）。
+列为 deferred（[`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)）。
 
 ### 2.2 生命周期与所有权
 
@@ -785,17 +785,17 @@ projection 不在 receiver loop 内。
 
 1. 16 频 Munk、10,000 rays、约 3,367,964 cached points、201×501 receiver cells：
    nonreuse Influence `279.429 s`，reuse `279.211 s`；Project 约 `0.5 s`。来源：
-   [`BENCHMARK_RESULTS_C77FF60.md`](../archive/benchmarks/BENCHMARK_RESULTS_C77FF60.md)。
+   [`REPORT_OFFICIAL_BENCHMARK_C77FF60_2026-07-30.md`](../archive/benchmarks/REPORT_OFFICIAL_BENCHMARK_C77FF60_2026-07-30.md)。
 2. 2 频诊断：`999,564,960` depth、`2,998,694,880` image evaluations，
    `406,782,232` nonzero contributions；precompute/hot-loop
    `0.1427/18.4380 s`。来源：
-   [`BENCHMARK_RESULTS_96F23F8.md`](../archive/benchmarks/BENCHMARK_RESULTS_96F23F8.md)。
+   [`REPORT_F1_BASELINE_96F23F8_2026-07-30.md`](../archive/benchmarks/REPORT_F1_BASELINE_96F23F8_2026-07-30.md)。
 3. 后续安全局部性优化后，16 频 serial reuse Influence 仍为 `86.563 s`；已试的
    endpoint state cache、receiver-depth scalar cache 和 depth tile 分别回退，说明
    小型局部缓存不是 geometry reuse 的充分实现。来源：
-   [`BENCHMARK_RESULTS_7CE9C7D.md`](../archive/benchmarks/BENCHMARK_RESULTS_7CE9C7D.md)。
+   [`REPORT_F2_LOOP_INVARIANTS_7CE9C7D_2026-07-31.md`](../archive/benchmarks/REPORT_F2_LOOP_INVARIANTS_7CE9C7D_2026-07-31.md)。
 4. 64 频 stress serial reuse Influence `621.719 s`，占 wall `99.19%`。来源：
-   [`BENCHMARK_RESULTS_FDAAF56.md`](../archive/benchmarks/BENCHMARK_RESULTS_FDAAF56.md)。
+   [`REPORT_F2_64_FREQUENCY_MATRIX_FDAAF56_2026-07-31.md`](../archive/benchmarks/REPORT_F2_64_FREQUENCY_MATRIX_FDAAF56_2026-07-31.md)。
 
 ### 12.3 Cost ranking
 

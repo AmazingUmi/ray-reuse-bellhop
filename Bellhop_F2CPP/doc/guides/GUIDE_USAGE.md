@@ -169,7 +169,7 @@ uv run python test/standard_cases/codes/standard_cases.py test \
 该命令运行当前 65 个单频案例，覆盖 SHD、RAY、ASCII/binary ARR 与 eigenray
 产品，以及 I0～I8 和 B1～B3 的代表性输入。案例定义与 profile 的唯一清单
 位于 `test/standard_cases/cases/` 和 `coverage.toml`；逐 iteration 的数值误差、
-Origin oracle 与冻结哈希见 [`PROGRESS.md`](../status/PROGRESS.md) 和
+Origin oracle 与冻结哈希见 [`STATUS_PROGRESS.md`](../status/STATUS_PROGRESS.md) 和
 [`validation/`](../reports/validation/)，不在本使用文档重复维护案例枚举。
 结果写入：
 
@@ -331,7 +331,7 @@ layer，并把其他层保持串行，以避免 nested parallelism 和 oversubsc
 ## 6. 支持的输入范围
 
 复刻封板的 supported / intentional divergence / deferred 分类以
-[`FEATURE_SUPPORT_MATRIX.md`](../reference/FEATURE_SUPPORT_MATRIX.md) 为准。下表给出
+[`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md) 为准。下表给出
 实际可输入范围：
 
 | 项目 | 支持范围 |
@@ -767,7 +767,7 @@ preset 执行同样操作。
 ## 9. 相关文档
 
 - [F2CPP 文档索引](../README.md)
-- [构建与实施计划](../archive/BUILD_PLAN.md)
-- [最终派生清单](../archive/DERIVATION_MANIFEST.md)
+- [构建与实施计划](../archive/PLAN_BUILD_ACCEPTANCE.md)
+- [最终派生清单](../archive/REPORT_DERIVATION_MANIFEST_2026-07-29.md)
 - [共享标准算例说明](../../../test/standard_cases/README.md)
-- [全项目基础变量、单位与数值规范](../../../doc/reference/基础变量单位与数值规范.md)
+- [全项目基础变量、单位与数值规范](../../../doc/reference/REFERENCE_NUMERICAL_CONVENTIONS.md)

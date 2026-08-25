@@ -2,7 +2,7 @@
 
 > 封板日期：2026-08-14
 > 适用范围：`Bellhop_F2CPP` 当前二维、单频研究实现。本文是复刻封板后的
-> 唯一功能分类表；具体输入格式和命令以 [`USAGE.md`](../guides/USAGE.md) 为准。
+> 唯一功能分类表；具体输入格式和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
 
 ## 状态定义
 
@@ -85,4 +85,4 @@ Origin 2-D 的可观察 legacy 语义：前者三场相同，后者使用冻结�
    硬件/workload 选择 8/16 或更高线程数。当前 F2CPP 性能阶段暂停，数据布局
    仍没有重构依据。
    详细结果见
-   [`PERFORMANCE.md`](../reports/PERFORMANCE.md)。
+   [`REPORT_PERFORMANCE_2026-08-16.md`](../reports/REPORT_PERFORMANCE_2026-08-16.md)。

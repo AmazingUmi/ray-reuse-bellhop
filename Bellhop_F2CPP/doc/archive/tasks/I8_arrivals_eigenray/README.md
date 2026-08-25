@@ -301,8 +301,8 @@ tree rather than relying on the completion report. Failed work is not committed;
 the preferred response is a narrowly scoped fix task.
 
 Task status and `Acceptance Record` are edited only by Codex during review.
-OpenCode must not edit this directory, `PROGRESS.md`, or
-`FURTHER_REPLICATION_PLAN.md` unless a later task explicitly says otherwise.
+OpenCode must not edit this directory, `STATUS_PROGRESS.md`, or
+`PLAN_FEATURE_REPLICATION.md` unless a later task explicitly says otherwise.
 
 ## Git checkpoints
 

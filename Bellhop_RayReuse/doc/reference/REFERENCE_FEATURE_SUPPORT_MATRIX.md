@@ -2,7 +2,7 @@
 
 > 封板日期：2026-08-20
 > 适用范围：当前二维、point-source、rectilinear-receiver 的 RayReuse 实现。
-> 输入和命令以 [`USAGE.md`](../guides/USAGE.md) 为准。
+> 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
 
 ## 状态定义
 

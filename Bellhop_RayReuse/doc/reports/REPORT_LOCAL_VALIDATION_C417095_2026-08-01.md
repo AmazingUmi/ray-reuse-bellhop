@@ -45,7 +45,7 @@ direct 仍由小规模固定开销主导；RayReuse 在 Munk 公式核心中约�
 F2CPP 新增 compile-time numerical contract test，冻结公开字段类型、单位与
 关键返回类型；geometry probe schema v1 同时由 F2CPP 和 RayReuse 独立实现。
 契约见
-[`../../../Bellhop_F2CPP/doc/reference/INTERMEDIATE_STATE_CONTRACT.md`](../../../Bellhop_F2CPP/doc/reference/INTERMEDIATE_STATE_CONTRACT.md)。
+[`../../../Bellhop_F2CPP/doc/reference/REFERENCE_INTERMEDIATE_STATE_CONTRACT.md`](../../../Bellhop_F2CPP/doc/reference/REFERENCE_INTERMEDIATE_STATE_CONTRACT.md)。
 
 执行：
 

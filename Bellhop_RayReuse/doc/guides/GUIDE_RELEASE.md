@@ -50,7 +50,7 @@ RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 - SHA-256：`9b5e512ffe73c1e12f5da642e291dbbf2886d8b60ef288f747df705ae3b4ea08`
 
 本轮同时通过完整质量门和三模型数值矩阵；其工具链、模型二进制身份、误差
-上限和 RSS 见 [`MODEL_MATRIX_RESULTS_06E390F.md`](../reports/MODEL_MATRIX_RESULTS_06E390F.md)。
+上限和 RSS 见 [`REPORT_MODEL_MATRIX_06E390F_2026-08-01.md`](../reports/REPORT_MODEL_MATRIX_06E390F_2026-08-01.md)。
 前一哈希保留为 `b04ccbc` 的历史内部构建记录，不再代表当前工作树制品。
 
 ## 对外发布前置条件
