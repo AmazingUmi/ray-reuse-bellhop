@@ -125,15 +125,15 @@ void validateAccumulateInput(
     const FrequencyWorkspace* pressureWorkspace,
     const IntensityWorkspace* intensityWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState, std::complex<double> epsilon,
-    const ReceiverGrid& receivers,
+    const ReceiverGrid& receivers, BeamWidthMode widthMode,
     const std::optional<CartesianCervenyDiagnosticRequest>& request) {
   if ((pressureWorkspace == nullptr) == (intensityWorkspace == nullptr)) {
     throw ValidationError(
         "Cartesian Cerveny influence requires exactly one workspace");
   }
-  const double workspaceFrequency =
-      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
-                                   : intensityWorkspace->frequency();
+  const double workspaceFrequency = pressureWorkspace != nullptr
+                                        ? pressureWorkspace->frequency()
+                                        : intensityWorkspace->frequency();
   const std::size_t workspaceDepthCount =
       pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
                                    : intensityWorkspace->depthCount();
@@ -177,12 +177,11 @@ void validateAccumulateInput(
         "Cartesian Cerveny workspace and receiver-grid sizes must match");
   }
   if (pressureWorkspace != nullptr) {
-    validateWorkspacePressure(
-        *pressureWorkspace, "Cartesian Cerveny existing workspace pressure");
+    validateWorkspacePressure(*pressureWorkspace,
+                              "Cartesian Cerveny existing workspace pressure");
   } else {
     validateWorkspaceIntensity(
-        *intensityWorkspace,
-        "Cartesian Cerveny existing workspace intensity");
+        *intensityWorkspace, "Cartesian Cerveny existing workspace intensity");
   }
   if (!std::isfinite(path.launchAngle)) {
     throw ValidationError("Cartesian Cerveny launch angle must be finite");
@@ -210,9 +209,13 @@ void validateAccumulateInput(
     previousTravelTime = point.realTravelTime;
   }
   requireFiniteComplex(epsilon, "Cartesian Cerveny epsilon");
-  if (epsilon.real() != 0.0 || epsilon.imag() <= 0.0) {
+  if (widthMode == BeamWidthMode::Wkb && epsilon.imag() != 0.0) {
+    throw ValidationError("Cartesian Cerveny WKB epsilon must be real");
+  }
+  if (widthMode != BeamWidthMode::Wkb &&
+      (epsilon.real() != 0.0 || epsilon.imag() <= 0.0)) {
     throw ValidationError(
-        "Cartesian Cerveny minimum-width epsilon must be positive imaginary");
+        "Cartesian Cerveny F/M epsilon must be positive imaginary");
   }
   if (request.has_value() &&
       (request->receiverRangeIndex >= receivers.rangeCount() ||
@@ -227,15 +230,16 @@ void validatePrevalidatedInput(const FrequencyWorkspace* pressureWorkspace,
                                const RayPath& path,
                                const RayFrequencyState& frequencyState,
                                std::complex<double> epsilon,
-                               const ReceiverGrid& receivers) {
+                               const ReceiverGrid& receivers,
+                               BeamWidthMode widthMode) {
   if ((pressureWorkspace == nullptr) == (intensityWorkspace == nullptr)) {
     throw ValidationError(
         "prevalidated Cartesian Cerveny influence requires exactly one "
         "workspace");
   }
-  const double workspaceFrequency =
-      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
-                                   : intensityWorkspace->frequency();
+  const double workspaceFrequency = pressureWorkspace != nullptr
+                                        ? pressureWorkspace->frequency()
+                                        : intensityWorkspace->frequency();
   const std::size_t workspaceDepthCount =
       pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
                                    : intensityWorkspace->depthCount();
@@ -264,10 +268,18 @@ void validatePrevalidatedInput(const FrequencyWorkspace* pressureWorkspace,
         "prevalidated Cartesian Cerveny source frequency point must "
         "be active");
   }
-  if (!finiteComplex(epsilon) || epsilon.real() != 0.0 ||
-      epsilon.imag() <= 0.0) {
+  if (!finiteComplex(epsilon)) {
     throw ValidationError(
-        "prevalidated Cartesian Cerveny minimum-width epsilon must be "
+        "prevalidated Cartesian Cerveny epsilon must be finite");
+  }
+  if (widthMode == BeamWidthMode::Wkb && epsilon.imag() != 0.0) {
+    throw ValidationError(
+        "prevalidated Cartesian Cerveny WKB epsilon must be real");
+  }
+  if (widthMode != BeamWidthMode::Wkb &&
+      (epsilon.real() != 0.0 || epsilon.imag() <= 0.0)) {
+    throw ValidationError(
+        "prevalidated Cartesian Cerveny F/M epsilon must be "
         "positive imaginary");
   }
 }
@@ -281,7 +293,8 @@ struct PrecomputedRayValues {
 
 [[nodiscard]] PrecomputedRayValues precomputeRayValues(
     const RayPath& path, const CLinearSsp& soundSpeedProfile,
-    std::complex<double> epsilon, std::size_t pointCount) {
+    std::complex<double> epsilon, std::size_t pointCount,
+    BeamWidthMode widthMode) {
   PrecomputedRayValues values;
   values.p.reserve(pointCount);
   values.q.reserve(pointCount);
@@ -323,7 +336,7 @@ struct PrecomputedRayValues {
 
     int kmah = index == 0U ? 1 : values.kmah.back();
     if (index != 0U) {
-      kmah = updateCervenyKmah(values.q[index - 1U], q, kmah);
+      kmah = updateCervenyKmah(values.q[index - 1U], q, kmah, widthMode);
     }
     values.kmah.push_back(kmah);
   }
@@ -478,11 +491,24 @@ template <std::size_t ImageCount, bool CollectStatistics>
 }  // namespace
 
 int updateCervenyKmah(std::complex<double> qLeft, std::complex<double> qRight,
-                      int currentKmah) {
+                      int currentKmah, BeamWidthMode widthMode) {
   requireFiniteComplex(qLeft, "Cerveny branch-cut left q");
   requireFiniteComplex(qRight, "Cerveny branch-cut right q");
   if (currentKmah != -1 && currentKmah != 1) {
     throw ValidationError("Cerveny KMAH must be -1 or +1");
+  }
+  if (widthMode == BeamWidthMode::Wkb) {
+    const double leftReal = qLeft.real();
+    const double rightReal = qRight.real();
+    if ((leftReal < 0.0 && rightReal >= 0.0) ||
+        (leftReal > 0.0 && rightReal <= 0.0)) {
+      return -currentKmah;
+    }
+    return currentKmah;
+  }
+  if (widthMode != BeamWidthMode::SpaceFilling &&
+      widthMode != BeamWidthMode::MinimumWidth) {
+    throw ValidationError("unknown Cerveny beam-width mode");
   }
   if (qRight.real() < 0.0) {
     const double leftImaginary = qLeft.imag();
@@ -529,10 +555,11 @@ void accumulateCartesianCervenyStatistics(
 
 CartesianCervenyInfluence::CartesianCervenyInfluence(
     Environment environment, ReceiverGrid receivers,
-    CartesianCervenySettings settings)
+    CartesianCervenySettings settings, BeamWidthMode widthMode)
     : environment_(std::move(environment)),
       receivers_(std::move(receivers)),
       settings_(settings),
+      widthMode_(widthMode),
       soundSpeedProfile_(environment_.soundSpeedProfile()),
       receiverRangeDelta_(receivers_.rangeCount() >= 2U
                               ? receivers_.ranges()[1U] -
@@ -543,6 +570,14 @@ CartesianCervenyInfluence::CartesianCervenyInfluence(
   }
   if (settings_.beamWindow <= 0) {
     throw ValidationError("Cartesian Cerveny beam window must be positive");
+  }
+  switch (widthMode_) {
+    case BeamWidthMode::SpaceFilling:
+    case BeamWidthMode::MinimumWidth:
+    case BeamWidthMode::Wkb:
+      break;
+    default:
+      throw ValidationError("Cartesian Cerveny beam width mode is invalid");
   }
   validateUniformReceiverRanges(receivers_, receiverRangeDelta_);
 }
@@ -601,7 +636,7 @@ CartesianCervenyInfluence::accumulateImpl(
     }
   }
   const PrecomputedRayValues ray = precomputeRayValues(
-      path, soundSpeedProfile_, epsilon, activePrefixPointCount);
+      path, soundSpeedProfile_, epsilon, activePrefixPointCount, widthMode_);
   if constexpr (CollectStatistics) {
     statistics->activeRayPoints += activePrefixPointCount;
     statistics->precomputeSeconds +=
@@ -701,7 +736,7 @@ CartesianCervenyInfluence::accumulateImpl(
       const std::complex<double> principal =
           ratio * std::sqrt(soundSpeed * std::abs(epsilon) / q);
       int finalKmah = ray.kmah[leftIndex];
-      finalKmah = updateCervenyKmah(ray.q[leftIndex], q, finalKmah);
+      finalKmah = updateCervenyKmah(ray.q[leftIndex], q, finalKmah, widthMode_);
       const std::complex<double> corrected =
           finalKmah < 0 ? -principal : principal;
       requireFiniteComplex(principal, "Cartesian Cerveny principal constant");
@@ -778,8 +813,7 @@ CartesianCervenyInfluence::accumulateImpl(
           // and overflow path differs from ABS followed by multiplication.
           const double magnitude = std::abs(contribution);
           intensityIncrement = magnitude * magnitude;
-          if (!std::isfinite(magnitude) ||
-              !std::isfinite(intensityIncrement) ||
+          if (!std::isfinite(magnitude) || !std::isfinite(intensityIncrement) ||
               intensityIncrement < 0.0) {
             throw ValidationError(
                 "Cartesian Cerveny intensity increment must be finite and "
@@ -837,7 +871,7 @@ std::optional<CartesianCervenyDiagnostic> CartesianCervenyInfluence::accumulate(
   if (statistics != nullptr) {
     const Clock::time_point validationBegin = Clock::now();
     validateAccumulateInput(&workspace, nullptr, path, frequencyState, epsilon,
-                            receivers_, diagnosticRequest);
+                            receivers_, widthMode_, diagnosticRequest);
     statistics->validatedRayPoints += path.points.size();
     statistics->validatedWorkspaceValues += workspace.pressure().size();
     statistics->validationSeconds +=
@@ -855,10 +889,10 @@ std::optional<CartesianCervenyDiagnostic> CartesianCervenyInfluence::accumulate(
   }
 
   validateAccumulateInput(&workspace, nullptr, path, frequencyState, epsilon,
-                          receivers_, diagnosticRequest);
-  const auto diagnostic = accumulateWithImageCount<false>(
-      &workspace, nullptr, path, frequencyState, epsilon, diagnosticRequest,
-      nullptr);
+                          receivers_, widthMode_, diagnosticRequest);
+  const auto diagnostic =
+      accumulateWithImageCount<false>(&workspace, nullptr, path, frequencyState,
+                                      epsilon, diagnosticRequest, nullptr);
   validateWorkspacePressure(workspace,
                             "Cartesian Cerveny computed workspace pressure");
   return diagnostic;
@@ -873,7 +907,7 @@ CartesianCervenyInfluence::accumulateIntensity(
   if (statistics != nullptr) {
     const Clock::time_point validationBegin = Clock::now();
     validateAccumulateInput(nullptr, &workspace, path, frequencyState, epsilon,
-                            receivers_, diagnosticRequest);
+                            receivers_, widthMode_, diagnosticRequest);
     statistics->validatedRayPoints += path.points.size();
     statistics->validatedWorkspaceValues += workspace.intensity().size();
     statistics->validationSeconds +=
@@ -891,12 +925,12 @@ CartesianCervenyInfluence::accumulateIntensity(
   }
 
   validateAccumulateInput(nullptr, &workspace, path, frequencyState, epsilon,
-                          receivers_, diagnosticRequest);
-  const auto diagnostic = accumulateWithImageCount<false>(
-      nullptr, &workspace, path, frequencyState, epsilon, diagnosticRequest,
-      nullptr);
-  validateWorkspaceIntensity(
-      workspace, "Cartesian Cerveny computed workspace intensity");
+                          receivers_, widthMode_, diagnosticRequest);
+  const auto diagnostic =
+      accumulateWithImageCount<false>(nullptr, &workspace, path, frequencyState,
+                                      epsilon, diagnosticRequest, nullptr);
+  validateWorkspaceIntensity(workspace,
+                             "Cartesian Cerveny computed workspace intensity");
   return diagnostic;
 }
 
@@ -908,16 +942,16 @@ CartesianCervenyInfluence::accumulatePrevalidated(
   if (statistics != nullptr) {
     const Clock::time_point validationBegin = Clock::now();
     validatePrevalidatedInput(&workspace, nullptr, path, frequencyState,
-                              epsilon, receivers_);
+                              epsilon, receivers_, widthMode_);
     statistics->validationSeconds +=
         elapsedSeconds(validationBegin, Clock::now());
     return accumulateWithImageCount<true>(&workspace, nullptr, path,
-                                          frequencyState, epsilon,
-                                          std::nullopt, statistics);
+                                          frequencyState, epsilon, std::nullopt,
+                                          statistics);
   }
 
   validatePrevalidatedInput(&workspace, nullptr, path, frequencyState, epsilon,
-                            receivers_);
+                            receivers_, widthMode_);
   return accumulateWithImageCount<false>(&workspace, nullptr, path,
                                          frequencyState, epsilon, std::nullopt,
                                          nullptr);
@@ -931,16 +965,16 @@ CartesianCervenyInfluence::accumulateIntensityPrevalidated(
   if (statistics != nullptr) {
     const Clock::time_point validationBegin = Clock::now();
     validatePrevalidatedInput(nullptr, &workspace, path, frequencyState,
-                              epsilon, receivers_);
+                              epsilon, receivers_, widthMode_);
     statistics->validationSeconds +=
         elapsedSeconds(validationBegin, Clock::now());
     return accumulateWithImageCount<true>(nullptr, &workspace, path,
-                                          frequencyState, epsilon,
-                                          std::nullopt, statistics);
+                                          frequencyState, epsilon, std::nullopt,
+                                          statistics);
   }
 
   validatePrevalidatedInput(nullptr, &workspace, path, frequencyState, epsilon,
-                            receivers_);
+                            receivers_, widthMode_);
   return accumulateWithImageCount<false>(nullptr, &workspace, path,
                                          frequencyState, epsilon, std::nullopt,
                                          nullptr);

@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "rayreuse/field/frequency_workspace.hpp"
+#include "rayreuse/model/beam_width.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/ray/ray_path.hpp"
@@ -95,17 +96,19 @@ struct CartesianCervenyDiagnostic {
   double intensityIncrement{};
 };
 
-[[nodiscard]] int updateCervenyKmah(std::complex<double> qLeft,
-                                    std::complex<double> qRight,
-                                    int currentKmah);
+[[nodiscard]] int updateCervenyKmah(
+    std::complex<double> qLeft, std::complex<double> qRight, int currentKmah,
+    BeamWidthMode widthMode = BeamWidthMode::MinimumWidth);
 
 [[nodiscard]] double cervenyHermiteTaper(double offset, double fullValueRadius,
                                          double zeroValueRadius);
 
 class CartesianCervenyInfluence {
  public:
-  CartesianCervenyInfluence(Environment environment, ReceiverGrid receivers,
-                            CartesianCervenySettings settings = {});
+  CartesianCervenyInfluence(
+      Environment environment, ReceiverGrid receivers,
+      CartesianCervenySettings settings = {},
+      BeamWidthMode widthMode = BeamWidthMode::MinimumWidth);
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
@@ -156,6 +159,7 @@ class CartesianCervenyInfluence {
   Environment environment_;
   ReceiverGrid receivers_;
   CartesianCervenySettings settings_;
+  BeamWidthMode widthMode_;
   CLinearSsp soundSpeedProfile_;
   double receiverRangeDelta_{};
 };

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "rayreuse/model/beam_curvature.hpp"
+#include "rayreuse/model/beam_width.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/launch_fan_planner.hpp"
 
@@ -117,16 +118,17 @@ struct IntegratorSettings {
 
 class SimulationCase {
  public:
-  SimulationCase(Environment environment, Source source, ReceiverGrid receivers,
-                 FrequencyGrid frequencies, LaunchFan launchFan,
-                 IntegratorSettings integrator,
-                 SourceBeamPattern sourceBeamPattern =
-                     SourceBeamPattern::omnidirectional(),
-                 SimulationRunMode runMode = SimulationRunMode::Coherent,
-                 BeamFamily beamFamily = BeamFamily::CervenyGaussian,
-                 FieldComponent fieldComponent = FieldComponent::Pressure,
-                 BoundaryCurvatureMode curvatureMode =
-                     BoundaryCurvatureMode::Standard);
+  SimulationCase(
+      Environment environment, Source source, ReceiverGrid receivers,
+      FrequencyGrid frequencies, LaunchFan launchFan,
+      IntegratorSettings integrator,
+      SourceBeamPattern sourceBeamPattern =
+          SourceBeamPattern::omnidirectional(),
+      SimulationRunMode runMode = SimulationRunMode::Coherent,
+      BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+      FieldComponent fieldComponent = FieldComponent::Pressure,
+      BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
+      BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
@@ -139,6 +141,7 @@ class SimulationCase {
   [[nodiscard]] BeamFamily beamFamily() const noexcept;
   [[nodiscard]] FieldComponent fieldComponent() const noexcept;
   [[nodiscard]] BoundaryCurvatureMode curvatureMode() const noexcept;
+  [[nodiscard]] BeamWidthMode beamWidthMode() const noexcept;
 
  private:
   Environment environment_;
@@ -152,6 +155,7 @@ class SimulationCase {
   BeamFamily beamFamily_;
   FieldComponent fieldComponent_;
   BoundaryCurvatureMode curvatureMode_;
+  BeamWidthMode beamWidthMode_;
 };
 
 }  // namespace rayreuse

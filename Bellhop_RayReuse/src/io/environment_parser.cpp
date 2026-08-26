@@ -611,8 +611,7 @@ struct ParsedRunType {
   const bool standardTransmissionLoss =
       (runType[0U] == 'C' || runType[0U] == 'I' || runType[0U] == 'S') &&
       (runType[1U] == 'C' || runType[1U] == 'G' || runType[1U] == 'B' ||
-       runType[1U] == '^' ||
-       runType[1U] == ' ');
+       runType[1U] == '^' || runType[1U] == ' ');
   const bool simpleGaussianTransmissionLoss =
       runType[0U] == 'C' && runType[1U] == 'S';
   const bool transmissionLoss =
@@ -1035,6 +1034,7 @@ struct ParsedRunType {
 
   double epsilonMultiplier = 1.0;
   double loopRange = 1.0;
+  BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth;
   BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard;
   std::size_t imageCount = 1U;
   int beamWindow = 1;
@@ -1048,9 +1048,19 @@ struct ParsedRunType {
       fail(source, beamRecord.lineNumber,
            "Cerveny beam type must contain a width and curvature letter");
     }
-    if (beamType[0U] != 'M') {
-      fail(source, beamRecord.lineNumber,
-           "only minimum-width Cerveny beam type 'M' is supported");
+    switch (beamType[0U]) {
+      case 'F':
+        beamWidthMode = BeamWidthMode::SpaceFilling;
+        break;
+      case 'M':
+        beamWidthMode = BeamWidthMode::MinimumWidth;
+        break;
+      case 'W':
+        beamWidthMode = BeamWidthMode::Wkb;
+        break;
+      default:
+        fail(source, beamRecord.lineNumber,
+             "Cerveny beam width must be one of 'F', 'M', or 'W'");
     }
     switch (beamType[1U]) {
       case 'D':
@@ -1117,7 +1127,7 @@ struct ParsedRunType {
                          .depthLimit = depthLimit,
                          .maximumRayPoints = kMaximumRayPoints},
       std::move(sourceBeamPattern), runType.runMode, runType.beamFamily,
-      fieldComponent, curvatureMode);
+      fieldComponent, curvatureMode, beamWidthMode);
 
   return ParsedEnvironment{
       .title = std::move(title),

@@ -77,6 +77,16 @@ void validateCurvatureMode(BoundaryCurvatureMode mode) {
   throw ValidationError("boundary curvature mode is invalid");
 }
 
+void validateBeamWidthMode(BeamWidthMode mode) {
+  switch (mode) {
+    case BeamWidthMode::SpaceFilling:
+    case BeamWidthMode::MinimumWidth:
+    case BeamWidthMode::Wkb:
+      return;
+  }
+  throw ValidationError("beam width mode is invalid");
+}
+
 }  // namespace
 
 bool isTransmissionLossMode(SimulationRunMode mode) {
@@ -253,7 +263,8 @@ SimulationCase::SimulationCase(Environment environment, Source source,
                                SourceBeamPattern sourceBeamPattern,
                                SimulationRunMode runMode, BeamFamily beamFamily,
                                FieldComponent fieldComponent,
-                               BoundaryCurvatureMode curvatureMode)
+                               BoundaryCurvatureMode curvatureMode,
+                               BeamWidthMode beamWidthMode)
     : environment_(std::move(environment)),
       source_(source),
       receivers_(std::move(receivers)),
@@ -263,11 +274,13 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       runMode_(runMode),
       beamFamily_(beamFamily),
       fieldComponent_(fieldComponent),
-      curvatureMode_(curvatureMode) {
+      curvatureMode_(curvatureMode),
+      beamWidthMode_(beamWidthMode) {
   validateRunMode(runMode_);
   validateBeamFamily(beamFamily_);
   validateFieldComponent(fieldComponent_);
   validateCurvatureMode(curvatureMode_);
+  validateBeamWidthMode(beamWidthMode_);
   if (fieldComponent_ != FieldComponent::Pressure &&
       (!isTransmissionLossMode(runMode_) ||
        beamFamily_ != BeamFamily::CervenyGaussian)) {
@@ -283,6 +296,12 @@ SimulationCase::SimulationCase(Environment environment, Source source,
        beamFamily_ != BeamFamily::CervenyGaussian)) {
     throw ValidationError(
         "only Cartesian Cerveny TL supports non-standard curvature modes");
+  }
+  if (beamWidthMode_ != BeamWidthMode::MinimumWidth &&
+      (!isTransmissionLossMode(runMode_) ||
+       beamFamily_ != BeamFamily::CervenyGaussian)) {
+    throw ValidationError(
+        "only Cartesian Cerveny TL supports non-minimum beam widths");
   }
   requireFinite(source_.depth, "source.depth");
   requireFinite(source_.amplitude, "source.amplitude");
@@ -387,6 +406,10 @@ FieldComponent SimulationCase::fieldComponent() const noexcept {
 
 BoundaryCurvatureMode SimulationCase::curvatureMode() const noexcept {
   return curvatureMode_;
+}
+
+BeamWidthMode SimulationCase::beamWidthMode() const noexcept {
+  return beamWidthMode_;
 }
 
 }  // namespace rayreuse

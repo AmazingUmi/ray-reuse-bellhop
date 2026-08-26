@@ -18,9 +18,10 @@
 
 namespace {
 
-using rayreuse::BoundaryModel;
 using rayreuse::BeamFamily;
+using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryCurvatureMode;
+using rayreuse::BoundaryModel;
 using rayreuse::BroadbandNonReuseResult;
 using rayreuse::BroadbandNonReuseSolver;
 using rayreuse::Environment;
@@ -48,8 +49,8 @@ SimulationCase makeSimulation(
     SimulationRunMode runMode = SimulationRunMode::Coherent,
     BeamFamily beamFamily = BeamFamily::CervenyGaussian,
     FieldComponent fieldComponent = FieldComponent::Pressure,
-    BoundaryCurvatureMode curvatureMode =
-        BoundaryCurvatureMode::Standard) {
+    BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
+    BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth) {
   return SimulationCase(
       Environment(
           SoundSpeedProfile(
@@ -68,8 +69,8 @@ SimulationCase makeSimulation(
                          .rangeLimit = 110.0,
                          .depthLimit = 110.0,
                          .maximumRayPoints = 100U},
-      SourceBeamPattern::omnidirectional(), runMode, beamFamily,
-      fieldComponent, curvatureMode);
+      SourceBeamPattern::omnidirectional(), runMode, beamFamily, fieldComponent,
+      curvatureMode, beamWidthMode);
 }
 
 std::vector<double> makeFrequencies(std::size_t count) {
@@ -219,14 +220,14 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
           makeSimulation({50.0, 100.0}, mode, beamFamily);
       const BroadbandNonReuseResult nonReuse =
           BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-      const SerialRayReuseResult reuse = SerialRayReuseSolver::solve(
-          simulation, 1.0, 50.0, {}, true);
-      const StreamedParallelRun parallel = runParallel(
-          simulation,
-          ParallelRayReuseSettings{.workerCount = 2U,
-                                   .outputQueueCapacity = 1U,
-                                   .memoryBudgetBytes = 0U},
-          true);
+      const SerialRayReuseResult reuse =
+          SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+      const StreamedParallelRun parallel =
+          runParallel(simulation,
+                      ParallelRayReuseSettings{.workerCount = 2U,
+                                               .outputQueueCapacity = 1U,
+                                               .memoryBudgetBytes = 0U},
+                      true);
       context.check(
           reuse.statistics.cacheFingerprintVerified &&
               reuse.statistics.cacheFingerprintBefore ==
@@ -238,16 +239,14 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
           "frozen cache "
           "fingerprint");
       for (std::size_t index = 0U; index < 2U; ++index) {
-        context.check(
-            parallel.workspaces[index].has_value(),
-            "parallel C/I/S returns every frequency workspace");
+        context.check(parallel.workspaces[index].has_value(),
+                      "parallel C/I/S returns every frequency workspace");
         if (!parallel.workspaces[index].has_value()) {
           continue;
         }
-        checkWorkspaceEqual(
-            context, reuse.frequencyResults[index].workspace,
-            nonReuse.frequencyResults[index].workspace,
-            "serial reuse C/I/S is bitwise equal to non-reuse");
+        checkWorkspaceEqual(context, reuse.frequencyResults[index].workspace,
+                            nonReuse.frequencyResults[index].workspace,
+                            "serial reuse C/I/S is bitwise equal to non-reuse");
         checkWorkspaceEqual(
             context, *parallel.workspaces[index],
             nonReuse.frequencyResults[index].workspace,
@@ -258,19 +257,18 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
 }
 
 void testSimpleGaussianMatchesAcrossExecution(Context& context) {
-  const SimulationCase simulation =
-      makeSimulation({50.0, 100.0}, SimulationRunMode::Coherent,
-                     BeamFamily::SimpleGaussian);
+  const SimulationCase simulation = makeSimulation(
+      {50.0, 100.0}, SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
   const BroadbandNonReuseResult nonReuse =
       BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
   const SerialRayReuseResult reuse =
       SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
-  const StreamedParallelRun parallel = runParallel(
-      simulation,
-      ParallelRayReuseSettings{.workerCount = 2U,
-                               .outputQueueCapacity = 1U,
-                               .memoryBudgetBytes = 0U},
-      true);
+  const StreamedParallelRun parallel =
+      runParallel(simulation,
+                  ParallelRayReuseSettings{.workerCount = 2U,
+                                           .outputQueueCapacity = 1U,
+                                           .memoryBudgetBytes = 0U},
+                  true);
   context.check(
       reuse.statistics.cacheFingerprintVerified &&
           reuse.statistics.cacheFingerprintBefore ==
@@ -303,56 +301,62 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
     for (const BoundaryCurvatureMode curvatureMode :
          {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
           BoundaryCurvatureMode::Zero}) {
-      std::optional<SerialRayReuseResult> pressure;
-      for (const FieldComponent component :
-           {FieldComponent::Pressure, FieldComponent::Vertical,
-            FieldComponent::Horizontal}) {
-        const SimulationCase simulation = makeSimulation(
-            {50.0, 100.0}, mode, BeamFamily::CervenyGaussian, component,
-            curvatureMode);
-        const BroadbandNonReuseResult nonReuse =
-            BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-        const SerialRayReuseResult reuse =
-            SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
-        const StreamedParallelRun parallel = runParallel(
-            simulation,
-            ParallelRayReuseSettings{.workerCount = 2U,
-                                     .outputQueueCapacity = 1U,
-                                     .memoryBudgetBytes = 0U},
-            true);
-        context.check(
-            reuse.statistics.cacheFingerprintVerified &&
-                reuse.statistics.cacheFingerprintBefore ==
-                    reuse.statistics.cacheFingerprintAfter &&
-                parallel.statistics.cacheFingerprintVerified &&
-                parallel.statistics.cacheFingerprintBefore ==
-                    parallel.statistics.cacheFingerprintAfter,
-            "Cartesian Cerveny C/I/S x P/V/H x D/S/Z preserves frozen "
-            "cache");
-        for (std::size_t index = 0U; index < 2U; ++index) {
+      for (const BeamWidthMode widthMode :
+           {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
+            BeamWidthMode::Wkb}) {
+        std::optional<SerialRayReuseResult> pressure;
+        for (const FieldComponent component :
+             {FieldComponent::Pressure, FieldComponent::Vertical,
+              FieldComponent::Horizontal}) {
+          const SimulationCase simulation =
+              makeSimulation({50.0, 100.0}, mode, BeamFamily::CervenyGaussian,
+                             component, curvatureMode, widthMode);
+          const BroadbandNonReuseResult nonReuse =
+              BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+          const SerialRayReuseResult reuse =
+              SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+          const StreamedParallelRun parallel =
+              runParallel(simulation,
+                          ParallelRayReuseSettings{.workerCount = 2U,
+                                                   .outputQueueCapacity = 1U,
+                                                   .memoryBudgetBytes = 0U},
+                          true);
           context.check(
-              parallel.workspaces[index].has_value(),
-              "parallel Cartesian curvature returns every frequency");
-          if (!parallel.workspaces[index].has_value()) {
-            continue;
-          }
-          checkWorkspaceEqual(
-              context, reuse.frequencyResults[index].workspace,
-              nonReuse.frequencyResults[index].workspace,
-              "Cartesian curvature serial reuse equals non-reuse bitwise");
-          checkWorkspaceEqual(
-              context, *parallel.workspaces[index],
-              nonReuse.frequencyResults[index].workspace,
-              "Cartesian curvature parallel reuse equals non-reuse bitwise");
-          if (pressure.has_value()) {
+              reuse.statistics.cacheFingerprintVerified &&
+                  reuse.statistics.cacheFingerprintBefore ==
+                      reuse.statistics.cacheFingerprintAfter &&
+                  parallel.statistics.cacheFingerprintVerified &&
+                  parallel.statistics.cacheFingerprintBefore ==
+                      parallel.statistics.cacheFingerprintAfter,
+              "Cartesian Cerveny C/I/S x F/M/W x D/S/Z x P/V/H preserves "
+              "frozen cache");
+          for (std::size_t index = 0U; index < 2U; ++index) {
+            context.check(
+                parallel.workspaces[index].has_value(),
+                "parallel Cartesian width/curvature returns every frequency");
+            if (!parallel.workspaces[index].has_value()) {
+              continue;
+            }
             checkWorkspaceEqual(
                 context, reuse.frequencyResults[index].workspace,
-                pressure->frequencyResults[index].workspace,
-                "Cartesian P/V/H legacy selectors are bitwise identical");
+                nonReuse.frequencyResults[index].workspace,
+                "Cartesian width/curvature serial reuse equals non-reuse "
+                "bitwise");
+            checkWorkspaceEqual(
+                context, *parallel.workspaces[index],
+                nonReuse.frequencyResults[index].workspace,
+                "Cartesian width/curvature parallel reuse equals non-reuse "
+                "bitwise");
+            if (pressure.has_value()) {
+              checkWorkspaceEqual(
+                  context, reuse.frequencyResults[index].workspace,
+                  pressure->frequencyResults[index].workspace,
+                  "Cartesian P/V/H legacy selectors are bitwise identical");
+            }
           }
-        }
-        if (!pressure.has_value()) {
-          pressure.emplace(reuse);
+          if (!pressure.has_value()) {
+            pressure.emplace(reuse);
+          }
         }
       }
     }

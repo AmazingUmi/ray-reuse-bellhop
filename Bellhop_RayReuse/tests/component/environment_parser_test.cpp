@@ -24,6 +24,7 @@ namespace {
 
 using rayreuse::AttenuationUnit;
 using rayreuse::BeamFamily;
+using rayreuse::BeamWidthMode;
 using rayreuse::BellhopError;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryKind;
@@ -239,32 +240,39 @@ void testCartesianCervenyComponents(Context& context) {
            {"CC", SimulationRunMode::Coherent},
            {"IC", SimulationRunMode::Incoherent},
            {"SC", SimulationRunMode::SemiCoherent}}) {
-    for (const auto& [curvatureToken, expectedCurvature] :
-         std::vector<std::pair<std::string, BoundaryCurvatureMode>>{
-             {"D", BoundaryCurvatureMode::Double},
-             {"S", BoundaryCurvatureMode::Standard},
-             {"Z", BoundaryCurvatureMode::Zero}}) {
-      for (const auto& [componentToken, expectedComponent] :
-           std::vector<std::pair<std::string, FieldComponent>>{
-               {"P", FieldComponent::Pressure},
-               {"V", FieldComponent::Vertical},
-               {"H", FieldComponent::Horizontal}}) {
-        std::string contents = pressureFixture;
-        replaceFirst(contents, "'CC'", "'" + runType + "'");
-        replaceFirst(contents, "'MS'", "'M" + curvatureToken + "'");
-        replaceFirst(contents, "1  5  'P'",
-                     "1  5  '" + componentToken + "'");
-        const ParsedEnvironment parsed = parseText(
-            contents,
-            "cartesian_" + runType + curvatureToken + componentToken +
-                ".env");
-        context.check(
-            parsed.simulationCase.runMode() == expectedMode &&
-                parsed.simulationCase.beamFamily() ==
-                    BeamFamily::CervenyGaussian &&
-                parsed.simulationCase.fieldComponent() == expectedComponent &&
-                parsed.simulationCase.curvatureMode() == expectedCurvature,
-            "Cartesian Cerveny parser preserves C/I/S x D/S/Z x P/V/H");
+    for (const auto& [widthToken, expectedWidth] :
+         std::vector<std::pair<std::string, BeamWidthMode>>{
+             {"F", BeamWidthMode::SpaceFilling},
+             {"M", BeamWidthMode::MinimumWidth},
+             {"W", BeamWidthMode::Wkb}}) {
+      for (const auto& [curvatureToken, expectedCurvature] :
+           std::vector<std::pair<std::string, BoundaryCurvatureMode>>{
+               {"D", BoundaryCurvatureMode::Double},
+               {"S", BoundaryCurvatureMode::Standard},
+               {"Z", BoundaryCurvatureMode::Zero}}) {
+        for (const auto& [componentToken, expectedComponent] :
+             std::vector<std::pair<std::string, FieldComponent>>{
+                 {"P", FieldComponent::Pressure},
+                 {"V", FieldComponent::Vertical},
+                 {"H", FieldComponent::Horizontal}}) {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'CC'", "'" + runType + "'");
+          replaceFirst(contents, "'MS'",
+                       "'" + widthToken + curvatureToken + "'");
+          replaceFirst(contents, "1  5  'P'", "1  5  '" + componentToken + "'");
+          const ParsedEnvironment parsed =
+              parseText(contents, "cartesian_" + runType + curvatureToken +
+                                      componentToken + ".env");
+          context.check(
+              parsed.simulationCase.runMode() == expectedMode &&
+                  parsed.simulationCase.beamFamily() ==
+                      BeamFamily::CervenyGaussian &&
+                  parsed.simulationCase.fieldComponent() == expectedComponent &&
+                  parsed.simulationCase.curvatureMode() == expectedCurvature &&
+                  parsed.simulationCase.beamWidthMode() == expectedWidth,
+              "Cartesian Cerveny parser preserves C/I/S x F/M/W x D/S/Z x "
+              "P/V/H");
+        }
       }
     }
   }
@@ -275,14 +283,14 @@ void testCartesianCervenyComponents(Context& context) {
         static_cast<void>(parseText(contents, "cartesian_component_x.env"));
       },
       "Cartesian Cerveny rejects an unknown field component");
-  for (const std::string beamType : {"FS", "WS", "MX", "M", "MSS"}) {
+  for (const std::string beamType : {"XS", "MX", "M", "MSS"}) {
     context.expectThrows<ValidationError>(
         [&, beamType] {
           std::string contents = pressureFixture;
           replaceFirst(contents, "'MS'", "'" + beamType + "'");
           static_cast<void>(parseText(contents, "beam_" + beamType + ".env"));
         },
-        "unsupported width and invalid curvature tokens remain rejected");
+        "unknown width and invalid curvature tokens remain rejected");
   }
   for (const std::string& runType : {"CG", "CB", "CS"}) {
     context.expectThrows<ValidationError>(
@@ -639,8 +647,7 @@ void testUnsupportedAndMalformedInput(Context& context) {
         "G/caret/blank aliases select the Cartesian GeoHat C/I/S path");
   }
   std::string nonuniformHat = hat;
-  replaceFirst(nonuniformHat, "\n21\n0.02  0.25 /",
-               "\n3\n0.02  0.08  0.25 /");
+  replaceFirst(nonuniformHat, "\n21\n0.02  0.25 /", "\n3\n0.02  0.08  0.25 /");
   const ParsedEnvironment parsedNonuniformHat =
       parseText(nonuniformHat, "nonuniform_cartesian_hat.env");
   context.check(
@@ -657,8 +664,7 @@ void testUnsupportedAndMalformedInput(Context& context) {
         parseText(contents, "cartesian_gaussian_" + runType + ".env");
     context.check(
         parsed.simulationCase.runMode() == expectedMode &&
-            parsed.simulationCase.beamFamily() ==
-                BeamFamily::GeometricGaussian,
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricGaussian,
         "CB/IB/SB select the Cartesian GeoGaussian C/I/S path");
   }
   std::string simple = hat;
@@ -675,9 +681,8 @@ void testUnsupportedAndMalformedInput(Context& context) {
         [&] {
           std::string contents = hat;
           replaceFirst(contents, "'CG'", "'" + unsupported + "'");
-          static_cast<void>(parseText(contents,
-                                      "simple_gaussian_" + unsupported +
-                                          ".env"));
+          static_cast<void>(
+              parseText(contents, "simple_gaussian_" + unsupported + ".env"));
         },
         "Simple Gaussian intensity run modes remain explicitly rejected");
   }
@@ -685,8 +690,7 @@ void testUnsupportedAndMalformedInput(Context& context) {
       [&] {
         std::string contents = simple;
         contents += "'MS' 1.0 2.5\n";
-        static_cast<void>(parseText(contents,
-                                    "simple_gaussian_with_tail.env"));
+        static_cast<void>(parseText(contents, "simple_gaussian_with_tail.env"));
       },
       "Cartesian Simple Gaussian rejects a Cerveny-only option tail");
   context.expectThrows<ValidationError>(
@@ -706,10 +710,10 @@ void testUnsupportedAndMalformedInput(Context& context) {
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;
-        replaceFirst(contents, "'MS' 1.0  2.5", "'FS' 1.0  2.5");
+        replaceFirst(contents, "'MS' 1.0  2.5", "'XS' 1.0  2.5");
         static_cast<void>(parseText(contents, "filling_beam.env"));
       },
-      "unsupported beam-width mode is explicitly rejected");
+      "unknown beam-width mode is explicitly rejected");
   std::string elasticContents = direct;
   replaceFirst(elasticContents, "1000.0  1600.0  0.0  1.8",
                "1000.0  1600.0  100.0  1.8");

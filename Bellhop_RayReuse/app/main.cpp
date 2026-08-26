@@ -112,6 +112,19 @@ void printUsage(std::ostream& stream) {
   throw rayreuse::ValidationError("boundary curvature mode is invalid");
 }
 
+[[nodiscard]] std::string_view beamWidthModeLabel(
+    rayreuse::BeamWidthMode mode) {
+  switch (mode) {
+    case rayreuse::BeamWidthMode::SpaceFilling:
+      return "Space filling beams";
+    case rayreuse::BeamWidthMode::MinimumWidth:
+      return "Minimum width beams";
+    case rayreuse::BeamWidthMode::Wkb:
+      return "WKB beams";
+  }
+  throw rayreuse::ValidationError("beam width mode is invalid");
+}
+
 [[nodiscard]] std::string frequencyToken(double frequency) {
   std::ostringstream stream;
   stream << std::setprecision(12) << std::defaultfloat << frequency;
@@ -342,9 +355,9 @@ void writeConfigurationSummary(std::ostream& stream,
   }
   if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian &&
       rayreuse::isTransmissionLossMode(simulation.runMode())) {
-    stream << "Component = "
-           << fieldComponentToken(simulation.fieldComponent()) << '\n'
-           << "Minimum width beams\n"
+    stream << "Component = " << fieldComponentToken(simulation.fieldComponent())
+           << '\n'
+           << beamWidthModeLabel(simulation.beamWidthMode()) << '\n'
            << curvatureModeLabel(simulation.curvatureMode()) << '\n';
   }
   switch (simulation.runMode()) {

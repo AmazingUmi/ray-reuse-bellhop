@@ -18,6 +18,7 @@
 namespace {
 
 using rayreuse::BeamFamily;
+using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::Environment;
@@ -275,26 +276,25 @@ void testSimulationProductMetadata(Context& context) {
       },
       "source beam pattern rejects amplitude-conversion overflow");
 
-  const auto makeMetadataCase = [&](
-                                    SimulationRunMode runMode,
-                                    BeamFamily beamFamily,
-                                    FieldComponent fieldComponent =
-                                        FieldComponent::Pressure,
-                                    BoundaryCurvatureMode curvatureMode =
-                                        BoundaryCurvatureMode::Standard) {
-    return SimulationCase(
-        makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
-        ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
-        FrequencyGrid({50.0}),
-        LaunchFan{.minimumAngle = -0.1,
-                  .maximumAngle = 0.1,
-                  .explicitLaunchAngleCount = 301U},
-        IntegratorSettings{.stepLength = 10.0,
-                           .rangeLimit = 5100.0,
-                           .depthLimit = 1100.0,
-                           .maximumRayPoints = 10000U},
-        pattern, runMode, beamFamily, fieldComponent, curvatureMode);
-  };
+  const auto makeMetadataCase =
+      [&](SimulationRunMode runMode, BeamFamily beamFamily,
+          FieldComponent fieldComponent = FieldComponent::Pressure,
+          BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
+          BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth) {
+        return SimulationCase(
+            makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+            FrequencyGrid({50.0}),
+            LaunchFan{.minimumAngle = -0.1,
+                      .maximumAngle = 0.1,
+                      .explicitLaunchAngleCount = 301U},
+            IntegratorSettings{.stepLength = 10.0,
+                               .rangeLimit = 5100.0,
+                               .depthLimit = 1100.0,
+                               .maximumRayPoints = 10000U},
+            pattern, runMode, beamFamily, fieldComponent, curvatureMode,
+            beamWidthMode);
+      };
   const SimulationCase arrivals = makeMetadataCase(
       SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
   context.check(arrivals.runMode() == SimulationRunMode::AsciiArrivals &&
@@ -305,18 +305,17 @@ void testSimulationProductMetadata(Context& context) {
       SimulationRunMode::Incoherent, BeamFamily::CervenyGaussian);
   const SimulationCase semiCoherent = makeMetadataCase(
       SimulationRunMode::SemiCoherent, BeamFamily::CervenyGaussian);
-  context.check(
-      incoherent.runMode() == SimulationRunMode::Incoherent &&
-          semiCoherent.runMode() == SimulationRunMode::SemiCoherent &&
-          rayreuse::isTransmissionLossMode(incoherent.runMode()) &&
-          rayreuse::isTransmissionLossMode(semiCoherent.runMode()) &&
-          rayreuse::fieldAccumulationKind(incoherent.runMode()) ==
-              rayreuse::FieldAccumulationKind::Intensity &&
-          rayreuse::fieldAccumulationKind(semiCoherent.runMode()) ==
-              rayreuse::FieldAccumulationKind::Intensity &&
-          !rayreuse::usesLloydMirror(incoherent.runMode()) &&
-          rayreuse::usesLloydMirror(semiCoherent.runMode()),
-      "SimulationCase preserves I/S mode and accumulation metadata");
+  context.check(incoherent.runMode() == SimulationRunMode::Incoherent &&
+                    semiCoherent.runMode() == SimulationRunMode::SemiCoherent &&
+                    rayreuse::isTransmissionLossMode(incoherent.runMode()) &&
+                    rayreuse::isTransmissionLossMode(semiCoherent.runMode()) &&
+                    rayreuse::fieldAccumulationKind(incoherent.runMode()) ==
+                        rayreuse::FieldAccumulationKind::Intensity &&
+                    rayreuse::fieldAccumulationKind(semiCoherent.runMode()) ==
+                        rayreuse::FieldAccumulationKind::Intensity &&
+                    !rayreuse::usesLloydMirror(incoherent.runMode()) &&
+                    rayreuse::usesLloydMirror(semiCoherent.runMode()),
+                "SimulationCase preserves I/S mode and accumulation metadata");
   for (const FieldComponent component :
        {FieldComponent::Pressure, FieldComponent::Vertical,
         FieldComponent::Horizontal}) {
@@ -334,18 +333,27 @@ void testSimulationProductMetadata(Context& context) {
     context.check(cartesianCerveny.curvatureMode() == curvatureMode,
                   "SimulationCase preserves Cartesian Cerveny curvature");
   }
+  for (const BeamWidthMode widthMode :
+       {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
+        BeamWidthMode::Wkb}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard, widthMode);
+    context.check(cartesianCerveny.beamWidthMode() == widthMode,
+                  "SimulationCase preserves Cartesian Cerveny beam width");
+  }
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
-        static_cast<void>(makeMetadataCase(
-            SimulationRunMode::Coherent, BeamFamily::GeometricHat,
-            FieldComponent::Vertical));
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Coherent,
+                                           BeamFamily::GeometricHat,
+                                           FieldComponent::Vertical));
       },
       "non-Cerveny families reject non-pressure components");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
-        static_cast<void>(makeMetadataCase(
-            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
-            FieldComponent::Horizontal));
+        static_cast<void>(makeMetadataCase(SimulationRunMode::RayTrace,
+                                           BeamFamily::CervenyGaussian,
+                                           FieldComponent::Horizontal));
       },
       "non-TL products reject non-pressure components");
   context.expectThrows<ValidationError>(
@@ -362,8 +370,24 @@ void testSimulationProductMetadata(Context& context) {
             FieldComponent::Pressure, BoundaryCurvatureMode::Zero));
       },
       "non-TL products reject non-standard curvature");
-  const SimulationCase simpleGaussian = makeMetadataCase(
-      SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::SpaceFilling));
+      },
+      "non-Cerveny families reject non-minimum beam width");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::Wkb));
+      },
+      "non-TL products reject non-minimum beam width");
+  const SimulationCase simpleGaussian =
+      makeMetadataCase(SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
   context.check(simpleGaussian.beamFamily() == BeamFamily::SimpleGaussian,
                 "SimulationCase accepts coherent Simple Gaussian TL");
   context.expectThrows<ValidationError>(
@@ -386,19 +410,26 @@ void testSimulationProductMetadata(Context& context) {
       "SimulationCase rejects invalid beam family enum values");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
-        static_cast<void>(makeMetadataCase(
-            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
-            static_cast<FieldComponent>(999)));
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Coherent,
+                                           BeamFamily::CervenyGaussian,
+                                           static_cast<FieldComponent>(999)));
       },
       "SimulationCase rejects invalid field component enum values");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(
             SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
-            FieldComponent::Pressure,
-            static_cast<BoundaryCurvatureMode>(999)));
+            FieldComponent::Pressure, static_cast<BoundaryCurvatureMode>(999)));
       },
       "SimulationCase rejects invalid curvature mode enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            static_cast<BeamWidthMode>(999)));
+      },
+      "SimulationCase rejects invalid beam width enum values");
 }
 
 void testRayPathCache(Context& context) {
@@ -588,10 +619,10 @@ void testFrequencyWorkspace(Context& context) {
   rayreuse::IntensityWorkspace intensity(50.0, receivers);
   intensity.add(1U, 2U, 3.0);
   intensity.add(1U, 2U, 4.0);
-  context.check(intensity.intensity().size() == 6U &&
-                    intensity.at(1U, 2U) == 7.0,
-                "intensity workspace accumulates depth-major non-negative "
-                "power");
+  context.check(
+      intensity.intensity().size() == 6U && intensity.at(1U, 2U) == 7.0,
+      "intensity workspace accumulates depth-major non-negative "
+      "power");
   intensity.clear();
   context.check(intensity.at(1U, 2U) == 0.0,
                 "intensity workspace clear resets power");

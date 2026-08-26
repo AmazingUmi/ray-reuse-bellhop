@@ -41,16 +41,18 @@ void requireSimulationFrequency(const SimulationCase& simulation,
 
 }  // namespace
 
-double semiCoherentLloydMirrorFactor(
-    double frequency, double sourceSoundSpeed, double sourceDepth,
-    double launchAngleRadians) {
-  return semiCoherentProjectedSourceAmplitude(
-      1.0, frequency, sourceSoundSpeed, sourceDepth, launchAngleRadians);
+double semiCoherentLloydMirrorFactor(double frequency, double sourceSoundSpeed,
+                                     double sourceDepth,
+                                     double launchAngleRadians) {
+  return semiCoherentProjectedSourceAmplitude(1.0, frequency, sourceSoundSpeed,
+                                              sourceDepth, launchAngleRadians);
 }
 
-double semiCoherentProjectedSourceAmplitude(
-    double baseAmplitude, double frequency, double sourceSoundSpeed,
-    double sourceDepth, double launchAngleRadians) {
+double semiCoherentProjectedSourceAmplitude(double baseAmplitude,
+                                            double frequency,
+                                            double sourceSoundSpeed,
+                                            double sourceDepth,
+                                            double launchAngleRadians) {
   if (!std::isfinite(baseAmplitude) || baseAmplitude < 0.0) {
     throw ValidationError(
         "semi-coherent base source amplitude must be finite and non-negative");
@@ -70,9 +72,9 @@ double semiCoherentProjectedSourceAmplitude(
   const double angularFrequency = 2.0 * std::numbers::pi * frequency;
   const double argument = (angularFrequency / sourceSoundSpeed) * sourceDepth *
                           std::sin(launchAngleRadians);
-  const double amplitude =
-      baseAmplitude * static_cast<double>(std::sqrt(2.0F)) *
-      std::abs(std::sin(argument));
+  const double amplitude = baseAmplitude *
+                           static_cast<double>(std::sqrt(2.0F)) *
+                           std::abs(std::sin(argument));
   if (!std::isfinite(amplitude)) {
     throw ValidationError(
         "semi-coherent projected source amplitude is invalid");
@@ -136,10 +138,9 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const CLinearSsp soundSpeedProfile(
       simulation.environment().soundSpeedProfile());
-  const double sourceSoundSpeed =
-      soundSpeedProfile
-          .evaluate(Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U)
-          .soundSpeed;
+  const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
+      Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U);
+  const double sourceSoundSpeed = sourceSample.soundSpeed;
   if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
       simulation.beamFamily() != BeamFamily::GeometricHat &&
       simulation.beamFamily() != BeamFamily::GeometricGaussian &&
@@ -150,15 +151,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   }
   if (simulation.beamFamily() == BeamFamily::SimpleGaussian &&
       simulation.runMode() != SimulationRunMode::Coherent) {
-    throw ValidationError(
-        "simple Gaussian TL requires coherent pressure");
+    throw ValidationError("simple Gaussian TL requires coherent pressure");
   }
-  std::optional<BeamEpsilon> epsilon;
-  if (simulation.beamFamily() == BeamFamily::CervenyGaussian) {
-    epsilon.emplace(pickMinimumWidthEpsilon(
-        frequency, sourceSoundSpeed, loopRange, epsilonMultiplier));
-  }
-
   std::optional<FrequencyWorkspace> coherentWorkspace;
   std::optional<IntensityWorkspace> intensityWorkspace;
   switch (fieldAccumulationKind(simulation.runMode())) {
@@ -189,7 +183,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     // environment/model/PRT lifecycle, but InfluenceCervenyCart does not read
     // it.  Only the out-of-scope ray-centered Influence applies V/H factors.
     cervenyInfluence.emplace(simulation.environment(), simulation.receivers(),
-                             influenceSettings);
+                             influenceSettings, simulation.beamWidthMode());
   }
 
   double projectSeconds = 0.0;
@@ -220,36 +214,41 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const Clock::time_point projectEnd = Clock::now();
     if (simpleGaussianInfluence.has_value()) {
       static_cast<void>(simpleGaussianInfluence->accumulate(
-          *coherentWorkspace, path, frequencyState,
-          launchFan.launchAngleStep));
+          *coherentWorkspace, path, frequencyState, launchFan.launchAngleStep));
     } else if (geometricGaussianInfluence.has_value() &&
-        coherentWorkspace.has_value()) {
+               coherentWorkspace.has_value()) {
       static_cast<void>(geometricGaussianInfluence->accumulate(
-          *coherentWorkspace, path, frequencyState,
-          launchFan.launchAngleStep));
+          *coherentWorkspace, path, frequencyState, launchFan.launchAngleStep));
     } else if (geometricGaussianInfluence.has_value()) {
       static_cast<void>(geometricGaussianInfluence->accumulateIntensity(
           *intensityWorkspace, path, frequencyState,
           launchFan.launchAngleStep));
     } else if (geometricHatInfluence.has_value() &&
-        coherentWorkspace.has_value()) {
+               coherentWorkspace.has_value()) {
       static_cast<void>(geometricHatInfluence->accumulate(
-          *coherentWorkspace, path, frequencyState,
-          launchFan.launchAngleStep));
+          *coherentWorkspace, path, frequencyState, launchFan.launchAngleStep));
     } else if (geometricHatInfluence.has_value()) {
       static_cast<void>(geometricHatInfluence->accumulateIntensity(
           *intensityWorkspace, path, frequencyState,
           launchFan.launchAngleStep));
     } else if (coherentWorkspace.has_value()) {
+      const BeamEpsilon epsilon = pickBeamEpsilon(
+          simulation.beamWidthMode(), frequency, sourceSoundSpeed,
+          sourceSample.soundSpeedGradient.depth, path.launchAngle,
+          launchFan.launchAngleStep, loopRange, epsilonMultiplier);
       static_cast<void>(cervenyInfluence->accumulatePrevalidated(
-          *coherentWorkspace, path, frequencyState, epsilon->value,
+          *coherentWorkspace, path, frequencyState, epsilon.value,
           influenceSettings.collectStatistics ? &influenceStatistics
-                                               : nullptr));
+                                              : nullptr));
     } else {
+      const BeamEpsilon epsilon = pickBeamEpsilon(
+          simulation.beamWidthMode(), frequency, sourceSoundSpeed,
+          sourceSample.soundSpeedGradient.depth, path.launchAngle,
+          launchFan.launchAngleStep, loopRange, epsilonMultiplier);
       static_cast<void>(cervenyInfluence->accumulateIntensityPrevalidated(
-          *intensityWorkspace, path, frequencyState, epsilon->value,
+          *intensityWorkspace, path, frequencyState, epsilon.value,
           influenceSettings.collectStatistics ? &influenceStatistics
-                                               : nullptr));
+                                              : nullptr));
     }
     const Clock::time_point influenceEnd = Clock::now();
     projectSeconds += elapsedSeconds(projectBegin, projectEnd);
@@ -259,28 +258,24 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   const Clock::time_point scaleBegin = Clock::now();
   const bool geometricNormalization =
       simulation.beamFamily() != BeamFamily::CervenyGaussian;
-  FrequencyWorkspace workspace = coherentWorkspace.has_value()
-                                     ? std::move(*coherentWorkspace)
-                                 : geometricNormalization
-                                     ? scaleGeometricPointIntensityToPressure(
-                                           *intensityWorkspace,
-                                           simulation.receivers(),
-                                           launchFan.launchAngleStep,
-                                           sourceSoundSpeed)
-                                     : scaleCartesianPointIntensityToPressure(
-                                           *intensityWorkspace,
-                                           simulation.receivers(),
-                                           launchFan.launchAngleStep,
-                                           sourceSoundSpeed);
+  FrequencyWorkspace workspace =
+      coherentWorkspace.has_value() ? std::move(*coherentWorkspace)
+      : geometricNormalization
+          ? scaleGeometricPointIntensityToPressure(
+                *intensityWorkspace, simulation.receivers(),
+                launchFan.launchAngleStep, sourceSoundSpeed)
+          : scaleCartesianPointIntensityToPressure(
+                *intensityWorkspace, simulation.receivers(),
+                launchFan.launchAngleStep, sourceSoundSpeed);
   if (coherentWorkspace.has_value()) {
     if (geometricNormalization) {
-      scaleCoherentGeometricPointPressure(
-          workspace, simulation.receivers(), launchFan.launchAngleStep,
-          sourceSoundSpeed);
+      scaleCoherentGeometricPointPressure(workspace, simulation.receivers(),
+                                          launchFan.launchAngleStep,
+                                          sourceSoundSpeed);
     } else {
-      scaleCoherentCartesianPointPressure(
-          workspace, simulation.receivers(), launchFan.launchAngleStep,
-          sourceSoundSpeed);
+      scaleCoherentCartesianPointPressure(workspace, simulation.receivers(),
+                                          launchFan.launchAngleStep,
+                                          sourceSoundSpeed);
     }
   }
   const Clock::time_point scaleEnd = Clock::now();
