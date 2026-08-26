@@ -1,0 +1,30 @@
+id = "cerveny_curvature_zero_flat_gradient"
+description = "Cartesian Cerveny zeroed reflection curvature in the RayReuse flat-boundary C-linear scope"
+origin_template = "origin.env.in"
+source_references = [
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 ReadBeamInfo",
+  "Bellhop_origin/Bellhop/bellhop.f90 PickEpsilon",
+  "Bellhop_origin/Bellhop/ReflectMod.f90 CurvatureCorrection2",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp", "rayreuse"]
+
+[launch]
+sound_speed_at_source_mps = 1550.0
+water_depth_m = 100.0
+maximum_range_m = 300.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 7, 21]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Minimum width beams", "Curvature zeroing invoked", "Component"]
+prt_forbidden_markers = ["Curvature doubling invoked", "THORP volume attenuation added"]
+
+[profiles.single]
+frequencies_hz = [100.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [100.0, 250.0]

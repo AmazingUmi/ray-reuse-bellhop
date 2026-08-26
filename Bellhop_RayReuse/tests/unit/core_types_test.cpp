@@ -18,6 +18,7 @@
 namespace {
 
 using rayreuse::BeamFamily;
+using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
@@ -278,7 +279,9 @@ void testSimulationProductMetadata(Context& context) {
                                     SimulationRunMode runMode,
                                     BeamFamily beamFamily,
                                     FieldComponent fieldComponent =
-                                        FieldComponent::Pressure) {
+                                        FieldComponent::Pressure,
+                                    BoundaryCurvatureMode curvatureMode =
+                                        BoundaryCurvatureMode::Standard) {
     return SimulationCase(
         makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
         ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
@@ -290,7 +293,7 @@ void testSimulationProductMetadata(Context& context) {
                            .rangeLimit = 5100.0,
                            .depthLimit = 1100.0,
                            .maximumRayPoints = 10000U},
-        pattern, runMode, beamFamily, fieldComponent);
+        pattern, runMode, beamFamily, fieldComponent, curvatureMode);
   };
   const SimulationCase arrivals = makeMetadataCase(
       SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
@@ -322,6 +325,15 @@ void testSimulationProductMetadata(Context& context) {
     context.check(cartesianCerveny.fieldComponent() == component,
                   "SimulationCase preserves Cartesian Cerveny component");
   }
+  for (const BoundaryCurvatureMode curvatureMode :
+       {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
+        BoundaryCurvatureMode::Zero}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        FieldComponent::Pressure, curvatureMode);
+    context.check(cartesianCerveny.curvatureMode() == curvatureMode,
+                  "SimulationCase preserves Cartesian Cerveny curvature");
+  }
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(
@@ -336,6 +348,20 @@ void testSimulationProductMetadata(Context& context) {
             FieldComponent::Horizontal));
       },
       "non-TL products reject non-pressure components");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::GeometricGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Double));
+      },
+      "non-Cerveny families reject non-standard curvature");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Zero));
+      },
+      "non-TL products reject non-standard curvature");
   const SimulationCase simpleGaussian = makeMetadataCase(
       SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
   context.check(simpleGaussian.beamFamily() == BeamFamily::SimpleGaussian,
@@ -365,6 +391,14 @@ void testSimulationProductMetadata(Context& context) {
             static_cast<FieldComponent>(999)));
       },
       "SimulationCase rejects invalid field component enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure,
+            static_cast<BoundaryCurvatureMode>(999)));
+      },
+      "SimulationCase rejects invalid curvature mode enum values");
 }
 
 void testRayPathCache(Context& context) {

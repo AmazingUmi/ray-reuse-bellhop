@@ -280,12 +280,22 @@ class GeometryStepLimiter {
 }  // namespace
 
 GeometryTracer::GeometryTracer(const Environment& environment,
-                               IntegratorSettings integrator)
+                               IntegratorSettings integrator,
+                               BoundaryCurvatureMode curvatureMode)
     : soundSpeedProfile_(environment.soundSpeedProfile()),
       integrator_(integrator),
       seaSurfaceBoundary_(environment.seaSurface()),
-      seabedBoundary_(environment.seabed()) {
+      seabedBoundary_(environment.seabed()),
+      curvatureMode_(curvatureMode) {
   validateIntegrator(integrator_);
+  switch (curvatureMode_) {
+    case BoundaryCurvatureMode::Standard:
+    case BoundaryCurvatureMode::Double:
+    case BoundaryCurvatureMode::Zero:
+      break;
+    default:
+      throw ValidationError("unknown boundary curvature mode");
+  }
   const std::vector<SoundSpeedPoint>& points =
       environment.soundSpeedProfile().points();
   profileDepths_.reserve(points.size());
@@ -295,7 +305,8 @@ GeometryTracer::GeometryTracer(const Environment& environment,
 }
 
 GeometryTracer::GeometryTracer(const SimulationCase& simulation)
-    : GeometryTracer(simulation.environment(), simulation.integrator()) {}
+    : GeometryTracer(simulation.environment(), simulation.integrator(),
+                     simulation.curvatureMode()) {}
 
 RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
   const BoundaryGeometry& seaSurfaceGeometry = seaSurfaceBoundary_.geometry();
@@ -467,7 +478,7 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
                 .curvature = reflectionSample.curvature,
                 .maximumIncidentPlaneDistance =
                     1.0e-3 * integrator_.stepLength},
-            path.points.size(), BoundaryCurvatureMode::Standard);
+            path.points.size(), curvatureMode_);
         const BoundaryModel& boundaryModel =
             isSurface ? seaSurfaceBoundary_ : seabedBoundary_;
         if (boundaryModel.kind() == BoundaryKind::AcousticHalfSpace &&

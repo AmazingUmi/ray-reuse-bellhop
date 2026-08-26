@@ -67,6 +67,16 @@ void validateFieldComponent(FieldComponent component) {
   throw ValidationError("field component is invalid");
 }
 
+void validateCurvatureMode(BoundaryCurvatureMode mode) {
+  switch (mode) {
+    case BoundaryCurvatureMode::Standard:
+    case BoundaryCurvatureMode::Double:
+    case BoundaryCurvatureMode::Zero:
+      return;
+  }
+  throw ValidationError("boundary curvature mode is invalid");
+}
+
 }  // namespace
 
 bool isTransmissionLossMode(SimulationRunMode mode) {
@@ -242,7 +252,8 @@ SimulationCase::SimulationCase(Environment environment, Source source,
                                IntegratorSettings integrator,
                                SourceBeamPattern sourceBeamPattern,
                                SimulationRunMode runMode, BeamFamily beamFamily,
-                               FieldComponent fieldComponent)
+                               FieldComponent fieldComponent,
+                               BoundaryCurvatureMode curvatureMode)
     : environment_(std::move(environment)),
       source_(source),
       receivers_(std::move(receivers)),
@@ -251,10 +262,12 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       sourceBeamPattern_(std::move(sourceBeamPattern)),
       runMode_(runMode),
       beamFamily_(beamFamily),
-      fieldComponent_(fieldComponent) {
+      fieldComponent_(fieldComponent),
+      curvatureMode_(curvatureMode) {
   validateRunMode(runMode_);
   validateBeamFamily(beamFamily_);
   validateFieldComponent(fieldComponent_);
+  validateCurvatureMode(curvatureMode_);
   if (fieldComponent_ != FieldComponent::Pressure &&
       (!isTransmissionLossMode(runMode_) ||
        beamFamily_ != BeamFamily::CervenyGaussian)) {
@@ -264,6 +277,12 @@ SimulationCase::SimulationCase(Environment environment, Source source,
   if (beamFamily_ == BeamFamily::SimpleGaussian &&
       runMode_ != SimulationRunMode::Coherent) {
     throw ValidationError("simple Gaussian TL requires coherent pressure");
+  }
+  if (curvatureMode_ != BoundaryCurvatureMode::Standard &&
+      (!isTransmissionLossMode(runMode_) ||
+       beamFamily_ != BeamFamily::CervenyGaussian)) {
+    throw ValidationError(
+        "only Cartesian Cerveny TL supports non-standard curvature modes");
   }
   requireFinite(source_.depth, "source.depth");
   requireFinite(source_.amplitude, "source.amplitude");
@@ -364,6 +383,10 @@ BeamFamily SimulationCase::beamFamily() const noexcept { return beamFamily_; }
 
 FieldComponent SimulationCase::fieldComponent() const noexcept {
   return fieldComponent_;
+}
+
+BoundaryCurvatureMode SimulationCase::curvatureMode() const noexcept {
+  return curvatureMode_;
 }
 
 }  // namespace rayreuse

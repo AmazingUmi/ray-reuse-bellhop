@@ -160,6 +160,63 @@ void testSingleSeaSurfaceReflectionAndArrivalGradient(Context& context) {
                     "both dynamic bases use Standard curvature correction");
 }
 
+void testTracerPropagatesCurvatureMode(Context& context) {
+  constexpr double angle = -0.25 * kPi;
+  const Environment environment = makeSurfaceGradientEnvironment();
+  const IntegratorSettings settings = makeSettings(10.0, 4U);
+  const RayPath standard =
+      GeometryTracer(environment, settings, BoundaryCurvatureMode::Standard)
+          .trace(Source{.depth = 5.0}, angle);
+  const RayPath doubled =
+      GeometryTracer(environment, settings, BoundaryCurvatureMode::Double)
+          .trace(Source{.depth = 5.0}, angle);
+  const RayPath zeroed =
+      GeometryTracer(environment, settings, BoundaryCurvatureMode::Zero)
+          .trace(Source{.depth = 5.0}, angle);
+
+  context.check(standard.events.size() == 1U &&
+                    doubled.events.size() == 1U &&
+                    zeroed.events.size() == 1U &&
+                    standard.points.size() == doubled.points.size() &&
+                    standard.points.size() == zeroed.points.size(),
+                "D/S/Z retain the same center-ray reflection topology");
+  if (standard.events.empty() || doubled.events.empty() ||
+      zeroed.events.empty()) {
+    return;
+  }
+  const std::size_t incidentIndex = standard.events.front().rayPointIndex;
+  const std::size_t reflectedIndex =
+      standard.events.front().reflectedRayPointIndex;
+  context.check(
+      standard.points[incidentIndex].position ==
+              doubled.points[incidentIndex].position &&
+          standard.points[incidentIndex].position ==
+              zeroed.points[incidentIndex].position &&
+          standard.points[reflectedIndex].slowness ==
+              doubled.points[reflectedIndex].slowness &&
+          standard.points[reflectedIndex].slowness ==
+              zeroed.points[reflectedIndex].slowness,
+      "D/S/Z change dynamic bases without changing center trajectory");
+  for (std::size_t basis = 0U; basis < 2U; ++basis) {
+    const double standardJump =
+        standard.points[reflectedIndex].dynamicP[basis] -
+        standard.points[incidentIndex].dynamicP[basis];
+    const double doubledJump =
+        doubled.points[reflectedIndex].dynamicP[basis] -
+        doubled.points[incidentIndex].dynamicP[basis];
+    context.check(standardJump != 0.0,
+                  "gradient reflection produces a nonzero standard RN jump");
+    context.checkNear(doubledJump, 2.0 * standardJump, 1.0e-14,
+                      "Double mode doubles the complete RN jump");
+    context.checkNear(zeroed.points[reflectedIndex].dynamicP[basis],
+                      zeroed.points[incidentIndex].dynamicP[basis], 0.0,
+                      "Zero mode suppresses the complete RN jump");
+    context.checkNear(standard.points[reflectedIndex].dynamicQ[basis],
+                      doubled.points[reflectedIndex].dynamicQ[basis], 0.0,
+                      "D/S/Z preserve reflected dynamic q");
+  }
+}
+
 void testSingleSeabedReflection(Context& context) {
   const GeometryTracer tracer(makeConstantEnvironment(),
                               makeSettings(10.0, 3U));
@@ -334,6 +391,7 @@ void testUnreflectedDirectRayDoesNotDrift(Context& context) {
 int main() {
   Context context;
   testSingleSeaSurfaceReflectionAndArrivalGradient(context);
+  testTracerPropagatesCurvatureMode(context);
   testSingleSeabedReflection(context);
   testMinimumStepOvershootIsNotProjected(context);
   testContinuousMultipleReflections(context);

@@ -20,6 +20,7 @@ namespace {
 
 using rayreuse::AcousticMaterial;
 using rayreuse::BeamFamily;
+using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::CartesianCervenySettings;
 using rayreuse::Environment;
@@ -76,7 +77,9 @@ SimulationCase makeSimulation(std::size_t maximumRayPoints,
                               BeamFamily beamFamily =
                                   BeamFamily::CervenyGaussian,
                               FieldComponent fieldComponent =
-                                  FieldComponent::Pressure) {
+                                  FieldComponent::Pressure,
+                              BoundaryCurvatureMode curvatureMode =
+                                  BoundaryCurvatureMode::Standard) {
   return SimulationCase(
       makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
       ReceiverGrid(linearGrid(400.0, 600.0, 5U),
@@ -89,7 +92,34 @@ SimulationCase makeSimulation(std::size_t maximumRayPoints,
                          .rangeLimit = 1100.0,
                          .depthLimit = 1100.0,
                          .maximumRayPoints = maximumRayPoints},
-      std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent);
+      std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent,
+      curvatureMode);
+}
+
+SimulationCase makeCurvatureSimulation(
+    SimulationRunMode runMode, FieldComponent fieldComponent,
+    BoundaryCurvatureMode curvatureMode,
+    std::vector<double> frequencies = {100.0}) {
+  return SimulationCase(
+      Environment(
+          SoundSpeedProfile(
+              {SoundSpeedPoint{
+                   .depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+               SoundSpeedPoint{
+                   .depth = 100.0, .soundSpeed = 1600.0, .density = 1000.0}}),
+          BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0)),
+      Source{.depth = 50.0, .amplitude = 1.0},
+      ReceiverGrid({20.0, 50.0, 80.0}, {50.0, 175.0, 300.0}),
+      FrequencyGrid(std::move(frequencies)),
+      LaunchFan{.minimumAngle = -60.0 * std::numbers::pi / 180.0,
+                .maximumAngle = 60.0 * std::numbers::pi / 180.0,
+                .explicitLaunchAngleCount = 121U},
+      IntegratorSettings{.stepLength = 5.0,
+                         .rangeLimit = 350.0,
+                         .depthLimit = 110.0,
+                         .maximumRayPoints = 1000U},
+      SourceBeamPattern::omnidirectional(), runMode,
+      BeamFamily::CervenyGaussian, fieldComponent, curvatureMode);
 }
 
 void testSemiCoherentLloydMirrorFactor(Context& context) {
@@ -244,6 +274,42 @@ void testCartesianComponentsPreserveLegacySelectorSemantics(
           "Cartesian Cerveny P/V/H selectors preserve identical C/I/S "
           "legacy fields");
     }
+  }
+}
+
+void testCartesianCurvatureModesPreserveFieldSemantics(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    std::vector<std::vector<std::complex<double>>> pressureFields;
+    for (const BoundaryCurvatureMode curvatureMode :
+         {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
+          BoundaryCurvatureMode::Zero}) {
+      const SingleFrequencyResult pressure = SingleFrequencySolver::solve(
+          makeCurvatureSimulation(mode, FieldComponent::Pressure,
+                                  curvatureMode),
+          1.0, 1000.0);
+      pressureFields.emplace_back(pressure.workspace.pressure().begin(),
+                                  pressure.workspace.pressure().end());
+      for (const FieldComponent component :
+           {FieldComponent::Vertical, FieldComponent::Horizontal}) {
+        const SingleFrequencyResult candidate = SingleFrequencySolver::solve(
+            makeCurvatureSimulation(mode, component, curvatureMode), 1.0,
+            1000.0);
+        context.check(
+            std::equal(pressure.workspace.pressure().begin(),
+                       pressure.workspace.pressure().end(),
+                       candidate.workspace.pressure().begin(),
+                       candidate.workspace.pressure().end()),
+            "D/S/Z preserve Cartesian P/V/H legacy field identity");
+      }
+    }
+    context.check(
+        pressureFields.size() == 3U &&
+            pressureFields[0U] != pressureFields[1U] &&
+            pressureFields[1U] != pressureFields[2U] &&
+            pressureFields[0U] != pressureFields[2U],
+        "D/S/Z produce distinct reflected Cartesian C/I/S fields");
   }
 }
 
@@ -620,6 +686,7 @@ int main() {
   testEndToEndSolve(context);
   testCoherenceModesShareGeometryAndSeparateFieldLaws(context);
   testCartesianComponentsPreserveLegacySelectorSemantics(context);
+  testCartesianCurvatureModesPreserveFieldSemantics(context);
   testSourceBeamPatternScalesAllCoherenceModes(context);
   testGeometricHatCoherenceAndDirectionalPattern(context);
   testGeometricGaussianCoherenceAndDirectionalPattern(context);

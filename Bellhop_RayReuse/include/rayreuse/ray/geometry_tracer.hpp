@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "rayreuse/model/beam_curvature.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/simulation_case.hpp"
@@ -20,7 +21,9 @@ namespace rayreuse {
 // transitions remain distinct from integrated StepQuadrature transitions.
 class GeometryTracer {
  public:
-  GeometryTracer(const Environment& environment, IntegratorSettings integrator);
+  GeometryTracer(
+      const Environment& environment, IntegratorSettings integrator,
+      BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard);
   explicit GeometryTracer(const SimulationCase& simulation);
 
   [[nodiscard]] RayPath trace(const Source& source, double launchAngle) const;
@@ -31,6 +34,7 @@ class GeometryTracer {
   std::vector<double> profileDepths_;
   BoundaryModel seaSurfaceBoundary_;
   BoundaryModel seabedBoundary_;
+  BoundaryCurvatureMode curvatureMode_{BoundaryCurvatureMode::Standard};
 };
 
 }  // namespace rayreuse

@@ -25,6 +25,7 @@ namespace {
 using rayreuse::AttenuationUnit;
 using rayreuse::BeamFamily;
 using rayreuse::BellhopError;
+using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryKind;
 using rayreuse::EnvironmentParser;
 using rayreuse::FieldComponent;
@@ -238,22 +239,33 @@ void testCartesianCervenyComponents(Context& context) {
            {"CC", SimulationRunMode::Coherent},
            {"IC", SimulationRunMode::Incoherent},
            {"SC", SimulationRunMode::SemiCoherent}}) {
-    for (const auto& [token, expectedComponent] :
-         std::vector<std::pair<std::string, FieldComponent>>{
-             {"P", FieldComponent::Pressure},
-             {"V", FieldComponent::Vertical},
-             {"H", FieldComponent::Horizontal}}) {
-      std::string contents = pressureFixture;
-      replaceFirst(contents, "'CC'", "'" + runType + "'");
-      replaceFirst(contents, "1  5  'P'", "1  5  '" + token + "'");
-      const ParsedEnvironment parsed =
-          parseText(contents, "cartesian_" + runType + token + ".env");
-      context.check(
-          parsed.simulationCase.runMode() == expectedMode &&
-              parsed.simulationCase.beamFamily() ==
-                  BeamFamily::CervenyGaussian &&
-              parsed.simulationCase.fieldComponent() == expectedComponent,
-          "Cartesian Cerveny C/I/S parser preserves P/V/H selector");
+    for (const auto& [curvatureToken, expectedCurvature] :
+         std::vector<std::pair<std::string, BoundaryCurvatureMode>>{
+             {"D", BoundaryCurvatureMode::Double},
+             {"S", BoundaryCurvatureMode::Standard},
+             {"Z", BoundaryCurvatureMode::Zero}}) {
+      for (const auto& [componentToken, expectedComponent] :
+           std::vector<std::pair<std::string, FieldComponent>>{
+               {"P", FieldComponent::Pressure},
+               {"V", FieldComponent::Vertical},
+               {"H", FieldComponent::Horizontal}}) {
+        std::string contents = pressureFixture;
+        replaceFirst(contents, "'CC'", "'" + runType + "'");
+        replaceFirst(contents, "'MS'", "'M" + curvatureToken + "'");
+        replaceFirst(contents, "1  5  'P'",
+                     "1  5  '" + componentToken + "'");
+        const ParsedEnvironment parsed = parseText(
+            contents,
+            "cartesian_" + runType + curvatureToken + componentToken +
+                ".env");
+        context.check(
+            parsed.simulationCase.runMode() == expectedMode &&
+                parsed.simulationCase.beamFamily() ==
+                    BeamFamily::CervenyGaussian &&
+                parsed.simulationCase.fieldComponent() == expectedComponent &&
+                parsed.simulationCase.curvatureMode() == expectedCurvature,
+            "Cartesian Cerveny parser preserves C/I/S x D/S/Z x P/V/H");
+      }
     }
   }
   context.expectThrows<ValidationError>(
@@ -263,6 +275,15 @@ void testCartesianCervenyComponents(Context& context) {
         static_cast<void>(parseText(contents, "cartesian_component_x.env"));
       },
       "Cartesian Cerveny rejects an unknown field component");
+  for (const std::string beamType : {"FS", "WS", "MX", "M", "MSS"}) {
+    context.expectThrows<ValidationError>(
+        [&, beamType] {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'MS'", "'" + beamType + "'");
+          static_cast<void>(parseText(contents, "beam_" + beamType + ".env"));
+        },
+        "unsupported width and invalid curvature tokens remain rejected");
+  }
   for (const std::string& runType : {"CG", "CB", "CS"}) {
     context.expectThrows<ValidationError>(
         [&] {

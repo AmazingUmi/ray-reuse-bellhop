@@ -66,6 +66,8 @@ class CaseModelTests(unittest.TestCase):
                 "cerveny_width_wkb",
                 "cerveny_curvature_double",
                 "cerveny_curvature_zero",
+                "cerveny_curvature_double_flat_gradient",
+                "cerveny_curvature_zero_flat_gradient",
                 "source_geometry_point_explicit",
                 "source_geometry_line",
                 "incoherent_direct",
@@ -154,6 +156,8 @@ class CaseModelTests(unittest.TestCase):
             "grain_size_equivalent_acoustic_control",
             "tabulated_reflection_bottom",
             "tabulated_reflection_rigid_control",
+            "cerveny_curvature_double_flat_gradient",
+            "cerveny_curvature_zero_flat_gradient",
         ):
             with self.subTest(case=case_id):
                 self.assertEqual(
@@ -407,6 +411,43 @@ class CaseModelTests(unittest.TestCase):
                         (control.directory / companion).read_bytes(),
                     )
         self.assertEqual(len(rendered_inputs), 5)
+        self.assertEqual(len(normalized), 1)
+
+    def test_fp1f_flat_gradient_curvature_fixtures_only_change_option(
+        self,
+    ) -> None:
+        expected = {
+            "cerveny_curvature_double_flat_gradient": "MD",
+            "cerveny_curvature_zero_flat_gradient": "MZ",
+        }
+        normalized: set[str] = set()
+        rendered_inputs: set[str] = set()
+        for case_id, option in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (100.0,))
+                self.assertEqual(
+                    definition.supported_versions,
+                    ("origin", "f2cpp", "rayreuse"),
+                )
+                rendered = definition.render_origin_environment(
+                    frequencies[0],
+                    definition.shared_launch_angle_count(frequencies),
+                )
+                self.assertIn(f"'{option}' 1.0  0.20", rendered)
+                rendered_inputs.add(rendered)
+                normalized.add(
+                    rendered.replace(
+                        f"'{option}' 1.0  0.20",
+                        "'<CURVATURE>' 1.0  0.20",
+                    ).replace(
+                        "doubled curvature", "<curvature>"
+                    ).replace(
+                        "zero curvature", "<curvature>"
+                    )
+                )
+        self.assertEqual(len(rendered_inputs), 2)
         self.assertEqual(len(normalized), 1)
 
     def test_i7_cartesian_component_fixtures_only_change_component(self) -> None:

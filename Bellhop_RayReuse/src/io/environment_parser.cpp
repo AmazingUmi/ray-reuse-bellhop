@@ -1035,6 +1035,7 @@ struct ParsedRunType {
 
   double epsilonMultiplier = 1.0;
   double loopRange = 1.0;
+  BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard;
   std::size_t imageCount = 1U;
   int beamWindow = 1;
   FieldComponent fieldComponent = FieldComponent::Pressure;
@@ -1042,10 +1043,28 @@ struct ParsedRunType {
       runType.beamFamily == BeamFamily::CervenyGaussian) {
     const Record beamRecord = reader.require("Cerveny beam settings");
     requireTokenCount(beamRecord, 3U, source, "Cerveny beam settings");
-    if (beamRecord.tokens.front() != "MS") {
+    const std::string& beamType = beamRecord.tokens.front();
+    if (beamType.size() != 2U) {
       fail(source, beamRecord.lineNumber,
-           "only minimum-width, standard-curvature beam type 'MS' "
-           "is supported");
+           "Cerveny beam type must contain a width and curvature letter");
+    }
+    if (beamType[0U] != 'M') {
+      fail(source, beamRecord.lineNumber,
+           "only minimum-width Cerveny beam type 'M' is supported");
+    }
+    switch (beamType[1U]) {
+      case 'D':
+        curvatureMode = BoundaryCurvatureMode::Double;
+        break;
+      case 'S':
+        curvatureMode = BoundaryCurvatureMode::Standard;
+        break;
+      case 'Z':
+        curvatureMode = BoundaryCurvatureMode::Zero;
+        break;
+      default:
+        fail(source, beamRecord.lineNumber,
+             "Cerveny curvature condition must be one of 'D', 'S', or 'Z'");
     }
     epsilonMultiplier =
         parseDouble(beamRecord, 1U, source, "epsilon multiplier");
@@ -1098,7 +1117,7 @@ struct ParsedRunType {
                          .depthLimit = depthLimit,
                          .maximumRayPoints = kMaximumRayPoints},
       std::move(sourceBeamPattern), runType.runMode, runType.beamFamily,
-      fieldComponent);
+      fieldComponent, curvatureMode);
 
   return ParsedEnvironment{
       .title = std::move(title),

@@ -1,6 +1,6 @@
 # Bellhop RayReuse 功能支持矩阵
 
-> 封板日期：2026-08-20；FP-1A/FP-1B/FP-1C/FP-1D/FP-1E 更新：2026-08-26
+> 封板日期：2026-08-20；FP-1A～FP-1F 更新：2026-08-26
 > 适用范围：当前二维、point-source、rectilinear-receiver 的 RayReuse 实现。
 > 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
 
@@ -18,7 +18,7 @@
 
 | 能力 | 当前范围 |
 |---|---|
-| TL | point/single-source-depth/rectilinear/C-linear SSP 下的 Cartesian Cerveny `CC/IC/SC + MS + P/V/H`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）、Cartesian GeoGaussian `CB/IB/SB` 与 coherent Cartesian Simple Gaussian `CS`；Cartesian Cerveny 的 P/V/H 按 Origin/F2CPP legacy contract 被解析、保存并写入 PRT，但 Cartesian Influence 不施加 component derivative，三者数值相同；非 Cerveny family 只允许 P；C 使用 complex-pressure workspace，前三个 family 的 I/S 使用逐频 intensity workspace，`IS/SS` 明确拒绝；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B/S 均使用 geometric point normalization；GeoGaussian width/membership 与 Simple Gaussian contribution 均逐频精确计算；directional `.sbp` 与适用的 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
+| TL | point/single-source-depth/rectilinear/C-linear SSP 下的 Cartesian Cerveny `CC/IC/SC + M{D,S,Z} + P/V/H`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）、Cartesian GeoGaussian `CB/IB/SB` 与 coherent Cartesian Simple Gaussian `CS`；Cartesian Cerveny 的 P/V/H 按 Origin/F2CPP legacy contract 被解析、保存并写入 PRT，但 Cartesian Influence 不施加 component derivative，三者数值相同；D/S/Z 在 frequency-independent reflection 时对完整 dynamic-ray `RN` jump 分别倍增、保留、清零，minimum-width epsilon 仍按每个目标频率和既有 F2CPP/Origin evaluation order 计算；F/W width 明确拒绝；非 Cerveny family 只允许 P 与 standard curvature；C 使用 complex-pressure workspace，前三个 family 的 I/S 使用逐频 intensity workspace，`IS/SS` 明确拒绝；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B/S 均使用 geometric point normalization；GeoGaussian width/membership 与 Simple Gaussian contribution 均逐频精确计算；directional `.sbp` 与适用的 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
 | R | 单频 `R/RG/RGO`、directional `.sbp`、显式 `Nalpha=1`、逐频 active/terminal prefix、Origin-compatible `.ray` |
 | Arrivals | ASCII `A`、binary `a`；Cartesian geometric hat/Gaussian `G/B`；frequency-local `ArrivalWorkspace` 与 AddArr 语义 |
 | Eigenray | `E` 的 Cartesian `G/B` traversal；receiver hit 对应的冻结 ray prefix 与 `.ray` |
@@ -59,7 +59,7 @@ header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频�
 - 3D / N×2D；
 - beam shift；
 - ray-centered geometric Gaussian；
-- ray-centered GeoHat TL、ray-centered Cerveny，以及本矩阵未列出的 beam/coordinate family；
+- Cartesian Cerveny F/W width、ray-centered GeoHat TL、ray-centered Cerveny，以及本矩阵未列出的 beam/coordinate family；
 - 新 BARR 算法、SIMD、新性能优化；
 - F2CPP/RayReuse shared-library 重构。
 

@@ -99,6 +99,19 @@ void printUsage(std::ostream& stream) {
   throw rayreuse::ValidationError("field component is invalid");
 }
 
+[[nodiscard]] std::string_view curvatureModeLabel(
+    rayreuse::BoundaryCurvatureMode mode) {
+  switch (mode) {
+    case rayreuse::BoundaryCurvatureMode::Double:
+      return "Curvature doubling invoked";
+    case rayreuse::BoundaryCurvatureMode::Standard:
+      return "Standard curvature condition";
+    case rayreuse::BoundaryCurvatureMode::Zero:
+      return "Curvature zeroing invoked";
+  }
+  throw rayreuse::ValidationError("boundary curvature mode is invalid");
+}
+
 [[nodiscard]] std::string frequencyToken(double frequency) {
   std::ostringstream stream;
   stream << std::setprecision(12) << std::defaultfloat << frequency;
@@ -330,7 +343,9 @@ void writeConfigurationSummary(std::ostream& stream,
   if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian &&
       rayreuse::isTransmissionLossMode(simulation.runMode())) {
     stream << "Component = "
-           << fieldComponentToken(simulation.fieldComponent()) << '\n';
+           << fieldComponentToken(simulation.fieldComponent()) << '\n'
+           << "Minimum width beams\n"
+           << curvatureModeLabel(simulation.curvatureMode()) << '\n';
   }
   switch (simulation.runMode()) {
     case rayreuse::SimulationRunMode::Coherent:

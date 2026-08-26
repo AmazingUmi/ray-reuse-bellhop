@@ -4,6 +4,7 @@
 #include <optional>
 #include <vector>
 
+#include "rayreuse/model/beam_curvature.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/launch_fan_planner.hpp"
 
@@ -123,7 +124,9 @@ class SimulationCase {
                      SourceBeamPattern::omnidirectional(),
                  SimulationRunMode runMode = SimulationRunMode::Coherent,
                  BeamFamily beamFamily = BeamFamily::CervenyGaussian,
-                 FieldComponent fieldComponent = FieldComponent::Pressure);
+                 FieldComponent fieldComponent = FieldComponent::Pressure,
+                 BoundaryCurvatureMode curvatureMode =
+                     BoundaryCurvatureMode::Standard);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
@@ -135,6 +138,7 @@ class SimulationCase {
   [[nodiscard]] SimulationRunMode runMode() const noexcept;
   [[nodiscard]] BeamFamily beamFamily() const noexcept;
   [[nodiscard]] FieldComponent fieldComponent() const noexcept;
+  [[nodiscard]] BoundaryCurvatureMode curvatureMode() const noexcept;
 
  private:
   Environment environment_;
@@ -147,6 +151,7 @@ class SimulationCase {
   SimulationRunMode runMode_;
   BeamFamily beamFamily_;
   FieldComponent fieldComponent_;
+  BoundaryCurvatureMode curvatureMode_;
 };
 
 }  // namespace rayreuse

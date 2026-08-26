@@ -2,19 +2,11 @@
 
 #include <cstddef>
 
+#include "rayreuse/model/beam_curvature.hpp"
 #include "rayreuse/numerics/vec2.hpp"
 #include "rayreuse/ray/ray_path.hpp"
 
 namespace rayreuse {
-
-// ReflectMod.f90 allows the boundary-curvature contribution to the dynamic-ray
-// jump to be doubled, retained, or suppressed.  Keep that choice explicit:
-// it is a beam-model option rather than a property of the physical boundary.
-enum class BoundaryCurvatureMode {
-  Standard,
-  Double,
-  Zero,
-};
 
 struct FlatBoundaryGeometry {
   Vec2 point;
