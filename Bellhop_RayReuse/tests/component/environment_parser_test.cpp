@@ -27,6 +27,7 @@ using rayreuse::BeamFamily;
 using rayreuse::BellhopError;
 using rayreuse::BoundaryKind;
 using rayreuse::EnvironmentParser;
+using rayreuse::FieldComponent;
 using rayreuse::FrequencyProjector;
 using rayreuse::GeometryTracer;
 using rayreuse::ParsedEnvironment;
@@ -227,6 +228,52 @@ void testEnvironmentFrequencyList(Context& context) {
         static_cast<void>(parseText(duplicate, "duplicate_frequencies.env"));
       },
       "a duplicate ENV frequency is rejected");
+}
+
+void testCartesianCervenyComponents(Context& context) {
+  const std::string pressureFixture =
+      renderCase("cartesian_component_pressure", 1000.0, 300U);
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CC", SimulationRunMode::Coherent},
+           {"IC", SimulationRunMode::Incoherent},
+           {"SC", SimulationRunMode::SemiCoherent}}) {
+    for (const auto& [token, expectedComponent] :
+         std::vector<std::pair<std::string, FieldComponent>>{
+             {"P", FieldComponent::Pressure},
+             {"V", FieldComponent::Vertical},
+             {"H", FieldComponent::Horizontal}}) {
+      std::string contents = pressureFixture;
+      replaceFirst(contents, "'CC'", "'" + runType + "'");
+      replaceFirst(contents, "1  5  'P'", "1  5  '" + token + "'");
+      const ParsedEnvironment parsed =
+          parseText(contents, "cartesian_" + runType + token + ".env");
+      context.check(
+          parsed.simulationCase.runMode() == expectedMode &&
+              parsed.simulationCase.beamFamily() ==
+                  BeamFamily::CervenyGaussian &&
+              parsed.simulationCase.fieldComponent() == expectedComponent,
+          "Cartesian Cerveny C/I/S parser preserves P/V/H selector");
+    }
+  }
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = pressureFixture;
+        replaceFirst(contents, "1  5  'P'", "1  5  'X'");
+        static_cast<void>(parseText(contents, "cartesian_component_x.env"));
+      },
+      "Cartesian Cerveny rejects an unknown field component");
+  for (const std::string& runType : {"CG", "CB", "CS"}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'CC'", "'" + runType + "'");
+          replaceFirst(contents, "1  5  'P'", "1  5  'V'");
+          static_cast<void>(
+              parseText(contents, "non_cerveny_" + runType + "V.env"));
+        },
+        "non-Cerveny TL families reject a component option tail");
+  }
 }
 
 void testBoundaryCases(Context& context) {
@@ -695,6 +742,7 @@ int main() {
   testDirectCase(context);
   testFrequencyOverride(context);
   testEnvironmentFrequencyList(context);
+  testCartesianCervenyComponents(context);
   testBoundaryCases(context);
   testRrB1BoundarySidecarsAndFrozenEvents(context);
   testAttenuationCases(context);

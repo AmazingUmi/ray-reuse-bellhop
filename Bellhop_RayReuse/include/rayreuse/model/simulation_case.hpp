@@ -56,6 +56,12 @@ enum class FieldAccumulationKind {
   Intensity,
 };
 
+enum class FieldComponent {
+  Pressure,
+  Vertical,
+  Horizontal,
+};
+
 [[nodiscard]] bool isTransmissionLossMode(SimulationRunMode mode);
 [[nodiscard]] FieldAccumulationKind fieldAccumulationKind(
     SimulationRunMode mode);
@@ -116,7 +122,8 @@ class SimulationCase {
                  SourceBeamPattern sourceBeamPattern =
                      SourceBeamPattern::omnidirectional(),
                  SimulationRunMode runMode = SimulationRunMode::Coherent,
-                 BeamFamily beamFamily = BeamFamily::CervenyGaussian);
+                 BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+                 FieldComponent fieldComponent = FieldComponent::Pressure);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
@@ -127,6 +134,7 @@ class SimulationCase {
   [[nodiscard]] const SourceBeamPattern& sourceBeamPattern() const noexcept;
   [[nodiscard]] SimulationRunMode runMode() const noexcept;
   [[nodiscard]] BeamFamily beamFamily() const noexcept;
+  [[nodiscard]] FieldComponent fieldComponent() const noexcept;
 
  private:
   Environment environment_;
@@ -138,6 +146,7 @@ class SimulationCase {
   SourceBeamPattern sourceBeamPattern_;
   SimulationRunMode runMode_;
   BeamFamily beamFamily_;
+  FieldComponent fieldComponent_;
 };
 
 }  // namespace rayreuse

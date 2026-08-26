@@ -23,6 +23,7 @@ using rayreuse::BeamFamily;
 using rayreuse::BoundaryModel;
 using rayreuse::CartesianCervenySettings;
 using rayreuse::Environment;
+using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchAngleDegreeBounds;
@@ -73,7 +74,9 @@ SimulationCase makeSimulation(std::size_t maximumRayPoints,
                               SourceBeamPattern sourceBeamPattern =
                                   SourceBeamPattern::omnidirectional(),
                               BeamFamily beamFamily =
-                                  BeamFamily::CervenyGaussian) {
+                                  BeamFamily::CervenyGaussian,
+                              FieldComponent fieldComponent =
+                                  FieldComponent::Pressure) {
   return SimulationCase(
       makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
       ReceiverGrid(linearGrid(400.0, 600.0, 5U),
@@ -86,7 +89,7 @@ SimulationCase makeSimulation(std::size_t maximumRayPoints,
                          .rangeLimit = 1100.0,
                          .depthLimit = 1100.0,
                          .maximumRayPoints = maximumRayPoints},
-      std::move(sourceBeamPattern), runMode, beamFamily);
+      std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent);
 }
 
 void testSemiCoherentLloydMirrorFactor(Context& context) {
@@ -210,6 +213,38 @@ void testCoherenceModesShareGeometryAndSeparateFieldLaws(Context& context) {
                 "I/S modes produce non-empty final pressure amplitudes");
   context.check(lloydChangesField,
                 "semi-coherent Lloyd weighting distinguishes S from I");
+}
+
+void testCartesianComponentsPreserveLegacySelectorSemantics(
+    Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SingleFrequencyResult pressure = SingleFrequencySolver::solve(
+        makeSimulation(1000U, {50.0}, mode,
+                       SourceBeamPattern::omnidirectional(),
+                       BeamFamily::CervenyGaussian,
+                       FieldComponent::Pressure),
+        1.0, 500.0);
+    for (const FieldComponent component :
+         {FieldComponent::Vertical, FieldComponent::Horizontal}) {
+      const SingleFrequencyResult candidate = SingleFrequencySolver::solve(
+          makeSimulation(1000U, {50.0}, mode,
+                         SourceBeamPattern::omnidirectional(),
+                         BeamFamily::CervenyGaussian, component),
+          1.0, 500.0);
+      context.check(
+          pressure.rayCount == candidate.rayCount &&
+              pressure.totalRayPointCount == candidate.totalRayPointCount &&
+              pressure.rayCacheBytes == candidate.rayCacheBytes &&
+              std::equal(pressure.workspace.pressure().begin(),
+                         pressure.workspace.pressure().end(),
+                         candidate.workspace.pressure().begin(),
+                         candidate.workspace.pressure().end()),
+          "Cartesian Cerveny P/V/H selectors preserve identical C/I/S "
+          "legacy fields");
+    }
+  }
 }
 
 void testSourceBeamPatternScalesAllCoherenceModes(Context& context) {
@@ -584,6 +619,7 @@ int main() {
   testSemiCoherentLloydMirrorFactor(context);
   testEndToEndSolve(context);
   testCoherenceModesShareGeometryAndSeparateFieldLaws(context);
+  testCartesianComponentsPreserveLegacySelectorSemantics(context);
   testSourceBeamPatternScalesAllCoherenceModes(context);
   testGeometricHatCoherenceAndDirectionalPattern(context);
   testGeometricGaussianCoherenceAndDirectionalPattern(context);

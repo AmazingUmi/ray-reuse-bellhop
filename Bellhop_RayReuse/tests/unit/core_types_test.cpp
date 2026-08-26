@@ -20,6 +20,7 @@ namespace {
 using rayreuse::BeamFamily;
 using rayreuse::BoundaryModel;
 using rayreuse::Environment;
+using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
@@ -273,8 +274,11 @@ void testSimulationProductMetadata(Context& context) {
       },
       "source beam pattern rejects amplitude-conversion overflow");
 
-  const auto makeMetadataCase = [&](SimulationRunMode runMode,
-                                    BeamFamily beamFamily) {
+  const auto makeMetadataCase = [&](
+                                    SimulationRunMode runMode,
+                                    BeamFamily beamFamily,
+                                    FieldComponent fieldComponent =
+                                        FieldComponent::Pressure) {
     return SimulationCase(
         makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
         ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
@@ -286,7 +290,7 @@ void testSimulationProductMetadata(Context& context) {
                            .rangeLimit = 5100.0,
                            .depthLimit = 1100.0,
                            .maximumRayPoints = 10000U},
-        pattern, runMode, beamFamily);
+        pattern, runMode, beamFamily, fieldComponent);
   };
   const SimulationCase arrivals = makeMetadataCase(
       SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
@@ -310,6 +314,28 @@ void testSimulationProductMetadata(Context& context) {
           !rayreuse::usesLloydMirror(incoherent.runMode()) &&
           rayreuse::usesLloydMirror(semiCoherent.runMode()),
       "SimulationCase preserves I/S mode and accumulation metadata");
+  for (const FieldComponent component :
+       {FieldComponent::Pressure, FieldComponent::Vertical,
+        FieldComponent::Horizontal}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian, component);
+    context.check(cartesianCerveny.fieldComponent() == component,
+                  "SimulationCase preserves Cartesian Cerveny component");
+  }
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+            FieldComponent::Vertical));
+      },
+      "non-Cerveny families reject non-pressure components");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            FieldComponent::Horizontal));
+      },
+      "non-TL products reject non-pressure components");
   const SimulationCase simpleGaussian = makeMetadataCase(
       SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
   context.check(simpleGaussian.beamFamily() == BeamFamily::SimpleGaussian,
@@ -332,6 +358,13 @@ void testSimulationProductMetadata(Context& context) {
                                            static_cast<BeamFamily>(999)));
       },
       "SimulationCase rejects invalid beam family enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            static_cast<FieldComponent>(999)));
+      },
+      "SimulationCase rejects invalid field component enum values");
 }
 
 void testRayPathCache(Context& context) {

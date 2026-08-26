@@ -87,6 +87,18 @@ void printUsage(std::ostream& stream) {
   throw rayreuse::ValidationError("unknown simulation run mode");
 }
 
+[[nodiscard]] char fieldComponentToken(rayreuse::FieldComponent component) {
+  switch (component) {
+    case rayreuse::FieldComponent::Pressure:
+      return 'P';
+    case rayreuse::FieldComponent::Vertical:
+      return 'V';
+    case rayreuse::FieldComponent::Horizontal:
+      return 'H';
+  }
+  throw rayreuse::ValidationError("field component is invalid");
+}
+
 [[nodiscard]] std::string frequencyToken(double frequency) {
   std::ostringstream stream;
   stream << std::setprecision(12) << std::defaultfloat << frequency;
@@ -314,6 +326,11 @@ void writeConfigurationSummary(std::ostream& stream,
   if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian ||
       !rayreuse::isTransmissionLossMode(simulation.runMode())) {
     stream << "Cartesian beams\n";
+  }
+  if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian &&
+      rayreuse::isTransmissionLossMode(simulation.runMode())) {
+    stream << "Component = "
+           << fieldComponentToken(simulation.fieldComponent()) << '\n';
   }
   switch (simulation.runMode()) {
     case rayreuse::SimulationRunMode::Coherent:

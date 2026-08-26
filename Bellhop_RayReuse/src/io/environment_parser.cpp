@@ -1037,6 +1037,7 @@ struct ParsedRunType {
   double loopRange = 1.0;
   std::size_t imageCount = 1U;
   int beamWindow = 1;
+  FieldComponent fieldComponent = FieldComponent::Pressure;
   if (isTransmissionLossMode(runType.runMode) &&
       runType.beamFamily == BeamFamily::CervenyGaussian) {
     const Record beamRecord = reader.require("Cerveny beam settings");
@@ -1059,9 +1060,15 @@ struct ParsedRunType {
     requireTokenCount(imageRecord, 3U, source, "image/window settings");
     imageCount = parseCount(imageRecord, 0U, source, "image count", false, 3U);
     beamWindow = parsePositiveInt(imageRecord, 1U, source, "beam window");
-    if (imageRecord.tokens[2U] != "P") {
+    if (imageRecord.tokens[2U] == "P") {
+      fieldComponent = FieldComponent::Pressure;
+    } else if (imageRecord.tokens[2U] == "V") {
+      fieldComponent = FieldComponent::Vertical;
+    } else if (imageRecord.tokens[2U] == "H") {
+      fieldComponent = FieldComponent::Horizontal;
+    } else {
       fail(source, imageRecord.lineNumber,
-           "only pressure component 'P' is supported");
+           "field component must be one of 'P', 'V', or 'H'");
     }
   }
   reader.requireEnd();
@@ -1090,7 +1097,8 @@ struct ParsedRunType {
                          .rangeLimit = rangeLimit,
                          .depthLimit = depthLimit,
                          .maximumRayPoints = kMaximumRayPoints},
-      std::move(sourceBeamPattern), runType.runMode, runType.beamFamily);
+      std::move(sourceBeamPattern), runType.runMode, runType.beamFamily,
+      fieldComponent);
 
   return ParsedEnvironment{
       .title = std::move(title),

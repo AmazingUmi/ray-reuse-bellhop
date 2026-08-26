@@ -185,6 +185,9 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     simpleGaussianInfluence.emplace(simulation.receivers(),
                                     simulation.integrator().stepLength);
   } else {
+    // Origin and F2CPP preserve the Cartesian Cerveny P/V/H selector in the
+    // environment/model/PRT lifecycle, but InfluenceCervenyCart does not read
+    // it.  Only the out-of-scope ray-centered Influence applies V/H factors.
     cervenyInfluence.emplace(simulation.environment(), simulation.receivers(),
                              influenceSettings);
   }

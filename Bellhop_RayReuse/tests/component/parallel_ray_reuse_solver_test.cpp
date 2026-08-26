@@ -23,6 +23,7 @@ using rayreuse::BeamFamily;
 using rayreuse::BroadbandNonReuseResult;
 using rayreuse::BroadbandNonReuseSolver;
 using rayreuse::Environment;
+using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
@@ -44,7 +45,8 @@ using rayreuse::test::Context;
 SimulationCase makeSimulation(
     std::vector<double> frequencies,
     SimulationRunMode runMode = SimulationRunMode::Coherent,
-    BeamFamily beamFamily = BeamFamily::CervenyGaussian) {
+    BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+    FieldComponent fieldComponent = FieldComponent::Pressure) {
   return SimulationCase(
       Environment(
           SoundSpeedProfile(
@@ -63,7 +65,8 @@ SimulationCase makeSimulation(
                          .rangeLimit = 110.0,
                          .depthLimit = 110.0,
                          .maximumRayPoints = 100U},
-      SourceBeamPattern::omnidirectional(), runMode, beamFamily);
+      SourceBeamPattern::omnidirectional(), runMode, beamFamily,
+      fieldComponent);
 }
 
 std::vector<double> makeFrequencies(std::size_t count) {
@@ -290,6 +293,63 @@ void testSimpleGaussianMatchesAcrossExecution(Context& context) {
   }
 }
 
+void testCartesianComponentsMatchAcrossExecution(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    std::optional<SerialRayReuseResult> pressure;
+    for (const FieldComponent component :
+         {FieldComponent::Pressure, FieldComponent::Vertical,
+          FieldComponent::Horizontal}) {
+      const SimulationCase simulation = makeSimulation(
+          {50.0, 100.0}, mode, BeamFamily::CervenyGaussian, component);
+      const BroadbandNonReuseResult nonReuse =
+          BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+      const SerialRayReuseResult reuse =
+          SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+      const StreamedParallelRun parallel = runParallel(
+          simulation,
+          ParallelRayReuseSettings{.workerCount = 2U,
+                                   .outputQueueCapacity = 1U,
+                                   .memoryBudgetBytes = 0U},
+          true);
+      context.check(
+          reuse.statistics.cacheFingerprintVerified &&
+              reuse.statistics.cacheFingerprintBefore ==
+                  reuse.statistics.cacheFingerprintAfter &&
+              parallel.statistics.cacheFingerprintVerified &&
+              parallel.statistics.cacheFingerprintBefore ==
+                  parallel.statistics.cacheFingerprintAfter,
+          "Cartesian Cerveny C/I/S x P/V/H preserves frozen cache");
+      for (std::size_t index = 0U; index < 2U; ++index) {
+        context.check(
+            parallel.workspaces[index].has_value(),
+            "parallel Cartesian component returns every frequency");
+        if (!parallel.workspaces[index].has_value()) {
+          continue;
+        }
+        checkWorkspaceEqual(
+            context, reuse.frequencyResults[index].workspace,
+            nonReuse.frequencyResults[index].workspace,
+            "Cartesian component serial reuse equals non-reuse bitwise");
+        checkWorkspaceEqual(
+            context, *parallel.workspaces[index],
+            nonReuse.frequencyResults[index].workspace,
+            "Cartesian component parallel reuse equals non-reuse bitwise");
+        if (pressure.has_value()) {
+          checkWorkspaceEqual(
+              context, reuse.frequencyResults[index].workspace,
+              pressure->frequencyResults[index].workspace,
+              "Cartesian P/V/H legacy selectors are bitwise identical");
+        }
+      }
+      if (!pressure.has_value()) {
+        pressure.emplace(reuse);
+      }
+    }
+  }
+}
+
 void testMemoryBudget(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
   const StreamedParallelRun unrestricted = runParallel(
@@ -384,6 +444,7 @@ int main() {
   testRepeatedRunIsDeterministic(context);
   testCoherenceModesMatchAcrossExecution(context);
   testSimpleGaussianMatchesAcrossExecution(context);
+  testCartesianComponentsMatchAcrossExecution(context);
   testMemoryBudget(context);
   testInvalidSettingsAndConsumerFailure(context);
 
