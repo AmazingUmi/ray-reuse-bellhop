@@ -15,6 +15,7 @@
 #include "rayreuse/field/geometric_gaussian_influence.hpp"
 #include "rayreuse/field/geometric_hat_influence.hpp"
 #include "rayreuse/field/pressure_scaling.hpp"
+#include "rayreuse/field/simple_gaussian_influence.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/ray/geometry_tracer.hpp"
 
@@ -141,10 +142,16 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
           .soundSpeed;
   if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
       simulation.beamFamily() != BeamFamily::GeometricHat &&
-      simulation.beamFamily() != BeamFamily::GeometricGaussian) {
+      simulation.beamFamily() != BeamFamily::GeometricGaussian &&
+      simulation.beamFamily() != BeamFamily::SimpleGaussian) {
     throw ValidationError(
         "single-frequency TL solver supports only Cartesian Cerveny and "
-        "Cartesian geometric G/B beams");
+        "Cartesian geometric G/B/S beams");
+  }
+  if (simulation.beamFamily() == BeamFamily::SimpleGaussian &&
+      simulation.runMode() != SimulationRunMode::Coherent) {
+    throw ValidationError(
+        "simple Gaussian TL requires coherent pressure");
   }
   std::optional<BeamEpsilon> epsilon;
   if (simulation.beamFamily() == BeamFamily::CervenyGaussian) {
@@ -169,10 +176,14 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   std::optional<CartesianCervenyInfluence> cervenyInfluence;
   std::optional<GeometricHatInfluence> geometricHatInfluence;
   std::optional<GeometricGaussianInfluence> geometricGaussianInfluence;
+  std::optional<SimpleGaussianInfluence> simpleGaussianInfluence;
   if (simulation.beamFamily() == BeamFamily::GeometricHat) {
     geometricHatInfluence.emplace(simulation.receivers());
   } else if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
     geometricGaussianInfluence.emplace(simulation.receivers());
+  } else if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
+    simpleGaussianInfluence.emplace(simulation.receivers(),
+                                    simulation.integrator().stepLength);
   } else {
     cervenyInfluence.emplace(simulation.environment(), simulation.receivers(),
                              influenceSettings);
@@ -204,7 +215,11 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const RayFrequencyState frequencyState =
         projector.project(path, frequency, projectedSourceAmplitude);
     const Clock::time_point projectEnd = Clock::now();
-    if (geometricGaussianInfluence.has_value() &&
+    if (simpleGaussianInfluence.has_value()) {
+      static_cast<void>(simpleGaussianInfluence->accumulate(
+          *coherentWorkspace, path, frequencyState,
+          launchFan.launchAngleStep));
+    } else if (geometricGaussianInfluence.has_value() &&
         coherentWorkspace.has_value()) {
       static_cast<void>(geometricGaussianInfluence->accumulate(
           *coherentWorkspace, path, frequencyState,

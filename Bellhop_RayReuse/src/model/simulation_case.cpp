@@ -51,6 +51,7 @@ void validateBeamFamily(BeamFamily family) {
     case BeamFamily::CervenyGaussian:
     case BeamFamily::GeometricHat:
     case BeamFamily::GeometricGaussian:
+    case BeamFamily::SimpleGaussian:
       return;
   }
   throw ValidationError("beam family is invalid");
@@ -241,6 +242,10 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       beamFamily_(beamFamily) {
   validateRunMode(runMode_);
   validateBeamFamily(beamFamily_);
+  if (beamFamily_ == BeamFamily::SimpleGaussian &&
+      runMode_ != SimulationRunMode::Coherent) {
+    throw ValidationError("simple Gaussian TL requires coherent pressure");
+  }
   requireFinite(source_.depth, "source.depth");
   requireFinite(source_.amplitude, "source.amplitude");
   const Vec2 sourcePosition{.range = 0.0, .depth = source_.depth};

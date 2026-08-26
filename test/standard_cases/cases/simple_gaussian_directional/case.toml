@@ -1,10 +1,12 @@
-id = "simple_gaussian_cartesian"
-description = "Finite constant-speed simple-Gaussian beam case"
+id = "simple_gaussian_directional"
+description = "Directional source beam pattern on Cartesian Simple Gaussian coherent TL"
 origin_template = "origin.env.in"
+companion_files = ["origin.sbp"]
 source_references = [
-  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 non-Cerveny beam grammar",
-  "Bellhop_origin/Bellhop/bellhop.f90 simple-Gaussian dispatch",
+  "Bellhop_origin/misc/beampattern.f90 ReadPat",
+  "Bellhop_origin/Bellhop/bellhop.f90 SrcBmPat interpolation",
   "Bellhop_origin/Bellhop/influence.f90 InfluenceSGB",
+  "Bellhop_F2CPP/src/solver/single_frequency_solver.cpp source pattern before projection",
 ]
 
 [compatibility]
@@ -21,24 +23,20 @@ policy = "shared_fmax"
 [validation]
 shd_dimensions = [1, 1, 1, 1, 1, 7, 21]
 prt_markers = [
-  "VACUUM",
-  "Perfectly RIGID",
+  "Coherent TL calculation",
   "Simple gaussian beams",
   "Simple Gaussian beams",
+  "Using source beam pattern file",
+  "Number of source beam pattern points",
+  "VACUUM",
+  "Perfectly RIGID",
 ]
 prt_forbidden_markers = [
-  "THORP volume attenuation added",
+  "Cartesian beams",
   "Geometric hat beams in Cartesian coordinates",
   "Geometric gaussian beams in Cartesian coordinates",
-  "Cartesian beams",
-  "Ray centered beams",
-  "Type of beam =",
-  "Component",
-  "Number of images",
+  "THORP volume attenuation added",
 ]
 
 [profiles.single]
 frequencies_hz = [1000.0]
-
-[profiles.broadband_smoke]
-frequencies_hz = [1000.0, 2000.0]

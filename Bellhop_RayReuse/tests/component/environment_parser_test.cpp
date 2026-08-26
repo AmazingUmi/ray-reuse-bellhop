@@ -593,13 +593,34 @@ void testUnsupportedAndMalformedInput(Context& context) {
                 BeamFamily::GeometricGaussian,
         "CB/IB/SB select the Cartesian GeoGaussian C/I/S path");
   }
+  std::string simple = hat;
+  replaceFirst(simple, "'CG'", "'CS'");
+  const ParsedEnvironment parsedSimple =
+      parseText(simple, "simple_gaussian.env");
+  context.check(
+      parsedSimple.simulationCase.runMode() == SimulationRunMode::Coherent &&
+          parsedSimple.simulationCase.beamFamily() ==
+              BeamFamily::SimpleGaussian,
+      "CS selects the coherent Cartesian Simple Gaussian path");
+  for (const std::string& unsupported : {"IS", "SS"}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          std::string contents = hat;
+          replaceFirst(contents, "'CG'", "'" + unsupported + "'");
+          static_cast<void>(parseText(contents,
+                                      "simple_gaussian_" + unsupported +
+                                          ".env"));
+        },
+        "Simple Gaussian intensity run modes remain explicitly rejected");
+  }
   context.expectThrows<ValidationError>(
       [&] {
-        std::string contents = hat;
-        replaceFirst(contents, "'CG'", "'CS'");
-        static_cast<void>(parseText(contents, "simple_gaussian.env"));
+        std::string contents = simple;
+        contents += "'MS' 1.0 2.5\n";
+        static_cast<void>(parseText(contents,
+                                    "simple_gaussian_with_tail.env"));
       },
-      "Simple Gaussian remains explicitly rejected");
+      "Cartesian Simple Gaussian rejects a Cerveny-only option tail");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = hat;

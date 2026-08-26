@@ -65,6 +65,7 @@ enum class BeamFamily {
   CervenyGaussian,
   GeometricHat,
   GeometricGaussian,
+  SimpleGaussian,
 };
 
 struct SourceBeamPatternSample {

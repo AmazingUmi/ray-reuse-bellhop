@@ -75,6 +75,7 @@ add_library(
     src/field/cartesian_cerveny_influence.cpp
     src/field/geometric_gaussian_influence.cpp
     src/field/geometric_hat_influence.cpp
+    src/field/simple_gaussian_influence.cpp
     src/field/arrival_workspace.cpp
     src/field/frequency_projector.cpp
     src/field/pressure_scaling.cpp
@@ -244,6 +245,12 @@ if(BUILD_TESTING)
     bellhop_rayreuse_geometric_gaussian_influence_tests
     rayreuse.component.geometric_gaussian_influence
     tests/component/geometric_gaussian_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_simple_gaussian_influence_tests
+    rayreuse.component.simple_gaussian_influence
+    tests/component/simple_gaussian_influence_test.cpp
     component
   )
   add_rayreuse_test(

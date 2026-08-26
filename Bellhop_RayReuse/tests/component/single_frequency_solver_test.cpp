@@ -380,6 +380,42 @@ void testGeometricGaussianCoherenceAndDirectionalPattern(Context& context) {
       "GeoGaussian semicoherent Lloyd weighting distinguishes S from I");
 }
 
+void testSimpleGaussianCoherentDirectionalPattern(Context& context) {
+  const double directionalAmplitude = std::pow(10.0, -6.0 / 20.0);
+  const SingleFrequencyResult omni = SingleFrequencySolver::solve(
+      makeSimulation(1000U, {50.0}, SimulationRunMode::Coherent,
+                     SourceBeamPattern::omnidirectional(),
+                     BeamFamily::SimpleGaussian),
+      1.0, 500.0);
+  const SingleFrequencyResult directional = SingleFrequencySolver::solve(
+      makeSimulation(
+          1000U, {50.0}, SimulationRunMode::Coherent,
+          SourceBeamPattern::directional(
+              {{.angleDegrees = -10.0, .powerDecibels = -6.0},
+               {.angleDegrees = 10.0, .powerDecibels = -6.0}}),
+          BeamFamily::SimpleGaussian),
+      1.0, 500.0);
+  context.check(
+      omni.rayCount == directional.rayCount &&
+          omni.totalRayPointCount == directional.totalRayPointCount &&
+          omni.rayCacheBytes == directional.rayCacheBytes,
+      "Simple Gaussian directional weighting leaves frozen geometry "
+      "unchanged");
+  bool havePressure = false;
+  for (std::size_t index = 0U;
+       index < omni.workspace.pressure().size(); ++index) {
+    const std::complex<double> pressure = omni.workspace.pressure()[index];
+    havePressure = havePressure || pressure != std::complex<double>{};
+    context.checkNear(
+        std::abs(directional.workspace.pressure()[index] -
+                 directionalAmplitude * pressure),
+        0.0, 2.0e-15,
+        "Simple Gaussian .sbp weighting scales coherent source amplitude");
+  }
+  context.check(havePressure,
+                "Simple Gaussian coherent solve produces a non-empty field");
+}
+
 void testAbnormalRayTerminationFails(Context& context) {
   const SimulationCase simulation = makeSimulation(20U);
   context.expectThrows<ValidationError>(
@@ -551,6 +587,7 @@ int main() {
   testSourceBeamPatternScalesAllCoherenceModes(context);
   testGeometricHatCoherenceAndDirectionalPattern(context);
   testGeometricGaussianCoherenceAndDirectionalPattern(context);
+  testSimpleGaussianCoherentDirectionalPattern(context);
   testAbnormalRayTerminationFails(context);
   testExplicitFrequencyEntryPoint(context);
   testSixCaseSanitizerSmoke(context);

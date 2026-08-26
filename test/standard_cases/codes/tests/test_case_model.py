@@ -84,6 +84,7 @@ class CaseModelTests(unittest.TestCase):
                 "geometric_gaussian_semicoherent",
                 "geometric_gaussian_directional",
                 "simple_gaussian_cartesian",
+                "simple_gaussian_directional",
                 "arrival_geometric_hat_ascii",
                 "arrival_geometric_hat_binary",
                 "arrival_geometric_hat_ray_centered",
@@ -127,7 +128,6 @@ class CaseModelTests(unittest.TestCase):
             "ray_centered_component_vertical",
             "ray_centered_component_horizontal",
             "geometric_hat_ray_centered",
-            "simple_gaussian_cartesian",
         ):
             with self.subTest(case=case_id):
                 self.assertEqual(
@@ -148,6 +148,8 @@ class CaseModelTests(unittest.TestCase):
             "geometric_gaussian_incoherent",
             "geometric_gaussian_semicoherent",
             "geometric_gaussian_directional",
+            "simple_gaussian_cartesian",
+            "simple_gaussian_directional",
             "grain_size_flat",
             "grain_size_equivalent_acoustic_control",
             "tabulated_reflection_bottom",
@@ -197,6 +199,23 @@ class CaseModelTests(unittest.TestCase):
                     )
         self.assertEqual(len(rendered_inputs), 2)
         self.assertEqual(len(normalized), 1)
+
+    def test_simple_gaussian_directional_fixture(self) -> None:
+        definition = self.cases["simple_gaussian_directional"]
+        frequencies = definition.frequencies("single")
+        launch_count = definition.shared_launch_angle_count(frequencies)
+        rendered = definition.render_origin_environment(
+            frequencies[0], launch_count
+        )
+        self.assertIn("'CS*'", rendered)
+        self.assertEqual(
+            tuple(path.name for path in definition.companion_files),
+            ("origin.sbp",),
+        )
+        self.assertEqual(
+            definition.supported_versions,
+            ("origin", "f2cpp", "rayreuse"),
+        )
 
     def test_i7_ray_centered_fixtures_only_change_family_and_component(self) -> None:
         expected = {

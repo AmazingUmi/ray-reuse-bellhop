@@ -303,6 +303,9 @@ void writeConfigurationSummary(std::ostream& stream,
     case rayreuse::BeamFamily::GeometricGaussian:
       stream << "geometric Gaussian\n";
       break;
+    case rayreuse::BeamFamily::SimpleGaussian:
+      stream << "simple Gaussian\n";
+      break;
   }
   stream << "source beam pattern = "
          << (simulation.sourceBeamPattern().isDirectional() ? "directional"
@@ -348,6 +351,10 @@ void writeConfigurationSummary(std::ostream& stream,
     case rayreuse::BeamFamily::GeometricGaussian:
       stream << "Geometric gaussian beams in Cartesian coordinates\n"
              << "Geometric Gaussian beams\n";
+      break;
+    case rayreuse::BeamFamily::SimpleGaussian:
+      stream << "Simple gaussian beams\n"
+             << "Simple Gaussian beams\n";
       break;
   }
   if (simulation.sourceBeamPattern().isDirectional()) {

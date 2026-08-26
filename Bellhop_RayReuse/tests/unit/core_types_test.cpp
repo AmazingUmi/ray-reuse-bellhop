@@ -310,6 +310,16 @@ void testSimulationProductMetadata(Context& context) {
           !rayreuse::usesLloydMirror(incoherent.runMode()) &&
           rayreuse::usesLloydMirror(semiCoherent.runMode()),
       "SimulationCase preserves I/S mode and accumulation metadata");
+  const SimulationCase simpleGaussian = makeMetadataCase(
+      SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
+  context.check(simpleGaussian.beamFamily() == BeamFamily::SimpleGaussian,
+                "SimulationCase accepts coherent Simple Gaussian TL");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Incoherent,
+                                           BeamFamily::SimpleGaussian));
+      },
+      "SimulationCase rejects unsupported Simple Gaussian intensity mode");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(static_cast<SimulationRunMode>(999),

@@ -251,6 +251,45 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
   }
 }
 
+void testSimpleGaussianMatchesAcrossExecution(Context& context) {
+  const SimulationCase simulation =
+      makeSimulation({50.0, 100.0}, SimulationRunMode::Coherent,
+                     BeamFamily::SimpleGaussian);
+  const BroadbandNonReuseResult nonReuse =
+      BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+  const SerialRayReuseResult reuse =
+      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+  const StreamedParallelRun parallel = runParallel(
+      simulation,
+      ParallelRayReuseSettings{.workerCount = 2U,
+                               .outputQueueCapacity = 1U,
+                               .memoryBudgetBytes = 0U},
+      true);
+  context.check(
+      reuse.statistics.cacheFingerprintVerified &&
+          reuse.statistics.cacheFingerprintBefore ==
+              reuse.statistics.cacheFingerprintAfter &&
+          parallel.statistics.cacheFingerprintVerified &&
+          parallel.statistics.cacheFingerprintBefore ==
+              parallel.statistics.cacheFingerprintAfter,
+      "Simple Gaussian reuse paths preserve the frozen cache fingerprint");
+  for (std::size_t index = 0U; index < 2U; ++index) {
+    context.check(parallel.workspaces[index].has_value(),
+                  "parallel Simple Gaussian returns every frequency");
+    if (!parallel.workspaces[index].has_value()) {
+      continue;
+    }
+    checkWorkspaceEqual(
+        context, reuse.frequencyResults[index].workspace,
+        nonReuse.frequencyResults[index].workspace,
+        "serial reuse Simple Gaussian is bitwise equal to non-reuse");
+    checkWorkspaceEqual(
+        context, *parallel.workspaces[index],
+        nonReuse.frequencyResults[index].workspace,
+        "parallel reuse Simple Gaussian is bitwise equal to non-reuse");
+  }
+}
+
 void testMemoryBudget(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
   const StreamedParallelRun unrestricted = runParallel(
@@ -344,6 +383,7 @@ int main() {
   testFrequencyCounts(context);
   testRepeatedRunIsDeterministic(context);
   testCoherenceModesMatchAcrossExecution(context);
+  testSimpleGaussianMatchesAcrossExecution(context);
   testMemoryBudget(context);
   testInvalidSettingsAndConsumerFailure(context);
 
