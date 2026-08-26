@@ -79,6 +79,7 @@ add_library(
     src/field/arrival_workspace.cpp
     src/field/frequency_projector.cpp
     src/field/pressure_scaling.cpp
+    src/field/ray_centered_cerveny_influence.cpp
     src/io/command_line.cpp
     src/io/ray_prefix_writer.cpp
     src/io/ray_writer.cpp
@@ -233,6 +234,12 @@ if(BUILD_TESTING)
     bellhop_rayreuse_cartesian_cerveny_influence_tests
     rayreuse.component.cartesian_cerveny_influence
     tests/component/cartesian_cerveny_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_ray_centered_cerveny_influence_tests
+    rayreuse.component.ray_centered_cerveny_influence
+    tests/component/ray_centered_cerveny_influence_test.cpp
     component
   )
   add_rayreuse_test(

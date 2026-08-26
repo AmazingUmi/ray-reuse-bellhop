@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <limits>
 #include <numbers>
 #include <string>
 #include <utility>
@@ -85,6 +86,35 @@ void validateBeamWidthMode(BeamWidthMode mode) {
       return;
   }
   throw ValidationError("beam width mode is invalid");
+}
+
+void validateCervenyCoordinateSystem(CervenyCoordinateSystem coordinates) {
+  switch (coordinates) {
+    case CervenyCoordinateSystem::Cartesian:
+    case CervenyCoordinateSystem::RayCentered:
+      return;
+  }
+  throw ValidationError("Cerveny coordinate system is invalid");
+}
+
+void validateRayCenteredReceiverRanges(const ReceiverGrid& receivers) {
+  if (receivers.rangeCount() < 2U) {
+    throw ValidationError(
+        "ray-centered Cerveny requires at least two receiver ranges");
+  }
+  const std::vector<double>& ranges = receivers.ranges();
+  const double delta = ranges[1U] - ranges[0U];
+  for (std::size_t index = 2U; index < ranges.size(); ++index) {
+    const double expected =
+        ranges.front() + static_cast<double>(index) * delta;
+    const double tolerance =
+        32.0 * std::numeric_limits<double>::epsilon() *
+        std::max({1.0, std::abs(expected), std::abs(ranges[index])});
+    if (std::abs(ranges[index] - expected) > tolerance) {
+      throw ValidationError(
+          "ray-centered Cerveny receiver ranges must be equally spaced");
+    }
+  }
 }
 
 }  // namespace
@@ -264,7 +294,8 @@ SimulationCase::SimulationCase(Environment environment, Source source,
                                SimulationRunMode runMode, BeamFamily beamFamily,
                                FieldComponent fieldComponent,
                                BoundaryCurvatureMode curvatureMode,
-                               BeamWidthMode beamWidthMode)
+                               BeamWidthMode beamWidthMode,
+                               CervenyCoordinateSystem cervenyCoordinateSystem)
     : environment_(std::move(environment)),
       source_(source),
       receivers_(std::move(receivers)),
@@ -275,17 +306,28 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       beamFamily_(beamFamily),
       fieldComponent_(fieldComponent),
       curvatureMode_(curvatureMode),
-      beamWidthMode_(beamWidthMode) {
+      beamWidthMode_(beamWidthMode),
+      cervenyCoordinateSystem_(cervenyCoordinateSystem) {
   validateRunMode(runMode_);
   validateBeamFamily(beamFamily_);
   validateFieldComponent(fieldComponent_);
   validateCurvatureMode(curvatureMode_);
   validateBeamWidthMode(beamWidthMode_);
+  validateCervenyCoordinateSystem(cervenyCoordinateSystem_);
+  if (cervenyCoordinateSystem_ == CervenyCoordinateSystem::RayCentered &&
+      (!isTransmissionLossMode(runMode_) ||
+       beamFamily_ != BeamFamily::CervenyGaussian)) {
+    throw ValidationError(
+        "ray-centered coordinates are supported only for Cerveny TL");
+  }
+  if (cervenyCoordinateSystem_ == CervenyCoordinateSystem::RayCentered) {
+    validateRayCenteredReceiverRanges(receivers_);
+  }
   if (fieldComponent_ != FieldComponent::Pressure &&
       (!isTransmissionLossMode(runMode_) ||
        beamFamily_ != BeamFamily::CervenyGaussian)) {
     throw ValidationError(
-        "only Cartesian Cerveny TL supports non-pressure components");
+        "only Cerveny TL supports non-pressure components");
   }
   if (beamFamily_ == BeamFamily::SimpleGaussian &&
       runMode_ != SimulationRunMode::Coherent) {
@@ -295,13 +337,13 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       (!isTransmissionLossMode(runMode_) ||
        beamFamily_ != BeamFamily::CervenyGaussian)) {
     throw ValidationError(
-        "only Cartesian Cerveny TL supports non-standard curvature modes");
+        "only Cerveny TL supports non-standard curvature modes");
   }
   if (beamWidthMode_ != BeamWidthMode::MinimumWidth &&
       (!isTransmissionLossMode(runMode_) ||
        beamFamily_ != BeamFamily::CervenyGaussian)) {
     throw ValidationError(
-        "only Cartesian Cerveny TL supports non-minimum beam widths");
+        "only Cerveny TL supports non-minimum beam widths");
   }
   requireFinite(source_.depth, "source.depth");
   requireFinite(source_.amplitude, "source.amplitude");
@@ -410,6 +452,11 @@ BoundaryCurvatureMode SimulationCase::curvatureMode() const noexcept {
 
 BeamWidthMode SimulationCase::beamWidthMode() const noexcept {
   return beamWidthMode_;
+}
+
+CervenyCoordinateSystem SimulationCase::cervenyCoordinateSystem() const
+    noexcept {
+  return cervenyCoordinateSystem_;
 }
 
 }  // namespace rayreuse

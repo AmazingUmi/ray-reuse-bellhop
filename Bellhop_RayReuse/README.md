@@ -113,7 +113,8 @@ modified-box 求积子集和反射顺序；F2CPP 契约见
 Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root>
 ```
 
-产品由 ENV run type 决定：`CC` 写 SHD，`R/E` 写 RAY，`A/a` 写 ARR。多频
+产品由 ENV run type 决定：Cartesian Cerveny `CC/IC/SC`、ray-centered
+Cerveny `CR/IR/SR` 及其他已支持 TL family 写 SHD，`R/E` 写 RAY，`A/a` 写 ARR。多频
 `A/a/E` 按 `<root>_fNNN_<frequency>Hz` 逐频发布；多频 R 明确拒绝。
 
 宽带调用保留同一 `.env`，由严格升序逗号列表覆盖频率：

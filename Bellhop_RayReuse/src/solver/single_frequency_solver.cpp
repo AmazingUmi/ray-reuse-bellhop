@@ -15,6 +15,7 @@
 #include "rayreuse/field/geometric_gaussian_influence.hpp"
 #include "rayreuse/field/geometric_hat_influence.hpp"
 #include "rayreuse/field/pressure_scaling.hpp"
+#include "rayreuse/field/ray_centered_cerveny_influence.hpp"
 #include "rayreuse/field/simple_gaussian_influence.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/ray/geometry_tracer.hpp"
@@ -146,8 +147,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
       simulation.beamFamily() != BeamFamily::GeometricGaussian &&
       simulation.beamFamily() != BeamFamily::SimpleGaussian) {
     throw ValidationError(
-        "single-frequency TL solver supports only Cartesian Cerveny and "
-        "Cartesian geometric G/B/S beams");
+        "single-frequency TL solver supports only Cerveny and Cartesian "
+        "geometric G/B/S beams");
   }
   if (simulation.beamFamily() == BeamFamily::SimpleGaussian &&
       simulation.runMode() != SimulationRunMode::Coherent) {
@@ -167,7 +168,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
           "field solver cannot accumulate a non-field run mode");
   }
   const FrequencyProjector projector(simulation.environment());
-  std::optional<CartesianCervenyInfluence> cervenyInfluence;
+  std::optional<CartesianCervenyInfluence> cartesianCervenyInfluence;
+  std::optional<RayCenteredCervenyInfluence> rayCenteredCervenyInfluence;
   std::optional<GeometricHatInfluence> geometricHatInfluence;
   std::optional<GeometricGaussianInfluence> geometricGaussianInfluence;
   std::optional<SimpleGaussianInfluence> simpleGaussianInfluence;
@@ -179,11 +181,22 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     simpleGaussianInfluence.emplace(simulation.receivers(),
                                     simulation.integrator().stepLength);
   } else {
-    // Origin and F2CPP preserve the Cartesian Cerveny P/V/H selector in the
-    // environment/model/PRT lifecycle, but InfluenceCervenyCart does not read
-    // it.  Only the out-of-scope ray-centered Influence applies V/H factors.
-    cervenyInfluence.emplace(simulation.environment(), simulation.receivers(),
-                             influenceSettings, simulation.beamWidthMode());
+    switch (simulation.cervenyCoordinateSystem()) {
+      case CervenyCoordinateSystem::Cartesian:
+        // Origin and F2CPP preserve the Cartesian Cerveny P/V/H selector in
+        // the environment/model/PRT lifecycle, but InfluenceCervenyCart does
+        // not read it.
+        cartesianCervenyInfluence.emplace(
+            simulation.environment(), simulation.receivers(),
+            influenceSettings, simulation.beamWidthMode());
+        break;
+      case CervenyCoordinateSystem::RayCentered:
+        rayCenteredCervenyInfluence.emplace(
+            simulation.environment(), simulation.receivers(),
+            influenceSettings, simulation.beamWidthMode(),
+            simulation.runMode(), simulation.fieldComponent());
+        break;
+    }
   }
 
   double projectSeconds = 0.0;
@@ -236,19 +249,30 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
           simulation.beamWidthMode(), frequency, sourceSoundSpeed,
           sourceSample.soundSpeedGradient.depth, path.launchAngle,
           launchFan.launchAngleStep, loopRange, epsilonMultiplier);
-      static_cast<void>(cervenyInfluence->accumulatePrevalidated(
-          *coherentWorkspace, path, frequencyState, epsilon.value,
-          influenceSettings.collectStatistics ? &influenceStatistics
-                                              : nullptr));
+      if (cartesianCervenyInfluence.has_value()) {
+        static_cast<void>(cartesianCervenyInfluence->accumulatePrevalidated(
+            *coherentWorkspace, path, frequencyState, epsilon.value,
+            influenceSettings.collectStatistics ? &influenceStatistics
+                                                : nullptr));
+      } else {
+        static_cast<void>(rayCenteredCervenyInfluence->accumulate(
+            *coherentWorkspace, path, frequencyState, epsilon.value));
+      }
     } else {
       const BeamEpsilon epsilon = pickBeamEpsilon(
           simulation.beamWidthMode(), frequency, sourceSoundSpeed,
           sourceSample.soundSpeedGradient.depth, path.launchAngle,
           launchFan.launchAngleStep, loopRange, epsilonMultiplier);
-      static_cast<void>(cervenyInfluence->accumulateIntensityPrevalidated(
-          *intensityWorkspace, path, frequencyState, epsilon.value,
-          influenceSettings.collectStatistics ? &influenceStatistics
-                                              : nullptr));
+      if (cartesianCervenyInfluence.has_value()) {
+        static_cast<void>(
+            cartesianCervenyInfluence->accumulateIntensityPrevalidated(
+                *intensityWorkspace, path, frequencyState, epsilon.value,
+                influenceSettings.collectStatistics ? &influenceStatistics
+                                                    : nullptr));
+      } else {
+        static_cast<void>(rayCenteredCervenyInfluence->accumulateIntensity(
+            *intensityWorkspace, path, frequencyState, epsilon.value));
+      }
     }
     const Clock::time_point influenceEnd = Clock::now();
     projectSeconds += elapsedSeconds(projectBegin, projectEnd);

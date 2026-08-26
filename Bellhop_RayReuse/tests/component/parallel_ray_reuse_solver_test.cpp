@@ -24,6 +24,7 @@ using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::BroadbandNonReuseResult;
 using rayreuse::BroadbandNonReuseSolver;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
@@ -50,7 +51,9 @@ SimulationCase makeSimulation(
     BeamFamily beamFamily = BeamFamily::CervenyGaussian,
     FieldComponent fieldComponent = FieldComponent::Pressure,
     BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
-    BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth) {
+    BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+    CervenyCoordinateSystem coordinateSystem =
+        CervenyCoordinateSystem::Cartesian) {
   return SimulationCase(
       Environment(
           SoundSpeedProfile(
@@ -70,7 +73,7 @@ SimulationCase makeSimulation(
                          .depthLimit = 110.0,
                          .maximumRayPoints = 100U},
       SourceBeamPattern::omnidirectional(), runMode, beamFamily, fieldComponent,
-      curvatureMode, beamWidthMode);
+      curvatureMode, beamWidthMode, coordinateSystem);
 }
 
 std::vector<double> makeFrequencies(std::size_t count) {
@@ -363,6 +366,64 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
   }
 }
 
+void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    for (const BoundaryCurvatureMode curvatureMode :
+         {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
+          BoundaryCurvatureMode::Zero}) {
+      for (const BeamWidthMode widthMode :
+           {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
+            BeamWidthMode::Wkb}) {
+        for (const FieldComponent component :
+             {FieldComponent::Pressure, FieldComponent::Vertical,
+              FieldComponent::Horizontal}) {
+          const SimulationCase simulation = makeSimulation(
+              {50.0, 100.0}, mode, BeamFamily::CervenyGaussian, component,
+              curvatureMode, widthMode,
+              CervenyCoordinateSystem::RayCentered);
+          const BroadbandNonReuseResult nonReuse =
+              BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+          const SerialRayReuseResult reuse =
+              SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+          const StreamedParallelRun parallel =
+              runParallel(simulation,
+                          ParallelRayReuseSettings{.workerCount = 2U,
+                                                   .outputQueueCapacity = 1U,
+                                                   .memoryBudgetBytes = 0U},
+                          true);
+          context.check(
+              reuse.statistics.cacheFingerprintVerified &&
+                  reuse.statistics.cacheFingerprintBefore ==
+                      reuse.statistics.cacheFingerprintAfter &&
+                  parallel.statistics.cacheFingerprintVerified &&
+                  parallel.statistics.cacheFingerprintBefore ==
+                      parallel.statistics.cacheFingerprintAfter,
+              "ray-centered C/I/S x F/M/W x D/S/Z x P/V/H preserves "
+              "the frozen cache");
+          for (std::size_t index = 0U; index < 2U; ++index) {
+            context.check(
+                parallel.workspaces[index].has_value(),
+                "parallel ray-centered matrix returns every frequency");
+            if (!parallel.workspaces[index].has_value()) {
+              continue;
+            }
+            checkWorkspaceEqual(
+                context, reuse.frequencyResults[index].workspace,
+                nonReuse.frequencyResults[index].workspace,
+                "ray-centered serial reuse equals non-reuse bitwise");
+            checkWorkspaceEqual(
+                context, *parallel.workspaces[index],
+                nonReuse.frequencyResults[index].workspace,
+                "ray-centered parallel reuse equals non-reuse bitwise");
+          }
+        }
+      }
+    }
+  }
+}
+
 void testMemoryBudget(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
   const StreamedParallelRun unrestricted = runParallel(
@@ -458,6 +519,7 @@ int main() {
   testCoherenceModesMatchAcrossExecution(context);
   testSimpleGaussianMatchesAcrossExecution(context);
   testCartesianComponentsMatchAcrossExecution(context);
+  testRayCenteredMatrixMatchesAcrossExecution(context);
   testMemoryBudget(context);
   testInvalidSettingsAndConsumerFailure(context);
 

@@ -125,9 +125,6 @@ class CaseModelTests(unittest.TestCase):
             "cerveny_curvature_zero",
             "source_geometry_point_explicit",
             "source_geometry_line",
-            "ray_centered_component_pressure",
-            "ray_centered_component_vertical",
-            "ray_centered_component_horizontal",
             "geometric_hat_ray_centered",
         ):
             with self.subTest(case=case_id):
@@ -162,6 +159,9 @@ class CaseModelTests(unittest.TestCase):
             "cerveny_curvature_zero_flat_gradient",
             "cerveny_width_space_filling_flat_gradient",
             "cerveny_width_wkb_flat_gradient",
+            "ray_centered_component_pressure",
+            "ray_centered_component_vertical",
+            "ray_centered_component_horizontal",
         ):
             with self.subTest(case=case_id):
                 self.assertEqual(

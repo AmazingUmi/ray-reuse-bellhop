@@ -254,8 +254,10 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
         "--execution-mode reuse/parallel requires a multi-frequency TL run");
   }
   if (rayreuse::isTransmissionLossMode(mode) && options.profileInfluence &&
-      parsed.simulationCase.beamFamily() !=
-          rayreuse::BeamFamily::CervenyGaussian) {
+      (parsed.simulationCase.beamFamily() !=
+           rayreuse::BeamFamily::CervenyGaussian ||
+       parsed.simulationCase.cervenyCoordinateSystem() !=
+           rayreuse::CervenyCoordinateSystem::Cartesian)) {
     throw rayreuse::ValidationError(
         "--profile-influence is currently defined only for Cartesian "
         "Cerveny TL");
@@ -351,7 +353,10 @@ void writeConfigurationSummary(std::ostream& stream,
          << '\n';
   if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian ||
       !rayreuse::isTransmissionLossMode(simulation.runMode())) {
-    stream << "Cartesian beams\n";
+    stream << (simulation.cervenyCoordinateSystem() ==
+                       rayreuse::CervenyCoordinateSystem::RayCentered
+                   ? "Ray centered beams\n"
+                   : "Cartesian beams\n");
   }
   if (simulation.beamFamily() == rayreuse::BeamFamily::CervenyGaussian &&
       rayreuse::isTransmissionLossMode(simulation.runMode())) {
@@ -387,7 +392,12 @@ void writeConfigurationSummary(std::ostream& stream,
   }
   switch (simulation.beamFamily()) {
     case rayreuse::BeamFamily::CervenyGaussian:
-      stream << "Cerveny beams in Cartesian coordinates\n";
+      if (simulation.cervenyCoordinateSystem() ==
+          rayreuse::CervenyCoordinateSystem::RayCentered) {
+        stream << "Cerveny beams in ray-centered coordinates\n";
+      } else {
+        stream << "Cerveny beams in Cartesian coordinates\n";
+      }
       break;
     case rayreuse::BeamFamily::GeometricHat:
       stream << "Geometric hat beams in Cartesian coordinates\n"

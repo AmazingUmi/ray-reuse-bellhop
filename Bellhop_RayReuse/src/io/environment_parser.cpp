@@ -591,6 +591,7 @@ struct ParsedBoundaryFile {
 
 struct ParsedRunType {
   SimulationRunMode runMode{};
+  CervenyCoordinateSystem cervenyCoordinateSystem{};
   BeamFamily beamFamily{};
   bool usesSourceBeamPattern{};
 };
@@ -610,8 +611,8 @@ struct ParsedRunType {
       (runType[5U] == ' ' || runType[5U] == '2') && runType[6U] == ' ';
   const bool standardTransmissionLoss =
       (runType[0U] == 'C' || runType[0U] == 'I' || runType[0U] == 'S') &&
-      (runType[1U] == 'C' || runType[1U] == 'G' || runType[1U] == 'B' ||
-       runType[1U] == '^' || runType[1U] == ' ');
+      (runType[1U] == 'C' || runType[1U] == 'R' || runType[1U] == 'G' ||
+       runType[1U] == 'B' || runType[1U] == '^' || runType[1U] == ' ');
   const bool simpleGaussianTransmissionLoss =
       runType[0U] == 'C' && runType[1U] == 'S';
   const bool transmissionLoss =
@@ -625,7 +626,8 @@ struct ParsedRunType {
   if (!commonOptionsValid ||
       (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
-         "only Cartesian Cerveny 'CC/IC/SC', Cartesian geometric-hat "
+         "only Cartesian Cerveny 'CC/IC/SC', ray-centered Cerveny "
+         "'CR/IR/SR', Cartesian geometric-hat "
          "'CG/IG/SG' (including '^' and blank aliases), Cartesian "
          "geometric-Gaussian 'CB/IB/SB', Cartesian simple-Gaussian 'CS', "
          "unshifted "
@@ -672,8 +674,13 @@ struct ParsedRunType {
     }
   }
   BeamFamily beamFamily = BeamFamily::CervenyGaussian;
+  CervenyCoordinateSystem coordinateSystem =
+      CervenyCoordinateSystem::Cartesian;
   if (simpleGaussianTransmissionLoss) {
     beamFamily = BeamFamily::SimpleGaussian;
+  } else if (transmissionLoss && runType[1U] == 'R') {
+    beamFamily = BeamFamily::CervenyGaussian;
+    coordinateSystem = CervenyCoordinateSystem::RayCentered;
   } else if (transmissionLoss && runType[1U] == 'B') {
     beamFamily = BeamFamily::GeometricGaussian;
   } else if (transmissionLoss && runType[1U] != 'C') {
@@ -685,6 +692,7 @@ struct ParsedRunType {
                                     : BeamFamily::GeometricGaussian;
   }
   return ParsedRunType{.runMode = mode,
+                       .cervenyCoordinateSystem = coordinateSystem,
                        .beamFamily = beamFamily,
                        .usesSourceBeamPattern = runType[2U] == '*'};
 }
@@ -1127,7 +1135,8 @@ struct ParsedRunType {
                          .depthLimit = depthLimit,
                          .maximumRayPoints = kMaximumRayPoints},
       std::move(sourceBeamPattern), runType.runMode, runType.beamFamily,
-      fieldComponent, curvatureMode, beamWidthMode);
+      fieldComponent, curvatureMode, beamWidthMode,
+      runType.cervenyCoordinateSystem);
 
   return ParsedEnvironment{
       .title = std::move(title),

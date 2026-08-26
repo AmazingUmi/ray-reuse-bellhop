@@ -21,6 +21,7 @@ using rayreuse::BeamFamily;
 using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
@@ -280,10 +281,16 @@ void testSimulationProductMetadata(Context& context) {
       [&](SimulationRunMode runMode, BeamFamily beamFamily,
           FieldComponent fieldComponent = FieldComponent::Pressure,
           BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
-          BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth) {
+          BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+          CervenyCoordinateSystem coordinateSystem =
+              CervenyCoordinateSystem::Cartesian) {
         return SimulationCase(
             makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
-            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+            ReceiverGrid(
+                {400.0, 500.0, 600.0},
+                coordinateSystem == CervenyCoordinateSystem::RayCentered
+                    ? std::vector<double>{100.0, 1000.0, 1900.0}
+                    : std::vector<double>{100.0, 1000.0, 5000.0}),
             FrequencyGrid({50.0}),
             LaunchFan{.minimumAngle = -0.1,
                       .maximumAngle = 0.1,
@@ -293,7 +300,7 @@ void testSimulationProductMetadata(Context& context) {
                                .depthLimit = 1100.0,
                                .maximumRayPoints = 10000U},
             pattern, runMode, beamFamily, fieldComponent, curvatureMode,
-            beamWidthMode);
+            beamWidthMode, coordinateSystem);
       };
   const SimulationCase arrivals = makeMetadataCase(
       SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
@@ -323,6 +330,21 @@ void testSimulationProductMetadata(Context& context) {
         SimulationRunMode::Coherent, BeamFamily::CervenyGaussian, component);
     context.check(cartesianCerveny.fieldComponent() == component,
                   "SimulationCase preserves Cartesian Cerveny component");
+  }
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SimulationCase rayCentered = makeMetadataCase(
+        mode, BeamFamily::CervenyGaussian, FieldComponent::Vertical,
+        BoundaryCurvatureMode::Double, BeamWidthMode::SpaceFilling,
+        CervenyCoordinateSystem::RayCentered);
+    context.check(
+        rayCentered.cervenyCoordinateSystem() ==
+                CervenyCoordinateSystem::RayCentered &&
+            rayCentered.fieldComponent() == FieldComponent::Vertical &&
+            rayCentered.curvatureMode() == BoundaryCurvatureMode::Double &&
+            rayCentered.beamWidthMode() == BeamWidthMode::SpaceFilling,
+        "SimulationCase preserves ray-centered Cerveny TL metadata");
   }
   for (const BoundaryCurvatureMode curvatureMode :
        {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
@@ -430,6 +452,24 @@ void testSimulationProductMetadata(Context& context) {
             static_cast<BeamWidthMode>(999)));
       },
       "SimulationCase rejects invalid beam width enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth,
+            CervenyCoordinateSystem::RayCentered));
+      },
+      "SimulationCase keeps ray-centered GeoHat outside FP-1H");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth,
+            static_cast<CervenyCoordinateSystem>(999)));
+      },
+      "SimulationCase rejects an invalid coordinate enum");
 }
 
 void testRayPathCache(Context& context) {

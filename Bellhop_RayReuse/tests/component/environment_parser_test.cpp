@@ -28,6 +28,7 @@ using rayreuse::BeamWidthMode;
 using rayreuse::BellhopError;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryKind;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::EnvironmentParser;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyProjector;
@@ -269,9 +270,55 @@ void testCartesianCervenyComponents(Context& context) {
                       BeamFamily::CervenyGaussian &&
                   parsed.simulationCase.fieldComponent() == expectedComponent &&
                   parsed.simulationCase.curvatureMode() == expectedCurvature &&
-                  parsed.simulationCase.beamWidthMode() == expectedWidth,
+                  parsed.simulationCase.beamWidthMode() == expectedWidth &&
+                  parsed.simulationCase.cervenyCoordinateSystem() ==
+                      CervenyCoordinateSystem::Cartesian,
               "Cartesian Cerveny parser preserves C/I/S x F/M/W x D/S/Z x "
               "P/V/H");
+        }
+      }
+    }
+  }
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CR", SimulationRunMode::Coherent},
+           {"IR", SimulationRunMode::Incoherent},
+           {"SR", SimulationRunMode::SemiCoherent}}) {
+    for (const auto& [widthToken, expectedWidth] :
+         std::vector<std::pair<std::string, BeamWidthMode>>{
+             {"F", BeamWidthMode::SpaceFilling},
+             {"M", BeamWidthMode::MinimumWidth},
+             {"W", BeamWidthMode::Wkb}}) {
+      for (const auto& [curvatureToken, expectedCurvature] :
+           std::vector<std::pair<std::string, BoundaryCurvatureMode>>{
+               {"D", BoundaryCurvatureMode::Double},
+               {"S", BoundaryCurvatureMode::Standard},
+               {"Z", BoundaryCurvatureMode::Zero}}) {
+        for (const auto& [componentToken, expectedComponent] :
+             std::vector<std::pair<std::string, FieldComponent>>{
+                 {"P", FieldComponent::Pressure},
+                 {"V", FieldComponent::Vertical},
+                 {"H", FieldComponent::Horizontal}}) {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'CC'", "'" + runType + "'");
+          replaceFirst(contents, "'MS'",
+                       "'" + widthToken + curvatureToken + "'");
+          replaceFirst(contents, "1  5  'P'",
+                       "1  5  '" + componentToken + "'");
+          const ParsedEnvironment parsed = parseText(
+              contents, "ray_centered_" + runType + widthToken +
+                            curvatureToken + componentToken + ".env");
+          context.check(
+              parsed.simulationCase.runMode() == expectedMode &&
+                  parsed.simulationCase.beamFamily() ==
+                      BeamFamily::CervenyGaussian &&
+                  parsed.simulationCase.fieldComponent() == expectedComponent &&
+                  parsed.simulationCase.curvatureMode() == expectedCurvature &&
+                  parsed.simulationCase.beamWidthMode() == expectedWidth &&
+                  parsed.simulationCase.cervenyCoordinateSystem() ==
+                      CervenyCoordinateSystem::RayCentered,
+              "ray-centered Cerveny parser preserves C/I/S x F/M/W x "
+              "D/S/Z x P/V/H");
         }
       }
     }
@@ -700,13 +747,6 @@ void testUnsupportedAndMalformedInput(Context& context) {
         static_cast<void>(parseText(contents, "hat_with_cerveny_tail.env"));
       },
       "Cartesian GeoHat rejects a Cerveny-only option tail");
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents = direct;
-        replaceFirst(contents, "'CC'", "'IR'");
-        static_cast<void>(parseText(contents, "ray_centered_cerveny.env"));
-      },
-      "ray-centered Cerveny remains rejected");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;

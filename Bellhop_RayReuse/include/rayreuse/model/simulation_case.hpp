@@ -64,6 +64,11 @@ enum class FieldComponent {
   Horizontal,
 };
 
+enum class CervenyCoordinateSystem {
+  Cartesian,
+  RayCentered,
+};
+
 [[nodiscard]] bool isTransmissionLossMode(SimulationRunMode mode);
 [[nodiscard]] FieldAccumulationKind fieldAccumulationKind(
     SimulationRunMode mode);
@@ -128,7 +133,9 @@ class SimulationCase {
       BeamFamily beamFamily = BeamFamily::CervenyGaussian,
       FieldComponent fieldComponent = FieldComponent::Pressure,
       BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
-      BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth);
+      BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+      CervenyCoordinateSystem cervenyCoordinateSystem =
+          CervenyCoordinateSystem::Cartesian);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
@@ -142,6 +149,8 @@ class SimulationCase {
   [[nodiscard]] FieldComponent fieldComponent() const noexcept;
   [[nodiscard]] BoundaryCurvatureMode curvatureMode() const noexcept;
   [[nodiscard]] BeamWidthMode beamWidthMode() const noexcept;
+  [[nodiscard]] CervenyCoordinateSystem cervenyCoordinateSystem() const
+      noexcept;
 
  private:
   Environment environment_;
@@ -156,6 +165,7 @@ class SimulationCase {
   FieldComponent fieldComponent_;
   BoundaryCurvatureMode curvatureMode_;
   BeamWidthMode beamWidthMode_;
+  CervenyCoordinateSystem cervenyCoordinateSystem_;
 };
 
 }  // namespace rayreuse

@@ -337,17 +337,21 @@ def load_run(
     }
 
 
-def generation_commands() -> list[str]:
+def generation_commands(include_rayreuse: bool) -> list[str]:
     executables = {
         "origin": "Bellhop_origin/bin/bellhop",
         "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
     }
+    if include_rayreuse:
+        executables["rayreuse"] = (
+            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+        )
     return [
         "python3 test/standard_cases/codes/standard_cases.py test "
         f"--version {version} --case {case_id} --profile single "
         f"--executable {executables[version]} "
         "--results-root <results-root>"
-        for version in ("origin", "f2cpp")
+        for version in executables
         for case_id, _, _ in CASES.values()
     ]
 
@@ -356,6 +360,7 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
+    rayreuse_executable: Path | None = None,
 ) -> dict[str, object]:
     source_contract = validate_origin_source_contract()
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
@@ -363,15 +368,17 @@ def validate(
         "origin": origin_executable.resolve(),
         "f2cpp": f2cpp_executable.resolve(),
     }
-    if executables["origin"] == executables["f2cpp"]:
-        raise ValueError("Origin and F2CPP executable paths must differ")
+    if rayreuse_executable is not None:
+        executables["rayreuse"] = rayreuse_executable.resolve()
+    if len(set(executables.values())) != len(executables):
+        raise ValueError("implementation executable paths must differ")
     if not all(path.is_file() for path in executables.values()):
         raise ValueError("an expected executable does not exist")
     executable_hashes = {
         version: sha256(path) for version, path in executables.items()
     }
-    if executable_hashes["origin"] == executable_hashes["f2cpp"]:
-        raise ValueError("Origin and F2CPP executable hashes must differ")
+    if len(set(executable_hashes.values())) != len(executable_hashes):
+        raise ValueError("implementation executable hashes must differ")
 
     loaded = {
         version: {
@@ -403,24 +410,37 @@ def validate(
         normalized_hashes[version] = hashlib.sha256(
             normalized.pop().encode("utf-8")
         ).hexdigest()
-    if environment_hashes["origin"] != environment_hashes["f2cpp"]:
-        raise ValueError("Origin and F2CPP rendered ENV inputs differ")
-    if normalized_hashes["origin"] != normalized_hashes["f2cpp"]:
-        raise ValueError("Origin and F2CPP normalized ENV identities differ")
+    if any(
+        hashes != environment_hashes["origin"]
+        for hashes in environment_hashes.values()
+    ):
+        raise ValueError("rendered ENV inputs differ across implementations")
+    if any(
+        digest != normalized_hashes["origin"]
+        for digest in normalized_hashes.values()
+    ):
+        raise ValueError("normalized ENV identities differ")
 
     tolerance_path = STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
     comparisons: dict[str, dict[str, object]] = {}
-    for key, (case_id, _, _) in CASES.items():
-        passed, metrics = compare_files(
-            loaded["origin"][key]["shade"],
-            loaded["f2cpp"][key]["shade"],
-            0,
-            0,
-            tolerance_path,
+    comparison_pairs = [("origin", "f2cpp")]
+    if "rayreuse" in executables:
+        comparison_pairs.extend(
+            [("origin", "rayreuse"), ("f2cpp", "rayreuse")]
         )
-        if not passed:
-            raise ValueError(f"{case_id} Origin/F2CPP mismatch: {metrics}")
-        comparisons[key] = {"passed": True, **metrics}
+    for left_version, right_version in comparison_pairs:
+        for key, (case_id, _, _) in CASES.items():
+            passed, metrics = compare_files(
+                loaded[left_version][key]["shade"],
+                loaded[right_version][key]["shade"],
+                0,
+                0,
+                tolerance_path,
+            )
+            label = f"{left_version}_vs_{right_version}/{key}"
+            if not passed:
+                raise ValueError(f"{case_id} {label} mismatch: {metrics}")
+            comparisons[label] = {"passed": True, **metrics}
 
     effect_pairs = (
         ("CC/P", "CR/P"),
@@ -451,8 +471,8 @@ def validate(
         for version in executables
     }
     return {
-        "schema": "bellhop.f2cpp.i7_ray_centered_components_validation",
-        "schema_version": 1,
+        "schema": "bellhop.fp1h.ray_centered_components_validation",
+        "schema_version": 2,
         "status": "passed",
         "matrix": {
             "cases": {
@@ -469,7 +489,7 @@ def validate(
                 MINIMUM_FAMILY_OR_COMPONENT_EFFECT
             ),
         },
-        "origin_f2cpp_field_comparisons": comparisons,
+        "field_comparisons": comparisons,
         "independent_family_component_effect_guards": effects,
         "field_summaries": {
             f"{version}/{key}": {
@@ -495,15 +515,17 @@ def validate(
             "manifest_executable_identity_bound": True,
             "manifest_source_references_bound": True,
             "staged_env_matches_canonical_fixture": True,
-            "origin_f2cpp_rendered_env_inputs_equal": True,
+            "rendered_env_inputs_equal_across_implementations": True,
             "family_component_env_inputs_pairwise_distinct": True,
             "family_component_env_inputs_otherwise_identical": True,
             "env_and_prt_family_component_identity_bound": True,
-            "origin_f2cpp_comparison_count": len(comparisons),
+            "field_comparison_count": len(comparisons),
             "effect_guard_count": len(effects),
         },
         "generation": {
-            "case_commands": generation_commands(),
+            "case_commands": generation_commands(
+                include_rayreuse="rayreuse" in executables
+            ),
             "validator_command": (
                 "python3 test/standard_cases/codes/"
                 "validate_i7_ray_centered_components.py "
@@ -511,7 +533,13 @@ def validate(
                 "--origin-executable Bellhop_origin/bin/bellhop "
                 "--f2cpp-executable "
                 "Bellhop_F2CPP/build/release/bellhop_f2cpp "
-                "--output Bellhop_F2CPP/doc/reports/validation/"
+                + (
+                    "--rayreuse-executable "
+                    "Bellhop_RayReuse/build/release/bellhop_rayreuse "
+                    if "rayreuse" in executables
+                    else ""
+                )
+                + "--output Bellhop_F2CPP/doc/reports/validation/"
                 "i7_ray_centered_components_report.json"
             ),
         },
@@ -520,6 +548,15 @@ def validate(
             "normalized_family_component_env": normalized_hashes["origin"],
             "origin_field_aggregate": aggregate_sha256(field_paths["origin"]),
             "f2cpp_field_aggregate": aggregate_sha256(field_paths["f2cpp"]),
+            **(
+                {
+                    "rayreuse_field_aggregate": aggregate_sha256(
+                        field_paths["rayreuse"]
+                    )
+                }
+                if "rayreuse" in field_paths
+                else {}
+            ),
             "origin_prt": {
                 key: sha256(loaded["origin"][key]["print"])
                 for key in CASES
@@ -528,6 +565,16 @@ def validate(
                 key: sha256(loaded["f2cpp"][key]["print"])
                 for key in CASES
             },
+            **(
+                {
+                    "rayreuse_prt": {
+                        key: sha256(loaded["rayreuse"][key]["print"])
+                        for key in CASES
+                    }
+                }
+                if "rayreuse" in loaded
+                else {}
+            ),
         },
     }
 
@@ -537,12 +584,14 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
+    parser.add_argument("--rayreuse-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
         args.results_root,
         args.origin_executable,
         args.f2cpp_executable,
+        args.rayreuse_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:
