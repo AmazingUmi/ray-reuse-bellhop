@@ -80,6 +80,9 @@ class CaseModelTests(unittest.TestCase):
                 "geometric_hat_semicoherent",
                 "geometric_hat_directional",
                 "geometric_gaussian_cartesian",
+                "geometric_gaussian_incoherent",
+                "geometric_gaussian_semicoherent",
+                "geometric_gaussian_directional",
                 "simple_gaussian_cartesian",
                 "arrival_geometric_hat_ascii",
                 "arrival_geometric_hat_binary",
@@ -124,7 +127,6 @@ class CaseModelTests(unittest.TestCase):
             "ray_centered_component_vertical",
             "ray_centered_component_horizontal",
             "geometric_hat_ray_centered",
-            "geometric_gaussian_cartesian",
             "simple_gaussian_cartesian",
         ):
             with self.subTest(case=case_id):
@@ -142,6 +144,10 @@ class CaseModelTests(unittest.TestCase):
             "geometric_hat_incoherent",
             "geometric_hat_semicoherent",
             "geometric_hat_directional",
+            "geometric_gaussian_cartesian",
+            "geometric_gaussian_incoherent",
+            "geometric_gaussian_semicoherent",
+            "geometric_gaussian_directional",
             "grain_size_flat",
             "grain_size_equivalent_acoustic_control",
             "tabulated_reflection_bottom",
@@ -272,6 +278,31 @@ class CaseModelTests(unittest.TestCase):
                 self.assertNotIn("'MS'", rendered)
                 normalized.add(
                     rendered.replace(f"'{run_type}'", "'<MODE>G'")
+                )
+        self.assertEqual(len(normalized), 1)
+
+    def test_i7_cartesian_geometric_gaussian_fixtures_only_change_mode(
+        self,
+    ) -> None:
+        expected = {
+            "geometric_gaussian_cartesian": "CB",
+            "geometric_gaussian_incoherent": "IB",
+            "geometric_gaussian_semicoherent": "SB",
+        }
+        normalized: set[str] = set()
+        for case_id, run_type in expected.items():
+            with self.subTest(case=case_id):
+                definition = self.cases[case_id]
+                frequencies = definition.frequencies("single")
+                self.assertEqual(frequencies, (1000.0,))
+                rendered = definition.render_origin_environment(
+                    frequencies[0],
+                    definition.shared_launch_angle_count(frequencies),
+                )
+                self.assertIn(f"'{run_type}'", rendered)
+                self.assertNotIn("'MS'", rendered)
+                normalized.add(
+                    rendered.replace(f"'{run_type}'", "'<MODE>B'")
                 )
         self.assertEqual(len(normalized), 1)
 

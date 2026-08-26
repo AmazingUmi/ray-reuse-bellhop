@@ -8,24 +8,27 @@ FP-1A 实施前基线：`f7b05e4a300cbd68c27099e64f5768ed62b58265`
 
 FP-1B 实施前基线：`bbc24fbbded037d1f6b4cd0b4825748ad2335d3c`
 
-本报告在原始只读审计之后，按 FP-1A/FP-1B 的实际实现与验证结果增量更新。新增
+FP-1C 实施前基线：`9f7d64eb9076802541cce16326f0909dcde1ecc7`
+
+本报告在原始只读审计之后，按 FP-1A/FP-1B/FP-1C 的实际实现与验证结果增量更新。新增
 范围严格限定为 `point + single source depth + rectilinear receiver + C-linear SSP`
-下的 Cartesian Cerveny 与 Cartesian GeoHat C/I/S TL，以及共用的 directional
-`.sbp` source weighting；其他原始 GAP 不因本次更新而放宽。
+下的 Cartesian Cerveny、Cartesian GeoHat 与 Cartesian GeoGaussian C/I/S TL，以及
+共用的 directional `.sbp` source weighting；其他原始 GAP 不因本次更新而放宽。
 
 ## 1. 结论摘要
 
 RayReuse 目前**尚未达到** F2CPP 二维 production feature surface 的完整 parity。
-已经闭环的是：当前受限的 Cartesian Cerveny 与 Cartesian GeoHat C/I/S TL、单点
-单源规则接收网格、C-linear SSP、RR-B1 边界子集、单频 R，以及 Cartesian G/B 的
+已经闭环的是：当前受限的 Cartesian Cerveny、Cartesian GeoHat 与 Cartesian
+GeoGaussian C/I/S TL、单点单源规则接收网格、C-linear SSP、RR-B1 边界子集、单频
+R，以及 Cartesian G/B 的
 A/a/E；这些已可在 RayReuse 的 `nonreuse`、`reuse`、`parallel` 路径内按其适用
 范围使用。
 
 主要差距不是旧 RayReuse `Deferred` 列表，而是以下真实代码边界：
 
-- Cartesian Cerveny 的 `C/I/S + MS + pressure` 与 Cartesian GeoHat 的 `C/I/S`
-  production contribution 已接入；其他 F2CPP TL beam/coordinate family 和完整
-  Cerveny 选项尚未接入。
+- Cartesian Cerveny 的 `C/I/S + MS + pressure`、Cartesian GeoHat 与 Cartesian
+  GeoGaussian 的 `C/I/S` production contribution 已接入；其他 F2CPP TL
+  beam/coordinate family 和完整 Cerveny 选项尚未接入。
 - TL directional `.sbp` 的旧 silent-ignore correctness gap 已关闭：source pattern
   现在在逐频 Project 前作用于每条 ray 的 source amplitude，C/I/S 共用该语义。
 - `SimulationCase`、receiver/workspace 与 writer 仍是单 source、Cartesian-product
@@ -69,20 +72,21 @@ frequency-local product schema。
 | 标签 | 真实证据 |
 | --- | --- |
 | `F-PARSER` | `Bellhop_F2CPP/src/io/environment_parser.cpp`：run type/beam/source/receiver、C/P/N/S/Q SSP、LS/LL/C boundary、attenuation dispatch |
-| `R-PARSER` | `Bellhop_RayReuse/src/io/environment_parser.cpp`：TL 接受 Cartesian Cerveny `CC/IC/SC` 与 Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）；GeoHat 不读取 Cerveny tail；继续显式拒绝 line、irregular、非 C SSP、FG/biological、canonical C boundary；source count 必须为 1 |
+| `R-PARSER` | `Bellhop_RayReuse/src/io/environment_parser.cpp`：TL 接受 Cartesian Cerveny `CC/IC/SC`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）与 Cartesian GeoGaussian `CB/IB/SB`；非 Cerveny family 不读取 Cerveny tail；继续显式拒绝 line、irregular、非 C SSP、FG/biological、canonical C boundary；source count 必须为 1 |
 | `F-MODEL` | `Bellhop_F2CPP/include/bellhop/model/simulation_case.hpp` 与 boundary/SSP model：source vector、receiver layout、coherence、coordinate/beam families、curvilinear geometry |
 | `R-MODEL` | `Bellhop_RayReuse/include/rayreuse/model/simulation_case.hpp`、`src/model/simulation_case.cpp`：单 `Source`、Cartesian-product `ReceiverGrid`；显式 C/I/S coherence 与 complex-pressure/intensity workspace 选择；仍无 line/multisource/irregular/ray-centered/Simple Gaussian；构造 C-linear SSP |
 | `F-TL` | `Bellhop_F2CPP/src/solver/single_frequency_solver.cpp` 及 `src/influence/`：按 coherence、beam family、coordinate、source geometry 和 component dispatch |
-| `R-TL` | `Bellhop_RayReuse/src/solver/single_frequency_solver.cpp`、`cartesian_cerveny_influence.cpp`、`geometric_hat_influence.cpp` 与 `pressure_scaling.cpp`：固定 `CLinearSsp`；按 Cerveny/GeoHat dispatch；C 使用 complex pressure，I/S 使用逐频 intensity；GeoHat 使用 geometric point normalization；`.sbp` 与 S Lloyd factor 在逐频 Project 前形成 source amplitude |
+| `R-TL` | `Bellhop_RayReuse/src/solver/single_frequency_solver.cpp`、`cartesian_cerveny_influence.cpp`、`geometric_hat_influence.cpp`、`geometric_gaussian_influence.cpp` 与 `pressure_scaling.cpp`：固定 `CLinearSsp`；按 Cerveny/GeoHat/GeoGaussian dispatch；C 使用 complex pressure，I/S 使用逐频 intensity；G/B 使用 geometric point normalization；`.sbp` 与 S Lloyd factor 在逐频 Project 前形成 source amplitude |
 | `F-GEOM` | `Bellhop_F2CPP/include/bellhop/ray/geometry_tracer.hpp` 与 boundary geometry：通用 SSP evaluator、canonical curvilinear frame/curvature |
 | `R-GEOM` | `Bellhop_RayReuse/include/rayreuse/ray/geometry_tracer.hpp`、`src/ray/ray_stepper.cpp` 与 boundary geometry：绑定 `CLinearSsp`，仅 flat/piecewise-linear boundary |
 | `R-PRODUCT` | RayReuse `arrival_solver.cpp`、`eigenray_solver.cpp`、`ray_writer.cpp`、`arrival_writer.cpp`、`eigenray_writer.cpp`：R/A/a/E frequency-local 产品已接入，但 writer headers/layout 固定一个 source 与规则网格 |
 | `R-CLI` | `Bellhop_RayReuse/app/main.cpp`：R/A/a/E/TL 正式 dispatch；R 只允许单频；A/a/E/TL 支持 nonreuse/reuse/parallel；逐频 serial consumer 发布 |
-| `MATRIX` | `Bellhop_F2CPP/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md` 与 `Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`；RayReuse 矩阵已同步 FP-1A/FP-1B 实际支持面与剩余限制 |
+| `MATRIX` | `Bellhop_F2CPP/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md` 与 `Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`；RayReuse 矩阵已同步 FP-1A/FP-1B/FP-1C 实际支持面与剩余限制 |
 | `STD` | `test/standard_cases/coverage.toml`、各 case `case.toml`、`codes/standard_cases.py`：共享 adapter/oracle 与版本 allow-list |
-| `TEST` | RayReuse isolated clean CTest 29/29；仓库全量 Python/pytest 164/164；standard-case unittest 149/149；RayReuse single 29 个支持案例通过；broadband 三模式各 23 个支持案例、28 个产品通过且跨模式逐字节一致 |
+| `TEST` | RayReuse isolated clean CTest 30/30；仓库全量 Python/pytest 165/165；standard-case unittest 150/150；RayReuse single 33 个支持案例通过；broadband 三模式各 26 个支持案例、31 个产品通过且跨模式逐字节一致 |
 | `FP1A-ORACLE` | 共享 `constant_speed_direct`、`incoherent_direct`、`semicoherent_direct`、directional/omni `.sbp` 输入：F2CPP 与 RayReuse pressure/TL 全部 0 差异；四个 FP-1A broadband case 的 nonreuse/reuse/parallel SHD 逐字节一致；directional 与 omni 最大 pressure 差 `2.1412473171949387e-2` |
 | `FP1B-ORACLE` | 共享 `geometric_hat_cartesian`、safe control、`geometric_hat_incoherent`、`geometric_hat_semicoherent`、`geometric_hat_directional`：F2CPP 与 RayReuse pressure/TL 全部 0 差异；Origin/F2CPP 最大 pressure absolute `4.16500123e-9`、最大 TL 差 `7.62939453e-6 dB`；GeoHat C/I/S 两频 SHD 三模式逐字节一致 |
+| `FP1C-ORACLE` | 共享 `geometric_gaussian_cartesian`、`geometric_gaussian_incoherent`、`geometric_gaussian_semicoherent`、`geometric_gaussian_directional`：F2CPP 与 RayReuse pressure/TL 全部 0 差异；Origin/F2CPP 最大 pressure absolute `1.3038516e-8`、最大 TL 差 `2.28881836e-5 dB`；GeoGaussian C/I/S 两频 SHD 三模式逐字节一致 |
 
 ## 4. Production feature parity 表
 
@@ -90,18 +94,18 @@ frequency-local product schema。
 
 | Feature | F2CPP | RayReuse | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| TL-01 — coherence `C` 跨 F2CPP production TL family | 全部正式 TL family 按其约束支持 | Cartesian Cerveny 与 Cartesian GeoHat 的受限 slice 闭环；其他 family 未闭环 | `GAP` | `F-PARSER`, `R-PARSER`, `F-TL`, `R-TL`, `TEST`；不得把两个 Cartesian 子集外推为全部 TL family parity |
+| TL-01 — coherence `C` 跨 F2CPP production TL family | 全部正式 TL family 按其约束支持 | Cartesian Cerveny、Cartesian GeoHat 与 Cartesian GeoGaussian 的受限 slice 闭环；其他 family 未闭环 | `GAP` | `F-PARSER`, `R-PARSER`, `F-TL`, `R-TL`, `TEST`；不得把三个 Cartesian 子集外推为全部 TL family parity |
 | TL-02 — Cartesian Cerveny，C/I/S、`MS` curvature、pressure component、point/single/rectilinear/C-SSP | 支持 | 支持 | `PARITY` | `F-TL`, `R-TL`, `STD`, `TEST`, `FP1A-ORACLE`；C 原路径保持，I/S 使用独立逐频 intensity workspace |
-| TL-03 — incoherent `I`（当前 Cartesian Cerveny/GeoHat slice） | 支持 | 两个 family 的 parser/runtime/Influence/output/oracle 闭环 | `PARITY` | Cerveny 为 image coherent sum 后 ABS²；GeoHat 为 attenuated real constant 平方后 `W_hat` 只乘一次；均在总 intensity 后 sqrt；`FP1A-ORACLE`, `FP1B-ORACLE` |
-| TL-04 — semicoherent `S`（当前 Cartesian Cerveny/GeoHat slice） | 支持 | 两个 family 的 parser/runtime/Influence/output/oracle 闭环 | `PARITY` | 各 family 与其 I 模式共用 contribution；S 的差异仅为 Project 前逐频 Lloyd/source amplitude；`F-TL`, `R-TL`, `FP1A-ORACLE`, `FP1B-ORACLE` |
+| TL-03 — incoherent `I`（当前 Cartesian Cerveny/GeoHat/GeoGaussian slice） | 支持 | 三个 family 的 parser/runtime/Influence/output/oracle 闭环 | `PARITY` | Cerveny 为 image coherent sum 后 ABS²；GeoHat 为 attenuated real constant 平方后 `W_hat` 只乘一次；GeoGaussian 为 `sqrt(2π) × power × W_gaussian` 且权重只乘一次；均在总 intensity 后 sqrt；`FP1A-ORACLE`, `FP1B-ORACLE`, `FP1C-ORACLE` |
+| TL-04 — semicoherent `S`（当前 Cartesian Cerveny/GeoHat/GeoGaussian slice） | 支持 | 三个 family 的 parser/runtime/Influence/output/oracle 闭环 | `PARITY` | 各 family 与其 I 模式共用 contribution；S 的差异仅为 Project 前逐频 Lloyd/source amplitude；`F-TL`, `R-TL`, `FP1A-ORACLE`, `FP1B-ORACLE`, `FP1C-ORACLE` |
 | TL-05 — Cartesian Cerveny 完整 production 选项（F/M/W width、D/S/Z curvature、P/V/H component） | 支持 | parser 只接受 `MS` 和 `P`，solver 固定单一路径 | `GAP` | `F-PARSER`, `F-TL`, `R-PARSER`, `R-TL` |
 | TL-06 — ray-centered Cerveny | 支持 | 无 parser/Influence/runtime dispatch | `GAP` | `F-PARSER`, `F-TL`；RayReuse CMake/solver 仅 Cartesian Cerveny |
 | TL-07 — Cartesian GeoHat，C/I/S、point/single/rectilinear/C-SSP | 支持 | parser/runtime/Influence/geometric scaling/SHD/oracle 闭环 | `PARITY` | `R-PARSER`, `R-TL`, `STD`, `TEST`, `FP1B-ORACLE`；不外推到 ray-centered/line/multisource/irregular/non-C SSP |
 | TL-08 — ray-centered GeoHat | 支持 | 无 parser/Influence/runtime dispatch | `GAP` | `F-PARSER`, `F-TL`, `R-PARSER`, `R-TL` |
-| TL-09 — Cartesian GeoGaussian | 支持 | B 只用于 Arrival/Eigenray traversal，不是 TL Influence | `GAP` | `F-TL`, `R-TL`, `R-PRODUCT` |
+| TL-09 — Cartesian GeoGaussian，C/I/S、point/single/rectilinear/C-SSP | 支持 | parser/runtime/逐频 width 与 membership/Influence/geometric scaling/SHD/oracle 闭环 | `PARITY` | `R-PARSER`, `R-TL`, `STD`, `TEST`, `FP1C-ORACLE`；`sigma_nf`、`sigma_lambda`、`sigma_1`、membership 与 Gaussian kernel 全部逐频计算 |
 | TL-10 — ray-centered GeoGaussian | F2CPP 未正式支持 | 未支持 | `F2CPP_OUT_OF_SCOPE` | `MATRIX`, F2CPP parser/solver 均不提供该组合 |
 | TL-11 — Simple Gaussian | coherent point-source、Cartesian、rectilinear 限制下支持 | 无 enum/parser/Influence/runtime dispatch | `GAP` | `F-PARSER`, `F-TL`, `R-PARSER`, `R-MODEL` |
-| TL-12 — directional `.sbp` 对当前 Cartesian Cerveny/GeoHat C/I/S TL 生效 | 支持且有 shared Origin/F2CPP case | 支持；两个 family 共用逐 ray、逐频、Project 前 source pattern 路径 | `PARITY` | `F-TL`, `R-PARSER`, `R-TL`, `STD`, `FP1A-ORACLE`, `FP1B-ORACLE`；GeoHat directional F2CPP/RayReuse 0 差异，R/A/a/E 既有路径未改 |
+| TL-12 — directional `.sbp` 对当前 Cartesian Cerveny/GeoHat/GeoGaussian C/I/S TL 生效 | 支持且有 shared Origin/F2CPP case | 支持；三个 family 共用逐 ray、逐频、Project 前 source pattern 路径 | `PARITY` | `F-TL`, `R-PARSER`, `R-TL`, `STD`, `FP1A-ORACLE`, `FP1B-ORACLE`, `FP1C-ORACLE`；G/B directional F2CPP/RayReuse 0 差异，R/A/a/E 既有路径未改 |
 | TL-13 — Cartesian Cerveny 1～3 images 与 beam window | 支持 | 在 TL-02 子集内支持 | `PARITY` | 两边 parser 均校验 image count ≤ 3 并传入 Cartesian Cerveny Influence；component/shared TL regression 闭环 |
 
 ### 4.2 Source
@@ -176,7 +180,7 @@ frequency-local product schema。
 
 | Feature | F2CPP | RayReuse | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| DOC-01 — production support matrix 与真实 executable surface 同步 | 当前矩阵与 parser/solver/tests 基本一致 | FP-1A coherence、FP-1B Cartesian GeoHat、workspace、`.sbp` 与 execution 范围已同步；其他限制保留 | `PARITY` | `MATRIX` 与本报告逐项代码证据对照 |
+| DOC-01 — production support matrix 与真实 executable surface 同步 | 当前矩阵与 parser/solver/tests 基本一致 | FP-1A coherence、FP-1B Cartesian GeoHat、FP-1C Cartesian GeoGaussian、workspace、`.sbp` 与 execution 范围已同步；其他限制保留 | `PARITY` | `MATRIX` 与本报告逐项代码证据对照 |
 
 ## 5. RayReuse 当前 execution 范围
 
@@ -184,16 +188,16 @@ frequency-local product schema。
 
 | Execution | 当前 production-supported 范围 | 当前明确边界 | 验证事实 |
 | --- | --- | --- | --- |
-| `nonreuse` | TL-02/03/04/07/12；PRD-02/03/04；当前 BND/ATT parity 子集 | R 不接受显式 execution mode；所有 SRC/REC/SSP/其他 TL gap 保持不支持 | shared broadband 23 个支持案例通过；每频独立 trace + solve |
-| `reuse` | 与 nonreuse 相同；trace once → frozen cache → per-frequency acoustic/product state | 不为 gap feature 提供隐式 fallback；R 拒绝 | 全部支持案例通过；28 个产品与 nonreuse 逐字节相同；cache fingerprint tests 通过 |
-| `parallel` | 与 reuse 相同；frequency workers + serial ordered consumer publish | 没有新增 source/receiver owner；不代表 gap feature 已支持 | 全部支持案例通过；28 个产品与 nonreuse/reuse 逐字节相同 |
+| `nonreuse` | TL-02/03/04/07/09/12；PRD-02/03/04；当前 BND/ATT parity 子集 | R 不接受显式 execution mode；所有 SRC/REC/SSP/其他 TL gap 保持不支持 | shared broadband 26 个支持案例通过；每频独立 trace + solve |
+| `reuse` | 与 nonreuse 相同；trace once → frozen cache → per-frequency acoustic/product state | 不为 gap feature 提供隐式 fallback；R 拒绝 | 全部支持案例通过；31 个产品与 nonreuse 逐字节相同；cache fingerprint tests 通过 |
+| `parallel` | 与 reuse 相同；frequency workers + serial ordered consumer publish | 没有新增 source/receiver owner；不代表 gap feature 已支持 | 全部支持案例通过；31 个产品与 nonreuse/reuse 逐字节相同 |
 
 现有 evidence 继续满足关键所有权边界：trajectory/geometry/reflection raw material 在
 frozen `RayPathCache`；amplitude、phase、complex travel time、active prefix、reflection
 result、ArrivalWorkspace 和 Eigenray hits 为 per-frequency。审计未发现逐频状态写回
 frozen cache 的证据。这个结论只覆盖当前已 dispatch 的 feature slice。
 
-## 6. FP-1A / FP-1B 验证记录
+## 6. FP-1A / FP-1B / FP-1C 验证记录
 
 - RayReuse 使用 `/tmp/rayreuse-fp1a-build` 隔离 Release clean build：configure/build 成功，
   CTest 28/28 通过。
@@ -226,39 +230,53 @@ frozen cache 的证据。这个结论只覆盖当前已 dispatch 的 feature sli
   q-zero `pi/2` caustic phase、inactive terminal prefix，以及 I/S 的 attenuation 后
   real constant 平方再单次乘 `W`。GeoHat `.sbp` regression 同时覆盖 C/I/S，现有
   R/A/a/E 与 FP-1A CC/IC/SC 由 full CTest 和 shared single/broadband matrix 保护。
+- FP-1C 使用 `/tmp/rayreuse-fp1c-clean-build` 隔离 Release configure/build，CTest
+  30/30；standard-case unittest 150/150；仓库全量 `pytest` 165/165。
+- `geometric_gaussian_cartesian`、IB、SB、directional 四个共享单频 case 的
+  F2CPP/RayReuse pressure absolute/relative difference 与 TL difference 均为 `0`。
+  Origin/F2CPP 沿用既有容差，最大 pressure absolute difference 为
+  `1.3038516e-8`，最大 TL difference 为 `2.28881836e-5 dB`，未放宽标准。
+- GeoGaussian C/I/S 两频 case 的 nonreuse/reuse/parallel SHD 逐字节一致；全量
+  RayReuse single 33 个支持案例通过，broadband 每模式 26 个支持案例、31 个产品
+  通过且跨模式逐字节一致。reuse/parallel component test 显式验证 frozen cache
+  fingerprint 前后不变。
+- 新增 component anchors 绑定 `0.2F` near-field 常量、geometric/near-field/
+  wavelength-cap 三个 width branch、segment depth gate、normal membership、Gaussian
+  kernel、q-zero caustic 与 inactive terminal prefix；I/S anchor 明确验证
+  `sqrt(2π) × power × W`，排除 `W²`。现有 AB/aB/EB 方法体未改，并由 full CTest
+  与 shared single/broadband matrix 保护。
 
 ## 7. 审计结论
 
 ### A. 当前完整 GAP 列表
 
-1. `TL-01`：coherent `C` 尚未覆盖 F2CPP 全部 production TL family；当前只有 Cartesian Cerveny 与 Cartesian GeoHat slice parity。
+1. `TL-01`：coherent `C` 尚未覆盖 F2CPP 全部 production TL family；当前只有 Cartesian Cerveny、Cartesian GeoHat 与 Cartesian GeoGaussian slice parity。
 2. `TL-05`：Cartesian Cerveny 完整 width/curvature/component dispatch。
 3. `TL-06`：ray-centered Cerveny。
 4. `TL-08`：ray-centered GeoHat TL。
-5. `TL-09`：Cartesian GeoGaussian TL。
-6. `TL-11`：Simple Gaussian TL。
-7. `SRC-02` / `PRD-08`：line source 及其产品 scaling。
-8. `SRC-04` / `PRD-07`：multisource / multiple source depths、产品 sequencing/header（architectural conflict）。
-9. `REC-02` / `PRD-06`：Cartesian TL irregular receiver（architectural conflict）。
-10. `REC-03` / `PRD-06`：paired irregular A/a/E（architectural conflict）。
-11. `REC-04`：ray-centered regular/equal-range receiver 路径。
-12. `SSP-02`：PCHIP SSP（architectural conflict）。
-13. `SSP-03`：N2-linear SSP（architectural conflict）。
-14. `SSP-04`：spline SSP（architectural conflict）。
-15. `SSP-05`：Q + `.ssp` range-dependent SSP（architectural conflict）。
-16. `BND-04`：canonical curvilinear `C` boundary（architectural conflict）。
-17. `BND-09`：flat `A` elastic P/S 缺 RayReuse executable oracle 闭环。
-18. `ATT-01`：attenuation units N/F/M/Q/L 缺 RayReuse product-level oracle 闭环。
-19. `ATT-04`：Francois–Garrison attenuation。
-20. `ATT-05`：biological attenuation。
-21. `PRD-05`：A/a/E ray-centered `g`。
+5. `TL-11`：Simple Gaussian TL。
+6. `SRC-02` / `PRD-08`：line source 及其产品 scaling。
+7. `SRC-04` / `PRD-07`：multisource / multiple source depths、产品 sequencing/header（architectural conflict）。
+8. `REC-02` / `PRD-06`：Cartesian TL irregular receiver（architectural conflict）。
+9. `REC-03` / `PRD-06`：paired irregular A/a/E（architectural conflict）。
+10. `REC-04`：ray-centered regular/equal-range receiver 路径。
+11. `SSP-02`：PCHIP SSP（architectural conflict）。
+12. `SSP-03`：N2-linear SSP（architectural conflict）。
+13. `SSP-04`：spline SSP（architectural conflict）。
+14. `SSP-05`：Q + `.ssp` range-dependent SSP（architectural conflict）。
+15. `BND-04`：canonical curvilinear `C` boundary（architectural conflict）。
+16. `BND-09`：flat `A` elastic P/S 缺 RayReuse executable oracle 闭环。
+17. `ATT-01`：attenuation units N/F/M/Q/L 缺 RayReuse product-level oracle 闭环。
+18. `ATT-04`：Francois–Garrison attenuation。
+19. `ATT-05`：biological attenuation。
+20. `PRD-05`：A/a/E ray-centered `g`。
 
 `TL-10`、`REC-05`、`BND-10` 不在 GAP 列表，因为它们是
 `F2CPP_OUT_OF_SCOPE`，而不是把 RayReuse 旧 Deferred 误当作 out of scope。
 
 ### B. 按优先级分组
 
-- **P0 — 主功能 / 后续 Influence 架构**：TL-01、TL-05、TL-06、TL-08、TL-09、TL-11；
+- **P0 — 主功能 / 后续 Influence 架构**：TL-01、TL-05、TL-06、TL-08、TL-11；
   SSP-02～SSP-05；SRC-04、REC-02、REC-03 所暴露的 source/receiver ownership 与
   product dimension 冲突。
 - **P1 — 重要 parity gap**：SRC-02/PRD-08、REC-04、BND-04、ATT-04、ATT-05、
@@ -267,18 +285,20 @@ frozen cache 的证据。这个结论只覆盖当前已 dispatch 的 feature sli
 
 ### C. 推荐下一步先补哪一组
 
-只推荐一个下一阶段：**Cartesian GeoGaussian TL parity**。
+只推荐一个下一阶段：**Cartesian Simple Gaussian TL parity**。
 
 ### D. 建议把下一阶段控制在什么范围
 
 仅在当前已经稳定的 `point + single source + rectilinear receiver + C-linear SSP +
-现有 boundary` 表面内，接入 Cartesian GeoGaussian 的 TL
-Influence/runtime/workspace/output 与现有 shared oracle。不要同时带入 Simple Gaussian、
-ray-centered family、SSP parity、multisource、irregular receiver 或 geometry reuse 研究。
+现有 boundary` 表面内，接入 Cartesian Simple Gaussian 的 coherent TL
+Influence/runtime/output 与现有 shared oracle。不要同时带入 ray-centered family、SSP
+parity、multisource、irregular receiver 或 geometry reuse 研究。
 
-### E. FP-1A / FP-1B 更新状态
+### E. FP-1A / FP-1B / FP-1C 更新状态
 
 FP-1B 只修改 RayReuse 的 Cartesian GeoHat TL dispatch/Influence/geometric scaling、对应
 测试、共享 case allow-list 与 RayReuse 文档；FP-1A source weighting 被复用而未另建
 `.sbp` 路径。Bellhop_F2CPP 与 Origin production code 均未修改。提交身份以本轮 Git
-history 为准。
+history 为准。FP-1C 只增加 RayReuse Cartesian GeoGaussian TL field sink、B family
+parser/runtime dispatch、共享案例与文档；现有 AB/aB/EB traversal 未重构。Bellhop_F2CPP
+与 Origin production code 均未修改。

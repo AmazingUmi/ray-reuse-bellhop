@@ -241,6 +241,12 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_geometric_gaussian_influence_tests
+    rayreuse.component.geometric_gaussian_influence
+    tests/component/geometric_gaussian_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_single_frequency_solver_tests
     rayreuse.component.single_frequency_solver
     tests/component/single_frequency_solver_test.cpp

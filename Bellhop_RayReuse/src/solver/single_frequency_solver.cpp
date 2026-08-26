@@ -12,6 +12,7 @@
 #include "rayreuse/error.hpp"
 #include "rayreuse/field/beam_epsilon.hpp"
 #include "rayreuse/field/frequency_projector.hpp"
+#include "rayreuse/field/geometric_gaussian_influence.hpp"
 #include "rayreuse/field/geometric_hat_influence.hpp"
 #include "rayreuse/field/pressure_scaling.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
@@ -139,10 +140,11 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
           .evaluate(Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U)
           .soundSpeed;
   if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
-      simulation.beamFamily() != BeamFamily::GeometricHat) {
+      simulation.beamFamily() != BeamFamily::GeometricHat &&
+      simulation.beamFamily() != BeamFamily::GeometricGaussian) {
     throw ValidationError(
         "single-frequency TL solver supports only Cartesian Cerveny and "
-        "Cartesian geometric hat beams");
+        "Cartesian geometric G/B beams");
   }
   std::optional<BeamEpsilon> epsilon;
   if (simulation.beamFamily() == BeamFamily::CervenyGaussian) {
@@ -166,8 +168,11 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   const FrequencyProjector projector(simulation.environment());
   std::optional<CartesianCervenyInfluence> cervenyInfluence;
   std::optional<GeometricHatInfluence> geometricHatInfluence;
+  std::optional<GeometricGaussianInfluence> geometricGaussianInfluence;
   if (simulation.beamFamily() == BeamFamily::GeometricHat) {
     geometricHatInfluence.emplace(simulation.receivers());
+  } else if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
+    geometricGaussianInfluence.emplace(simulation.receivers());
   } else {
     cervenyInfluence.emplace(simulation.environment(), simulation.receivers(),
                              influenceSettings);
@@ -199,7 +204,16 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const RayFrequencyState frequencyState =
         projector.project(path, frequency, projectedSourceAmplitude);
     const Clock::time_point projectEnd = Clock::now();
-    if (geometricHatInfluence.has_value() &&
+    if (geometricGaussianInfluence.has_value() &&
+        coherentWorkspace.has_value()) {
+      static_cast<void>(geometricGaussianInfluence->accumulate(
+          *coherentWorkspace, path, frequencyState,
+          launchFan.launchAngleStep));
+    } else if (geometricGaussianInfluence.has_value()) {
+      static_cast<void>(geometricGaussianInfluence->accumulateIntensity(
+          *intensityWorkspace, path, frequencyState,
+          launchFan.launchAngleStep));
+    } else if (geometricHatInfluence.has_value() &&
         coherentWorkspace.has_value()) {
       static_cast<void>(geometricHatInfluence->accumulate(
           *coherentWorkspace, path, frequencyState,
@@ -225,11 +239,11 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   }
 
   const Clock::time_point scaleBegin = Clock::now();
-  const bool geometricHat =
-      simulation.beamFamily() == BeamFamily::GeometricHat;
+  const bool geometricNormalization =
+      simulation.beamFamily() != BeamFamily::CervenyGaussian;
   FrequencyWorkspace workspace = coherentWorkspace.has_value()
                                      ? std::move(*coherentWorkspace)
-                                 : geometricHat
+                                 : geometricNormalization
                                      ? scaleGeometricPointIntensityToPressure(
                                            *intensityWorkspace,
                                            simulation.receivers(),
@@ -241,7 +255,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
                                            launchFan.launchAngleStep,
                                            sourceSoundSpeed);
   if (coherentWorkspace.has_value()) {
-    if (geometricHat) {
+    if (geometricNormalization) {
       scaleCoherentGeometricPointPressure(
           workspace, simulation.receivers(), launchFan.launchAngleStep,
           sourceSoundSpeed);

@@ -610,7 +610,8 @@ struct ParsedRunType {
       (runType[5U] == ' ' || runType[5U] == '2') && runType[6U] == ' ';
   const bool transmissionLoss =
       (runType[0U] == 'C' || runType[0U] == 'I' || runType[0U] == 'S') &&
-      (runType[1U] == 'C' || runType[1U] == 'G' || runType[1U] == '^' ||
+      (runType[1U] == 'C' || runType[1U] == 'G' || runType[1U] == 'B' ||
+       runType[1U] == '^' ||
        runType[1U] == ' ');
   const bool rayTrace =
       runType[0U] == 'R' && (runType[1U] == ' ' || runType[1U] == 'G');
@@ -622,7 +623,8 @@ struct ParsedRunType {
       (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
          "only Cartesian Cerveny 'CC/IC/SC', Cartesian geometric-hat "
-         "'CG/IG/SG' (including '^' and blank aliases), unshifted "
+         "'CG/IG/SG' (including '^' and blank aliases), Cartesian "
+         "geometric-Gaussian 'CB/IB/SB', unshifted "
          "point-source 'R/RG/RGO', or Cartesian geometric "
          "'AG/aG/AB/aB/EG/EB' run types are supported");
   }
@@ -666,7 +668,9 @@ struct ParsedRunType {
     }
   }
   BeamFamily beamFamily = BeamFamily::CervenyGaussian;
-  if (transmissionLoss && runType[1U] != 'C') {
+  if (transmissionLoss && runType[1U] == 'B') {
+    beamFamily = BeamFamily::GeometricGaussian;
+  } else if (transmissionLoss && runType[1U] != 'C') {
     beamFamily = BeamFamily::GeometricHat;
   } else if (rayTrace && runType[1U] == 'G') {
     beamFamily = BeamFamily::GeometricHat;

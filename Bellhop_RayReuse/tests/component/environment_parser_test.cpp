@@ -578,13 +578,28 @@ void testUnsupportedAndMalformedInput(Context& context) {
   context.check(
       parsedNonuniformHat.simulationCase.receivers().rangeCount() == 3U,
       "Cartesian GeoHat accepts nonuniform rectilinear receiver ranges");
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CB", SimulationRunMode::Coherent},
+           {"IB", SimulationRunMode::Incoherent},
+           {"SB", SimulationRunMode::SemiCoherent}}) {
+    std::string contents = hat;
+    replaceFirst(contents, "'CG'", "'" + runType + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, "cartesian_gaussian_" + runType + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() ==
+                BeamFamily::GeometricGaussian,
+        "CB/IB/SB select the Cartesian GeoGaussian C/I/S path");
+  }
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = hat;
-        replaceFirst(contents, "'CG'", "'CB'");
-        static_cast<void>(parseText(contents, "geometric_gaussian.env"));
+        replaceFirst(contents, "'CG'", "'CS'");
+        static_cast<void>(parseText(contents, "simple_gaussian.env"));
       },
-      "unimplemented Cartesian GeoGaussian remains rejected");
+      "Simple Gaussian remains explicitly rejected");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = hat;

@@ -347,7 +347,7 @@ void writeConfigurationSummary(std::ostream& stream,
       break;
     case rayreuse::BeamFamily::GeometricGaussian:
       stream << "Geometric gaussian beams in Cartesian coordinates\n"
-             << "Geometric gaussian beams\n";
+             << "Geometric Gaussian beams\n";
       break;
   }
   if (simulation.sourceBeamPattern().isDirectional()) {

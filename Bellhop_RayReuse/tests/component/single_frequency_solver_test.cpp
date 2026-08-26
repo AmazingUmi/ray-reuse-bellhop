@@ -314,6 +314,72 @@ void testGeometricHatCoherenceAndDirectionalPattern(Context& context) {
       "GeoHat semicoherent Lloyd weighting distinguishes S from I");
 }
 
+void testGeometricGaussianCoherenceAndDirectionalPattern(Context& context) {
+  const double directionalAmplitude = std::pow(10.0, -6.0 / 20.0);
+  std::vector<SingleFrequencyResult> omniResults;
+  omniResults.reserve(3U);
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SingleFrequencyResult omni = SingleFrequencySolver::solve(
+        makeSimulation(1000U, {50.0}, mode,
+                       SourceBeamPattern::omnidirectional(),
+                       BeamFamily::GeometricGaussian),
+        1.0, 500.0);
+    const SingleFrequencyResult directional = SingleFrequencySolver::solve(
+        makeSimulation(
+            1000U, {50.0}, mode,
+            SourceBeamPattern::directional(
+                {{.angleDegrees = -10.0, .powerDecibels = -6.0},
+                 {.angleDegrees = 10.0, .powerDecibels = -6.0}}),
+            BeamFamily::GeometricGaussian),
+        1.0, 500.0);
+    context.check(
+        omni.rayCount == directional.rayCount &&
+            omni.totalRayPointCount == directional.totalRayPointCount &&
+            omni.rayCacheBytes == directional.rayCacheBytes,
+        "GeoGaussian directional source weighting leaves frozen geometry "
+        "unchanged");
+    bool havePressure = false;
+    for (std::size_t index = 0U;
+         index < omni.workspace.pressure().size(); ++index) {
+      const std::complex<double> pressure = omni.workspace.pressure()[index];
+      havePressure = havePressure || pressure != std::complex<double>{};
+      if (mode != SimulationRunMode::Coherent) {
+        context.check(pressure.imag() == 0.0 && pressure.real() <= 0.0,
+                      "GeoGaussian I/S final pressure is real with Origin "
+                      "sign");
+      }
+      const double tolerance = mode == SimulationRunMode::Coherent
+                                   ? 2.0e-15
+                                   : 2.0e-11;
+      context.checkNear(
+          std::abs(directional.workspace.pressure()[index] -
+                   directionalAmplitude * pressure),
+          0.0, tolerance,
+          "GeoGaussian .sbp weighting scales C/I/S source amplitude");
+    }
+    context.check(havePressure,
+                  "GeoGaussian C/I/S produces a non-empty field");
+    omniResults.push_back(omni);
+  }
+  context.check(
+      omniResults[0U].rayCount == omniResults[1U].rayCount &&
+          omniResults[0U].rayCount == omniResults[2U].rayCount &&
+          omniResults[0U].totalRayPointCount ==
+              omniResults[1U].totalRayPointCount &&
+          omniResults[0U].totalRayPointCount ==
+              omniResults[2U].totalRayPointCount &&
+          omniResults[0U].rayCacheBytes == omniResults[1U].rayCacheBytes &&
+          omniResults[0U].rayCacheBytes == omniResults[2U].rayCacheBytes,
+      "GeoGaussian C/I/S share the same frozen trajectory");
+  context.check(
+      !std::equal(omniResults[1U].workspace.pressure().begin(),
+                  omniResults[1U].workspace.pressure().end(),
+                  omniResults[2U].workspace.pressure().begin()),
+      "GeoGaussian semicoherent Lloyd weighting distinguishes S from I");
+}
+
 void testAbnormalRayTerminationFails(Context& context) {
   const SimulationCase simulation = makeSimulation(20U);
   context.expectThrows<ValidationError>(
@@ -484,6 +550,7 @@ int main() {
   testCoherenceModesShareGeometryAndSeparateFieldLaws(context);
   testSourceBeamPatternScalesAllCoherenceModes(context);
   testGeometricHatCoherenceAndDirectionalPattern(context);
+  testGeometricGaussianCoherenceAndDirectionalPattern(context);
   testAbnormalRayTerminationFails(context);
   testExplicitFrequencyEntryPoint(context);
   testSixCaseSanitizerSmoke(context);

@@ -1,6 +1,6 @@
 # Bellhop RayReuse 功能支持矩阵
 
-> 封板日期：2026-08-20；FP-1A/FP-1B 更新：2026-08-25
+> 封板日期：2026-08-20；FP-1A/FP-1B/FP-1C 更新：2026-08-26
 > 适用范围：当前二维、point-source、rectilinear-receiver 的 RayReuse 实现。
 > 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
 
@@ -18,7 +18,7 @@
 
 | 能力 | 当前范围 |
 |---|---|
-| TL | point/single-source-depth/rectilinear/C-linear SSP 下的 Cartesian Cerveny `CC/IC/SC + MS + pressure`，以及 Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）；C 使用 complex-pressure workspace，I/S 使用逐频 intensity workspace；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，并使用 geometric point normalization；directional `.sbp` 与 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
+| TL | point/single-source-depth/rectilinear/C-linear SSP 下的 Cartesian Cerveny `CC/IC/SC + MS + pressure`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）与 Cartesian GeoGaussian `CB/IB/SB`；C 使用 complex-pressure workspace，I/S 使用逐频 intensity workspace；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B 均使用 geometric point normalization；GeoGaussian 的 `sigma_nf`、`sigma_lambda`、`sigma_1`、membership 与 kernel 逐频精确计算；directional `.sbp` 与 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
 | R | 单频 `R/RG/RGO`、directional `.sbp`、显式 `Nalpha=1`、逐频 active/terminal prefix、Origin-compatible `.ray` |
 | Arrivals | ASCII `A`、binary `a`；Cartesian geometric hat/Gaussian `G/B`；frequency-local `ArrivalWorkspace` 与 AddArr 语义 |
 | Eigenray | `E` 的 Cartesian `G/B` traversal；receiver hit 对应的冻结 ray prefix 与 `.ray` |
@@ -59,7 +59,7 @@ header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频�
 - 3D / N×2D；
 - beam shift；
 - ray-centered geometric Gaussian；
-- ray-centered GeoHat TL、Cartesian GeoGaussian TL、Simple Gaussian、ray-centered Cerveny，以及本矩阵未列出的 beam/coordinate family；
+- ray-centered GeoHat TL、Simple Gaussian、ray-centered Cerveny，以及本矩阵未列出的 beam/coordinate family；
 - 新 BARR 算法、SIMD、新性能优化；
 - F2CPP/RayReuse shared-library 重构。
 

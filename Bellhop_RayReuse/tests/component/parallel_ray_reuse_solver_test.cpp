@@ -204,7 +204,8 @@ void testRepeatedRunIsDeterministic(Context& context) {
 
 void testCoherenceModesMatchAcrossExecution(Context& context) {
   for (const BeamFamily beamFamily :
-       {BeamFamily::CervenyGaussian, BeamFamily::GeometricHat}) {
+       {BeamFamily::CervenyGaussian, BeamFamily::GeometricHat,
+        BeamFamily::GeometricGaussian}) {
     for (const SimulationRunMode mode :
          {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
           SimulationRunMode::SemiCoherent}) {
@@ -227,24 +228,24 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
               parallel.statistics.cacheFingerprintVerified &&
               parallel.statistics.cacheFingerprintBefore ==
                   parallel.statistics.cacheFingerprintAfter,
-          "C/I/S Cerveny and GeoHat reuse paths preserve the frozen cache "
+          "C/I/S Cerveny, GeoHat, and GeoGaussian reuse paths preserve the "
+          "frozen cache "
           "fingerprint");
       for (std::size_t index = 0U; index < 2U; ++index) {
         context.check(
             parallel.workspaces[index].has_value(),
-            "parallel Cerveny/GeoHat C/I/S returns every frequency workspace");
+            "parallel C/I/S returns every frequency workspace");
         if (!parallel.workspaces[index].has_value()) {
           continue;
         }
         checkWorkspaceEqual(
             context, reuse.frequencyResults[index].workspace,
             nonReuse.frequencyResults[index].workspace,
-            "serial reuse Cerveny/GeoHat C/I/S is bitwise equal to non-reuse");
+            "serial reuse C/I/S is bitwise equal to non-reuse");
         checkWorkspaceEqual(
             context, *parallel.workspaces[index],
             nonReuse.frequencyResults[index].workspace,
-            "parallel reuse Cerveny/GeoHat C/I/S is bitwise equal to "
-            "non-reuse");
+            "parallel reuse C/I/S is bitwise equal to non-reuse");
       }
     }
   }
