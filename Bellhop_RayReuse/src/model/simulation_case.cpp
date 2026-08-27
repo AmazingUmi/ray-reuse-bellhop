@@ -9,7 +9,7 @@
 #include <utility>
 
 #include "rayreuse/error.hpp"
-#include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 
 namespace rayreuse {
 namespace {
@@ -393,7 +393,7 @@ SimulationCase::SimulationCase(Environment environment, Source source,
     throw ValidationError("integrator.maximumRayPoints must be at least two");
   }
 
-  const CLinearSsp soundSpeedProfile(environment_.soundSpeedProfile());
+  const GeometrySspEvaluator soundSpeedProfile(environment_.soundSpeedProfile());
   const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
       Vec2{.range = 0.0, .depth = source_.depth}, 0U);
   launchFanPlan_ = LaunchFanPlanner::plan(LaunchFanPlanningInput{

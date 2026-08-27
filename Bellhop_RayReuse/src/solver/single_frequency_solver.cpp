@@ -17,7 +17,7 @@
 #include "rayreuse/field/pressure_scaling.hpp"
 #include "rayreuse/field/ray_centered_cerveny_influence.hpp"
 #include "rayreuse/field/simple_gaussian_influence.hpp"
-#include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/ray/geometry_tracer.hpp"
 
 namespace rayreuse {
@@ -137,7 +137,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   }
 
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
-  const CLinearSsp soundSpeedProfile(
+  const GeometrySspEvaluator soundSpeedProfile(
       simulation.environment().soundSpeedProfile());
   const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
       Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U);

@@ -72,12 +72,15 @@ int main(int argc, char* argv[]) {
   if (argc != 3 && argc != 4 && argc != 7) {
     std::cerr << "usage: geometry_oracle_probe OUTPUT_CSV "
                  "LAUNCH_ANGLE_RAD "
-                 "[munk | BOTTOM_DEPTH SOURCE_DEPTH DEPTH_LIMIT "
+                 "[munk | munk-pchip | BOTTOM_DEPTH SOURCE_DEPTH DEPTH_LIMIT "
                  "MAX_POINTS]\n";
     return 2;
   }
 
-  const bool useMunkConfiguration = argc == 4 && std::string(argv[3]) == "munk";
+  const std::string namedConfiguration = argc == 4 ? argv[3] : "";
+  const bool useMunkConfiguration =
+      namedConfiguration == "munk" || namedConfiguration == "munk-pchip";
+  const bool usePchip = namedConfiguration == "munk-pchip";
   if (argc == 4 && !useMunkConfiguration) {
     std::cerr << "unknown probe configuration: " << argv[3] << '\n';
     return 2;
@@ -112,7 +115,9 @@ int main(int argc, char* argv[]) {
 
   const rayreuse::Environment environment =
       useMunkConfiguration
-          ? rayreuse::test::makeMunkEnvironment()
+          ? rayreuse::test::makeMunkEnvironment(
+                usePchip ? rayreuse::SspInterpolationKind::Pchip
+                         : rayreuse::SspInterpolationKind::CLinear)
           : rayreuse::Environment(
                 rayreuse::SoundSpeedProfile(
                     {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
@@ -187,9 +192,9 @@ int main(int argc, char* argv[]) {
   output.close();
   try {
     writeManifest(argv[1], launchAngle,
-                  useMunkConfiguration
-                      ? "munk"
-                      : (argc == 7 ? "flat-boundary-custom" : "direct"),
+                  namedConfiguration.empty()
+                      ? (argc == 7 ? "flat-boundary-custom" : "direct")
+                      : namedConfiguration,
                   path);
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

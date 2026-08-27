@@ -508,6 +508,66 @@ void testInvalidInputs(Context& context) {
       "malformed path transition topology is rejected");
 }
 
+void testPchipFrequencyProjection(Context& context) {
+  const SoundSpeedProfile profile(
+      {{.depth = 0.0,
+        .soundSpeed = 1500.0,
+        .density = 1000.0,
+        .attenuation =
+            {.value = 0.1,
+             .unit = AttenuationUnit::DecibelsPerWavelength}},
+       {.depth = 500.0,
+        .soundSpeed = 1480.0,
+        .density = 1100.0,
+        .attenuation =
+            {.value = 0.4,
+             .unit = AttenuationUnit::DecibelsPerWavelength}},
+       {.depth = 1000.0,
+        .soundSpeed = 1520.0,
+        .density = 1200.0,
+        .attenuation =
+            {.value = 0.2,
+             .unit = AttenuationUnit::DecibelsPerWavelength}}},
+      rayreuse::SspInterpolationKind::Pchip);
+  const Environment environment(profile, BoundaryModel::vacuum(0.0),
+                                BoundaryModel::rigid(1000.0));
+  const FrequencyProjector projector(environment);
+
+  RayPath path;
+  path.points = {
+      RayState{.position = {.range = 0.0, .depth = 250.0},
+               .slowness = {.range = 1.0 / 1483.75, .depth = 0.0},
+               .dynamicP = {1.0, 0.0},
+               .dynamicQ = {0.0, 1.0},
+               .soundSpeed = 1483.75,
+               .realTravelTime = 0.0},
+      RayState{.position = {.range = 100.0, .depth = 750.0},
+               .slowness = {.range = 1.0 / 1483.75, .depth = 0.0},
+               .dynamicP = {1.0, 0.0},
+               .dynamicQ = {0.0, 1.0},
+               .soundSpeed = 1483.75,
+               .realTravelTime = 100.0 / 1483.75}};
+  path.steps = {StepQuadrature{
+      .stepLength = 100.0,
+      .startWeight = 50.0,
+      .midpointWeight = 50.0,
+      .midpoint = {.range = 50.0, .depth = 500.0}}};
+
+  const RayPath pathCopy = path;
+  const RayFrequencyState state50 = projector.project(path, 50.0, 1.0);
+  const RayFrequencyState state250 = projector.project(path, 250.0, 1.0);
+
+  context.check(path.points.size() == pathCopy.points.size(),
+                "PCHIP projection preserves ray point count");
+  context.check(state50.frequency == 50.0 && state250.frequency == 250.0,
+                "projected states retain distinct frequencies");
+  context.check(state50.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating PCHIP projection produces negative imaginary travel time");
+  context.check(state50.points.back().complexTravelTime !=
+                    state250.points.back().complexTravelTime,
+                "different frequencies produce different complex acoustic states");
+}
+
 }  // namespace
 
 int main() {
@@ -518,6 +578,7 @@ int main() {
   testAcousticReflectionAndActiveCutoff(context);
   testMunkReflectionOracle(context);
   testProjectionDoesNotMutateGeometry(context);
+  testPchipFrequencyProjection(context);
   testInvalidInputs(context);
 
   if (context.failureCount() != 0) {

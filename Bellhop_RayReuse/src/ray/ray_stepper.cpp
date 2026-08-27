@@ -131,12 +131,12 @@ void applyCLinearGradientJump(RayState& endState,
   }
 }
 
-}  // namespace
-
-RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
-                      const RayState& initialState,
-                      std::size_t initialSegmentIndex, double nominalStepLength,
-                      const StepLimiter& limiter) {
+template <typename SspType>
+RayStepResult stepRayImpl(const SspType& soundSpeedProfile,
+                          const RayState& initialState,
+                          std::size_t initialSegmentIndex,
+                          double nominalStepLength,
+                          const StepLimiter& limiter) {
   validateState(initialState, "initial ray state");
   if (!std::isfinite(nominalStepLength) || nominalStepLength <= 0.0) {
     throw ValidationError(
@@ -214,7 +214,10 @@ RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
   const SoundSpeedSample endSample =
       soundSpeedProfile.evaluate(endState.position, initialSample.segmentIndex);
   endState.soundSpeed = endSample.soundSpeed;
-  applyCLinearGradientJump(endState, initialSample, endSample);
+  if (soundSpeedProfile.gradientContinuity() ==
+      SspGradientContinuity::DiscontinuousAtNodes) {
+    applyCLinearGradientJump(endState, initialSample, endSample);
+  }
   validateState(endState, "ray-step result state");
 
   return RayStepResult{
@@ -224,6 +227,24 @@ RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
                                    .midpointWeight = midpointWeight,
                                    .midpoint = midpoint.position},
       .segmentIndex = endSample.segmentIndex};
+}
+
+}  // namespace
+
+RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
+                      const RayState& initialState,
+                      std::size_t initialSegmentIndex, double nominalStepLength,
+                      const StepLimiter& limiter) {
+  return stepRayImpl(soundSpeedProfile, initialState, initialSegmentIndex,
+                     nominalStepLength, limiter);
+}
+
+RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
+                      const RayState& initialState,
+                      std::size_t initialSegmentIndex, double nominalStepLength,
+                      const StepLimiter& limiter) {
+  return stepRayImpl(soundSpeedProfile, initialState, initialSegmentIndex,
+                     nominalStepLength, limiter);
 }
 
 }  // namespace rayreuse

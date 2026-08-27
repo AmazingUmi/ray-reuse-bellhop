@@ -292,7 +292,7 @@ struct PrecomputedRayValues {
 };
 
 [[nodiscard]] PrecomputedRayValues precomputeRayValues(
-    const RayPath& path, const CLinearSsp& soundSpeedProfile,
+    const RayPath& path, const GeometrySspEvaluator& soundSpeedProfile,
     std::complex<double> epsilon, std::size_t pointCount,
     BeamWidthMode widthMode) {
   PrecomputedRayValues values;

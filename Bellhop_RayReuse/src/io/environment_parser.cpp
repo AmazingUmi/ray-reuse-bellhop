@@ -740,15 +740,33 @@ struct ParsedRunType {
          "top/SSP options must contain between three and five characters");
   }
   topOptions.resize(5U, ' ');
-  if (topOptions[0U] != 'C' ||
-      (topOptions[1U] != 'V' && topOptions[1U] != 'R' &&
+  SspInterpolationKind interpolationKind{};
+  switch (topOptions.front()) {
+    case 'C':
+      interpolationKind = SspInterpolationKind::CLinear;
+      break;
+    case 'P':
+      interpolationKind = SspInterpolationKind::Pchip;
+      break;
+    case 'N':
+    case 'S':
+    case 'Q':
+      fail(source, topOptionsRecord.lineNumber,
+           "SSP interpolation option '" + std::string(1U, topOptions.front()) +
+               "' is not supported");
+    default:
+      fail(source, topOptionsRecord.lineNumber,
+           "unknown SSP interpolation option '" +
+               std::string(1U, topOptions.front()) + "'");
+  }
+  if ((topOptions[1U] != 'V' && topOptions[1U] != 'R' &&
        topOptions[1U] != 'A' && topOptions[1U] != 'G' &&
        topOptions[1U] != 'F') ||
       (topOptions[3U] != ' ' && topOptions[3U] != 'T') ||
       (topOptions[4U] != ' ' && topOptions[4U] != '~' &&
        topOptions[4U] != '*')) {
     fail(source, topOptionsRecord.lineNumber,
-         "RR-B1 supports C-linear SSP, V/R/A/G/F surfaces, optional Thorp, "
+         "RR-B1 supports C-linear and PCHIP SSP, V/R/A/G/F surfaces, optional Thorp, "
          "and optional piecewise-linear topography");
   }
   const AttenuationUnit attenuationUnit =
@@ -1120,8 +1138,9 @@ struct ParsedRunType {
   }
   reader.requireEnd();
 
-  Environment environment(SoundSpeedProfile(std::move(soundSpeedPoints)),
-                          seaSurface, seabed);
+  Environment environment(
+      SoundSpeedProfile(std::move(soundSpeedPoints), interpolationKind),
+      seaSurface, seabed);
   ReceiverGrid receivers(std::move(receiverDepths), std::move(receiverRanges));
   std::vector<double> frequencies = frequencyOverrideHz.has_value()
                                         ? std::move(*frequencyOverrideHz)

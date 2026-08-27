@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/numerics/vec2.hpp"
 #include "rayreuse/ray/ray_path.hpp"
 
@@ -39,6 +40,12 @@ struct RayStepResult {
 // and the returned quadrature weights describe the resulting blended update.
 //
 // This layer contains no reflection, absorption, or complex-time behavior.
+[[nodiscard]] RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
+                                    const RayState& initialState,
+                                    std::size_t initialSegmentIndex,
+                                    double nominalStepLength,
+                                    const StepLimiter& limiter = {});
+
 [[nodiscard]] RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
                                     const RayState& initialState,
                                     std::size_t initialSegmentIndex,

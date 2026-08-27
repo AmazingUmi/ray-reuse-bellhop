@@ -1,0 +1,80 @@
+{
+  "defaultProvider": "google-vertex",
+  "defaultModel": "gemini-3.7-flash",
+  "defaultThinkingLevel": "high",
+  "transport": "sse",
+  "subagents": {
+    "defaultModel": "google-vertex/gemini-3.7-flash",
+    "defaultThinking": "high",
+    "projectRootResolution": "git-root",
+    "agentOverrides": {
+      "scout": {
+        "model": "google-vertex/gemini-3.7-flash",
+        "thinking": "medium",
+        "inheritProjectContext": true,
+        "defaultContext": "fresh"
+      },
+      "worker": {
+        "model": "google-vertex/gemini-3.7-flash",
+        "thinking": "medium",
+        "inheritProjectContext": true,
+        "defaultContext": "fresh"
+      },
+      "reviewer": {
+        "model": "google-vertex/gemini-3.7-flash",
+        "thinking": "medium",
+        "inheritProjectContext": true,
+        "defaultContext": "fresh",
+        "acceptanceRole": "read-only"
+      },
+      "architect": {
+        "model": "openai-codex/gpt-5.6-sol",
+        "thinking": "high",
+        "inheritProjectContext": true,
+        "defaultContext": "fresh"
+      },
+      "advanced-worker": {
+        "model": "opencode-go/glm-5.3",
+        "thinking": "max",
+        "inheritProjectContext": true,
+        "defaultContext": "fresh"
+      },
+      "final-reviewer": {
+        "model": "openai-codex/gpt-5.6-sol",
+        "thinking": "high",
+        "inheritProjectContext": true,
+        "defaultContext": "fresh",
+        "acceptanceRole": "read-only"
+      }
+    },
+    "modelScope": {
+      "enforce": true,
+      "strict": true,
+      "allow": [
+        "google-vertex/gemini-3.7-flash",
+        "opencode-go/glm-5.3",
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "agents": {
+        "scout": {
+          "allow": ["google-vertex/gemini-3.7-flash"]
+        },
+        "worker": {
+          "allow": ["google-vertex/gemini-3.7-flash"]
+        },
+        "reviewer": {
+          "allow": ["google-vertex/gemini-3.7-flash"]
+        },
+        "architect": {
+          "allow": ["openai-codex/gpt-5.6-sol"]
+        },
+        "advanced-worker": {
+          "allow": ["opencode-go/glm-5.3"]
+        },
+        "final-reviewer": {
+          "allow": ["openai-codex/gpt-5.6-sol"]
+        }
+      }
+    }
+  }
+}

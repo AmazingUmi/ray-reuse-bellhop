@@ -1,6 +1,6 @@
 # Bellhop RayReuse 功能支持矩阵
 
-> 封板日期：2026-08-20；FP-1A～FP-2A 更新：2026-08-27
+> 封板日期：2026-08-20；FP-1A～FP-2B 更新：2026-08-27
 > 适用范围：当前二维、point-source、rectilinear-receiver 的 RayReuse 实现。
 > 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
 
@@ -18,10 +18,11 @@
 
 | 能力 | 当前范围 |
 |---|---|
-| TL | point/single-source-depth/rectilinear/C-linear SSP 下的 Cartesian Cerveny `CC/IC/SC + {F,M,W}{D,S,Z} + P/V/H`、ray-centered Cerveny `CR/IR/SR + {F,M,W}{D,S,Z} + P/V/H`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）、ray-centered GeoHat `Cg/Ig/Sg`、Cartesian GeoGaussian `CB/IB/SB` 与 coherent Cartesian Simple Gaussian `CS`；两个 ray-centered family 都要求至少两个等间距 receiver ranges。Cartesian Cerveny 的 P/V/H 是数值相同的 legacy selector；ray-centered Cerveny V/H 按 Origin 的 normal/along derivative 公式计算，并保留 persistent image-normal flip、逐 image I/S power、receiver-level KMAH 与 Hermite-once 语义。ray-centered GeoHat 则沿实际反射轨迹按 `c*slowness` normal 做 depth projection/range crossing，没有 image loop、persistent flip、epsilon、gamma、KMAH 或 Hermite window；`q` 与 complex delay 线性插值，sound speed/amplitude 取右端点、reflection phase 取左端点，q crossing 增加 `π/2`。D/S/Z 在 frequency-independent reflection 时对完整 dynamic-ray `RN` jump 分别倍增、保留、清零；F/M/W epsilon 按每个目标频率、每条 ray 及 F2CPP/Origin evaluation order 计算，W 使用 real epsilon 与 real-q KMAH crossing，F/M 使用 positive-imaginary epsilon 与 complex-q branch crossing；非 Cerveny family 只允许 P 与 standard curvature，且不能接收 Cerveny width/curvature tail；C 使用 complex-pressure workspace，Cerveny/G/B 的 I/S 使用逐频 intensity workspace，`IS/SS` 明确拒绝；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B/S 均使用 geometric point normalization；GeoGaussian width/membership 与 Simple Gaussian contribution 均逐频精确计算；directional `.sbp` 与适用的 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
+| TL | point/single-source-depth/rectilinear/C-linear 或 PCHIP SSP 下的 Cartesian Cerveny `CC/IC/SC + {F,M,W}{D,S,Z} + P/V/H`、ray-centered Cerveny `CR/IR/SR + {F,M,W}{D,S,Z} + P/V/H`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）、ray-centered GeoHat `Cg/Ig/Sg`、Cartesian GeoGaussian `CB/IB/SB` 与 coherent Cartesian Simple Gaussian `CS`；两个 ray-centered family 都要求至少两个等间距 receiver ranges。Cartesian Cerveny 的 P/V/H 是数值相同的 legacy selector；ray-centered Cerveny V/H 按 Origin 的 normal/along derivative 公式计算，并保留 persistent image-normal flip、逐 image I/S power、receiver-level KMAH 与 Hermite-once 语义。ray-centered GeoHat 则沿实际反射轨迹按 `c*slowness` normal 做 depth projection/range crossing，没有 image loop、persistent flip、epsilon、gamma、KMAH 或 Hermite window；`q` 与 complex delay 线性插值，sound speed/amplitude 取右端点、reflection phase 取左端点，q crossing 增加 `π/2`。D/S/Z 在 frequency-independent reflection 时对完整 dynamic-ray `RN` jump 分别倍增、保留、清零；F/M/W epsilon 按每个目标频率、每条 ray 及 F2CPP/Origin evaluation order 计算，W 使用 real epsilon 与 real-q KMAH crossing，F/M 使用 positive-imaginary epsilon 与 complex-q branch crossing；非 Cerveny family 只允许 P 与 standard curvature，且不能接收 Cerveny width/curvature tail；C 使用 complex-pressure workspace，Cerveny/G/B 的 I/S 使用逐频 intensity workspace，`IS/SS` 明确拒绝；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B/S 均使用 geometric point normalization；GeoGaussian width/membership 与 Simple Gaussian contribution 均逐频精确计算；directional `.sbp` 与适用的 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |
 | R | 单频 `R/RG/RGO`、directional `.sbp`、显式 `Nalpha=1`、逐频 active/terminal prefix、Origin-compatible `.ray` |
 | Arrivals | ASCII `A`、binary `a`；Cartesian geometric hat/Gaussian `G/B` 与 ray-centered GeoHat `g`；frequency-local `ArrivalWorkspace` 与 AddArr 语义 |
 | Eigenray | `E` 的 Cartesian `G/B` 与 ray-centered GeoHat `g` traversal；receiver hit 对应的冻结 ray prefix 与 `.ray` |
+| SSP | 当前 production-supported SSP 仅为 C-linear 与 PCHIP `P`；PCHIP 计算 F2CPP/Origin 兼容的 Hermite 系数、单调性限制器、连续一阶导数与二阶导数 `d²c/dz²`，并精确进入 dynamic ray 与逐频投影；N/S/Q 不支持 |
 | 边界 | top/bottom `V/R/A/G/F`、`.trc/.brc`、piecewise-linear `.ati/.bty`、acoustic/elastic `LL` |
 | 输出生命周期 | PRT、SHD、RAY、ARR；原子单文件发布、模式切换清理、失败后不留下部分正式产品或 `.tmp` |
 | 状态所有权 | geometry/trajectory 与 raw reflection event 位于 frozen `RayPathCache`；幅相、复走时、active prefix、反射结果、Arrival/Eigenray 产品均为逐频临时状态 |
@@ -52,6 +53,7 @@ header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频�
 
 ## Deferred
 
+- N²-linear (`N`)、Cubic Spline (`S`)、Quadrilateral (`Q` / `.ssp`) SSP 插值；
 - irregular receiver；
 - line source；
 - multisource parity；

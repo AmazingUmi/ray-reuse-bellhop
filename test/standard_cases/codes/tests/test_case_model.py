@@ -576,7 +576,7 @@ class CaseModelTests(unittest.TestCase):
     def test_pchip_case_is_scoped_to_implemented_versions(self) -> None:
         self.assertEqual(
             self.cases["munk_pchip"].supported_versions,
-            ("origin", "f2cpp"),
+            ("origin", "f2cpp", "rayreuse"),
         )
 
     def test_n2_case_is_scoped_to_implemented_versions(self) -> None:

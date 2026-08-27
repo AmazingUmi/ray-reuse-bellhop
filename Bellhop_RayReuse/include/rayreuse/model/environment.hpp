@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "rayreuse/model/boundary_geometry.hpp"
+#include "rayreuse/model/sound_speed_types.hpp"
 
 namespace rayreuse {
 
@@ -44,14 +45,18 @@ struct SoundSpeedPoint {
 
 class SoundSpeedProfile {
  public:
-  explicit SoundSpeedProfile(std::vector<SoundSpeedPoint> points);
+  explicit SoundSpeedProfile(
+      std::vector<SoundSpeedPoint> points,
+      SspInterpolationKind interpolationKind = SspInterpolationKind::CLinear);
 
   [[nodiscard]] const std::vector<SoundSpeedPoint>& points() const noexcept;
   [[nodiscard]] double minimumDepth() const noexcept;
   [[nodiscard]] double maximumDepth() const noexcept;
+  [[nodiscard]] SspInterpolationKind interpolationKind() const noexcept;
 
  private:
   std::vector<SoundSpeedPoint> points_;
+  SspInterpolationKind interpolationKind_{SspInterpolationKind::CLinear};
 };
 
 enum class BoundaryKind {

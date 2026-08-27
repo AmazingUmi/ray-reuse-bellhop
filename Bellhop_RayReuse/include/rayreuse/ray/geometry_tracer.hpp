@@ -3,9 +3,9 @@
 #include <vector>
 
 #include "rayreuse/model/beam_curvature.hpp"
-#include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/simulation_case.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/ray/ray_path.hpp"
 
 namespace rayreuse {
@@ -29,7 +29,7 @@ class GeometryTracer {
   [[nodiscard]] RayPath trace(const Source& source, double launchAngle) const;
 
  private:
-  CLinearSsp soundSpeedProfile_;
+  GeometrySspEvaluator soundSpeedProfile_;
   IntegratorSettings integrator_;
   std::vector<double> profileDepths_;
   BoundaryModel seaSurfaceBoundary_;

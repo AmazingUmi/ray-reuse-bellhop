@@ -142,8 +142,10 @@ void validateReflectionTable(const SharedTabulatedReflectionTable& table) {
 
 }  // namespace
 
-SoundSpeedProfile::SoundSpeedProfile(std::vector<SoundSpeedPoint> points)
-    : points_(std::move(points)) {
+SoundSpeedProfile::SoundSpeedProfile(
+    std::vector<SoundSpeedPoint> points,
+    SspInterpolationKind interpolationKind)
+    : points_(std::move(points)), interpolationKind_(interpolationKind) {
   if (points_.size() < 2U) {
     throw ValidationError("sound-speed profile requires at least two points");
   }
@@ -177,6 +179,10 @@ double SoundSpeedProfile::minimumDepth() const noexcept {
 
 double SoundSpeedProfile::maximumDepth() const noexcept {
   return points_.back().depth;
+}
+
+SspInterpolationKind SoundSpeedProfile::interpolationKind() const noexcept {
+  return interpolationKind_;
 }
 
 BoundaryModel BoundaryModel::vacuum(double depth) {

@@ -838,9 +838,54 @@ void testUnsupportedAndMalformedInput(Context& context) {
 
 }  // namespace
 
+void testSspInterpolationKinds(Context& context) {
+  const std::string munkContents = renderCase("munk_pchip", 50.0, 300U);
+  const ParsedEnvironment pchipParsed =
+      parseText(munkContents, "munk_pchip.env");
+  context.check(
+      pchipParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
+          rayreuse::SspInterpolationKind::Pchip,
+      "top option 'P' parses as PCHIP SSP interpolation");
+
+  std::string cLinearContents = munkContents;
+  replaceFirst(cLinearContents, "'PVW'", "'CVW'");
+  const ParsedEnvironment cParsed =
+      parseText(cLinearContents, "munk_clinear.env");
+  context.check(
+      cParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
+          rayreuse::SspInterpolationKind::CLinear,
+      "top option 'C' parses as C-linear SSP interpolation");
+
+  for (const std::string& unsupported : {"'NVW'", "'SVW'", "'QVW'"}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          std::string contents = munkContents;
+          replaceFirst(contents, "'PVW'", unsupported);
+          static_cast<void>(parseText(contents, "unsupported_ssp.env"));
+        },
+        "unsupported SSP interpolation option " + unsupported + " is rejected");
+  }
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = munkContents;
+        replaceFirst(contents, "'PVW'", "'XVW'");
+        static_cast<void>(parseText(contents, "unknown_ssp.env"));
+      },
+      "unknown SSP interpolation option is rejected");
+
+  const rayreuse::SoundSpeedProfile programmatic(
+      {rayreuse::SoundSpeedPoint{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+       rayreuse::SoundSpeedPoint{.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}});
+  context.check(
+      programmatic.interpolationKind() == rayreuse::SspInterpolationKind::CLinear,
+      "programmatic construction defaults to C-linear");
+}
+
 int main() {
   Context context;
   testDirectCase(context);
+  testSspInterpolationKinds(context);
   testFrequencyOverride(context);
   testEnvironmentFrequencyList(context);
   testCartesianCervenyComponents(context);

@@ -7,8 +7,8 @@
 
 #include "rayreuse/field/frequency_workspace.hpp"
 #include "rayreuse/model/beam_width.hpp"
-#include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/ray/ray_path.hpp"
 
 namespace rayreuse {
@@ -160,7 +160,7 @@ class CartesianCervenyInfluence {
   ReceiverGrid receivers_;
   CartesianCervenySettings settings_;
   BeamWidthMode widthMode_;
-  CLinearSsp soundSpeedProfile_;
+  GeometrySspEvaluator soundSpeedProfile_;
   double receiverRangeDelta_{};
 };
 

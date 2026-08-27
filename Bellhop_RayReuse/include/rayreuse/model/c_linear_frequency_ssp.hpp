@@ -19,6 +19,11 @@ class CLinearFrequencySsp {
  public:
   CLinearFrequencySsp(const SoundSpeedProfile& profile, double frequency);
 
+  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
+      noexcept {
+    return sspGradientContinuity(SspInterpolationKind::CLinear);
+  }
+
   [[nodiscard]] double frequency() const noexcept;
   [[nodiscard]] std::size_t segmentCount() const noexcept;
   // These queries let the frequency projector bypass repeated C-linear

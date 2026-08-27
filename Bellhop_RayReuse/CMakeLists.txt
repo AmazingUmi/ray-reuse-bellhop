@@ -90,7 +90,11 @@ add_library(
     src/model/c_linear_ssp.cpp
     src/model/environment.cpp
     src/model/launch_fan_planner.cpp
+    src/model/pchip_frequency_ssp.cpp
+    src/model/pchip_ssp.cpp
     src/model/simulation_case.cpp
+    src/model/sound_speed_evaluator.cpp
+    src/numerics/pchip_coefficients.cpp
     src/cache/ray_path_cache.cpp
     src/field/frequency_workspace.cpp
     src/io/arrival_writer.cpp
@@ -288,6 +292,18 @@ if(BUILD_TESTING)
     bellhop_rayreuse_c_linear_ssp_tests
     rayreuse.component.c_linear_ssp
     tests/component/c_linear_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_pchip_ssp_tests
+    rayreuse.component.pchip_ssp
+    tests/component/pchip_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_sound_speed_evaluator_tests
+    rayreuse.component.sound_speed_evaluator
+    tests/component/sound_speed_evaluator_test.cpp
     component
   )
   add_rayreuse_test(
