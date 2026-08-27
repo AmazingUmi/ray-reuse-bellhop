@@ -147,8 +147,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
       simulation.beamFamily() != BeamFamily::GeometricGaussian &&
       simulation.beamFamily() != BeamFamily::SimpleGaussian) {
     throw ValidationError(
-        "single-frequency TL solver supports only Cerveny and Cartesian "
-        "geometric G/B/S beams");
+        "single-frequency TL solver supports only Cerveny, Cartesian or "
+        "ray-centered geometric hat, and Cartesian geometric B/S beams");
   }
   if (simulation.beamFamily() == BeamFamily::SimpleGaussian &&
       simulation.runMode() != SimulationRunMode::Coherent) {
@@ -174,7 +174,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   std::optional<GeometricGaussianInfluence> geometricGaussianInfluence;
   std::optional<SimpleGaussianInfluence> simpleGaussianInfluence;
   if (simulation.beamFamily() == BeamFamily::GeometricHat) {
-    geometricHatInfluence.emplace(simulation.receivers());
+    geometricHatInfluence.emplace(simulation.receivers(),
+                                  simulation.cervenyCoordinateSystem());
   } else if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
     geometricGaussianInfluence.emplace(simulation.receivers());
   } else if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
@@ -187,14 +188,14 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
         // the environment/model/PRT lifecycle, but InfluenceCervenyCart does
         // not read it.
         cartesianCervenyInfluence.emplace(
-            simulation.environment(), simulation.receivers(),
-            influenceSettings, simulation.beamWidthMode());
+            simulation.environment(), simulation.receivers(), influenceSettings,
+            simulation.beamWidthMode());
         break;
       case CervenyCoordinateSystem::RayCentered:
         rayCenteredCervenyInfluence.emplace(
-            simulation.environment(), simulation.receivers(),
-            influenceSettings, simulation.beamWidthMode(),
-            simulation.runMode(), simulation.fieldComponent());
+            simulation.environment(), simulation.receivers(), influenceSettings,
+            simulation.beamWidthMode(), simulation.runMode(),
+            simulation.fieldComponent());
         break;
     }
   }

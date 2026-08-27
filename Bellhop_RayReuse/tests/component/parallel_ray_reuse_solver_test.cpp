@@ -381,8 +381,7 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
               FieldComponent::Horizontal}) {
           const SimulationCase simulation = makeSimulation(
               {50.0, 100.0}, mode, BeamFamily::CervenyGaussian, component,
-              curvatureMode, widthMode,
-              CervenyCoordinateSystem::RayCentered);
+              curvatureMode, widthMode, CervenyCoordinateSystem::RayCentered);
           const BroadbandNonReuseResult nonReuse =
               BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
           const SerialRayReuseResult reuse =
@@ -393,15 +392,14 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
                                                    .outputQueueCapacity = 1U,
                                                    .memoryBudgetBytes = 0U},
                           true);
-          context.check(
-              reuse.statistics.cacheFingerprintVerified &&
-                  reuse.statistics.cacheFingerprintBefore ==
-                      reuse.statistics.cacheFingerprintAfter &&
-                  parallel.statistics.cacheFingerprintVerified &&
-                  parallel.statistics.cacheFingerprintBefore ==
-                      parallel.statistics.cacheFingerprintAfter,
-              "ray-centered C/I/S x F/M/W x D/S/Z x P/V/H preserves "
-              "the frozen cache");
+          context.check(reuse.statistics.cacheFingerprintVerified &&
+                            reuse.statistics.cacheFingerprintBefore ==
+                                reuse.statistics.cacheFingerprintAfter &&
+                            parallel.statistics.cacheFingerprintVerified &&
+                            parallel.statistics.cacheFingerprintBefore ==
+                                parallel.statistics.cacheFingerprintAfter,
+                        "ray-centered C/I/S x F/M/W x D/S/Z x P/V/H preserves "
+                        "the frozen cache");
           for (std::size_t index = 0U; index < 2U; ++index) {
             context.check(
                 parallel.workspaces[index].has_value(),
@@ -420,6 +418,47 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
           }
         }
       }
+    }
+  }
+}
+
+void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SimulationCase simulation = makeSimulation(
+        {50.0, 100.0}, mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
+        BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+        CervenyCoordinateSystem::RayCentered);
+    const BroadbandNonReuseResult nonReuse =
+        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+    const SerialRayReuseResult reuse =
+        SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+    const StreamedParallelRun parallel =
+        runParallel(simulation,
+                    ParallelRayReuseSettings{.workerCount = 2U,
+                                             .outputQueueCapacity = 1U,
+                                             .memoryBudgetBytes = 0U},
+                    true);
+    context.check(
+        reuse.statistics.cacheFingerprintVerified &&
+            reuse.statistics.cacheFingerprintBefore ==
+                reuse.statistics.cacheFingerprintAfter &&
+            parallel.statistics.cacheFingerprintVerified &&
+            parallel.statistics.cacheFingerprintBefore ==
+                parallel.statistics.cacheFingerprintAfter,
+        "ray-centered GeoHat C/I/S preserves the frozen cache fingerprint");
+    for (std::size_t index = 0U; index < 2U; ++index) {
+      context.check(parallel.workspaces[index].has_value(),
+                    "parallel ray-centered GeoHat returns every frequency");
+      if (!parallel.workspaces[index].has_value()) continue;
+      checkWorkspaceEqual(context, reuse.frequencyResults[index].workspace,
+                          nonReuse.frequencyResults[index].workspace,
+                          "ray-centered GeoHat reuse equals non-reuse bitwise");
+      checkWorkspaceEqual(
+          context, *parallel.workspaces[index],
+          nonReuse.frequencyResults[index].workspace,
+          "ray-centered GeoHat parallel equals non-reuse bitwise");
     }
   }
 }
@@ -520,6 +559,7 @@ int main() {
   testSimpleGaussianMatchesAcrossExecution(context);
   testCartesianComponentsMatchAcrossExecution(context);
   testRayCenteredMatrixMatchesAcrossExecution(context);
+  testRayCenteredGeometricHatMatchesAcrossExecution(context);
   testMemoryBudget(context);
   testInvalidSettingsAndConsumerFailure(context);
 

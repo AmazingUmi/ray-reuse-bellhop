@@ -8,10 +8,12 @@
 #include <string>
 #include <vector>
 
+#include "rayreuse/error.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
 
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometricHatDiagnosticRequest;
 using rayreuse::GeometricHatInfluence;
@@ -28,13 +30,14 @@ constexpr double kDalpha = 0.1;
 
 RayPath makeHorizontalPath(const std::vector<double>& ranges,
                            const std::vector<double>& q,
-                           double launchAngle = 0.0) {
+                           double launchAngle = 0.0, bool leftGoing = false) {
   RayPath path;
   path.launchAngle = launchAngle;
   for (std::size_t index = 0U; index < ranges.size(); ++index) {
     path.points.push_back(
         RayState{.position = {.range = ranges[index], .depth = 500.0},
-                 .slowness = {.range = 1.0 / kSoundSpeed, .depth = 0.0},
+                 .slowness = {.range = (leftGoing ? -1.0 : 1.0) / kSoundSpeed,
+                              .depth = 0.0},
                  .dynamicP = {},
                  .dynamicQ = {q[index], 0.0},
                  .soundSpeed = kSoundSpeed,
@@ -49,12 +52,11 @@ RayFrequencyState makeFrequencyState(const std::vector<double>& ranges,
   RayFrequencyState state;
   state.frequency = frequency;
   for (const double range : ranges) {
-    state.points.push_back(
-        RayFrequencyPoint{.complexTravelTime =
-                              {range / kSoundSpeed, imaginaryDelay},
-                          .amplitude = 1.0,
-                          .reflectionPhase = 0.0,
-                          .active = true});
+    state.points.push_back(RayFrequencyPoint{
+        .complexTravelTime = {range / kSoundSpeed, imaginaryDelay},
+        .amplitude = 1.0,
+        .reflectionPhase = 0.0,
+        .active = true});
   }
   return state;
 }
@@ -71,8 +73,7 @@ void checkComplexNear(Context& context, std::complex<double> actual,
 void testCartesianOriginAnchor(Context& context) {
   const std::vector<double> ranges{0.0, 200.0, 400.0, 600.0};
   const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
-  const RayPath path =
-      makeHorizontalPath(ranges, {0.0, 100.0, 200.0, 300.0});
+  const RayPath path = makeHorizontalPath(ranges, {0.0, 100.0, 200.0, 300.0});
   const RayFrequencyState state = makeFrequencyState(ranges, 50.0);
   FrequencyWorkspace workspace(50.0, receivers);
   const auto diagnostic = GeometricHatInfluence(receivers).accumulate(
@@ -103,8 +104,7 @@ void testIntensityUsesAttenuationAndHatOnce(Context& context) {
   const double beamRadius = 50.0 / (kSoundSpeed / kDalpha);
   const ReceiverGrid receivers({500.0 + beamRadius / 2.0}, {100.0, 300.0});
   const RayPath path = makeHorizontalPath(ranges, {0.0, 100.0});
-  const RayFrequencyState state =
-      makeFrequencyState(ranges, 10.0, -1.0e-4);
+  const RayFrequencyState state = makeFrequencyState(ranges, 10.0, -1.0e-4);
   IntensityWorkspace workspace(10.0, receivers);
   const auto diagnostic = GeometricHatInfluence(receivers).accumulateIntensity(
       workspace, path, state, kDalpha,
@@ -115,16 +115,13 @@ void testIntensityUsesAttenuationAndHatOnce(Context& context) {
                 "Cartesian G intensity evaluates the offset receiver");
   context.checkNear(diagnostic->hatWeight, 0.5, 3.0e-12,
                     "Cartesian G intensity uses nontrivial W");
-  context.checkNear(diagnostic->intensityIncrement, 14.81268384785484,
-                    2.0e-11,
+  context.checkNear(diagnostic->intensityIncrement, 14.81268384785484, 2.0e-11,
                     "Cartesian G intensity applies attenuation and W once");
-  context.checkNear(workspace.at(0U, 0U),
-                    diagnostic->intensityIncrement, 0.0,
+  context.checkNear(workspace.at(0U, 0U), diagnostic->intensityIncrement, 0.0,
                     "Cartesian G stores the per-ray intensity increment");
-  context.check(
-      std::abs(diagnostic->intensityIncrement -
-               14.81268384785484 * diagnostic->hatWeight) > 1.0,
-      "Cartesian G fixture distinguishes W from W squared");
+  context.check(std::abs(diagnostic->intensityIncrement -
+                         14.81268384785484 * diagnostic->hatWeight) > 1.0,
+                "Cartesian G fixture distinguishes W from W squared");
 }
 
 void testCausticAndActivePrefix(Context& context) {
@@ -154,8 +151,7 @@ void testCausticAndActivePrefix(Context& context) {
   {
     const std::vector<double> ranges{0.0, 200.0, 400.0, 600.0};
     const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
-    const RayPath path =
-        makeHorizontalPath(ranges, {1.0, 100.0, 200.0, 300.0});
+    const RayPath path = makeHorizontalPath(ranges, {1.0, 100.0, 200.0, 300.0});
     RayFrequencyState state = makeFrequencyState(ranges, 1.0);
     state.points[2U].active = false;
     state.points[3U].active = false;
@@ -169,6 +165,116 @@ void testCausticAndActivePrefix(Context& context) {
   }
 }
 
+void testRayCenteredOriginTraversalAndKernel(Context& context) {
+  {
+    const std::vector<double> ranges{0.0, 200.0, 400.0, 600.0};
+    const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
+    const RayPath path = makeHorizontalPath(ranges, {0.0, 100.0, 200.0, 300.0});
+    const RayFrequencyState state = makeFrequencyState(ranges, 50.0);
+    FrequencyWorkspace workspace(50.0, receivers);
+    static_cast<void>(
+        GeometricHatInfluence(receivers, CervenyCoordinateSystem::RayCentered)
+            .accumulate(workspace, path, state, kDalpha));
+    context.check(workspace.at(0U, 0U) == std::complex<double>{},
+                  "ray-centered g preserves the Origin initial same-index "
+                  "skip");
+    context.check(std::abs(workspace.at(0U, 1U)) > 0.0,
+                  "ray-centered g walks projected receiver ranges");
+  }
+
+  {
+    const std::vector<double> ranges{600.0, 400.0, 200.0};
+    const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
+    const RayPath path =
+        makeHorizontalPath(ranges, {300.0, 200.0, 100.0}, 0.0, true);
+    const RayFrequencyState state = makeFrequencyState(ranges, 1.0);
+    FrequencyWorkspace workspace(1.0, receivers);
+    static_cast<void>(
+        GeometricHatInfluence(receivers, CervenyCoordinateSystem::RayCentered)
+            .accumulate(workspace, path, state, kDalpha));
+    context.check(std::abs(workspace.at(0U, 2U)) > 0.0 &&
+                      std::abs(workspace.at(0U, 1U)) > 0.0,
+                  "ray-centered g walks receiver indices backwards");
+  }
+
+  {
+    const std::vector<double> ranges{0.0, 400.0};
+    const double qAtReceiver = 75.0;
+    const double beamRadius = qAtReceiver / (kSoundSpeed / kDalpha);
+    const ReceiverGrid receivers({500.0 + beamRadius / 2.0}, {100.0, 300.0});
+    const RayPath path = makeHorizontalPath(ranges, {0.0, 100.0});
+    const RayFrequencyState state = makeFrequencyState(ranges, 10.0, -1.0e-4);
+    IntensityWorkspace workspace(10.0, receivers);
+    const auto diagnostic =
+        GeometricHatInfluence(receivers, CervenyCoordinateSystem::RayCentered)
+            .accumulateIntensity(
+                workspace, path, state, kDalpha,
+                GeometricHatDiagnosticRequest{.receiverRangeIndex = 1U,
+                                              .receiverDepthIndex = 0U});
+    context.check(diagnostic.has_value() && diagnostic->evaluated,
+                  "ray-centered g evaluates the projected offset receiver");
+    context.checkNear(diagnostic->interpolationWeight, 0.75, 0.0,
+                      "ray-centered g projected-range interpolation");
+    context.checkNear(diagnostic->qInterpolated, qAtReceiver, 0.0,
+                      "ray-centered g linearly interpolates real q");
+    context.checkNear(diagnostic->normalOffset, beamRadius / 2.0, 3.0e-14,
+                      "ray-centered g interpolates the signed normal then "
+                      "takes abs");
+    context.checkNear(diagnostic->hatWeight, 0.5, 3.0e-12,
+                      "ray-centered g uses the linear hat kernel once");
+    const double expectedConstant =
+        std::sqrt(kSoundSpeed) / std::sqrt(qAtReceiver);
+    const double attenuated =
+        expectedConstant *
+        std::exp((2.0 * std::numbers::pi * 10.0 * diagnostic->delay).imag());
+    context.checkNear(diagnostic->amplitudeConstant, expectedConstant, 2.0e-15,
+                      "ray-centered g uses right-endpoint amplitude and c");
+    context.checkNear(diagnostic->intensityIncrement,
+                      attenuated * attenuated * diagnostic->hatWeight, 2.0e-14,
+                      "ray-centered g squares attenuation before one W");
+  }
+
+  {
+    const std::vector<double> ranges{0.0, 200.0, 400.0};
+    const ReceiverGrid receivers({500.0}, {100.0, 250.0, 400.0});
+    const RayPath path = makeHorizontalPath(ranges, {1.0, 1.0, -1.0});
+    RayFrequencyState state = makeFrequencyState(ranges, 1.0);
+    for (RayFrequencyPoint& point : state.points) {
+      point.complexTravelTime = {};
+    }
+    FrequencyWorkspace workspace(1.0, receivers);
+    const auto diagnostic =
+        GeometricHatInfluence(receivers, CervenyCoordinateSystem::RayCentered)
+            .accumulate(
+                workspace, path, state, kDalpha,
+                GeometricHatDiagnosticRequest{.receiverRangeIndex = 2U,
+                                              .receiverDepthIndex = 0U});
+    context.check(diagnostic.has_value() && diagnostic->evaluated,
+                  "ray-centered g evaluates the caustic endpoint");
+    context.checkNear(diagnostic->causticPhase, std::numbers::pi / 2.0, 0.0,
+                      "ray-centered g adds receiver-side q-zero phase");
+    context.checkNear(diagnostic->pressureIncrement.real(), 0.0, 3.0e-15,
+                      "ray-centered g caustic has zero real contribution");
+    context.check(diagnostic->pressureIncrement.imag() > 0.0,
+                  "ray-centered g caustic rotates by plus pi/2");
+  }
+
+  context.expectThrows<rayreuse::ValidationError>(
+      [] {
+        static_cast<void>(
+            GeometricHatInfluence(ReceiverGrid({500.0}, {100.0}),
+                                  CervenyCoordinateSystem::RayCentered));
+      },
+      "ray-centered g requires at least two receiver ranges");
+  context.expectThrows<rayreuse::ValidationError>(
+      [] {
+        static_cast<void>(
+            GeometricHatInfluence(ReceiverGrid({500.0}, {100.0, 300.0, 550.0}),
+                                  CervenyCoordinateSystem::RayCentered));
+      },
+      "ray-centered g requires equally spaced receiver ranges");
+}
+
 }  // namespace
 
 int main() {
@@ -176,6 +282,7 @@ int main() {
   testCartesianOriginAnchor(context);
   testIntensityUsesAttenuationAndHatOnce(context);
   testCausticAndActivePrefix(context);
+  testRayCenteredOriginTraversalAndKernel(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
               << " geometric hat influence assertion(s) failed\n";

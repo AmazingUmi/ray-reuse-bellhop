@@ -400,7 +400,10 @@ void writeConfigurationSummary(std::ostream& stream,
       }
       break;
     case rayreuse::BeamFamily::GeometricHat:
-      stream << "Geometric hat beams in Cartesian coordinates\n"
+      stream << (simulation.cervenyCoordinateSystem() ==
+                         rayreuse::CervenyCoordinateSystem::RayCentered
+                     ? "Geometric hat beams in ray-centered coordinates\n"
+                     : "Geometric hat beams in Cartesian coordinates\n")
              << "Geometric hat beams\n";
       break;
     case rayreuse::BeamFamily::GeometricGaussian:

@@ -452,15 +452,26 @@ void testSimulationProductMetadata(Context& context) {
             static_cast<BeamWidthMode>(999)));
       },
       "SimulationCase rejects invalid beam width enum values");
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SimulationCase rayCenteredHat = makeMetadataCase(
+        mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
+        BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+        CervenyCoordinateSystem::RayCentered);
+    context.check(rayCenteredHat.cervenyCoordinateSystem() ==
+                          CervenyCoordinateSystem::RayCentered &&
+                      rayCenteredHat.beamFamily() == BeamFamily::GeometricHat,
+                  "SimulationCase accepts ray-centered GeoHat C/I/S TL");
+  }
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(
-            SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+            SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat,
             FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
-            BeamWidthMode::MinimumWidth,
-            CervenyCoordinateSystem::RayCentered));
+            BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::RayCentered));
       },
-      "SimulationCase keeps ray-centered GeoHat outside FP-1H");
+      "SimulationCase keeps ray-centered GeoHat arrivals outside FP-1I");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(

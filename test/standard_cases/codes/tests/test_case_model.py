@@ -125,7 +125,6 @@ class CaseModelTests(unittest.TestCase):
             "cerveny_curvature_zero",
             "source_geometry_point_explicit",
             "source_geometry_line",
-            "geometric_hat_ray_centered",
         ):
             with self.subTest(case=case_id):
                 self.assertEqual(
@@ -162,6 +161,7 @@ class CaseModelTests(unittest.TestCase):
             "ray_centered_component_pressure",
             "ray_centered_component_vertical",
             "ray_centered_component_horizontal",
+            "geometric_hat_ray_centered",
         ):
             with self.subTest(case=case_id):
                 self.assertEqual(

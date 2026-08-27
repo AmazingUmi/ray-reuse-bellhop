@@ -303,11 +303,10 @@ void testCartesianCervenyComponents(Context& context) {
           replaceFirst(contents, "'CC'", "'" + runType + "'");
           replaceFirst(contents, "'MS'",
                        "'" + widthToken + curvatureToken + "'");
-          replaceFirst(contents, "1  5  'P'",
-                       "1  5  '" + componentToken + "'");
-          const ParsedEnvironment parsed = parseText(
-              contents, "ray_centered_" + runType + widthToken +
-                            curvatureToken + componentToken + ".env");
+          replaceFirst(contents, "1  5  'P'", "1  5  '" + componentToken + "'");
+          const ParsedEnvironment parsed =
+              parseText(contents, "ray_centered_" + runType + widthToken +
+                                      curvatureToken + componentToken + ".env");
           context.check(
               parsed.simulationCase.runMode() == expectedMode &&
                   parsed.simulationCase.beamFamily() ==
@@ -592,6 +591,22 @@ void testRrB4ProductRunTypes(Context& context) {
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents =
+            renderCase("arrival_geometric_hat_binary", 1000.0, 80U);
+        replaceFirst(contents, "'aG RR'", "'ag RR'");
+        static_cast<void>(parseText(contents, "ray_centered_binary.env"));
+      },
+      "ray-centered binary geometric arrivals are explicitly rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("eigenray_geometric_gaussian", 1000.0, 80U);
+        replaceFirst(contents, "'EB RR'", "'Eg RR'");
+        static_cast<void>(parseText(contents, "ray_centered_eigenray.env"));
+      },
+      "ray-centered geometric eigenrays are explicitly rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
             renderCase("arrival_geometric_hat_ascii", 1000.0, 80U);
         replaceFirst(contents, "'AG RR'", "'AC RR'");
         static_cast<void>(parseText(contents, "cerveny_arrival.env"));
@@ -693,6 +708,22 @@ void testUnsupportedAndMalformedInput(Context& context) {
             parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat,
         "G/caret/blank aliases select the Cartesian GeoHat C/I/S path");
   }
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"Cg", SimulationRunMode::Coherent},
+           {"Ig", SimulationRunMode::Incoherent},
+           {"Sg", SimulationRunMode::SemiCoherent}}) {
+    std::string contents = hat;
+    replaceFirst(contents, "'CG'", "'" + runType + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, "ray_centered_hat_" + runType + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat &&
+            parsed.simulationCase.cervenyCoordinateSystem() ==
+                CervenyCoordinateSystem::RayCentered,
+        "Cg/Ig/Sg select the ray-centered GeoHat C/I/S path");
+  }
   std::string nonuniformHat = hat;
   replaceFirst(nonuniformHat, "\n21\n0.02  0.25 /", "\n3\n0.02  0.08  0.25 /");
   const ParsedEnvironment parsedNonuniformHat =
@@ -700,6 +731,14 @@ void testUnsupportedAndMalformedInput(Context& context) {
   context.check(
       parsedNonuniformHat.simulationCase.receivers().rangeCount() == 3U,
       "Cartesian GeoHat accepts nonuniform rectilinear receiver ranges");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = nonuniformHat;
+        replaceFirst(contents, "'CG'", "'Cg'");
+        static_cast<void>(
+            parseText(contents, "nonuniform_ray_centered_hat.env"));
+      },
+      "ray-centered GeoHat rejects nonuniform receiver ranges");
   for (const auto& [runType, expectedMode] :
        std::vector<std::pair<std::string, SimulationRunMode>>{
            {"CB", SimulationRunMode::Coherent},

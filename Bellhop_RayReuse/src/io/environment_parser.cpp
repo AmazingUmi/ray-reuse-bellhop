@@ -612,7 +612,8 @@ struct ParsedRunType {
   const bool standardTransmissionLoss =
       (runType[0U] == 'C' || runType[0U] == 'I' || runType[0U] == 'S') &&
       (runType[1U] == 'C' || runType[1U] == 'R' || runType[1U] == 'G' ||
-       runType[1U] == 'B' || runType[1U] == '^' || runType[1U] == ' ');
+       runType[1U] == 'g' || runType[1U] == 'B' || runType[1U] == '^' ||
+       runType[1U] == ' ');
   const bool simpleGaussianTransmissionLoss =
       runType[0U] == 'C' && runType[1U] == 'S';
   const bool transmissionLoss =
@@ -627,8 +628,9 @@ struct ParsedRunType {
       (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
          "only Cartesian Cerveny 'CC/IC/SC', ray-centered Cerveny "
-         "'CR/IR/SR', Cartesian geometric-hat "
-         "'CG/IG/SG' (including '^' and blank aliases), Cartesian "
+         "'CR/IR/SR', Cartesian/ray-centered geometric-hat "
+         "'CG/IG/SG' or 'Cg/Ig/Sg', "
+         "Cartesian geometric-hat '^'/blank aliases, Cartesian "
          "geometric-Gaussian 'CB/IB/SB', Cartesian simple-Gaussian 'CS', "
          "unshifted "
          "point-source 'R/RG/RGO', or Cartesian geometric "
@@ -674,12 +676,14 @@ struct ParsedRunType {
     }
   }
   BeamFamily beamFamily = BeamFamily::CervenyGaussian;
-  CervenyCoordinateSystem coordinateSystem =
-      CervenyCoordinateSystem::Cartesian;
+  CervenyCoordinateSystem coordinateSystem = CervenyCoordinateSystem::Cartesian;
   if (simpleGaussianTransmissionLoss) {
     beamFamily = BeamFamily::SimpleGaussian;
   } else if (transmissionLoss && runType[1U] == 'R') {
     beamFamily = BeamFamily::CervenyGaussian;
+    coordinateSystem = CervenyCoordinateSystem::RayCentered;
+  } else if (transmissionLoss && runType[1U] == 'g') {
+    beamFamily = BeamFamily::GeometricHat;
     coordinateSystem = CervenyCoordinateSystem::RayCentered;
   } else if (transmissionLoss && runType[1U] == 'B') {
     beamFamily = BeamFamily::GeometricGaussian;

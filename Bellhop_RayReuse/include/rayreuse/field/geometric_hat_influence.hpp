@@ -40,19 +40,19 @@ class GeometricHatInfluence {
  public:
   using EigenrayHitSink = std::function<void(const EigenrayHit&)>;
 
-  explicit GeometricHatInfluence(ReceiverGrid receivers);
+  explicit GeometricHatInfluence(
+      ReceiverGrid receivers,
+      CervenyCoordinateSystem coordinates = CervenyCoordinateSystem::Cartesian);
 
   [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
       std::optional<GeometricHatDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
   [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulateIntensity(
       IntensityWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
       std::optional<GeometricHatDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
@@ -68,11 +68,19 @@ class GeometricHatInfluence {
   [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulateField(
       FrequencyWorkspace* pressureWorkspace,
       IntensityWorkspace* intensityWorkspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
+      std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const;
+
+  [[nodiscard]] std::optional<GeometricHatDiagnostic>
+  accumulateRayCenteredField(
+      FrequencyWorkspace* pressureWorkspace,
+      IntensityWorkspace* intensityWorkspace, const RayPath& path,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
       std::optional<GeometricHatDiagnosticRequest> diagnosticRequest) const;
 
   ReceiverGrid receivers_;
+  CervenyCoordinateSystem coordinates_{CervenyCoordinateSystem::Cartesian};
+  double receiverRangeDelta_{};
 };
 
 }  // namespace rayreuse

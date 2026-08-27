@@ -25,6 +25,7 @@ using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::CartesianCervenySettings;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
@@ -77,7 +78,9 @@ SimulationCase makeSimulation(
     BeamFamily beamFamily = BeamFamily::CervenyGaussian,
     FieldComponent fieldComponent = FieldComponent::Pressure,
     BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
-    BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth) {
+    BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+    CervenyCoordinateSystem coordinateSystem =
+        CervenyCoordinateSystem::Cartesian) {
   return SimulationCase(
       makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
       ReceiverGrid(linearGrid(400.0, 600.0, 5U),
@@ -91,7 +94,7 @@ SimulationCase makeSimulation(
                          .depthLimit = 1100.0,
                          .maximumRayPoints = maximumRayPoints},
       std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent,
-      curvatureMode, beamWidthMode);
+      curvatureMode, beamWidthMode, coordinateSystem);
 }
 
 SimulationCase makeCurvatureSimulation(
@@ -402,61 +405,71 @@ void testSourceBeamPatternScalesAllCoherenceModes(Context& context) {
 
 void testGeometricHatCoherenceAndDirectionalPattern(Context& context) {
   const double directionalAmplitude = std::pow(10.0, -6.0 / 20.0);
-  std::vector<SingleFrequencyResult> omniResults;
-  omniResults.reserve(3U);
-  for (const SimulationRunMode mode :
-       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
-        SimulationRunMode::SemiCoherent}) {
-    const SingleFrequencyResult omni = SingleFrequencySolver::solve(
-        makeSimulation(1000U, {50.0}, mode,
-                       SourceBeamPattern::omnidirectional(),
-                       BeamFamily::GeometricHat),
-        1.0, 500.0);
-    const SingleFrequencyResult directional = SingleFrequencySolver::solve(
-        makeSimulation(1000U, {50.0}, mode,
-                       SourceBeamPattern::directional(
-                           {{.angleDegrees = -10.0, .powerDecibels = -6.0},
-                            {.angleDegrees = 10.0, .powerDecibels = -6.0}}),
-                       BeamFamily::GeometricHat),
-        1.0, 500.0);
-    context.check(
-        omni.rayCount == directional.rayCount &&
-            omni.totalRayPointCount == directional.totalRayPointCount &&
-            omni.rayCacheBytes == directional.rayCacheBytes,
-        "GeoHat directional source weighting leaves frozen geometry unchanged");
-    bool havePressure = false;
-    for (std::size_t index = 0U; index < omni.workspace.pressure().size();
-         ++index) {
-      const std::complex<double> pressure = omni.workspace.pressure()[index];
-      havePressure = havePressure || pressure != std::complex<double>{};
-      if (mode != SimulationRunMode::Coherent) {
-        context.check(pressure.imag() == 0.0 && pressure.real() <= 0.0,
-                      "GeoHat I/S final pressure is real with Origin sign");
+  for (const CervenyCoordinateSystem coordinates :
+       {CervenyCoordinateSystem::Cartesian,
+        CervenyCoordinateSystem::RayCentered}) {
+    std::vector<SingleFrequencyResult> omniResults;
+    omniResults.reserve(3U);
+    for (const SimulationRunMode mode :
+         {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+          SimulationRunMode::SemiCoherent}) {
+      const SingleFrequencyResult omni = SingleFrequencySolver::solve(
+          makeSimulation(1000U, {50.0}, mode,
+                         SourceBeamPattern::omnidirectional(),
+                         BeamFamily::GeometricHat, FieldComponent::Pressure,
+                         BoundaryCurvatureMode::Standard,
+                         BeamWidthMode::MinimumWidth, coordinates),
+          1.0, 500.0);
+      const SingleFrequencyResult directional = SingleFrequencySolver::solve(
+          makeSimulation(1000U, {50.0}, mode,
+                         SourceBeamPattern::directional(
+                             {{.angleDegrees = -10.0, .powerDecibels = -6.0},
+                              {.angleDegrees = 10.0, .powerDecibels = -6.0}}),
+                         BeamFamily::GeometricHat, FieldComponent::Pressure,
+                         BoundaryCurvatureMode::Standard,
+                         BeamWidthMode::MinimumWidth, coordinates),
+          1.0, 500.0);
+      context.check(
+          omni.rayCount == directional.rayCount &&
+              omni.totalRayPointCount == directional.totalRayPointCount &&
+              omni.rayCacheBytes == directional.rayCacheBytes,
+          "GeoHat directional source weighting leaves frozen geometry "
+          "unchanged");
+      bool havePressure = false;
+      for (std::size_t index = 0U; index < omni.workspace.pressure().size();
+           ++index) {
+        const std::complex<double> pressure = omni.workspace.pressure()[index];
+        havePressure = havePressure || pressure != std::complex<double>{};
+        if (mode != SimulationRunMode::Coherent) {
+          context.check(pressure.imag() == 0.0 && pressure.real() <= 0.0,
+                        "GeoHat I/S final pressure is real with Origin sign");
+        }
+        const double tolerance =
+            mode == SimulationRunMode::Coherent ? 2.0e-15 : 2.0e-11;
+        context.checkNear(
+            std::abs(directional.workspace.pressure()[index] -
+                     directionalAmplitude * pressure),
+            0.0, tolerance,
+            "GeoHat .sbp weighting scales C/I/S source amplitude");
       }
-      const double tolerance =
-          mode == SimulationRunMode::Coherent ? 2.0e-15 : 2.0e-11;
-      context.checkNear(std::abs(directional.workspace.pressure()[index] -
-                                 directionalAmplitude * pressure),
-                        0.0, tolerance,
-                        "GeoHat .sbp weighting scales C/I/S source amplitude");
+      context.check(havePressure, "GeoHat C/I/S produces a non-empty field");
+      omniResults.push_back(omni);
     }
-    context.check(havePressure, "GeoHat C/I/S produces a non-empty field");
-    omniResults.push_back(omni);
+    context.check(
+        omniResults[0U].rayCount == omniResults[1U].rayCount &&
+            omniResults[0U].rayCount == omniResults[2U].rayCount &&
+            omniResults[0U].totalRayPointCount ==
+                omniResults[1U].totalRayPointCount &&
+            omniResults[0U].totalRayPointCount ==
+                omniResults[2U].totalRayPointCount &&
+            omniResults[0U].rayCacheBytes == omniResults[1U].rayCacheBytes &&
+            omniResults[0U].rayCacheBytes == omniResults[2U].rayCacheBytes,
+        "GeoHat C/I/S share the same frozen trajectory");
+    context.check(!std::equal(omniResults[1U].workspace.pressure().begin(),
+                              omniResults[1U].workspace.pressure().end(),
+                              omniResults[2U].workspace.pressure().begin()),
+                  "GeoHat semicoherent Lloyd weighting distinguishes S from I");
   }
-  context.check(
-      omniResults[0U].rayCount == omniResults[1U].rayCount &&
-          omniResults[0U].rayCount == omniResults[2U].rayCount &&
-          omniResults[0U].totalRayPointCount ==
-              omniResults[1U].totalRayPointCount &&
-          omniResults[0U].totalRayPointCount ==
-              omniResults[2U].totalRayPointCount &&
-          omniResults[0U].rayCacheBytes == omniResults[1U].rayCacheBytes &&
-          omniResults[0U].rayCacheBytes == omniResults[2U].rayCacheBytes,
-      "GeoHat C/I/S share the same frozen trajectory");
-  context.check(!std::equal(omniResults[1U].workspace.pressure().begin(),
-                            omniResults[1U].workspace.pressure().end(),
-                            omniResults[2U].workspace.pressure().begin()),
-                "GeoHat semicoherent Lloyd weighting distinguishes S from I");
 }
 
 void testGeometricGaussianCoherenceAndDirectionalPattern(Context& context) {

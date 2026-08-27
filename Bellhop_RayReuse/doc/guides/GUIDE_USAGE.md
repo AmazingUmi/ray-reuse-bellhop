@@ -26,6 +26,8 @@ run type 决定：
 |---|---|---|
 | `CC/IC/SC` | `<root>.shd` | 一个多频 `<root>.shd` |
 | `CR/IR/SR` | `<root>.shd` | 一个多频 `<root>.shd` |
+| `CG/IG/SG`、`Cg/Ig/Sg` | `<root>.shd` | 一个多频 `<root>.shd` |
+| `CB/IB/SB`、`CS` | `<root>.shd` | 一个多频 `<root>.shd` |
 | `R/RG/RGO` | `<root>.ray` | 明确拒绝 |
 | `A` | `<root>.arr` | `<root>_fNNN_<freq>Hz.arr` |
 | `a` | `<root>.arr` | `<root>_fNNN_<freq>Hz.arr` |
@@ -68,9 +70,10 @@ worker 不直接写文件；主 consumer 按 frequency index 稳定发布。
 - 多频运行中任一频失败会清理本次已发布的逐频产品；
 - 环境解析或组合校验在新生命周期开始前失败时，旧有效产品保持不变；
 - 未支持组合返回非零状态，并在可用时写入 PRT `FATAL ERROR`；
-- ray-centered Cerveny 要求 point/single/C-linear、规则网格且 receiver ranges
-  至少两个并等间距；ray-centered GeoHat、line source、irregular receiver 等
-  未支持组合不会静默退化。
+- ray-centered Cerveny 与 ray-centered GeoHat TL 都要求
+  point/single/C-linear、规则网格且 receiver ranges 至少两个并等间距；其中
+  GeoHat 使用 `Cg/Ig/Sg`。ray-centered A/a/E `g`、line source、irregular
+  receiver 等未支持组合不会静默退化。
 
 ## 共享标准案例
 
