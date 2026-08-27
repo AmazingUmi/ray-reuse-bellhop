@@ -25,6 +25,7 @@ CASES = (
     "arrival_geometric_hat_ascii",
     "arrival_geometric_hat_binary",
     "arrival_geometric_hat_ray_centered",
+    "arrival_geometric_hat_ray_centered_binary",
     "arrival_geometric_gaussian_irregular",
     "arrival_line_directional_multisource",
     "arrival_zero",
@@ -32,6 +33,8 @@ CASES = (
 RAYREUSE_CASES = (
     "arrival_geometric_hat_ascii",
     "arrival_geometric_hat_binary",
+    "arrival_geometric_hat_ray_centered",
+    "arrival_geometric_hat_ray_centered_binary",
     "arrival_zero",
 )
 ULP_LIMIT = 8
@@ -268,6 +271,11 @@ def validate(
         comparison[case_id] = compare_arrival_products(products["origin"][case_id], products["f2cpp"][case_id], case_id)
     for version in implementations:
         comparison[f"{version}_ascii_binary"] = compare_arrival_products(products[version][CASES[0]], products[version][CASES[1]], f"{version} A/a encoding pair")
+        comparison[f"{version}_ray_centered_ascii_binary"] = compare_arrival_products(
+            products[version]["arrival_geometric_hat_ray_centered"],
+            products[version]["arrival_geometric_hat_ray_centered_binary"],
+            f"{version} Ag/ag encoding pair",
+        )
     if "rayreuse" in implementations:
         for case_id in RAYREUSE_CASES:
             comparison[f"origin_vs_rayreuse_{case_id}"] = compare_arrival_products(

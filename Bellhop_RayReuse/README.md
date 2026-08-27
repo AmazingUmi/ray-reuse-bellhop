@@ -115,7 +115,8 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root>
 
 产品由 ENV run type 决定：Cartesian Cerveny `CC/IC/SC`、ray-centered
 Cerveny `CR/IR/SR`、Cartesian GeoHat `CG/IG/SG`、ray-centered GeoHat
-`Cg/Ig/Sg` 及其他已支持 TL family 写 SHD，`R/E` 写 RAY，`A/a` 写 ARR。多频
+`Cg/Ig/Sg` 及其他已支持 TL family 写 SHD，`R/E` 写 RAY，`A/a` 写 ARR；
+`Ag/ag/Eg` 使用 ray-centered GeoHat 产品路径。多频
 `A/a/E` 按 `<root>_fNNN_<frequency>Hz` 逐频发布；多频 R 明确拒绝。
 
 宽带调用保留同一 `.env`，由严格升序逗号列表覆盖频率：

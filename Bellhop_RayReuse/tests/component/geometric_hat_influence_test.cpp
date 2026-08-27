@@ -14,6 +14,8 @@
 namespace {
 
 using rayreuse::CervenyCoordinateSystem;
+using rayreuse::ArrivalWorkspace;
+using rayreuse::EigenrayHit;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometricHatDiagnosticRequest;
 using rayreuse::GeometricHatInfluence;
@@ -275,6 +277,53 @@ void testRayCenteredOriginTraversalAndKernel(Context& context) {
       "ray-centered g requires equally spaced receiver ranges");
 }
 
+void testRayCenteredArrivalAndEigenrayProducts(Context& context) {
+  const std::vector<double> ranges{0.0, 200.0, 400.0, 600.0};
+  const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
+  const RayPath path =
+      makeHorizontalPath(ranges, {0.0, 100.0, 200.0, 300.0}, 0.25);
+  RayFrequencyState state = makeFrequencyState(ranges, 50.0);
+  const GeometricHatInfluence influence(
+      receivers, CervenyCoordinateSystem::RayCentered);
+
+  ArrivalWorkspace arrivals(50.0, receivers);
+  influence.accumulateArrivals(arrivals, path, state, kDalpha);
+  context.check(arrivals.arrivalCountAt(0U, 0U) == 0U &&
+                    arrivals.arrivalCountAt(0U, 1U) == 1U &&
+                    arrivals.arrivalCountAt(0U, 2U) == 1U,
+                "Ag/ag preserve the initial same-index skip and projected "
+                "range order");
+  const auto first = arrivals.arrivalsAt(0U, 1U).front();
+  context.checkNear(first.sourceDeclinationDegrees,
+                    static_cast<float>(0.25 * 180.0 / std::numbers::pi),
+                    2.0e-6,
+                    "Ag/ag store the launch angle in degrees");
+  context.checkNear(first.receiverDeclinationDegrees, 0.0, 0.0,
+                    "Ag/ag use the right-endpoint slowness direction");
+  context.check(first.topBounceCount == 0 && first.bottomBounceCount == 0,
+                "Ag/ag direct candidates retain zero prefix bounces");
+
+  std::vector<EigenrayHit> hits;
+  influence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { hits.push_back(hit); }, path, state,
+      kDalpha);
+  context.check(
+      hits.size() == 2U && hits[0].receiverRangeIndex == 1U &&
+          hits[0].receiverDepthIndex == 0U &&
+          hits[0].prefixPointCount == 3U &&
+          hits[1].receiverRangeIndex == 2U &&
+          hits[1].prefixPointCount == 4U,
+      "Eg preserves ray-centered traversal order and exclusive prefixes");
+
+  state.points.back().active = false;
+  hits.clear();
+  influence.collectEigenrayHits(
+      [&](const EigenrayHit& hit) { hits.push_back(hit); }, path, state,
+      kDalpha);
+  context.check(hits.size() == 1U && hits.front().prefixPointCount == 3U,
+                "Eg excludes the inactive terminal from published hits");
+}
+
 }  // namespace
 
 int main() {
@@ -283,6 +332,7 @@ int main() {
   testIntensityUsesAttenuationAndHatOnce(context);
   testCausticAndActivePrefix(context);
   testRayCenteredOriginTraversalAndKernel(context);
+  testRayCenteredArrivalAndEigenrayProducts(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
               << " geometric hat influence assertion(s) failed\n";

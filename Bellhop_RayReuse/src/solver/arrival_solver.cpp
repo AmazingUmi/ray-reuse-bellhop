@@ -71,7 +71,8 @@ ArrivalWorkspace projectArrivals(const SimulationCase& simulation,
   const double frequency = simulation.frequencies().values().at(frequencyIndex);
   ArrivalWorkspace workspace(frequency, simulation.receivers());
   const FrequencyProjector projector(simulation.environment());
-  GeometricHatInfluence hat(simulation.receivers());
+  GeometricHatInfluence hat(simulation.receivers(),
+                            simulation.cervenyCoordinateSystem());
   GeometricGaussianInfluence gaussian(simulation.receivers());
   for (const RayPath& path : cache.paths()) {
     const double sourceAmplitude =
@@ -137,7 +138,8 @@ ArrivalSolverStatistics ArrivalSolver::solve(
     const double frequency = simulation.frequencies().values()[fi];
     ArrivalWorkspace workspace(frequency, simulation.receivers());
     const FrequencyProjector projector(simulation.environment());
-    GeometricHatInfluence hat(simulation.receivers());
+    GeometricHatInfluence hat(simulation.receivers(),
+                              simulation.cervenyCoordinateSystem());
     GeometricGaussianInfluence gaussian(simulation.receivers());
     for (const RayPath& path : cache.paths()) {
       const auto projectBegin = Clock::now();

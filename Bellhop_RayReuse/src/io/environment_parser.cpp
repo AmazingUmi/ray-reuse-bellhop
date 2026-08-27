@@ -620,10 +620,12 @@ struct ParsedRunType {
       standardTransmissionLoss || simpleGaussianTransmissionLoss;
   const bool rayTrace =
       runType[0U] == 'R' && (runType[1U] == ' ' || runType[1U] == 'G');
-  const bool arrivals = (runType[0U] == 'A' || runType[0U] == 'a') &&
-                        (runType[1U] == 'G' || runType[1U] == 'B');
+  const bool arrivals =
+      (runType[0U] == 'A' || runType[0U] == 'a') &&
+      (runType[1U] == 'G' || runType[1U] == 'g' || runType[1U] == 'B');
   const bool eigenray =
-      runType[0U] == 'E' && (runType[1U] == 'G' || runType[1U] == 'B');
+      runType[0U] == 'E' &&
+      (runType[1U] == 'G' || runType[1U] == 'g' || runType[1U] == 'B');
   if (!commonOptionsValid ||
       (!transmissionLoss && !rayTrace && !arrivals && !eigenray)) {
     fail(sourceName, record.lineNumber,
@@ -633,8 +635,9 @@ struct ParsedRunType {
          "Cartesian geometric-hat '^'/blank aliases, Cartesian "
          "geometric-Gaussian 'CB/IB/SB', Cartesian simple-Gaussian 'CS', "
          "unshifted "
-         "point-source 'R/RG/RGO', or Cartesian geometric "
-         "'AG/aG/AB/aB/EG/EB' run types are supported");
+         "point-source 'R/RG/RGO', Cartesian geometric "
+         "'AG/aG/AB/aB/EG/EB', or ray-centered geometric-hat "
+         "'Ag/ag/Eg' run types are supported");
   }
   if (runType[3U] == 'X') {
     fail(sourceName, record.lineNumber,
@@ -645,9 +648,10 @@ struct ParsedRunType {
          "irregular receiver grids are not supported by RayReuse");
   }
   if (arrivals || eigenray) {
-    if (runType[1U] != 'G' && runType[1U] != 'B') {
+    if (runType[1U] != 'G' && runType[1U] != 'g' &&
+        runType[1U] != 'B') {
       fail(sourceName, record.lineNumber,
-           "arrival and eigenray run types require Cartesian G or B beams");
+           "arrival and eigenray run types require G, g, or B beams");
     }
   }
   runType[3U] = 'R';
@@ -682,7 +686,7 @@ struct ParsedRunType {
   } else if (transmissionLoss && runType[1U] == 'R') {
     beamFamily = BeamFamily::CervenyGaussian;
     coordinateSystem = CervenyCoordinateSystem::RayCentered;
-  } else if (transmissionLoss && runType[1U] == 'g') {
+  } else if (!rayTrace && runType[1U] == 'g') {
     beamFamily = BeamFamily::GeometricHat;
     coordinateSystem = CervenyCoordinateSystem::RayCentered;
   } else if (transmissionLoss && runType[1U] == 'B') {
@@ -985,8 +989,10 @@ struct ParsedRunType {
                   kKilometersToMeters);
   const Record runTypeRecord = reader.require("run type");
   const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
-  if (isTransmissionLossMode(runType.runMode) &&
-      runType.beamFamily == BeamFamily::CervenyGaussian) {
+  if ((isTransmissionLossMode(runType.runMode) &&
+       runType.beamFamily == BeamFamily::CervenyGaussian) ||
+      runType.cervenyCoordinateSystem ==
+          CervenyCoordinateSystem::RayCentered) {
     requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
   }
 

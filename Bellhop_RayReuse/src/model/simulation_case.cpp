@@ -313,13 +313,20 @@ SimulationCase::SimulationCase(Environment environment, Source source,
   validateCurvatureMode(curvatureMode_);
   validateBeamWidthMode(beamWidthMode_);
   validateCervenyCoordinateSystem(cervenyCoordinateSystem_);
+  const bool rayCenteredCervenyTl =
+      isTransmissionLossMode(runMode_) &&
+      beamFamily_ == BeamFamily::CervenyGaussian;
+  const bool rayCenteredGeometricHat =
+      beamFamily_ == BeamFamily::GeometricHat &&
+      (isTransmissionLossMode(runMode_) ||
+       runMode_ == SimulationRunMode::AsciiArrivals ||
+       runMode_ == SimulationRunMode::BinaryArrivals ||
+       runMode_ == SimulationRunMode::Eigenray);
   if (cervenyCoordinateSystem_ == CervenyCoordinateSystem::RayCentered &&
-      (!isTransmissionLossMode(runMode_) ||
-       (beamFamily_ != BeamFamily::CervenyGaussian &&
-        beamFamily_ != BeamFamily::GeometricHat))) {
+      !rayCenteredCervenyTl && !rayCenteredGeometricHat) {
     throw ValidationError(
-        "ray-centered coordinates are supported only for Cerveny or "
-        "geometric-hat TL");
+        "ray-centered coordinates are supported only for Cerveny TL or "
+        "geometric-hat TL/arrivals/eigenrays");
   }
   if (cervenyCoordinateSystem_ == CervenyCoordinateSystem::RayCentered) {
     validateRayCenteredReceiverRanges(receivers_);

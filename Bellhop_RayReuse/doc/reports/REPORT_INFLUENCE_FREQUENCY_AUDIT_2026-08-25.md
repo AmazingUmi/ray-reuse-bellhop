@@ -3,6 +3,9 @@
 > 审计基线：`8300c89 feat(rayreuse): close RR-B4 feature sync`
 > 审计日期：2026-08-25
 > 性质：架构、数据流、公式和性能证据审计；不修改数值路径，不提出测试基线变更。
+> 历史范围说明：本文的“当前生产支持面”仅描述上述审计基线；FP-1A～FP-2A
+> 已随后补齐多项 TL family 及 ray-centered GeoHat `Ag/ag/Eg`。当前支持范围以
+> `REFERENCE_FEATURE_SUPPORT_MATRIX.md` 和 production parity report 为准。
 
 ## 1. Executive Summary
 

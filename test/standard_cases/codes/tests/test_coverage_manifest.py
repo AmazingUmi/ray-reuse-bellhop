@@ -33,7 +33,7 @@ class CoverageManifestTests(unittest.TestCase):
         selected = self.coverage.case_ids_for_sets(
             ("arrival",), self.cases
         )
-        self.assertEqual(len(selected), 6)
+        self.assertEqual(len(selected), 7)
         self.assertTrue(
             all(case_id.startswith("arrival_") for case_id in selected)
         )

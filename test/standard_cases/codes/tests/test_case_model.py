@@ -92,6 +92,7 @@ class CaseModelTests(unittest.TestCase):
                 "arrival_geometric_hat_ascii",
                 "arrival_geometric_hat_binary",
                 "arrival_geometric_hat_ray_centered",
+                "arrival_geometric_hat_ray_centered_binary",
                 "arrival_geometric_gaussian_irregular",
                 "arrival_line_directional_multisource",
                 "arrival_zero",
@@ -531,7 +532,10 @@ class CaseModelTests(unittest.TestCase):
             "ray_trace_directional_tabulated": "ray",
             "arrival_geometric_hat_ascii": "arrivals_ascii",
             "arrival_geometric_hat_binary": "arrivals_binary",
+            "arrival_geometric_hat_ray_centered": "arrivals_ascii",
+            "arrival_geometric_hat_ray_centered_binary": "arrivals_binary",
             "arrival_zero": "arrivals_ascii",
+            "eigenray_geometric_hat_ray_centered": "eigenray",
             "eigenray_geometric_gaussian": "eigenray",
             "eigenray_zero": "eigenray",
         }

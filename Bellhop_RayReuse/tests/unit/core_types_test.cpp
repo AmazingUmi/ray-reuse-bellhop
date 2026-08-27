@@ -464,14 +464,18 @@ void testSimulationProductMetadata(Context& context) {
                       rayCenteredHat.beamFamily() == BeamFamily::GeometricHat,
                   "SimulationCase accepts ray-centered GeoHat C/I/S TL");
   }
-  context.expectThrows<ValidationError>(
-      [&makeMetadataCase] {
-        static_cast<void>(makeMetadataCase(
-            SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat,
-            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
-            BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::RayCentered));
-      },
-      "SimulationCase keeps ray-centered GeoHat arrivals outside FP-1I");
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::AsciiArrivals,
+        SimulationRunMode::BinaryArrivals, SimulationRunMode::Eigenray}) {
+    const SimulationCase rayCenteredProduct = makeMetadataCase(
+        mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
+        BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+        CervenyCoordinateSystem::RayCentered);
+    context.check(rayCenteredProduct.cervenyCoordinateSystem() ==
+                          CervenyCoordinateSystem::RayCentered &&
+                      rayCenteredProduct.runMode() == mode,
+                  "SimulationCase accepts ray-centered GeoHat A/a/E");
+  }
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(

@@ -165,6 +165,201 @@ std::size_t clampedReceiverIndex1Based(double projectedRange,
   return static_cast<std::size_t>(raw);
 }
 
+struct RayCenteredEvaluation {
+  std::size_t depthIndex{};
+  std::size_t rangeIndex{};
+  std::size_t leftIndex{};
+  std::size_t rightIndex{};
+  double interpolationWeight{};
+  double normalOffset{};
+  double q{};
+  double hatWeight{};
+  double amplitudeConstant{};
+  double phaseAtReceiver{};
+  std::complex<double> delay{};
+  double receiverDeclinationDegrees{};
+};
+
+template <typename Consumer>
+void forEachRayCenteredEvaluation(const ReceiverGrid& receivers,
+                                  double receiverRangeDelta,
+                                  const RayPath& path,
+                                  const RayFrequencyState& state,
+                                  double launchSpacing, Consumer&& consumer) {
+  const std::size_t pointCount = activeCount(state);
+  const double q0 = path.points.front().soundSpeed / launchSpacing;
+  const double sourceRatio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  requireFinite(q0, "geometric hat q0");
+  requireFinite(sourceRatio, "geometric hat source ratio");
+
+  std::vector<Vec2> normals;
+  std::vector<double> scaledAmplitudes;
+  normals.reserve(pointCount);
+  scaledAmplitudes.reserve(pointCount);
+  for (std::size_t index = 0U; index < pointCount; ++index) {
+    const Vec2 tangent =
+        path.points[index].soundSpeed * path.points[index].slowness;
+    normals.push_back(Vec2{.range = tangent.depth, .depth = -tangent.range});
+    scaledAmplitudes.push_back(sourceRatio *
+                               std::sqrt(path.points[index].soundSpeed) *
+                               state.points[index].amplitude);
+  }
+
+  for (std::size_t depthIndex = 0U; depthIndex < receivers.depthCount();
+       ++depthIndex) {
+    const double receiverDepth = receivers.depths()[depthIndex];
+    double phase = 0.0;
+    double previousQ = path.points.front().dynamicQ[0U];
+    double previousNormalOffset = 0.0;
+    double previousProjectedRange = 0.0;
+    std::size_t previousReceiverIndex1Based = 1U;
+    if (std::abs(normals.front().depth) < 1.0e-6) {
+      previousNormalOffset = 1.0e10;
+      previousProjectedRange = 1.0e10;
+    } else {
+      previousNormalOffset =
+          (receiverDepth - path.points.front().position.depth) /
+          normals.front().depth;
+      previousProjectedRange = path.points.front().position.range +
+                               previousNormalOffset * normals.front().range;
+      previousReceiverIndex1Based = clampedReceiverIndex1Based(
+          previousProjectedRange, receivers, receiverRangeDelta);
+    }
+
+    for (std::size_t rightIndex = 1U; rightIndex < pointCount; ++rightIndex) {
+      if (std::abs(normals[rightIndex].depth) < 1.0e-10) {
+        continue;
+      }
+      const double normalOffset =
+          (receiverDepth - path.points[rightIndex].position.depth) /
+          normals[rightIndex].depth;
+      const double projectedRange = path.points[rightIndex].position.range +
+                                    normalOffset * normals[rightIndex].range;
+      const std::size_t receiverIndex1Based = clampedReceiverIndex1Based(
+          projectedRange, receivers, receiverRangeDelta);
+      const bool duplicatePoint =
+          std::abs(path.points[rightIndex].position.range -
+                   path.points[rightIndex - 1U].position.range) <
+          1000.0 * spacing(path.points[rightIndex].position.range);
+      if (duplicatePoint ||
+          previousReceiverIndex1Based == receiverIndex1Based) {
+        previousProjectedRange = projectedRange;
+        previousNormalOffset = normalOffset;
+        previousReceiverIndex1Based = receiverIndex1Based;
+        continue;
+      }
+
+      const double leftQ = path.points[rightIndex - 1U].dynamicQ[0U];
+      if (crosses(previousQ, leftQ)) {
+        phase += std::numbers::pi / 2.0;
+      }
+      previousQ = leftQ;
+
+      const auto evaluateReceiver = [&](std::size_t oneBasedRange) {
+        const std::size_t rangeIndex = oneBasedRange - 1U;
+        const double interpolationWeight =
+            (receivers.ranges()[rangeIndex] - previousProjectedRange) /
+            (projectedRange - previousProjectedRange);
+        const double interpolatedNormal = std::abs(
+            previousNormalOffset + interpolationWeight *
+                                       (normalOffset - previousNormalOffset));
+        const double q =
+            leftQ + interpolationWeight *
+                        (path.points[rightIndex].dynamicQ[0U] - leftQ);
+        const double beamRadius = std::abs(q) / q0;
+        if (interpolatedNormal >= beamRadius) {
+          return;
+        }
+
+        const std::complex<double> delay =
+            state.points[rightIndex - 1U].complexTravelTime +
+            interpolationWeight *
+                (state.points[rightIndex].complexTravelTime -
+                 state.points[rightIndex - 1U].complexTravelTime);
+        const double amplitudeConstant =
+            scaledAmplitudes[rightIndex] / std::sqrt(std::abs(q));
+        const double hatWeight =
+            (beamRadius - interpolatedNormal) / beamRadius;
+        double phaseAtReceiver =
+            state.points[rightIndex - 1U].reflectionPhase + phase;
+        if (crosses(previousQ, q)) {
+          phaseAtReceiver += std::numbers::pi / 2.0;
+        }
+
+        consumer(RayCenteredEvaluation{
+            .depthIndex = depthIndex,
+            .rangeIndex = rangeIndex,
+            .leftIndex = rightIndex - 1U,
+            .rightIndex = rightIndex,
+            .interpolationWeight = interpolationWeight,
+            .normalOffset = interpolatedNormal,
+            .q = q,
+            .hatWeight = hatWeight,
+            .amplitudeConstant = amplitudeConstant,
+            .phaseAtReceiver = phaseAtReceiver,
+            .delay = delay,
+            .receiverDeclinationDegrees =
+                std::atan2(path.points[rightIndex].slowness.depth,
+                           path.points[rightIndex].slowness.range) *
+                (180.0 / std::numbers::pi)});
+      };
+
+      if (receiverIndex1Based > previousReceiverIndex1Based) {
+        for (std::size_t oneBasedRange = previousReceiverIndex1Based + 1U;
+             oneBasedRange <= receiverIndex1Based; ++oneBasedRange) {
+          evaluateReceiver(oneBasedRange);
+        }
+      } else {
+        for (std::size_t oneBasedRange = previousReceiverIndex1Based;
+             oneBasedRange >= receiverIndex1Based + 1U; --oneBasedRange) {
+          evaluateReceiver(oneBasedRange);
+          if (oneBasedRange == receiverIndex1Based + 1U) {
+            break;
+          }
+        }
+      }
+      previousProjectedRange = projectedRange;
+      previousNormalOffset = normalOffset;
+      previousReceiverIndex1Based = receiverIndex1Based;
+    }
+  }
+}
+
+struct PrefixBounceCounts {
+  std::vector<std::int32_t> top;
+  std::vector<std::int32_t> bottom;
+};
+
+PrefixBounceCounts prefixBounceCounts(const RayPath& path,
+                                      std::size_t pointCount) {
+  PrefixBounceCounts result{.top = std::vector<std::int32_t>(pointCount, 0),
+                            .bottom =
+                                std::vector<std::int32_t>(pointCount, 0)};
+  for (const auto& event : path.events) {
+    const std::size_t reflected = event.reflectedRayPointIndex;
+    if (reflected != event.rayPointIndex + 1U ||
+        reflected >= path.points.size()) {
+      throw ValidationError(
+          "geometric hat reflection event has invalid indices");
+    }
+    if (reflected >= pointCount) {
+      continue;
+    }
+    auto& count = event.boundary == ReflectionBoundary::SeaSurface
+                      ? result.top[reflected]
+                      : result.bottom[reflected];
+    if (count == std::numeric_limits<std::int32_t>::max()) {
+      throw ValidationError("geometric hat bounce count exceeds int32");
+    }
+    ++count;
+  }
+  for (std::size_t index = 1U; index < pointCount; ++index) {
+    result.top[index] += result.top[index - 1U];
+    result.bottom[index] += result.bottom[index - 1U];
+  }
+  return result;
+}
+
 }  // namespace
 
 GeometricHatInfluence::GeometricHatInfluence(
@@ -578,10 +773,6 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
                                                const RayPath& path,
                                                const RayFrequencyState& state,
                                                double launchSpacing) const {
-  if (coordinates_ != CervenyCoordinateSystem::Cartesian) {
-    throw ValidationError(
-        "ray-centered geometric-hat arrivals are not supported");
-  }
   validate(receivers_, path, state, launchSpacing);
   const std::size_t pointCount = activeCount(state);
   const double omega = 2.0 * std::numbers::pi * state.frequency;
@@ -590,24 +781,34 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
   if (!std::isfinite(q0) || q0 == 0.0 || !std::isfinite(ratio))
     throw ValidationError("geometric hat source constants are invalid");
 
-  std::vector<std::int32_t> top(pointCount, 0), bottom(pointCount, 0);
-  for (const auto& event : path.events) {
-    const std::size_t reflected = event.reflectedRayPointIndex;
-    if (reflected != event.rayPointIndex + 1U ||
-        reflected >= path.points.size())
-      throw ValidationError(
-          "geometric hat reflection event has invalid indices");
-    if (reflected >= pointCount) continue;
-    auto& count = event.boundary == ReflectionBoundary::SeaSurface
-                      ? top[reflected]
-                      : bottom[reflected];
-    if (count == std::numeric_limits<std::int32_t>::max())
-      throw ValidationError("geometric hat bounce count exceeds int32");
-    ++count;
-  }
-  for (std::size_t i = 1U; i < pointCount; ++i) {
-    top[i] += top[i - 1U];
-    bottom[i] += bottom[i - 1U];
+  const PrefixBounceCounts bounces = prefixBounceCounts(path, pointCount);
+  if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
+    forEachRayCenteredEvaluation(
+        receivers_, receiverRangeDelta_, path, state, launchSpacing,
+        [&](const RayCenteredEvaluation& evaluation) {
+          requireFinite(evaluation.q, "geometric hat interpolated q");
+          requireFinite(evaluation.hatWeight, "geometric hat weight");
+          requireFinite(evaluation.amplitudeConstant,
+                        "geometric hat amplitude constant");
+          requireFinite(evaluation.phaseAtReceiver,
+                        "geometric hat caustic phase");
+          requireFiniteComplex(evaluation.delay, "geometric hat delay");
+          workspace.addCandidate(
+              state.frequency,
+              ArrivalCandidate{
+                  .amplitude =
+                      evaluation.amplitudeConstant * evaluation.hatWeight,
+                  .phaseRadians = evaluation.phaseAtReceiver,
+                  .delaySeconds = evaluation.delay,
+                  .sourceDeclinationDegrees =
+                      path.launchAngle * (180.0 / std::numbers::pi),
+                  .receiverDeclinationDegrees =
+                      evaluation.receiverDeclinationDegrees,
+                  .topBounceCount = bounces.top[evaluation.rightIndex],
+                  .bottomBounceCount = bounces.bottom[evaluation.rightIndex]},
+              evaluation.depthIndex, evaluation.rangeIndex);
+        });
+    return;
   }
 
   const std::vector<double>& ranges = receivers_.ranges();
@@ -672,7 +873,7 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
                                path.launchAngle * 180.0 / std::numbers::pi,
                                std::atan2(tangent.depth, tangent.range) *
                                    180.0 / std::numbers::pi,
-                               top[right], bottom[right]},
+                               bounces.top[right], bounces.bottom[right]},
               di, receiverIndex);
         }
       }
@@ -698,13 +899,33 @@ void GeometricHatInfluence::collectEigenrayHits(const EigenrayHitSink& sink,
                                                 const RayPath& path,
                                                 const RayFrequencyState& state,
                                                 double launchSpacing) const {
-  if (coordinates_ != CervenyCoordinateSystem::Cartesian) {
-    throw ValidationError(
-        "ray-centered geometric-hat eigenrays are not supported");
-  }
   if (!sink) throw ValidationError("geometric hat eigenray hit sink is empty");
   validate(receivers_, path, state, launchSpacing);
   const std::size_t pointCount = activeCount(state);
+  if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
+    forEachRayCenteredEvaluation(
+        receivers_, receiverRangeDelta_, path, state, launchSpacing,
+        [&](const RayCenteredEvaluation& evaluation) {
+          if (!state.points[evaluation.rightIndex].active) {
+            return;
+          }
+          requireFinite(evaluation.q, "geometric hat interpolated q");
+          requireFinite(evaluation.hatWeight, "geometric hat weight");
+          requireFinite(evaluation.amplitudeConstant,
+                        "geometric hat amplitude constant");
+          requireFinite(evaluation.phaseAtReceiver,
+                        "geometric hat caustic phase");
+          requireFiniteComplex(evaluation.delay, "geometric hat delay");
+          const std::size_t prefixPointCount = evaluation.rightIndex + 1U;
+          if (prefixPointCount < 2U || prefixPointCount > pointCount) {
+            throw ValidationError(
+                "geometric hat eigenray prefix is outside the active path");
+          }
+          sink(EigenrayHit{evaluation.rangeIndex, evaluation.depthIndex,
+                           prefixPointCount});
+        });
+    return;
+  }
   const std::vector<double>& ranges = receivers_.ranges();
   const double rangeDelta = ranges.size() >= 2U ? ranges[1U] - ranges[0U] : 0.0;
   std::size_t receiverIndex = 0U;

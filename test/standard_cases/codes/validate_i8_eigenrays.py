@@ -22,6 +22,7 @@ CASES = (
     "eigenray_zero",
 )
 RAYREUSE_CASES = (
+    "eigenray_geometric_hat_ray_centered",
     "eigenray_geometric_gaussian",
     "eigenray_zero",
 )

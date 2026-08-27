@@ -1,7 +1,7 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-08-25
-> 当前状态：RayReuse Feature Sync 的 RR-B1～RR-B4 已关闭；暂停等待下一阶段决定。
+> 更新日期：2026-08-27
+> 当前状态：FP-2A ray-centered GeoHat A/a/E `g` parity 已完成；暂停等待下一阶段决定。
 
 ## 已完成范围
 
@@ -11,6 +11,7 @@
 | RR-B2 | 完成，提交 `5e6cc03` | generalized R、directional `.sbp`、per-frequency active/terminal prefix、R-only `Nalpha=1`、Origin-compatible RAY writer |
 | RR-B3 | 完成，提交 `5e6cc03` | A/a、E、ArrivalWorkspace/AddArr、Cartesian G/B traversal、逐频 product 与三种执行模式 |
 | RR-B4 | 完成 | parser/executable/CLI lifecycle、共享 standard-case adapter、三方与多频回归、文档封板 |
+| FP-2A | 完成 | `Ag/ag/Eg` parser/runtime、ray-centered Arrival/Eigenray traversal、共享 oracle 与多频三模式 parity |
 
 ## RR-B4 验收基线
 

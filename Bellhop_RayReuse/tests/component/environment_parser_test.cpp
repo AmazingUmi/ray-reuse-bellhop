@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -580,30 +581,26 @@ void testRrB4ProductRunTypes(Context& context) {
                         BeamFamily::GeometricGaussian,
                 "EB parser selects eigenray and Cartesian geometric Gaussian");
 
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents =
-            renderCase("arrival_geometric_hat_ascii", 1000.0, 80U);
-        replaceFirst(contents, "'AG RR'", "'Ag RR'");
-        static_cast<void>(parseText(contents, "ray_centered_arrival.env"));
-      },
-      "ray-centered geometric arrivals are explicitly rejected");
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents =
-            renderCase("arrival_geometric_hat_binary", 1000.0, 80U);
-        replaceFirst(contents, "'aG RR'", "'ag RR'");
-        static_cast<void>(parseText(contents, "ray_centered_binary.env"));
-      },
-      "ray-centered binary geometric arrivals are explicitly rejected");
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents =
-            renderCase("eigenray_geometric_gaussian", 1000.0, 80U);
-        replaceFirst(contents, "'EB RR'", "'Eg RR'");
-        static_cast<void>(parseText(contents, "ray_centered_eigenray.env"));
-      },
-      "ray-centered geometric eigenrays are explicitly rejected");
+  for (const auto& [caseId, originalRunType, rayCenteredRunType, expectedMode] :
+       std::vector<std::tuple<std::string, std::string, std::string,
+                              SimulationRunMode>>{
+           {"arrival_geometric_hat_ray_centered", "'Ag RR'", "'Ag RR'",
+            SimulationRunMode::AsciiArrivals},
+           {"arrival_geometric_hat_ray_centered", "'Ag RR'", "'ag RR'",
+            SimulationRunMode::BinaryArrivals},
+           {"eigenray_geometric_hat_ray_centered", "'Eg RR'", "'Eg RR'",
+            SimulationRunMode::Eigenray}}) {
+    std::string contents = renderCase(caseId, 1000.0, 80U);
+    replaceFirst(contents, originalRunType, rayCenteredRunType);
+    const ParsedEnvironment parsed =
+        parseText(contents, "ray_centered_product.env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat &&
+            parsed.simulationCase.cervenyCoordinateSystem() ==
+                CervenyCoordinateSystem::RayCentered,
+        "Ag/ag/Eg select ray-centered geometric-hat product paths");
+  }
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents =
