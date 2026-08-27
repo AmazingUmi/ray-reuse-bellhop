@@ -73,36 +73,82 @@
 - 除非用户明确要求，不提交、不推送、不创建 PR。用户要求“纳入版本控制”时，
   可以只暂存明确指定的文件，并报告暂存范围。
 
-## Agent 编排与并行执行
+## Agent 编排与 Feature Batch 工作流
 
-对于非平凡的新功能、重构、性能优化和跨模块修改，在开始实现前先判断任务是否
-适合拆分为相互独立的子任务。若能明显缩短完成时间且不会增加过多协调成本，
-优先使用子线程 / 子 Agent 并行执行，而不是默认全部串行完成。
-当任务明显具备可并行性时，应主动使用可用的子 Agent / 子线程，不需要等待用户再次提醒；若收益很小，则直接由主 Agent 完成。
+本项目在支持多 Agent 的环境中，默认采用“设计、施工、预审、最终验收”分离的
+工作流。主会话 Agent 主要负责协调，不应同时承担高风险架构设计、主要实现和最终
+验收，以减少角色混淆和自我验收。
 
-默认职责划分：
+### Agent 职责
 
-- 主 Agent 负责需求理解、架构分析、任务拆解、关键设计决策、跨模块集成、
-  最终审查和验收。
-- 独立且边界清晰的执行任务可委派给子 Agent，例如：
-  - 代码搜索、调用链和现有实现调查；
-  - 独立模块或局部功能实现；
-  - 重复性、机械性修改；
-  - 针对既定行为补充测试；
-  - 独立运行测试、benchmark 或静态检查；
-  - 文档和结果整理。
-- 若运行环境支持模型选择，简单、明确、低风险的执行任务优先使用性价比较高的模型；架构规划、复杂推理、疑难调试、跨模块集成和最终验收优先使用能力更强的模型。模型能力应与任务难度匹配，不应为了节省成本把架构判断、科学语义判断或最终验收下放给低能力模型，也不应让高能力模型长期承担纯搜索和机械修改。
+默认角色如下：
 
-并行执行遵循以下原则：
+- `scout`
+  - 用于代码搜索、调用链调查、已有实现定位和轻量事实核查。
+  - 默认使用低成本模型。
+  - 不负责架构决策和最终验收。
 
-1. 尽早拆分真正独立的工作，避免主线程先串行完成所有调查再开始委派。
-2. 主 Agent 保留架构、接口、科学语义和重要性能取舍的决定权。
-3. 高耦合、会同时修改相同核心文件或依赖前序设计结果的任务不要强行并行。
-4. 子 Agent 的输出视为候选结果，主 Agent 必须检查后再集成。
-5. 不因可以开启子线程而扩大任务范围；并行化服务于当前目标，不额外制造测试、
-   重构、文档或基础设施工作。
-6. 集成完成后，由主 Agent 负责运行与风险相称的最终验证，并检查最终 diff。
-7. 主 Agent 对最终结果负责，不能以“子 Agent 已完成”为验收依据。
+- `architect`
+  - 负责非平凡 feature batch 的架构审计、范围定义、任务拆解和 Worklist。
+  - 架构、科学语义、数值语义、跨模块接口和重要性能取舍由该角色决定。
+  - 默认使用高能力模型。
+  - 设计阶段原则上不修改 production code。
+
+- `worker`
+  - 负责 `[GENERAL]` 工作项。
+  - 适用于 parser/model 接线、机械性修改、已有模式迁移、普通测试、标准算例、
+    文档和其他边界清晰的施工工作。
+
+- `advanced-worker`
+  - 负责 `[ADVANCED]` 工作项。
+  - 适用于数值算法、科学语义、复杂架构、ownership/lifetime、cache consistency、
+    concurrency、同步、复杂性能优化和疑难 regression。
+  - 不应为了“保险”把普通任务全部升级给高级模型。
+
+- `reviewer`
+  - 负责施工后的低成本只读预审。
+  - 重点发现 scope violation、漏接 runtime path、遗漏测试、stale documentation、
+    unrelated diff、silent fallback 等明显问题。
+  - 无权正式接受 feature batch。
+
+- `final-reviewer`
+  - 负责最终只读验收。
+  - 必须独立检查 Worklist、WorkReport、真实 git diff、production code、oracle 和
+    当前测试证据。
+  - 最终结论只能为 `ACCEPTED` 或 `CHANGES_REQUIRED`。
+  - 不能仅根据 worker 或 WorkReport 的完成声明验收。
+
+- 主会话 / coordinator
+  - 负责启动和调度上述角色、收集结果、维护执行顺序、运行 Batch Acceptance、
+    生成 WorkReport，并根据 reviewer/final-reviewer findings 分派修复。
+  - 默认不自行承担 architect 或 final-reviewer 的职责。
+  - 对 `[ADVANCED]` 工作必须调用 advanced-worker，而不是自行降级执行。
+
+### Worklist 与 WorkReport
+
+对于非平凡 feature batch，默认使用：
+
+```text
+Bellhop_RayReuse/doc/worklists/<BATCH>_WORKLIST.md
+Bellhop_RayReuse/doc/workreports/<BATCH>_BATCH_REPORT.md
+```
+### Pi 配置保护
+
+`.pi/settings.json` 中的 provider、model、thinking 和 modelScope
+属于用户维护的执行环境配置。
+
+任何 coordinator、architect、worker、reviewer 或其他 Agent：
+
+- 不得为了绕过 provider/network/tool 错误自行切换模型；
+- 不得修改 defaultProvider/defaultModel；
+- 不得修改 subagents.defaultModel；
+- 不得修改 agentOverrides 中的 model/thinking；
+- 不得修改 modelScope。
+
+若指定 Agent 因 provider、proxy、authentication 或 runtime 错误无法启动，
+应停止当前相关任务并报告 `AGENT_RUNTIME_BLOCKER`。
+
+只有用户明确授权后才能修改 `.pi/settings.json` 的模型路由。
 
 ## 功能开发原则
 
