@@ -8,6 +8,8 @@
 #include "rayreuse/model/c_linear_frequency_ssp.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
+#include "rayreuse/model/n2_linear_frequency_ssp.hpp"
+#include "rayreuse/model/n2_linear_ssp.hpp"
 #include "rayreuse/model/pchip_frequency_ssp.hpp"
 #include "rayreuse/model/pchip_ssp.hpp"
 #include "rayreuse/model/sound_speed_types.hpp"
@@ -33,7 +35,7 @@ class GeometrySspEvaluator {
       Vec2 position, std::size_t previousSegment) const;
 
  private:
-  using Backend = std::variant<CLinearSsp, PchipSsp>;
+  using Backend = std::variant<CLinearSsp, PchipSsp, N2LinearSsp>;
 
   SspInterpolationKind interpolationKind_;
   Backend backend_;
@@ -58,7 +60,9 @@ class FrequencySspEvaluator {
       Vec2 position, std::size_t previousSegment) const;
 
  private:
-  using Backend = std::variant<CLinearFrequencySsp, PchipFrequencySsp>;
+  using Backend =
+      std::variant<CLinearFrequencySsp, PchipFrequencySsp,
+                   N2LinearFrequencySsp>;
 
   SspInterpolationKind interpolationKind_;
   Backend backend_;

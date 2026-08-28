@@ -25,6 +25,7 @@ CASE_CONFIGURATIONS = {
     "constant_speed_direct": "direct",
     "constant_speed_vacuum_rigid": "vacuum-rigid",
     "munk_cerveny_cc": "munk",
+    "munk_n2": "munk-n2",
     "munk_pchip": "munk-pchip",
 }
 

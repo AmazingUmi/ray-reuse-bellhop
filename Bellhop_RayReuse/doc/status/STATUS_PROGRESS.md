@@ -1,7 +1,7 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-08-27
-> 当前状态：FP-2A ray-centered GeoHat A/a/E `g` parity 已完成；暂停等待下一阶段决定。
+> 更新日期：2026-08-28
+> 当前状态：FP-2C N²-linear SSP `N` parity 已完成 batch review 与最终验收；文档失配已收口。
 
 ## 已完成范围
 
@@ -13,6 +13,7 @@
 | RR-B4 | 完成 | parser/executable/CLI lifecycle、共享 standard-case adapter、三方与多频回归、文档封板 |
 | FP-2A | 完成 | `Ag/ag/Eg` parser/runtime、ray-centered Arrival/Eigenray traversal、共享 oracle 与多频三模式 parity |
 | FP-2B | 完成 | PCHIP SSP parity、`GeometrySspEvaluator`/`FrequencySspEvaluator`、共享 `munk_pchip` oracle 与三模式一致性 |
+| FP-2C | 完成（待最终验收） | N²-linear SSP `N` parity：real geometry（node jump + 非零 Hessian）与 frequency-local complex N² evaluator、共享 `munk_n2` 三方 oracle、TL/R/A/a/E 与 `nonreuse/reuse/parallel` 一致性；S/Q 仍 deferred |
 
 ## RR-B4 验收基线
 

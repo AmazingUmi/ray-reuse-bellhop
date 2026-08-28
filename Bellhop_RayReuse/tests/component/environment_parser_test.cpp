@@ -663,13 +663,13 @@ void testUnsupportedAndMalformedInput(Context& context) {
         static_cast<void>(parseText(contents, "two_media.env"));
       },
       "multiple media are explicitly rejected");
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents = direct;
-        replaceFirst(contents, "'CVW'", "'NVW'");
-        static_cast<void>(parseText(contents, "n2_ssp.env"));
-      },
-      "unsupported SSP interpolation is explicitly rejected");
+  std::string n2Contents = direct;
+  replaceFirst(n2Contents, "'CVW'", "'NVW'");
+  const ParsedEnvironment n2Parsed = parseText(n2Contents, "n2_ssp.env");
+  context.check(
+      n2Parsed.simulationCase.environment().soundSpeedProfile()
+          .interpolationKind() == rayreuse::SspInterpolationKind::N2Linear,
+      "N2-linear SSP interpolation is preserved by the real parser");
   std::string incoherentContents = direct;
   replaceFirst(incoherentContents, "'CC'", "'IC'");
   const ParsedEnvironment incoherent =
@@ -856,7 +856,15 @@ void testSspInterpolationKinds(Context& context) {
           rayreuse::SspInterpolationKind::CLinear,
       "top option 'C' parses as C-linear SSP interpolation");
 
-  for (const std::string& unsupported : {"'NVW'", "'SVW'", "'QVW'"}) {
+  std::string n2Contents = munkContents;
+  replaceFirst(n2Contents, "'PVW'", "'NVW'");
+  const ParsedEnvironment nParsed = parseText(n2Contents, "munk_n2.env");
+  context.check(
+      nParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
+          rayreuse::SspInterpolationKind::N2Linear,
+      "top option 'N' parses as N2-linear SSP interpolation");
+
+  for (const std::string& unsupported : {"'SVW'", "'QVW'"}) {
     context.expectThrows<ValidationError>(
         [&] {
           std::string contents = munkContents;

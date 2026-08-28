@@ -13,8 +13,9 @@ namespace rayreuse {
 // Traces the frequency-independent centre ray and its two dynamic-ray
 // fundamental solutions.
 //
-// C-linear SSP interfaces are aligned with the same reduced-step rule as the
-// Fortran tracer. The segment hint remains on the arrival side at an exact
+// SSP depth-node interfaces (C-linear and N²-linear) are aligned with the same
+// reduced-step rule as the Fortran tracer; PCHIP nodes share the rule without a
+// gradient jump. The segment hint remains on the arrival side at an exact
 // node; the following minimum forward step moves into the adjacent segment and
 // updates the hint. Flat sea-surface and seabed crossings retain the integrated
 // incident point and append a same-position reflected point, so reflection

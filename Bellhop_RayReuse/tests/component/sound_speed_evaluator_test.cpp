@@ -10,6 +10,8 @@
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/c_linear_frequency_ssp.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/n2_linear_frequency_ssp.hpp"
+#include "rayreuse/model/n2_linear_ssp.hpp"
 #include "rayreuse/model/pchip_frequency_ssp.hpp"
 #include "rayreuse/model/pchip_ssp.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
@@ -23,6 +25,8 @@ using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
 using rayreuse::FrequencySspEvaluator;
 using rayreuse::GeometrySspEvaluator;
+using rayreuse::N2LinearFrequencySsp;
+using rayreuse::N2LinearSsp;
 using rayreuse::PchipFrequencySsp;
 using rayreuse::PchipSsp;
 using rayreuse::SoundSpeedPoint;
@@ -30,6 +34,7 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::SoundSpeedSample;
 using rayreuse::SspGradientContinuity;
 using rayreuse::SspInterpolationKind;
+using rayreuse::sspGradientContinuity;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
 using rayreuse::test::Context;
@@ -174,6 +179,69 @@ void testPchipDispatchIsExact(Context& context) {
                   freqEvaluator.evaluateAtSegment(query, 0U));
 }
 
+void testN2LinearDispatchIsExact(Context& context) {
+  context.check(
+      sspGradientContinuity(SspInterpolationKind::N2Linear) ==
+              SspGradientContinuity::DiscontinuousAtNodes &&
+          sspGradientContinuity(SspInterpolationKind::CLinear) ==
+              SspGradientContinuity::DiscontinuousAtNodes &&
+          sspGradientContinuity(SspInterpolationKind::Pchip) ==
+              SspGradientContinuity::ContinuousAtNodes,
+      "N2/C interpolation kinds retain gradient jumps while PCHIP does not");
+
+  const SoundSpeedProfile profile =
+      makePiecewiseProfile(SspInterpolationKind::N2Linear);
+  const N2LinearSsp concrete(profile);
+  const GeometrySspEvaluator evaluator(profile);
+
+  context.check(evaluator.interpolationKind() ==
+                    SspInterpolationKind::N2Linear,
+                "evaluator reports N2-linear interpolation");
+  context.check(evaluator.gradientContinuity() ==
+                    SspGradientContinuity::DiscontinuousAtNodes,
+                "N2-linear evaluator reports discontinuous gradient at nodes");
+  context.check(evaluator.segmentCount() == concrete.segmentCount(),
+                "evaluator preserves segment count");
+
+  const Vec2 query{.range = 50.0, .depth = 50.0};
+  checkSameSample(context, concrete.evaluate(query, 0U),
+                  evaluator.evaluate(query, 0U));
+  checkSameSample(context, concrete.evaluateAtSegment(query, 0U),
+                  evaluator.evaluateAtSegment(query, 0U));
+  context.check(concrete.locateSegment(150.0, 0U) ==
+                    evaluator.locateSegment(150.0, 0U),
+                "evaluator preserves segment location");
+
+  const SoundSpeedProfile attProfile =
+      makeAttenuatingProfile(SspInterpolationKind::N2Linear);
+  const N2LinearFrequencySsp freqConcrete(attProfile, 50.0);
+  const FrequencySspEvaluator freqEvaluator(attProfile, 50.0);
+
+  context.check(freqEvaluator.interpolationKind() ==
+                    SspInterpolationKind::N2Linear,
+                "frequency evaluator reports N2-linear interpolation");
+  context.check(freqEvaluator.gradientContinuity() ==
+                    SspGradientContinuity::DiscontinuousAtNodes,
+                "N2-linear frequency evaluator reports discontinuous gradient "
+                "at nodes");
+  context.checkNear(freqEvaluator.frequency(), 50.0, 0.0,
+                "frequency evaluator reports frequency");
+  context.check(freqEvaluator.isLossless() == freqConcrete.isLossless(),
+                "frequency evaluator preserves lossless state");
+  context.check(freqEvaluator.uniformComplexSoundSpeed() ==
+                    freqConcrete.uniformComplexSoundSpeed(),
+                "frequency evaluator preserves uniform complex speed");
+  checkSameSample(context, freqConcrete.evaluate(query, 0U),
+                  freqEvaluator.evaluate(query, 0U));
+  checkSameSample(context, freqConcrete.evaluateAtSegment(query, 0U),
+                  freqEvaluator.evaluateAtSegment(query, 0U));
+
+  context.check(
+      freqEvaluator.evaluate(query, 0U).soundSpeedHessian.depthDepth != 0.0,
+      "N2-linear frequency evaluator reports non-zero second derivative "
+      "d2c/dz2");
+}
+
 void testPchipNonzeroCurvature(Context& context) {
   const auto munkEnvironment =
       rayreuse::test::makeMunkEnvironment(SspInterpolationKind::Pchip);
@@ -193,6 +261,7 @@ int main() {
   Context context;
   testCLinearDispatchIsExact(context);
   testPchipDispatchIsExact(context);
+  testN2LinearDispatchIsExact(context);
   testPchipNonzeroCurvature(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

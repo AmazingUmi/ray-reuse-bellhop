@@ -9,6 +9,7 @@ namespace rayreuse {
 enum class SspInterpolationKind {
   CLinear,
   Pchip,
+  N2Linear,
 };
 
 enum class SspGradientContinuity {
@@ -20,6 +21,7 @@ enum class SspGradientContinuity {
     SspInterpolationKind kind) noexcept {
   switch (kind) {
     case SspInterpolationKind::CLinear:
+    case SspInterpolationKind::N2Linear:
       return SspGradientContinuity::DiscontinuousAtNodes;
     case SspInterpolationKind::Pchip:
       return SspGradientContinuity::ContinuousAtNodes;

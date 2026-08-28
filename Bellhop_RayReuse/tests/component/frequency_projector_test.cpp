@@ -568,6 +568,150 @@ void testPchipFrequencyProjection(Context& context) {
                 "different frequencies produce different complex acoustic states");
 }
 
+Environment makeN2AttenuatedEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0,
+            .attenuation = thorpAttenuation()},
+           {.depth = 500.0,
+            .soundSpeed = 1480.0,
+            .density = 1100.0,
+            .attenuation = thorpAttenuation()},
+           {.depth = 1000.0,
+            .soundSpeed = 1520.0,
+            .density = 1200.0,
+            .attenuation = thorpAttenuation()}},
+          rayreuse::SspInterpolationKind::N2Linear),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+}
+
+// One frozen N² trajectory, projected at 50 Hz and 250 Hz through the shared
+// frequency evaluator: the two RayFrequencyState instances stay independent
+// and stable, the imaginary travel time keeps the attenuation sign
+// convention, and the input path is untouched field by field.
+void testN2FrequencyProjection(Context& context) {
+  const Environment environment = makeN2AttenuatedEnvironment();
+  const RayPath path =
+      GeometryTracer(environment,
+                     IntegratorSettings{.stepLength = 100.0,
+                                        .rangeLimit = 5000.0,
+                                        .depthLimit = 3000.0,
+                                        .maximumRayPoints = 40U})
+          .trace(Source{.depth = 250.0}, 20.0 * std::numbers::pi / 180.0);
+  context.check(path.points.size() >= 10U,
+                "N2 attenuated projection uses a nontrivial frozen path");
+  context.check(!path.events.empty(),
+                "N2 attenuated frozen path includes at least one reflection");
+
+  const RayPath before = path;
+  const FrequencyProjector projector(environment);
+  RayFrequencyState state50 = projector.project(path, 50.0, 1.0);
+  const RayFrequencyState state250 = projector.project(path, 250.0, 1.0);
+  const RayFrequencyState repeat50 = projector.project(path, 50.0, 1.0);
+
+  context.check(state50.frequency == 50.0 && state250.frequency == 250.0,
+                "N2 projected states retain their own frequencies");
+  context.check(state50.points.size() == path.points.size() &&
+                    state250.points.size() == path.points.size(),
+                "N2 projection stores one state per geometry point");
+  context.check(state50.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating N2 50 Hz projection has negative imaginary "
+                "travel time");
+  context.check(state250.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating N2 250 Hz projection has negative imaginary "
+                "travel time");
+  context.check(
+      std::abs(state250.points.back().complexTravelTime.imag() -
+               state50.points.back().complexTravelTime.imag()) > 1.0e-9,
+      "Thorp volume attenuation separates the two N2 frequency states");
+  context.check(
+      repeat50.points.back().complexTravelTime ==
+          state50.points.back().complexTravelTime,
+      "repeating an N2 projection at one frequency is bit-stable");
+
+  state50.points.front().amplitude = 0.25;
+  context.checkNear(state250.points.front().amplitude, 1.0, 0.0,
+                    "mutating one N2 frequency state leaves the other "
+                    "untouched");
+
+  context.check(path.launchAngle == before.launchAngle &&
+                    path.points.size() == before.points.size() &&
+                    path.steps.size() == before.steps.size() &&
+                    path.events.size() == before.events.size() &&
+                    path.terminationReason == before.terminationReason,
+                "N2 projection preserves the path container and bookkeeping");
+  for (std::size_t index = 0U; index < path.points.size(); ++index) {
+    context.check(
+        path.points[index].position == before.points[index].position &&
+            path.points[index].slowness == before.points[index].slowness &&
+            path.points[index].dynamicP == before.points[index].dynamicP &&
+            path.points[index].dynamicQ == before.points[index].dynamicQ &&
+            path.points[index].soundSpeed == before.points[index].soundSpeed &&
+            path.points[index].realTravelTime ==
+                before.points[index].realTravelTime,
+        "N2 projection leaves every geometry point unchanged");
+  }
+  for (std::size_t index = 0U; index < path.steps.size(); ++index) {
+    context.check(
+        path.steps[index].stepLength == before.steps[index].stepLength &&
+            path.steps[index].startWeight == before.steps[index].startWeight &&
+            path.steps[index].midpointWeight ==
+                before.steps[index].midpointWeight &&
+            path.steps[index].midpoint == before.steps[index].midpoint,
+        "N2 projection leaves every step quadrature unchanged");
+  }
+  for (std::size_t index = 0U; index < path.events.size(); ++index) {
+    const ReflectionEvent& event = path.events[index];
+    const ReflectionEvent& previous = before.events[index];
+    context.check(
+        event.rayPointIndex == previous.rayPointIndex &&
+            event.reflectedRayPointIndex == previous.reflectedRayPointIndex &&
+            event.boundary == previous.boundary &&
+            event.boundarySegmentIndex == previous.boundarySegmentIndex &&
+            event.boundaryCurvature == previous.boundaryCurvature &&
+            event.position == previous.position &&
+            event.boundaryTangent == previous.boundaryTangent &&
+            event.outwardNormal == previous.outwardNormal &&
+            event.incidentSlowness == previous.incidentSlowness &&
+            event.reflectedSlowness == previous.reflectedSlowness &&
+            event.tangentSlowness == previous.tangentSlowness &&
+            event.normalSlowness == previous.normalSlowness,
+        "N2 projection leaves every reflection event unchanged");
+  }
+}
+
+// A lossless N² water column must reuse the frozen real travel time exactly
+// instead of re-integrating a complex slowness.
+void testN2LosslessProjectionReusesFrozenTravelTime(Context& context) {
+  const Environment environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 500.0, .soundSpeed = 1480.0, .density = 1100.0},
+           {.depth = 1000.0, .soundSpeed = 1520.0, .density = 1200.0}},
+          rayreuse::SspInterpolationKind::N2Linear),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+  const RayPath path =
+      GeometryTracer(environment,
+                     IntegratorSettings{.stepLength = 100.0,
+                                        .rangeLimit = 5000.0,
+                                        .depthLimit = 3000.0,
+                                        .maximumRayPoints = 40U})
+          .trace(Source{.depth = 250.0}, 20.0 * std::numbers::pi / 180.0);
+
+  const RayFrequencyState state =
+      FrequencyProjector(environment).project(path, 100.0, 1.0);
+  context.check(state.points.size() == path.points.size(),
+                "lossless N2 projection stores one state per geometry point");
+  for (std::size_t index = 0U; index < path.points.size(); ++index) {
+    context.check(
+        state.points[index].complexTravelTime ==
+            std::complex<double>{path.points[index].realTravelTime, 0.0},
+        "lossless N2 projection copies the frozen real travel time");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -579,6 +723,8 @@ int main() {
   testMunkReflectionOracle(context);
   testProjectionDoesNotMutateGeometry(context);
   testPchipFrequencyProjection(context);
+  testN2FrequencyProjection(context);
+  testN2LosslessProjectionReusesFrozenTravelTime(context);
   testInvalidInputs(context);
 
   if (context.failureCount() != 0) {

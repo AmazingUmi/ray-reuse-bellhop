@@ -580,9 +580,14 @@ class CaseModelTests(unittest.TestCase):
         )
 
     def test_n2_case_is_scoped_to_implemented_versions(self) -> None:
+        definition = self.cases["munk_n2"]
         self.assertEqual(
-            self.cases["munk_n2"].supported_versions,
-            ("origin", "f2cpp"),
+            definition.supported_versions,
+            ("origin", "f2cpp", "rayreuse"),
+        )
+        self.assertEqual(
+            definition.frequencies("broadband_smoke"),
+            (50.0, 250.0),
         )
 
     def test_spline_case_is_scoped_to_implemented_versions(self) -> None:

@@ -90,6 +90,8 @@ add_library(
     src/model/c_linear_ssp.cpp
     src/model/environment.cpp
     src/model/launch_fan_planner.cpp
+    src/model/n2_linear_frequency_ssp.cpp
+    src/model/n2_linear_ssp.cpp
     src/model/pchip_frequency_ssp.cpp
     src/model/pchip_ssp.cpp
     src/model/simulation_case.cpp
@@ -298,6 +300,12 @@ if(BUILD_TESTING)
     bellhop_rayreuse_pchip_ssp_tests
     rayreuse.component.pchip_ssp
     tests/component/pchip_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_n2_linear_ssp_tests
+    rayreuse.component.n2_linear_ssp
+    tests/component/n2_linear_ssp_test.cpp
     component
   )
   add_rayreuse_test(

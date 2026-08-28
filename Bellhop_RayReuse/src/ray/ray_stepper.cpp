@@ -99,9 +99,8 @@ void validateState(const RayState& state, std::string_view name) {
   return midpoint;
 }
 
-void applyCLinearGradientJump(RayState& endState,
-                              const SoundSpeedSample& initialSample,
-                              const SoundSpeedSample& endSample) {
+void applyGradientJump(RayState& endState, const SoundSpeedSample& initialSample,
+                       const SoundSpeedSample& endSample) {
   if (endSample.segmentIndex == initialSample.segmentIndex) {
     return;
   }
@@ -113,8 +112,9 @@ void applyCLinearGradientJump(RayState& endState,
   const double normalGradientJump = dot(gradientJump, rayNormal);
   const double tangentGradientJump = dot(gradientJump, endState.slowness);
 
-  // CLinearSsp is range independent, so a changed segment is a depth
-  // interface. This is the iSegz branch of Step.f90.
+  // Discontinuous-at-node SSP backends (C-linear, N²-linear) are range
+  // independent, so a changed segment is a depth interface. This is the iSegz
+  // branch of Step.f90.
   const double incidenceTangent =
       endState.slowness.range / endState.slowness.depth;
   const double jumpCorrection =
@@ -124,7 +124,7 @@ void applyCLinearGradientJump(RayState& endState,
 
   if (!std::isfinite(jumpCorrection)) {
     throw ValidationError(
-        "C-linear gradient jump produced a non-finite dynamic correction");
+        "SSP gradient jump produced a non-finite dynamic correction");
   }
   for (std::size_t index = 0; index < endState.dynamicP.size(); ++index) {
     endState.dynamicP[index] -= endState.dynamicQ[index] * jumpCorrection;
@@ -216,7 +216,7 @@ RayStepResult stepRayImpl(const SspType& soundSpeedProfile,
   endState.soundSpeed = endSample.soundSpeed;
   if (soundSpeedProfile.gradientContinuity() ==
       SspGradientContinuity::DiscontinuousAtNodes) {
-    applyCLinearGradientJump(endState, initialSample, endSample);
+    applyGradientJump(endState, initialSample, endSample);
   }
   validateState(endState, "ray-step result state");
 

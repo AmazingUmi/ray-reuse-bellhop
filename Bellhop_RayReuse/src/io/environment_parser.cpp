@@ -749,6 +749,8 @@ struct ParsedRunType {
       interpolationKind = SspInterpolationKind::Pchip;
       break;
     case 'N':
+      interpolationKind = SspInterpolationKind::N2Linear;
+      break;
     case 'S':
     case 'Q':
       fail(source, topOptionsRecord.lineNumber,
@@ -766,8 +768,8 @@ struct ParsedRunType {
       (topOptions[4U] != ' ' && topOptions[4U] != '~' &&
        topOptions[4U] != '*')) {
     fail(source, topOptionsRecord.lineNumber,
-         "RR-B1 supports C-linear and PCHIP SSP, V/R/A/G/F surfaces, optional Thorp, "
-         "and optional piecewise-linear topography");
+         "RR-B1 supports C-linear, N2-linear, and PCHIP SSP, V/R/A/G/F "
+         "surfaces, optional Thorp, and optional piecewise-linear topography");
   }
   const AttenuationUnit attenuationUnit =
       parseAttenuationUnit(topOptions[2U], topOptionsRecord, source);
