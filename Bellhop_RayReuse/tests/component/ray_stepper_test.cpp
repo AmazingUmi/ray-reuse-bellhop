@@ -10,6 +10,8 @@
 
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/cubic_spline_frequency_ssp.hpp"
+#include "rayreuse/model/cubic_spline_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/model/sound_speed_types.hpp"
@@ -19,11 +21,15 @@
 namespace {
 
 using rayreuse::CLinearSsp;
+using rayreuse::CubicSplineFrequencySsp;
+using rayreuse::CubicSplineSsp;
 using rayreuse::GeometrySspEvaluator;
 using rayreuse::RayState;
 using rayreuse::SoundSpeedHessian;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
+using rayreuse::SoundSpeedSample;
+using rayreuse::SspGradientContinuity;
 using rayreuse::SspInterpolationKind;
 using rayreuse::StepLimitPhase;
 using rayreuse::StepLimitRequest;
@@ -400,6 +406,232 @@ void testN2DiffersFromCLinearAndPchip(Context& context) {
                 "N² travel time differs from C-linear");
 }
 
+// A real GeometrySspEvaluator spline step crosses the 100 m node. Rebuilding
+// the predictor/corrector dynamic update without a node jump pins the
+// ContinuousAtNodes contract at the production stepRay boundary. Although a
+// spline derivative is continuous exactly at the node, the derivative evolves
+// across this finite step; accidentally routing it through applyGradientJump
+// would mistake that smooth evolution for a jump and materially change p.
+void testSplineGradientContinuityAvoidsNodeJump(Context& context) {
+  static_assert(
+      CubicSplineSsp::gradientContinuity() ==
+      SspGradientContinuity::ContinuousAtNodes);
+  static_assert(
+      CubicSplineFrequencySsp::gradientContinuity() ==
+      SspGradientContinuity::ContinuousAtNodes);
+  context.check(
+      CubicSplineSsp::gradientContinuity() ==
+          SspGradientContinuity::ContinuousAtNodes &&
+          CubicSplineFrequencySsp::gradientContinuity() ==
+              SspGradientContinuity::ContinuousAtNodes,
+      "spline selects the ContinuousAtNodes branch that never calls "
+      "applyGradientJump");
+
+  const SoundSpeedProfile profile = makePiecewiseLinearProfile();
+  const GeometrySspEvaluator spline(
+      SoundSpeedProfile(profile.points(), SspInterpolationKind::CubicSpline));
+  context.check(spline.gradientContinuity() ==
+                    SspGradientContinuity::ContinuousAtNodes,
+                "runtime spline evaluator reports continuous node gradients");
+
+  const Vec2 node{.range = 0.0, .depth = 100.0};
+  const auto splineBelow = spline.evaluateAtSegment(node, 0U);
+  const auto splineAbove = spline.evaluateAtSegment(node, 1U);
+  context.check(
+      std::abs(splineBelow.soundSpeedGradient.depth -
+               splineAbove.soundSpeedGradient.depth) < 1.0e-9,
+      "spline gradient is continuous across the node");
+
+  constexpr double stepLength = 30.0;
+  RayState initial{
+      .position = Vec2{.range = 0.0, .depth = 90.0},
+      .slowness = Vec2{.range = 0.8 / 1498.0, .depth = 0.6 / 1498.0},
+      .dynamicP = {1.0, 0.25},
+      .dynamicQ = {0.5, 1.0},
+      .soundSpeed = 1498.0,
+      .realTravelTime = 0.0};
+  const SoundSpeedSample initialSample =
+      spline.evaluate(initial.position, 0U);
+  initial.soundSpeed = initialSample.soundSpeed;
+
+  const double halfStep = 0.5 * stepLength;
+  RayState midpoint = initial;
+  midpoint.position =
+      initial.position + halfStep * initialSample.soundSpeed * initial.slowness;
+  midpoint.slowness =
+      initial.slowness -
+      (halfStep /
+       (initialSample.soundSpeed * initialSample.soundSpeed)) *
+          initialSample.soundSpeedGradient;
+  const double initialCurvature =
+      rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          initialSample.soundSpeedHessian, initial.slowness);
+  for (std::size_t index = 0; index < midpoint.dynamicP.size(); ++index) {
+    midpoint.dynamicP[index] =
+        initial.dynamicP[index] -
+        halfStep * initialCurvature * initial.dynamicQ[index];
+    midpoint.dynamicQ[index] =
+        initial.dynamicQ[index] +
+        halfStep * initialSample.soundSpeed * initial.dynamicP[index];
+  }
+  const SoundSpeedSample midpointSample =
+      spline.evaluate(midpoint.position, initialSample.segmentIndex);
+  const double midpointCurvature =
+      rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          midpointSample.soundSpeedHessian, midpoint.slowness);
+
+  std::array<double, 2> expectedP{};
+  std::array<double, 2> expectedQ{};
+  for (std::size_t index = 0; index < expectedP.size(); ++index) {
+    expectedP[index] = initial.dynamicP[index] -
+                       stepLength * midpointCurvature *
+                           midpoint.dynamicQ[index];
+    expectedQ[index] = initial.dynamicQ[index] +
+                       stepLength * midpointSample.soundSpeed *
+                           midpoint.dynamicP[index];
+  }
+
+  const auto result = stepRay(spline, initial, 0U, stepLength);
+  context.check(result.segmentIndex == 1U &&
+                    result.endState.position.depth > node.depth,
+                "production spline step crosses the interior SSP node");
+  for (std::size_t index = 0; index < expectedP.size(); ++index) {
+    context.checkNear(result.endState.dynamicP[index], expectedP[index],
+                      1.0e-14,
+                      "continuous spline crossing preserves the no-jump p "
+                      "update for dynamic pair " +
+                          std::to_string(index));
+    context.checkNear(result.endState.dynamicQ[index], expectedQ[index],
+                      1.0e-10,
+                      "continuous spline crossing preserves the smooth q "
+                      "update for dynamic pair " +
+                          std::to_string(index));
+  }
+
+  const SoundSpeedSample endSample =
+      spline.evaluate(result.endState.position, initialSample.segmentIndex);
+  const Vec2 gradientDifference =
+      endSample.soundSpeedGradient - initialSample.soundSpeedGradient;
+  const Vec2 rayNormal{.range = -result.endState.slowness.depth,
+                       .depth = result.endState.slowness.range};
+  const double incidenceTangent =
+      result.endState.slowness.range / result.endState.slowness.depth;
+  const double erroneousJumpCorrection =
+      incidenceTangent *
+      (2.0 * rayreuse::dot(gradientDifference, rayNormal) -
+       incidenceTangent *
+           rayreuse::dot(gradientDifference, result.endState.slowness)) /
+      endSample.soundSpeed;
+  context.check(std::abs(result.endState.dynamicQ[1] *
+                         erroneousJumpCorrection) > 1.0e-6,
+                "routing a smooth spline crossing through applyGradientJump "
+                "would cause a detectable dynamic-p regression");
+}
+
+// The dynamic-ray equations consume c_nn/c² built from the sample Hessian;
+// the spline must therefore ship a materially nonzero d²c/dz² so the p
+// update -w * curvature * q actually acts. Zeroing the spline Hessian (the
+// C-linear value on the same nodes) collapses the term to exactly zero,
+// which is the observable difference a Hessian-suppressing shortcut would
+// leave behind. The full stepRay integration through the spline backend is
+// covered by testSplineCurvatureEntersDynamicEquations below.
+void testSplineHessianFeedsDynamicCurvature(Context& context) {
+  const CubicSplineSsp spline(makePiecewiseLinearProfile());
+  const CLinearSsp cLinear(makePiecewiseLinearProfile());
+  const Vec2 slowness{.range = 0.8 / 1498.0, .depth = 0.6 / 1498.0};
+
+  const SoundSpeedSample splineSample = spline.evaluateAtSegment(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  const SoundSpeedSample cSample = cLinear.evaluateAtSegment(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+
+  context.check(std::abs(splineSample.soundSpeedHessian.depthDepth) > 1.0e-9,
+                "spline sample carries a nonzero depth Hessian");
+  context.check(cSample.soundSpeedHessian == SoundSpeedHessian{},
+                "C-linear baseline ships an all-zero Hessian");
+
+  const double splineCurvature =
+      rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          splineSample.soundSpeedHessian, slowness);
+  const double zeroedCurvature =
+      rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          SoundSpeedHessian{}, slowness);
+  const double cCurvature =
+      rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          cSample.soundSpeedHessian, slowness);
+
+  context.check(std::abs(splineCurvature) > 1.0e-12,
+                "spline Hessian yields a materially nonzero dynamic "
+                "curvature term");
+  context.check(zeroedCurvature == 0.0 && cCurvature == 0.0,
+                "a zeroed Hessian contributes exactly zero, so the spline "
+                "curvature genuinely enters the p/q update");
+}
+
+// End-to-end spline leg of testN2CurvatureEntersDynamicEquations: a single
+// interior step integrated through the GeometrySspEvaluator CubicSpline
+// backend must let the nonzero spline Hessian act on the dynamic p/q
+// equations, while the C-linear baseline on identical nodes stays bit-exact
+// because its within-segment Hessian is zero. Any collapse of the spline
+// Hessian (a Hessian-suppressing shortcut) would make these checks fail by
+// reproducing the baseline exactly.
+void testSplineCurvatureEntersDynamicEquations(Context& context) {
+  const SoundSpeedProfile profile = makePiecewiseLinearProfile();
+  const CLinearSsp cLinear(profile);
+  const GeometrySspEvaluator spline(
+      SoundSpeedProfile(profile.points(), SspInterpolationKind::CubicSpline));
+  constexpr double angle = 37.0 * kPi / 180.0;
+  RayState initial{
+      .position = Vec2{.range = 10.0, .depth = 50.0},
+      .slowness = Vec2{.range = std::cos(angle) / 1490.0,
+                       .depth = std::sin(angle) / 1490.0},
+      .dynamicP = {1.0, -1.0},
+      .dynamicQ = {0.0, 0.0},
+      .soundSpeed = 1490.0,
+      .realTravelTime = 0.75};
+
+  const auto cResult = stepRay(cLinear, initial, 0U, 30.0);
+  const auto splineResult = stepRay(spline, initial, 0U, 30.0);
+  context.check(cResult.segmentIndex == 0U && splineResult.segmentIndex == 0U,
+                "interior spline step stays inside one segment without a jump");
+
+  // Zero within-segment Hessian keeps the C-linear dynamic p bit-exact.
+  context.checkNear(cResult.endState.dynamicP[0], 1.0, 0.0,
+                    "C-linear baseline preserves the first dynamic p");
+  context.checkNear(cResult.endState.dynamicP[1], -1.0, 0.0,
+                    "C-linear baseline preserves the second dynamic p");
+
+  // The spline curvature is nonzero inside the segment (pinned by
+  // testSplineHessianFeedsDynamicCurvature on this profile), so dynamic p
+  // moves away from its initial value for both fundamental pairs and the
+  // deviation is far above rounding noise.
+  context.check(std::abs(splineResult.endState.dynamicP[0] - 1.0) > 1.0e-9,
+                "spline curvature changes the first dynamic p");
+  context.check(std::abs(splineResult.endState.dynamicP[1] + 1.0) > 1.0e-9,
+                "spline curvature changes the second dynamic p");
+  context.check(std::abs(splineResult.endState.dynamicP[0] -
+                         cResult.endState.dynamicP[0]) > 1.0e-9,
+                "spline dynamic p deviates from the C-linear baseline "
+                "observably");
+
+  // dynamicQ integrates c*p, so the curved spline speed profile also
+  // separates q from the piecewise-linear baseline.
+  context.check(std::abs(splineResult.endState.dynamicQ[0] -
+                         cResult.endState.dynamicQ[0]) > 1.0e-9,
+                "spline dynamic q deviates from the C-linear baseline");
+  context.check(std::abs(splineResult.endState.dynamicQ[1] -
+                         cResult.endState.dynamicQ[1]) > 1.0e-9,
+                "spline second dynamic q deviates from the C-linear baseline");
+
+  context.check(std::abs(splineResult.endState.soundSpeed -
+                         cResult.endState.soundSpeed) > 1.0e-6,
+                "spline endpoint samples a different sound speed than "
+                "C-linear");
+  context.check(std::abs(splineResult.endState.realTravelTime -
+                         cResult.endState.realTravelTime) > 1.0e-12,
+                "spline endpoint accumulates a different real travel time");
+}
+
 void testValidation(Context& context) {
   const CLinearSsp ssp(makeConstantProfile());
   const RayState valid = makeRayState(0.0);
@@ -453,6 +685,9 @@ int main() {
   testN2CurvatureEntersDynamicEquations(context);
   testN2SegmentCrossingAppliesGradientJump(context);
   testN2DiffersFromCLinearAndPchip(context);
+  testSplineGradientContinuityAvoidsNodeJump(context);
+  testSplineHessianFeedsDynamicCurvature(context);
+  testSplineCurvatureEntersDynamicEquations(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

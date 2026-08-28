@@ -7,7 +7,7 @@
 namespace rayreuse {
 namespace {
 
-[[nodiscard]] std::variant<CLinearSsp, PchipSsp, N2LinearSsp>
+[[nodiscard]] std::variant<CLinearSsp, PchipSsp, N2LinearSsp, CubicSplineSsp>
 makeGeometryBackend(const SoundSpeedProfile& profile) {
   switch (profile.interpolationKind()) {
     case SspInterpolationKind::CLinear:
@@ -16,6 +16,8 @@ makeGeometryBackend(const SoundSpeedProfile& profile) {
       return PchipSsp(profile);
     case SspInterpolationKind::N2Linear:
       return N2LinearSsp(profile);
+    case SspInterpolationKind::CubicSpline:
+      return CubicSplineSsp(profile);
   }
   throw ValidationError("SSP interpolation kind is invalid");
 }
@@ -23,7 +25,7 @@ makeGeometryBackend(const SoundSpeedProfile& profile) {
 // Keep the factories' return types explicit so unsupported kinds cannot fall
 // back to another interpolation backend.
 [[nodiscard]] std::variant<CLinearFrequencySsp, PchipFrequencySsp,
-                           N2LinearFrequencySsp>
+                           N2LinearFrequencySsp, CubicSplineFrequencySsp>
 makeFrequencyBackend(const SoundSpeedProfile& profile, double frequency) {
   switch (profile.interpolationKind()) {
     case SspInterpolationKind::CLinear:
@@ -32,6 +34,8 @@ makeFrequencyBackend(const SoundSpeedProfile& profile, double frequency) {
       return PchipFrequencySsp(profile, frequency);
     case SspInterpolationKind::N2Linear:
       return N2LinearFrequencySsp(profile, frequency);
+    case SspInterpolationKind::CubicSpline:
+      return CubicSplineFrequencySsp(profile, frequency);
   }
   throw ValidationError("SSP interpolation kind is invalid");
 }

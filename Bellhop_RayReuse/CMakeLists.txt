@@ -88,6 +88,8 @@ add_library(
     src/model/boundary_geometry.cpp
     src/model/c_linear_frequency_ssp.cpp
     src/model/c_linear_ssp.cpp
+    src/model/cubic_spline_ssp.cpp
+    src/model/cubic_spline_frequency_ssp.cpp
     src/model/environment.cpp
     src/model/launch_fan_planner.cpp
     src/model/n2_linear_frequency_ssp.cpp
@@ -96,6 +98,7 @@ add_library(
     src/model/pchip_ssp.cpp
     src/model/simulation_case.cpp
     src/model/sound_speed_evaluator.cpp
+    src/numerics/cubic_spline_coefficients.cpp
     src/numerics/pchip_coefficients.cpp
     src/cache/ray_path_cache.cpp
     src/field/frequency_workspace.cpp
@@ -306,6 +309,12 @@ if(BUILD_TESTING)
     bellhop_rayreuse_n2_linear_ssp_tests
     rayreuse.component.n2_linear_ssp
     tests/component/n2_linear_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_cubic_spline_ssp_tests
+    rayreuse.component.cubic_spline_ssp
+    tests/component/cubic_spline_ssp_test.cpp
     component
   )
   add_rayreuse_test(

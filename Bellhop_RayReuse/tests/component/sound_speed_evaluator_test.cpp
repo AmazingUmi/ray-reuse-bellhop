@@ -10,6 +10,8 @@
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/c_linear_frequency_ssp.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/cubic_spline_frequency_ssp.hpp"
+#include "rayreuse/model/cubic_spline_ssp.hpp"
 #include "rayreuse/model/n2_linear_frequency_ssp.hpp"
 #include "rayreuse/model/n2_linear_ssp.hpp"
 #include "rayreuse/model/pchip_frequency_ssp.hpp"
@@ -23,6 +25,8 @@ namespace {
 using rayreuse::AttenuationUnit;
 using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
+using rayreuse::CubicSplineFrequencySsp;
+using rayreuse::CubicSplineSsp;
 using rayreuse::FrequencySspEvaluator;
 using rayreuse::GeometrySspEvaluator;
 using rayreuse::N2LinearFrequencySsp;
@@ -242,6 +246,99 @@ void testN2LinearDispatchIsExact(Context& context) {
       "d2c/dz2");
 }
 
+void testCubicSplineDispatchIsExact(Context& context) {
+  context.check(
+      sspGradientContinuity(SspInterpolationKind::CubicSpline) ==
+              SspGradientContinuity::ContinuousAtNodes &&
+          sspGradientContinuity(SspInterpolationKind::Pchip) ==
+              SspGradientContinuity::ContinuousAtNodes &&
+          sspGradientContinuity(SspInterpolationKind::CLinear) ==
+              SspGradientContinuity::DiscontinuousAtNodes &&
+          sspGradientContinuity(SspInterpolationKind::N2Linear) ==
+              SspGradientContinuity::DiscontinuousAtNodes,
+      "cubic spline joins PCHIP as node-continuous while C/N2 keep jumps");
+
+  const SoundSpeedProfile profile =
+      makePiecewiseProfile(SspInterpolationKind::CubicSpline);
+  const CubicSplineSsp concrete(profile);
+  const GeometrySspEvaluator evaluator(profile);
+
+  context.check(evaluator.interpolationKind() ==
+                    SspInterpolationKind::CubicSpline,
+                "evaluator reports cubic-spline interpolation");
+  context.check(evaluator.gradientContinuity() ==
+                    SspGradientContinuity::ContinuousAtNodes,
+                "cubic-spline evaluator reports continuous gradient at nodes");
+  context.check(evaluator.segmentCount() == concrete.segmentCount(),
+                "evaluator preserves segment count");
+
+  const Vec2 query{.range = 50.0, .depth = 50.0};
+  checkSameSample(context, concrete.evaluate(query, 0U),
+                  evaluator.evaluate(query, 0U));
+  checkSameSample(context, concrete.evaluateAtSegment(query, 0U),
+                  evaluator.evaluateAtSegment(query, 0U));
+  context.check(concrete.locateSegment(150.0, 0U) ==
+                    evaluator.locateSegment(150.0, 0U),
+                "evaluator preserves segment location");
+
+  const GeometrySspEvaluator cEvaluator(
+      makePiecewiseProfile(SspInterpolationKind::CLinear));
+  const GeometrySspEvaluator pchipEvaluator(
+      makePiecewiseProfile(SspInterpolationKind::Pchip));
+  const GeometrySspEvaluator n2Evaluator(
+      makePiecewiseProfile(SspInterpolationKind::N2Linear));
+  const SoundSpeedSample splineSample = evaluator.evaluate(query, 0U);
+  context.check(
+      splineSample.soundSpeed != cEvaluator.evaluate(query, 0U).soundSpeed &&
+          splineSample.soundSpeed !=
+              pchipEvaluator.evaluate(query, 0U).soundSpeed &&
+          splineSample.soundSpeed !=
+              n2Evaluator.evaluate(query, 0U).soundSpeed,
+      "dispatched spline sample differs from C/P/N2 at the same query "
+      "point, excluding a silent fallback backend");
+
+  const SoundSpeedProfile attProfile =
+      makeAttenuatingProfile(SspInterpolationKind::CubicSpline);
+  const CubicSplineFrequencySsp freqConcrete(attProfile, 50.0);
+  const FrequencySspEvaluator freqEvaluator(attProfile, 50.0);
+
+  context.check(freqEvaluator.interpolationKind() ==
+                    SspInterpolationKind::CubicSpline,
+                "frequency evaluator reports cubic-spline interpolation");
+  context.check(freqEvaluator.gradientContinuity() ==
+                    SspGradientContinuity::ContinuousAtNodes,
+                "cubic-spline frequency evaluator reports continuous gradient "
+                "at nodes");
+  context.checkNear(freqEvaluator.frequency(), 50.0, 0.0,
+                "frequency evaluator reports frequency");
+  context.check(freqEvaluator.isLossless() == freqConcrete.isLossless(),
+                "frequency evaluator preserves lossless state");
+  context.check(freqEvaluator.uniformComplexSoundSpeed() ==
+                    freqConcrete.uniformComplexSoundSpeed(),
+                "frequency evaluator preserves uniform complex speed");
+  checkSameSample(context, freqConcrete.evaluate(query, 0U),
+                  freqEvaluator.evaluate(query, 0U));
+  checkSameSample(context, freqConcrete.evaluateAtSegment(query, 0U),
+                  freqEvaluator.evaluateAtSegment(query, 0U));
+
+  const FrequencySspEvaluator cFreqEvaluator(
+      makeAttenuatingProfile(SspInterpolationKind::CLinear), 50.0);
+  const FrequencySspEvaluator pchipFreqEvaluator(
+      makeAttenuatingProfile(SspInterpolationKind::Pchip), 50.0);
+  const FrequencySspEvaluator n2FreqEvaluator(
+      makeAttenuatingProfile(SspInterpolationKind::N2Linear), 50.0);
+  const SoundSpeedSample splineFreqSample = freqEvaluator.evaluate(query, 0U);
+  context.check(
+      splineFreqSample.soundSpeed !=
+              cFreqEvaluator.evaluate(query, 0U).soundSpeed &&
+          splineFreqSample.soundSpeed !=
+              pchipFreqEvaluator.evaluate(query, 0U).soundSpeed &&
+          splineFreqSample.soundSpeed !=
+              n2FreqEvaluator.evaluate(query, 0U).soundSpeed,
+      "dispatched spline frequency sample differs from C/P/N2, excluding a "
+      "silent fallback backend");
+}
+
 void testPchipNonzeroCurvature(Context& context) {
   const auto munkEnvironment =
       rayreuse::test::makeMunkEnvironment(SspInterpolationKind::Pchip);
@@ -262,6 +359,7 @@ int main() {
   testCLinearDispatchIsExact(context);
   testPchipDispatchIsExact(context);
   testN2LinearDispatchIsExact(context);
+  testCubicSplineDispatchIsExact(context);
   testPchipNonzeroCurvature(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

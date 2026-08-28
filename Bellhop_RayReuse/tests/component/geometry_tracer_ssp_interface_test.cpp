@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 
+#include "rayreuse/model/cubic_spline_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/n2_linear_ssp.hpp"
 #include "rayreuse/model/simulation_case.hpp"
@@ -16,6 +17,7 @@ namespace {
 
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
+using rayreuse::CubicSplineSsp;
 using rayreuse::Environment;
 using rayreuse::FlatBoundaryGeometry;
 using rayreuse::GeometryTracer;
@@ -27,7 +29,9 @@ using rayreuse::RayTerminationReason;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
+using rayreuse::SspGradientContinuity;
 using rayreuse::SspInterpolationKind;
+using rayreuse::Vec2;
 using rayreuse::reflectAtFlatBoundary;
 using rayreuse::test::Context;
 
@@ -411,6 +415,46 @@ void testN2SeaBoundariesReflect(Context& context) {
   checkFiniteStates(context, multi, "N2 multi");
 }
 
+// The cubic-spline backend must already present the exact evaluator contract
+// the tracer consumes through GeometrySspEvaluator: ContinuousAtNodes
+// gradient handling (the shared PCHIP-style node rule, no C/N² jump), the
+// arrival-side segment hint at an aligned node, and edge-segment selection
+// outside the profile. SspInterpolationKind::CubicSpline and the variant
+// backend are G01, so the full spline crossing/reflection runs (mirroring the
+// N2 tests above) are added once the tracer can construct the backend.
+void testSplineSspInterfaceContract(Context& context) {
+  const CubicSplineSsp spline(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = kInterfaceDepth, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 1000.0, .soundSpeed = 1550.0, .density = 1000.0}}));
+  context.check(spline.gradientContinuity() ==
+                    SspGradientContinuity::ContinuousAtNodes,
+                "spline exposes the ContinuousAtNodes tracer contract");
+  context.check(spline.segmentCount() == 2U,
+                "spline segment count matches the depth-node topology");
+
+  const Vec2 node{.range = 0.0, .depth = kInterfaceDepth};
+  const auto arrivalFromBelow = spline.evaluate(node, 0U);
+  const auto arrivalFromAbove = spline.evaluate(node, 1U);
+  context.check(arrivalFromBelow.segmentIndex == 0U &&
+                    arrivalFromAbove.segmentIndex == 1U,
+                "spline keeps the arrival-side segment at an aligned node");
+  context.checkNear(arrivalFromBelow.soundSpeed,
+                    arrivalFromAbove.soundSpeed, 1.0e-9,
+                    "spline value is continuous across the tracer node");
+  context.checkNear(arrivalFromBelow.soundSpeedGradient.depth,
+                    arrivalFromAbove.soundSpeedGradient.depth, 1.0e-9,
+                    "spline gradient is continuous across the tracer node");
+
+  const auto above = spline.evaluate(
+      Vec2{.range = 0.0, .depth = -10.0}, 1U);
+  const auto below = spline.evaluate(
+      Vec2{.range = 0.0, .depth = 1010.0}, 0U);
+  context.check(above.segmentIndex == 0U && below.segmentIndex == 1U,
+                "spline extrapolation selects edge segments for the tracer");
+}
+
 }  // namespace
 
 int main() {
@@ -423,6 +467,7 @@ int main() {
   testN2UpwardInterfaceCrossing(context);
   testN2SourceOnNodeMovesWithoutLooping(context);
   testN2SeaBoundariesReflect(context);
+  testSplineSspInterfaceContract(context);
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

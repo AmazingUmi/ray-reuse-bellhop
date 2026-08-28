@@ -254,6 +254,10 @@ profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调�
 uv run python test/standard_cases/codes/model_matrix.py
 ```
 
+矩阵默认优先使用各 case 目录中的既有 `tolerances.toml`，没有 case-local
+文件时回退到 `codes/tolerances.toml`。显式传入 `--tolerances PATH` 会对本次
+选中的所有 case 使用同一覆盖文件。
+
 迁移前的 `test_origin_bellhop` 和 `test_ray_reuse` 位于 `test/legacy/`，
 仅作历史材料，不参与测试。PlotRead 使用独立生成的小型 fixture，不依赖
 本目录结果。

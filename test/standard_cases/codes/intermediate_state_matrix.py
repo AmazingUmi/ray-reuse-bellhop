@@ -27,6 +27,7 @@ CASE_CONFIGURATIONS = {
     "munk_cerveny_cc": "munk",
     "munk_n2": "munk-n2",
     "munk_pchip": "munk-pchip",
+    "munk_spline": "munk-spline",
 }
 
 

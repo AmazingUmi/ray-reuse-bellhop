@@ -10,6 +10,7 @@ enum class SspInterpolationKind {
   CLinear,
   Pchip,
   N2Linear,
+  CubicSpline,
 };
 
 enum class SspGradientContinuity {
@@ -24,6 +25,7 @@ enum class SspGradientContinuity {
     case SspInterpolationKind::N2Linear:
       return SspGradientContinuity::DiscontinuousAtNodes;
     case SspInterpolationKind::Pchip:
+    case SspInterpolationKind::CubicSpline:
       return SspGradientContinuity::ContinuousAtNodes;
   }
   return SspGradientContinuity::DiscontinuousAtNodes;

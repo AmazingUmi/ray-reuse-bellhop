@@ -1,342 +1,282 @@
 # AGENTS.md
 
-## 适用范围
+## 1. 项目目标与优先级
 
-本文件是仓库根级约束，适用于 `Bellhop_origin/`、`Bellhop_F2CPP/`、
-`Bellhop_RayReuse/`、`test/`、`demo/` 和项目文档。若子目录存在更具体的
-`AGENTS.md`，则在该子目录内以更具体的规则为补充；不得违背本文件确定的
-项目目标和版本职责。
+本仓库用于 Bellhop 功能复刻、数值一致性验证、性能优化和宽带射线复用研究。
 
-## 项目目标
+优先级：
 
-本项目面向水声传播计算研究，目标依次是：
+1. 用户明确要求的功能与研究目标；
+2. 相对 Bellhop Origin 的科学正确性与文件兼容性；
+3. 运行时间、内存与可扩展性；
+4. RayReuse 研究路线所需架构；
+5. 防止重要回归的最小充分测试；
+6. 必要的易用性、展示和文档。
 
-1. 复刻研究所需的 Bellhop Origin 功能；
-2. 保持具有科学可信度的数值与文件兼容性；
-3. 改善运行时间、内存、可扩展性和可修改性；
-4. 支持宽带射线复用及后续研究方法；
-5. 提供足以支撑快速研发的回归、标准算例和直观展示。
+默认采用“最小充分工程”。测试、CI、抽象、重构和文档服务于功能、正确性与性能，
+不得主动把任务扩大为通用框架或大规模工程建设。
 
-正确性不可牺牲，但测试、CI、抽象、文档和工程基础设施是服务于功能、性能
-与研究的手段，不是独立目标。默认采用“最小充分工程”，不把本项目扩张为
-通用生产级软件平台。
-
-## 目录与版本职责
+## 2. 目录职责
 
 | 路径 | 职责 |
 |---|---|
-| `Bellhop_origin/` | 可重现的 Fortran 单频参考实现和首要行为 oracle |
-| `Bellhop_F2CPP/` | 独立的 C++20 二维单频复刻与优化实现 |
-| `Bellhop_RayReuse/` | 独立的 C++20 多频轨迹复用实现 |
-| `test/standard_cases/` | Origin、F2CPP、RayReuse 共用的标准输入、运行和比较框架 |
-| `test/PlotRead/` | 独立 SHD 读取、绘图、导出和自包含测试 |
-| `demo/` | 直接可用、可靠性横向对比和 RayReuse 多频效果展示 |
-| `test/legacy/` | 迁移前历史材料，不参与当前测试 |
+| `Bellhop_origin/` | Fortran 单频参考实现和首要 oracle |
+| `Bellhop_F2CPP/` | 独立 C++20 二维单频复刻与优化 |
+| `Bellhop_RayReuse/` | 独立 C++20 多频轨迹复用实现 |
+| `test/standard_cases/` | Origin/F2CPP/RayReuse 共享标准算例与比较 |
+| `test/PlotRead/` | 独立 SHD 读取、绘图和测试 |
+| `demo/` | 可用性、横向对比和多频展示 |
+| `test/legacy/` | 历史材料，不参与当前测试 |
 
-具体约束：
+约束：
 
-- Origin 是复刻阶段的主要行为基准。除非任务明确要求，不改变其数值语义；
-  可以构建、运行或增加不影响正常可执行程序的窄 oracle。
-- F2CPP 每次运行只处理一个频率，优先完成 Bellhop 二维功能复刻、数值一致性
-  和单频性能。
-- RayReuse 面向一个环境中的多个频率，重点验证一次几何追踪、多频投影、
-  非复用/复用/并行复用一致性及实际性能收益。
-- F2CPP 与 RayReuse 保持独立源码、独立 CMake 工程和独立可执行文件，互不
-  链接。除非用户明确要求，不因修改一方而自动同步另一方。
-- PlotRead 保持独立，不依赖 MATLAB，也不依赖标准算例目录中的临时结果。
-- `test/legacy/` 仅供追溯；不要恢复其测试职责或向其中添加新工作。
+- Origin 默认不修改数值语义。
+- F2CPP 每次只处理一个频率。
+- RayReuse 面向同一环境多频计算，验证 `nonreuse/reuse/parallel` 一致性和性能收益。
+- F2CPP 与 RayReuse 保持独立源码、CMake 和可执行文件；除非用户要求，不自动同步。
+- 不恢复 `test/legacy/` 的测试职责。
 
-## 决策优先级
+## 3. 通用工作规则
 
-开展工作时使用以下顺序：
+- 用户可见说明、项目文档默认中文；代码标识符和既有英文技术内容保持原风格。
+- 先检查代码、文档、算例或日志，再下结论。
+- 保留用户已有修改，不触碰无关文件，不执行破坏性 Git/文件操作。
+- 除非用户明确要求，不提交、不推送、不创建 PR。
+- 涉及科学语义、兼容范围、关键接口或显著性能取舍时，不自行扩大假设。
+- 优先局部、渐进修改；避免无关重构、格式化和推测性未来功能。
 
-1. 用户明确要求的可见功能和研究目标；
-2. 相对 Bellhop Origin 的科学正确性；
-3. 运行时间、峰值内存和可扩展性；
-4. 宽带射线复用等研究路线所需架构；
-5. 防止重要回归的最小充分测试；
-6. 易用性、展示、必要文档和工程清理。
+# 4. Agent 工作流
 
-不要让新增测试、CI、抽象、重构、格式化或文档压过尚缺失的功能和重要性能
-工作，除非它们是安全继续的必要条件。不要主动把一个功能任务扩大为 CI
-重构、通用框架或大规模测试矩阵建设。
+核心原则：**使用最少必要 Agent，按风险升级，不机械运行完整流水线。**
 
-## 沟通与协作偏好
+## 4.1 风险等级
 
-- 面向用户的说明、评估、操作指南和项目级文档默认使用中文；代码标识符、
-  命令行选项、文件格式字段和既有英文技术文档保持原有语言风格。
-- 先给结论，再给关键证据和操作方法。区分已验证事实、推断和可选建议。
-- 遇到可以从代码、文档、算例或日志确认的问题，先检查再回答。
-- 可以作不改变任务方向的合理假设；涉及科学语义、兼容范围、显著性能取舍、
-  对外接口或大幅扩展范围时，明确说明并请求决定。
-- 保留用户已有修改，避免触碰无关文件。不要使用破坏性 Git 或文件操作。
-- 除非用户明确要求，不提交、不推送、不创建 PR。用户要求“纳入版本控制”时，
-  可以只暂存明确指定的文件，并报告暂存范围。
+### `[SIMPLE]`
 
-## Agent 编排与 Feature Batch 工作流
+适用：局部机械修改、小 bug、配置/文档、低风险单文件修改。
 
-本项目在支持多 Agent 的环境中，默认采用“设计、施工、预审、最终验收”分离的
-工作流。主会话 Agent 主要负责协调，不应同时承担高风险架构设计、主要实现和最终
-验收，以减少角色混淆和自我验收。
+```text
+coordinator 或 worker → 窄测试 → DONE
+```
 
-### Agent 职责
+默认不调用 architect、scout、reviewer、final-reviewer。
 
-默认角色如下：
+### `[STANDARD]`
 
-- `scout`
-  - 用于代码搜索、调用链调查、已有实现定位和轻量事实核查。
-  - 默认使用低成本模型。
-  - 不负责架构决策和最终验收。
+适用：普通 parser/model 接线、writer、CLI、runtime path、标准算例和边界清晰的新功能。
 
-- `architect`
-  - 负责非平凡 feature batch 的架构审计、范围定义、任务拆解和 Worklist。
-  - 架构、科学语义、数值语义、跨模块接口和重要性能取舍由该角色决定。
-  - 默认使用高能力模型。
-  - 设计阶段原则上不修改 production code。
+```text
+worker → 相关测试 → reviewer? → DONE
+```
 
-- `worker`
-  - 负责 `[GENERAL]` 工作项。
-  - 适用于 parser/model 接线、机械性修改、已有模式迁移、普通测试、标准算例、
-    文档和其他边界清晰的施工工作。
+reviewer 仅在跨模块、兼容性、较大 diff 或明显遗漏风险时调用。
 
-- `advanced-worker`
-  - 负责 `[ADVANCED]` 工作项。
-  - 适用于数值算法、科学语义、复杂架构、ownership/lifetime、cache consistency、
-    concurrency、同步、复杂性能优化和疑难 regression。
-  - 不应为了“保险”把普通任务全部升级给高级模型。
+### `[ADVANCED]`
 
-- `reviewer`
-  - 负责施工后的低成本只读预审。
-  - 重点发现 scope violation、漏接 runtime path、遗漏测试、stale documentation、
-    unrelated diff、silent fallback 等明显问题。
-  - 无权正式接受 feature batch。
+适用：数值算法、科学语义、复杂架构、ownership/lifetime、cache consistency、
+concurrency、同步、多频状态、复杂性能优化和疑难 regression。
 
-- `final-reviewer`
-  - 负责最终只读验收。
-  - 必须独立检查 Worklist、WorkReport、真实 git diff、production code、oracle 和
-    当前测试证据。
-  - 最终结论只能为 `ACCEPTED` 或 `CHANGES_REQUIRED`。
-  - 不能仅根据 worker 或 WorkReport 的完成声明验收。
+```text
+advanced-worker → 测试/oracle/benchmark → reviewer → DONE
+```
 
-- 主会话 / coordinator
-  - 负责启动和调度上述角色、收集结果、维护执行顺序、运行 Batch Acceptance、
-    生成 WorkReport，并根据 reviewer/final-reviewer findings 分派修复。
-  - 默认不自行承担 architect 或 final-reviewer 的职责。
-  - 对 `[ADVANCED]` 工作必须调用 advanced-worker，而不是自行降级执行。
+`[ADVANCED]` 必须使用 advanced-worker 和独立 reviewer。
 
-### Worklist 与 WorkReport
+## 4.2 Feature Batch
 
-对于非平凡 feature batch，默认使用：
+非平凡 feature batch 默认：
+
+```text
+architect ×1
+→ Worklist
+→ 各 SIMPLE/STANDARD/ADVANCED 工作项
+→ final-reviewer ×1
+```
+
+architect 和 final-reviewer 按 batch/phase 调用，不按 work item 重复调用。
+
+禁止默认采用：
+
+```text
+architect → scout → worker → reviewer → final-reviewer
+```
+
+作为每个工作项的固定流程。
+
+## 4.3 Agent 职责
+
+### scout
+- 仅在目标文件、调用链、已有实现或测试位置不明确时调用。
+- 只做搜索和事实定位，不做架构决策、施工或验收。
+- 输出只保留关键文件、符号、调用链和结论。
+
+### architect
+- 负责 batch/phase 的范围、架构、科学/数值语义、关键接口、性能取舍和 Worklist。
+- 默认高能力模型，原则上不修改 production code。
+- Worklist 已明确时不重复调用。
+- 只有设计假设被推翻、范围显著变化或 reviewer 要求重设计时重新调用。
+
+### worker
+- 负责 `[STANDARD]`，也可承担 `[SIMPLE]`。
+- 严格围绕 acceptance criteria 施工，不主动扩大范围。
+- 遇到科学语义、复杂架构、cache/concurrency 等问题时停止并请求升级。
+
+### advanced-worker
+- 负责 `[ADVANCED]`。
+- 默认高能力模型。
+- 重要数值/性能修改必须给出测试、oracle 或 benchmark 证据。
+
+### reviewer
+- 独立只读审查，默认只看：
+  1. 当前 acceptance criteria；
+  2. 当前工作项 git diff；
+  3. 相关测试/oracle/benchmark；
+  4. 判断 diff 必需的局部源码。
+- 是窄范围 diff reviewer，不是第二个 worker。
+- `[SIMPLE]` 默认不用；`[STANDARD]` 按需；`[ADVANCED]` 必须。
+- 无问题输出 `PASS`；有问题只列 actionable findings。
+
+### final-reviewer
+- 每个 batch/phase 最终调用一次。
+- 检查 Worklist、最终 diff、reviewer findings、测试/oracle/benchmark 和必要的高风险源码。
+- 不无差别重读整个模块。
+- 结论只能为 `ACCEPTED` 或 `CHANGES_REQUIRED`。
+
+### coordinator
+- 负责风险判断、调度、Worklist 状态、结果汇总和 findings 修复。
+- 可以直接完成 `[SIMPLE]`。
+- 不为体现多 Agent 而创建无收益子任务。
+- `[ADVANCED]` 必须交给 advanced-worker，不自行降级。
+- 仅在确有信息缺口时调用 scout。
+
+## 4.4 Worklist
+
+非平凡 batch 使用：
 
 ```text
 Bellhop_RayReuse/doc/worklists/<BATCH>_WORKLIST.md
-Bellhop_RayReuse/doc/workreports/<BATCH>_BATCH_REPORT.md
 ```
-### Pi 配置保护
 
-`.pi/settings.json` 中的 provider、model、thinking 和 modelScope
-属于用户维护的执行环境配置。
+Worklist 是执行期唯一权威状态源。每项只保留：
 
-任何 coordinator、architect、worker、reviewer 或其他 Agent：
+```md
+### A03 [ADVANCED]
+Status: DONE
+Reviewer: PASS
 
-- 不得为了绕过 provider/network/tool 错误自行切换模型；
-- 不得修改 defaultProvider/defaultModel；
-- 不得修改 subagents.defaultModel；
-- 不得修改 agentOverrides 中的 model/thinking；
-- 不得修改 modelScope。
+Acceptance:
+- ...
 
-若指定 Agent 因 provider、proxy、authentication 或 runtime 错误无法启动，
-应停止当前相关任务并报告 `AGENT_RUNTIME_BLOCKER`。
+Evidence:
+- tests/oracle/benchmark: ...
+```
 
-只有用户明确授权后才能修改 `.pi/settings.json` 的模型路由。
+平台切换时优先读取：
 
-## 功能开发原则
+1. `AGENTS.md`
+2. 当前 Worklist
+3. `git status`
+4. 必要的 `git diff` / `git log`
+5. 相关代码与测试
 
-每轮首先确认正在复刻或研究的真实 Bellhop 功能，优先贯通端到端路径，而不是
-打磨尚未形成可用结果的局部子系统。
+不依赖聊天上下文维持长期项目状态。
 
-典型功能满足以下条件即可完成：
+WorkReport 默认不创建；只用于 phase closeout、冻结验证、重要性能阶段或用户明确要求。
 
-1. 目标功能可从真实输入端到端运行；
-2. 代表性输出与 Bellhop Origin 在声明的语义和容差内一致；
-3. 相关既有回归继续通过；
-4. 没有已知严重正确性问题或明显性能退化；
-5. 重要限制和设计决策已被简洁记录。
+## 4.5 Agent 上下文与输出预算
 
-优先匹配 Origin 的可观察行为和文件兼容性，不必保留不影响结果的低效 Fortran
-内部结构。若精确兼容与显著性能/架构收益冲突，并可能影响科学结果或文件
-互操作性，必须记录取舍并由用户决定。
+所有 Agent 使用“最短充分上下文、最短充分报告”。
 
-F2CPP 和 RayReuse 均应保持以下研究契约：
+- 不默认重新理解整个仓库。
+- 已写入 Worklist 的背景和决策不重复推导。
+- scout 不写项目综述。
+- worker 只报告修改、结果、测试和 blocker。
+- reviewer 只报告 `PASS` 或 findings。
+- final-reviewer 只报告结论、关键证据和 findings。
+- 不重复粘贴完整代码、diff、测试日志或项目背景。
 
-- 完整保存频率无关的冻结射线路径和反射事件；
-- 将幅度、相位、复走时、反射系数和压力留在逐频临时状态；
-- 避免全局“当前频率”和不可控的共享可变状态；
-- 使几何追踪、逐频投影、Influence 和输出阶段可独立验证与计时。
+## 5. Pi 配置保护
 
-## 测试与数值验证
+`.pi/settings.json` 中 provider、model、thinking、modelScope 属于用户维护配置。
 
-测试原则是：证明正确性并防止有意义的回归，而不是追求穷尽覆盖率。
+任何 Agent 不得自行：
 
-现有 CTest、Python 工具测试、标准算例、Origin oracle 和冻结验证报告已经较为
-充分。新增测试前，先判断既有案例或验证器是否已经能捕获目标失败。
+- 修改 defaultProvider/defaultModel；
+- 修改 subagents.defaultModel；
+- 修改 agentOverrides 中的 model/thinking；
+- 修改 modelScope；
+- 为绕过 provider/network/auth/runtime 错误自行换模型。
+
+遇到上述运行问题，停止相关任务并报告 `AGENT_RUNTIME_BLOCKER`。只有用户明确授权后
+才能修改模型路由。
+
+## 6. Bellhop / RayReuse 开发契约
+
+典型功能完成条件：
+
+1. 真实输入可端到端运行；
+2. 代表性输出与 Origin 在声明语义和容差内一致；
+3. 相关既有回归通过；
+4. 无已知严重正确性问题或明显性能退化；
+5. 关键限制和设计决策已简洁记录。
+
+F2CPP 与 RayReuse 保持：
+
+- 频率无关的冻结射线路径和反射事件；
+- 幅度、相位、复走时、反射系数和压力属于逐频状态；
+- 避免全局“当前频率”和不可控共享可变状态；
+- 几何追踪、逐频投影、Influence 和输出可独立验证与计时。
+
+## 7. 测试与性能
+
+验证强度与风险相称。优先运行最相关的窄测试，不机械执行全部昂贵组合。
 
 普通新功能默认只需要：
 
 - 一个最小可运行案例；
-- 一个有代表性的 Origin 对比；
-- 必要时增加一个重要边界或复杂案例。
+- 一个代表性 Origin 对比；
+- 必要时一个重要边界案例。
 
-一个高信息量案例可以同时承担多个目标。不要自动为 source 数、receiver
-布局、SSP、边界、频率、beam、输出格式和环境模型的所有组合分别建例。
-
-优先在以下情况下增加回归：
-
-- 已发现真实缺陷；
-- 存在脆弱的数值边界或容易误实现的 Origin 语义；
-- 某组件将被频繁优化；
-- 现有测试确实无法检测重要失败；
-- 新产品格式或研究路径需要一个独立端到端证据。
-
-Arrival、Eigenray、传播损失、复压力、相位、走时、反射和二进制文件布局可在
-必要时采用严格验证。一条数值路径已经由组件测试、真实 oracle 和代表性
-端到端案例充分闭环后，不再并行创建重复验证框架。
-
-标准算例职责：
-
-- 基础环境只定义一次，并优先参考 Origin 官方算例和项目已冻结输入；
-- Origin 结果作为 baseline/oracle；
-- F2CPP 主要使用单频 profile；
-- RayReuse 使用同一基础环境的多频 profile，并区分 `nonreuse`、`reuse`、
-  `parallel`；
-- 单个版本、单个环节、单个案例应可独立运行，同时保留整体批量入口；
-- 校验不仅检查“文件存在”，还应在必要时检查 PRT 语义、维度、有限性、
-  产品类型、数值误差和陈旧输出。
-
-除明确冻结的参考快照、验证报告和说明文件外，生成的 `.prt/.shd/.ray/.arr`、
-图片、清单和临时结果不进入版本控制。
-
-## 性能原则
-
-功能正确后，性能是一等要求。重点关注：
-
-- 射线追踪或 Influence 热循环中的分配与重复计算；
-- 缓存局部性、数据布局、无谓复制和精度转换；
-- ray × receiver × frequency 的伸缩性；
-- receiver 查找、插值、反射和文件 I/O 成本；
-- 并行任务粒度、同步、队列、峰值 RSS 和确定性。
-
-不凭代码观感进行大范围微优化。先使用计时、profile 或 benchmark 确认瓶颈，
-再集中复杂度优化热路径，并在优化后同时检查：
-
-- 代表性数值输出；
-- 运行时间；
-- 相关时的峰值内存和并行扩展性。
-
-## 目录分类与易用性
-
-标准算例和展示遵循清晰分类：
-
-- `cases/`：可复用基础环境和输入元数据；
-- `codes/`：生成、运行、比较、绘图和相应代码测试；
-- `results/`：可重新生成的数值结果和清单；
-- `figures/`：可重新生成的展示图片（适用时）。
-
-不要把业务脚本、输入和结果重新混放在目录根部。代码测试放在对应
-`codes/tests/` 中；基础环境保持稳定，运行时复制到隔离的结果目录，不回写
-`cases/`。
-
-提高易用性时优先满足：
-
-- `.env` 能被对应正式可执行程序直接使用；
-- 可以单独运行某个版本、某个案例或生成/运行/校验/绘图环节；
-- 可以使用一个明确命令整体批量运行；
-- 结果路径、可执行文件、频率、执行模式和状态进入清单；
-- 展示同时说明“直接可用”和“横向对比”，而不是依赖隐藏步骤。
-
-Python 默认使用仓库根目录的 uv 环境。首次使用和日常测试采用：
-
-```bash
-uv sync
-uv run pytest
-```
-
-Makefile 和脚本通过 `python3`/`PYTHON` 从 `PATH` 发现解释器；在 uv 环境中
-运行时使用 `uv run ...`，不要硬编码 `.venv` 或 Conda 路径，也不要重新引入
-MATLAB 运行依赖。
-
-## 架构、重构与范围控制
-
-架构主要服务于功能、性能和研究路线。选择设计时优先支持：
-
-- 轨迹复用和宽带计算；
-- 几何与频率相关声学量分离；
-- 中间状态和贡献的可检查性；
-- 并行执行、性能测量和后续算法实验。
-
-仅在以下情况下重构：
-
-- 它是目标功能的必要条件；
-- 能带来可测性能提升；
-- 消除具体正确性风险；
-- 明显简化紧接着要做的研究工作。
-
-优先局部、渐进式修改，避免宽泛 API 重写、无证据的通用抽象、无关格式化、
-重复工具和推测性未来功能。较大的相邻改进应记录为后续事项，而不是顺手实施。
-
-## 文档原则
-
-文档重点记录以后仍有价值的信息：
-
-- Origin 兼容语义和来源；
-- 数值假设、容差和验证证据；
-- 架构与所有权决策；
-- 性能测量方法和结果；
-- 已完成范围、已知限制和下一步入口；
-- 可复现的构建、运行和展示命令。
-
-保持简洁、可操作，避免为自明实现写长篇说明。进度文档必须与实际代码和测试
-状态一致；冻结报告应记录输入、可执行文件和关键来源的身份或哈希。
-
-## 验证工作流
-
-验证强度与修改风险相称，优先运行最相关的窄测试，再决定是否需要全量回归。
+只有在真实缺陷、脆弱数值语义、核心优化路径或现有测试无法覆盖重要失败时增加回归。
 
 常用入口：
 
 ```bash
-# F2CPP / RayReuse C++ 回归
 uv run ctest --test-dir Bellhop_F2CPP/build/release --output-on-failure
 uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
 
-# 标准算例工具和共享算例
 uv run make -C test/standard_cases test-unit
 uv run make -C test/standard_cases test VERSION=f2cpp CASE=<case> PROFILE=single
 uv run make -C test/standard_cases batch
 
-# SHD 读取绘图与工程展示
 uv run make -C test/PlotRead test
 uv run make -C demo test
 uv run make -C demo all
 uv run make -C demo rayreuse-multifrequency
 ```
 
-不要机械地为局部改动运行所有昂贵组合；涉及公共解析、核心数值、输出布局、
-跨版本适配或广泛重构时，才扩大到相关完整矩阵。性能修改必须在代表性基准上
-复测，而不能用单元测试通过替代性能证据。
+性能优化先 profile/benchmark，再优化热点；优化后同时检查代表性数值结果、运行时间，
+必要时检查峰值内存和并行扩展性。
 
-## 完成定义
+Python 默认使用仓库根目录 uv 环境：
 
-除非具体任务另有要求，以下条件满足即可完成：
+```bash
+uv sync
+uv run pytest
+```
 
-- 用户要求的功能已真正可用；
+不要硬编码 `.venv`、Conda 或 MATLAB 运行依赖。
+
+## 8. 完成定义
+
+除非任务另有要求，满足以下条件即可完成：
+
+- 用户要求的功能真正可用；
 - 代表性 Origin 对比通过；
-- 相关既有回归通过；
-- 没有已知严重正确性问题或明显性能退化；
-- 结果和操作方式足够清楚；
-- 重要设计决定和限制已简洁记录；
+- 相关回归通过；
+- 无已知严重正确性问题或明显性能退化；
+- 重要设计决定和限制已记录；
 - 未引入无关重构、测试矩阵或基础设施。
 
-穷尽测试覆盖不是默认完成条件。无法确定是否应增加测试、抽象、重构或基础
-设施时，问：它是否会实质提升功能完整性、科学可信度、性能或研究路线实施
-能力？如果不会，则推迟。
+若某项测试、抽象、重构或文档不会实质提升功能完整性、科学可信度、性能或研究路线，
+则默认推迟。

@@ -864,15 +864,22 @@ void testSspInterpolationKinds(Context& context) {
           rayreuse::SspInterpolationKind::N2Linear,
       "top option 'N' parses as N2-linear SSP interpolation");
 
-  for (const std::string& unsupported : {"'SVW'", "'QVW'"}) {
-    context.expectThrows<ValidationError>(
-        [&] {
-          std::string contents = munkContents;
-          replaceFirst(contents, "'PVW'", unsupported);
-          static_cast<void>(parseText(contents, "unsupported_ssp.env"));
-        },
-        "unsupported SSP interpolation option " + unsupported + " is rejected");
-  }
+  std::string splineContents = munkContents;
+  replaceFirst(splineContents, "'PVW'", "'SVW'");
+  const ParsedEnvironment splineParsed =
+      parseText(splineContents, "munk_spline.env");
+  context.check(
+      splineParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
+          rayreuse::SspInterpolationKind::CubicSpline,
+      "top option 'S' parses as cubic-spline SSP interpolation");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = munkContents;
+        replaceFirst(contents, "'PVW'", "'QVW'");
+        static_cast<void>(parseText(contents, "unsupported_ssp.env"));
+      },
+      "unsupported SSP interpolation option 'QVW' is rejected");
 
   context.expectThrows<ValidationError>(
       [&] {

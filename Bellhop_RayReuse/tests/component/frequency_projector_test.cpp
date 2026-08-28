@@ -14,6 +14,7 @@
 #include "rayreuse/acoustics/attenuation.hpp"
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/c_linear_frequency_ssp.hpp"
+#include "rayreuse/model/cubic_spline_frequency_ssp.hpp"
 #include "rayreuse/ray/geometry_tracer.hpp"
 #include "support/boundary_acoustics_fixture.hpp"
 #include "support/munk_case_fixture.hpp"
@@ -26,6 +27,7 @@ using rayreuse::AttenuationUnit;
 using rayreuse::BoundaryKind;
 using rayreuse::BoundaryModel;
 using rayreuse::CLinearFrequencySsp;
+using rayreuse::CubicSplineFrequencySsp;
 using rayreuse::convertAttenuation;
 using rayreuse::Environment;
 using rayreuse::FrequencyProjector;
@@ -712,6 +714,198 @@ void testN2LosslessProjectionReusesFrozenTravelTime(Context& context) {
   }
 }
 
+// End-to-end spline leg of testN2FrequencyProjection: a real cubic-spline
+// RayPath produced by the generic GeometryTracer (node crossings plus an
+// acoustic reflection) is projected at two frequencies through the shared
+// FrequencyProjector. The frozen geometry must survive field by field, and
+// the per-frequency spline states must stay independent, repeatable, and
+// free of cross-frequency contamination.
+void testSplineFrozenPathProjection(Context& context) {
+  const auto thorp = []() {
+    return RawAttenuation{.value = 0.0,
+                          .unit = AttenuationUnit::DecibelsPerWavelength,
+                          .volumeModel = VolumeAttenuationModel::Thorp};
+  };
+  const Environment environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0,
+            .attenuation = thorp()},
+           {.depth = 500.0,
+            .soundSpeed = 1480.0,
+            .density = 1100.0,
+            .attenuation = thorp()},
+           {.depth = 1000.0,
+            .soundSpeed = 1520.0,
+            .density = 1200.0,
+            .attenuation = thorp()}},
+          rayreuse::SspInterpolationKind::CubicSpline),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+  const RayPath path =
+      GeometryTracer(environment,
+                     IntegratorSettings{.stepLength = 100.0,
+                                        .rangeLimit = 5000.0,
+                                        .depthLimit = 3000.0,
+                                        .maximumRayPoints = 40U})
+          .trace(Source{.depth = 250.0}, 20.0 * std::numbers::pi / 180.0);
+  context.check(path.points.size() >= 10U,
+                "spline frozen projection uses a nontrivial traced path");
+  context.check(!path.events.empty(),
+                "spline frozen path includes at least one reflection");
+
+  const RayPath before = path;
+  const FrequencyProjector projector(environment);
+  RayFrequencyState state50 = projector.project(path, 50.0, 1.0);
+  const RayFrequencyState state250 = projector.project(path, 250.0, 1.0);
+  const RayFrequencyState repeat50 = projector.project(path, 50.0, 1.0);
+
+  context.check(state50.frequency == 50.0 && state250.frequency == 250.0,
+                "spline projected states retain their own frequencies");
+  context.check(state50.points.size() == path.points.size() &&
+                    state250.points.size() == path.points.size(),
+                "spline projection stores one state per geometry point");
+  context.check(state50.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating spline 50 Hz projection has negative imaginary "
+                "travel time");
+  context.check(state250.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating spline 250 Hz projection has negative imaginary "
+                "travel time");
+  context.check(
+      std::abs(state250.points.back().complexTravelTime.imag() -
+               state50.points.back().complexTravelTime.imag()) > 1.0e-9,
+      "Thorp volume attenuation separates the two spline frequency states");
+  context.check(
+      repeat50.points.back().complexTravelTime ==
+          state50.points.back().complexTravelTime,
+      "repeating a spline projection at one frequency is bit-stable");
+
+  state50.points.front().amplitude = 0.25;
+  context.checkNear(state250.points.front().amplitude, 1.0, 0.0,
+                    "mutating one spline frequency state leaves the other "
+                    "untouched");
+
+  context.check(path.launchAngle == before.launchAngle &&
+                    path.points.size() == before.points.size() &&
+                    path.steps.size() == before.steps.size() &&
+                    path.events.size() == before.events.size() &&
+                    path.terminationReason == before.terminationReason,
+                "spline projection preserves the path container and "
+                "bookkeeping");
+  for (std::size_t index = 0U; index < path.points.size(); ++index) {
+    context.check(
+        path.points[index].position == before.points[index].position &&
+            path.points[index].slowness == before.points[index].slowness &&
+            path.points[index].dynamicP == before.points[index].dynamicP &&
+            path.points[index].dynamicQ == before.points[index].dynamicQ &&
+            path.points[index].soundSpeed == before.points[index].soundSpeed &&
+            path.points[index].realTravelTime ==
+                before.points[index].realTravelTime,
+        "spline projection leaves every geometry point unchanged");
+  }
+  for (std::size_t index = 0U; index < path.steps.size(); ++index) {
+    context.check(
+        path.steps[index].stepLength == before.steps[index].stepLength &&
+            path.steps[index].startWeight == before.steps[index].startWeight &&
+            path.steps[index].midpointWeight ==
+                before.steps[index].midpointWeight &&
+            path.steps[index].midpoint == before.steps[index].midpoint,
+        "spline projection leaves every step quadrature unchanged");
+  }
+  for (std::size_t index = 0U; index < path.events.size(); ++index) {
+    const ReflectionEvent& event = path.events[index];
+    const ReflectionEvent& previous = before.events[index];
+    context.check(
+        event.rayPointIndex == previous.rayPointIndex &&
+            event.reflectedRayPointIndex == previous.reflectedRayPointIndex &&
+            event.boundary == previous.boundary &&
+            event.boundarySegmentIndex == previous.boundarySegmentIndex &&
+            event.boundaryCurvature == previous.boundaryCurvature &&
+            event.position == previous.position &&
+            event.boundaryTangent == previous.boundaryTangent &&
+            event.outwardNormal == previous.outwardNormal &&
+            event.incidentSlowness == previous.incidentSlowness &&
+            event.reflectedSlowness == previous.reflectedSlowness &&
+            event.tangentSlowness == previous.tangentSlowness &&
+            event.normalSlowness == previous.normalSlowness,
+        "spline projection leaves every reflection event unchanged");
+  }
+}
+
+// FrequencyProjector consumes FrequencySspEvaluator, whose variant gains the
+// spline backend only in G01, so the projector-level frozen-path check for
+// spline (the testN2FrequencyProjection pattern, field by field) lands with
+// G02 end-to-end validation. This test pins the evaluator-level contract the
+// projector relies on today: two per-frequency spline evaluators over one
+// frozen trajectory are fully independent, repeatable, and free of
+// cross-frequency contamination. The full traced-path frozen check is
+// testSplineFrozenPathProjection above.
+void testSplineFrequencyStateIndependence(Context& context) {
+  const auto thorp = []() {
+    return RawAttenuation{.value = 0.0,
+                          .unit = AttenuationUnit::DecibelsPerWavelength,
+                          .volumeModel = VolumeAttenuationModel::Thorp};
+  };
+  const SoundSpeedProfile profile(
+      {{.depth = 0.0,
+        .soundSpeed = 1500.0,
+        .density = 1000.0,
+        .attenuation = thorp()},
+       {.depth = 500.0,
+        .soundSpeed = 1480.0,
+        .density = 1100.0,
+        .attenuation = thorp()},
+       {.depth = 1000.0,
+        .soundSpeed = 1520.0,
+        .density = 1200.0,
+        .attenuation = thorp()}});
+
+  const CubicSplineFrequencySsp low(profile, 50.0);
+  const CubicSplineFrequencySsp high(profile, 250.0);
+  context.check(!low.isLossless() && !high.isLossless(),
+                "Thorp spline evaluators are lossy at both frequencies");
+  context.check(!low.uniformComplexSoundSpeed().has_value(),
+                "Thorp spline evaluators keep the general path");
+
+  // A frozen deterministic stand-in for the traced trajectory: arrival-side
+  // segment hints plus query depths, projected at both frequencies.
+  const std::vector<std::pair<std::size_t, double>> trajectory{
+      {0U, 60.0}, {0U, 180.0}, {0U, 300.0}, {1U, 620.0}, {1U, 940.0}};
+
+  for (const auto& [segment, depth] : trajectory) {
+    const Vec2 position{.range = 0.0, .depth = depth};
+    const auto lowState = low.evaluateAtSegment(position, segment);
+    const auto highState = high.evaluateAtSegment(position, segment);
+    const auto repeatedLow = low.evaluateAtSegment(position, segment);
+
+    context.check(
+        lowState.soundSpeed == highState.soundSpeed &&
+            lowState.soundSpeedGradient == highState.soundSpeedGradient &&
+            lowState.soundSpeedHessian == highState.soundSpeedHessian &&
+            lowState.density == highState.density &&
+            lowState.segmentIndex == highState.segmentIndex,
+        "spline real observables are bit-identical across frequencies");
+    context.check(
+        lowState.imaginarySoundSpeed != highState.imaginarySoundSpeed,
+        "Thorp spline imaginary states separate 50 Hz from 250 Hz");
+    context.check(
+        repeatedLow.soundSpeed == lowState.soundSpeed &&
+            repeatedLow.imaginarySoundSpeed ==
+                lowState.imaginarySoundSpeed &&
+            repeatedLow.soundSpeedGradient == lowState.soundSpeedGradient &&
+            repeatedLow.soundSpeedHessian == lowState.soundSpeedHessian,
+        "repeating a spline projection at one frequency is bit-stable");
+  }
+
+  // The imaginary travel-time sign convention on a representative projected
+  // step: Thorp attenuation yields a negative imaginary contribution.
+  const auto attenuated =
+      low.evaluateAtSegment(Vec2{.range = 0.0, .depth = 620.0}, 1U);
+  context.check(attenuated.imaginarySoundSpeed > 0.0,
+                "converted Thorp node attenuation keeps the positive "
+                "imaginary sound speed convention");
+}
+
 }  // namespace
 
 int main() {
@@ -725,6 +919,8 @@ int main() {
   testPchipFrequencyProjection(context);
   testN2FrequencyProjection(context);
   testN2LosslessProjectionReusesFrozenTravelTime(context);
+  testSplineFrozenPathProjection(context);
+  testSplineFrequencyStateIndependence(context);
   testInvalidInputs(context);
 
   if (context.failureCount() != 0) {

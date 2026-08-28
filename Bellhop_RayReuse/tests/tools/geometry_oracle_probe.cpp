@@ -72,7 +72,8 @@ int main(int argc, char* argv[]) {
   if (argc != 3 && argc != 4 && argc != 7) {
     std::cerr << "usage: geometry_oracle_probe OUTPUT_CSV "
                  "LAUNCH_ANGLE_RAD "
-                 "[munk | munk-n2 | munk-pchip | BOTTOM_DEPTH SOURCE_DEPTH "
+                 "[munk | munk-n2 | munk-pchip | munk-spline | "
+                 "BOTTOM_DEPTH SOURCE_DEPTH "
                  "DEPTH_LIMIT MAX_POINTS]\n";
     return 2;
   }
@@ -80,9 +81,11 @@ int main(int argc, char* argv[]) {
   const std::string namedConfiguration = argc == 4 ? argv[3] : "";
   const bool useMunkConfiguration =
       namedConfiguration == "munk" || namedConfiguration == "munk-n2" ||
-      namedConfiguration == "munk-pchip";
+      namedConfiguration == "munk-pchip" ||
+      namedConfiguration == "munk-spline";
   const bool useN2 = namedConfiguration == "munk-n2";
   const bool usePchip = namedConfiguration == "munk-pchip";
+  const bool useSpline = namedConfiguration == "munk-spline";
   if (argc == 4 && !useMunkConfiguration) {
     std::cerr << "unknown probe configuration: " << argv[3] << '\n';
     return 2;
@@ -120,8 +123,10 @@ int main(int argc, char* argv[]) {
       ? rayreuse::test::makeMunkEnvironment(
             usePchip
                 ? rayreuse::SspInterpolationKind::Pchip
-                : (useN2 ? rayreuse::SspInterpolationKind::N2Linear
-                         : rayreuse::SspInterpolationKind::CLinear))
+                : (useSpline
+                       ? rayreuse::SspInterpolationKind::CubicSpline
+                       : (useN2 ? rayreuse::SspInterpolationKind::N2Linear
+                                : rayreuse::SspInterpolationKind::CLinear)))
           : rayreuse::Environment(
                 rayreuse::SoundSpeedProfile(
                     {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},

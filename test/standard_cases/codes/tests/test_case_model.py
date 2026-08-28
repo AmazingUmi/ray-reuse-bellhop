@@ -591,9 +591,14 @@ class CaseModelTests(unittest.TestCase):
         )
 
     def test_spline_case_is_scoped_to_implemented_versions(self) -> None:
+        definition = self.cases["munk_spline"]
         self.assertEqual(
-            self.cases["munk_spline"].supported_versions,
-            ("origin", "f2cpp"),
+            definition.supported_versions,
+            ("origin", "f2cpp", "rayreuse"),
+        )
+        self.assertEqual(
+            definition.frequencies("broadband_smoke"),
+            (50.0, 250.0),
         )
 
     def test_every_profile_renders_all_origin_tokens(self) -> None:

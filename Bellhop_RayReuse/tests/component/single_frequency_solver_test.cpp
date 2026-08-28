@@ -8,12 +8,15 @@
 #include <iostream>
 #include <numbers>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/io/environment_parser.hpp"
 #include "rayreuse/model/simulation_case.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "support/munk_case_fixture.hpp"
 #include "support/test_harness.hpp"
 
@@ -730,6 +733,108 @@ void testSixCaseSanitizerSmoke(Context& context) {
   checkSmokeSolve(context, "Munk layered/caustic smoke", munk, 1.0, 25000.0);
 }
 
+// Executable-level cubic-spline smoke: a real .env payload whose SSP line is
+// 'SVW' is parsed by the production EnvironmentParser and solved through the
+// shared SimulationCase -> SingleFrequencySolver path, so the spline backend
+// really reaches the frozen geometry traced by GeometrySspEvaluator/stepRay.
+// The identical case with 'CVW' isolates silent fallback: a fallback would
+// reproduce the C-linear pressures and frozen-cache fingerprint bit-for-bit.
+std::string renderSspSmokeCase(char sspOption) {
+  std::ostringstream contents;
+  contents << "'Cubic-spline SSP solver smoke'  ! TITLE\n";
+  contents << "50.0          ! FREQ (Hz)\n";
+  contents << "1                       ! NMEDIA\n";
+  contents << "'" << sspOption << "VW'                   ! SSP option\n";
+  contents << "3  0.0  1000.0          ! SSP points, sigma, bottom depth\n";
+  contents << "0.0     1500.0 /\n";
+  contents << "500.0   1520.0 /\n";
+  contents << "1000.0  1480.0 /\n";
+  contents << "'A' 0.0                 ! Acoustic half-space bottom\n";
+  contents << "1000.0  1600.0  0.0  1.8  0.0 /\n";
+  contents << "1                       ! NSD\n";
+  contents << "500.0 /\n";
+  contents << "21                      ! NRD\n";
+  contents << "400.0  600.0 /\n";
+  contents << "51                      ! NR\n";
+  contents << "0.1  5.0 /\n";
+  contents << "'CC'                    ! Coherent TL, Cartesian Cerveny\n";
+  contents << "300                     ! launch-angle count\n";
+  contents << "-5.0  5.0 /\n";
+  contents << "10.0  1100.0  5.1\n";
+  contents << "'MS' 1.0  2.5\n";
+  contents << "3  5  'P'\n";
+  return contents.str();
+}
+
+rayreuse::ParsedEnvironment parseSspSmokeCase(char sspOption) {
+  std::istringstream input(renderSspSmokeCase(sspOption));
+  return rayreuse::EnvironmentParser::parse(input, "ssp_smoke.env");
+}
+
+void testSplineEnvironmentSolverSmoke(Context& context) {
+  const rayreuse::ParsedEnvironment splineParsed = parseSspSmokeCase('S');
+  const SimulationCase& splineSimulation = splineParsed.simulationCase;
+  context.check(
+      splineSimulation.environment().soundSpeedProfile().interpolationKind() ==
+          rayreuse::SspInterpolationKind::CubicSpline,
+      "real 'SVW' environment parses as a cubic-spline simulation case");
+
+  const rayreuse::Vec2 midDepthSample{.range = 0.0, .depth = 250.0};
+  const rayreuse::GeometrySspEvaluator splineEvaluator(
+      splineSimulation.environment().soundSpeedProfile());
+  const double splineSampleSpeed =
+      splineEvaluator.evaluate(midDepthSample, 0U).soundSpeed;
+  const rayreuse::ParsedEnvironment cParsedCase = parseSspSmokeCase('C');
+  const SimulationCase& cSimulation = cParsedCase.simulationCase;
+  const rayreuse::GeometrySspEvaluator cEvaluator(
+      cSimulation.environment().soundSpeedProfile());
+  context.check(
+      splineSampleSpeed !=
+          cEvaluator.evaluate(midDepthSample, 0U).soundSpeed,
+      "spline and C-linear evaluations of the same nodes differ, so the "
+      "input itself distinguishes the backends");
+
+  const rayreuse::RayFanTraceResult splineTrace =
+      SingleFrequencySolver::traceRayFan(splineSimulation);
+  const rayreuse::RayFanTraceResult cTrace =
+      SingleFrequencySolver::traceRayFan(cSimulation);
+  context.check(
+      splineTrace.cache.size() == cTrace.cache.size() &&
+          splineTrace.cache.size() ==
+              splineSimulation.launchFanPlan().launchAngleCount,
+      "spline environment traces the complete planned launch fan");
+  context.check(
+      splineTrace.cache.contentFingerprint() != cTrace.cache.contentFingerprint(),
+      "frozen spline geometry differs from C-linear, proving the variant "
+      "backend really enters the tracer");
+
+  const SingleFrequencyResult splineResult =
+      SingleFrequencySolver::solve(splineSimulation, 1.0, 500.0);
+  const SingleFrequencyResult cResult =
+      SingleFrequencySolver::solve(cSimulation, 1.0, 500.0);
+  context.check(splineResult.workspace.depthCount() == 21U &&
+                    splineResult.workspace.rangeCount() == 51U,
+                "spline solve fills the expected receiver workspace");
+  bool haveFinite = true;
+  bool haveNonzeroPressure = false;
+  bool differsFromCLinear = false;
+  for (std::size_t index = 0U; index < splineResult.workspace.pressure().size();
+       ++index) {
+    const std::complex<double> pressure = splineResult.workspace.pressure()[index];
+    haveFinite = haveFinite && std::isfinite(pressure.real()) &&
+                 std::isfinite(pressure.imag());
+    haveNonzeroPressure = haveNonzeroPressure || pressure != std::complex<double>{};
+    differsFromCLinear =
+        differsFromCLinear || pressure != cResult.workspace.pressure()[index];
+  }
+  context.check(haveFinite, "spline solver pressure remains finite");
+  context.check(haveNonzeroPressure,
+                "spline environment produces nonzero coherent pressure");
+  context.check(differsFromCLinear,
+                "spline solve result differs from the identical C-linear "
+                "solve, excluding a silent fallback backend");
+}
+
 }  // namespace
 
 int main() {
@@ -748,6 +853,7 @@ int main() {
   testAbnormalRayTerminationFails(context);
   testExplicitFrequencyEntryPoint(context);
   testSixCaseSanitizerSmoke(context);
+  testSplineEnvironmentSolverSmoke(context);
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

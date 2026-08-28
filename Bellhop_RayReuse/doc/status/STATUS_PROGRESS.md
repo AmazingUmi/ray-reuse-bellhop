@@ -1,7 +1,9 @@
 # Bellhop RayReuse 当前进度
 
 > 更新日期：2026-08-28
-> 当前状态：FP-2C N²-linear SSP `N` parity 已完成 batch review 与最终验收；文档失配已收口。
+> 当前状态：FP-2D cubic spline SSP `S` parity 已完成施工、Batch Acceptance 与
+> FP-2D-R1 remediation；独立 Re-Final Review 结论为 `ACCEPTED`（只关闭 `S`
+> slice；`Q`/`.ssp` 仍 deferred）。
 
 ## 已完成范围
 
@@ -14,6 +16,7 @@
 | FP-2A | 完成 | `Ag/ag/Eg` parser/runtime、ray-centered Arrival/Eigenray traversal、共享 oracle 与多频三模式 parity |
 | FP-2B | 完成 | PCHIP SSP parity、`GeometrySspEvaluator`/`FrequencySspEvaluator`、共享 `munk_pchip` oracle 与三模式一致性 |
 | FP-2C | 完成（待最终验收） | N²-linear SSP `N` parity：real geometry（node jump + 非零 Hessian）与 frequency-local complex N² evaluator、共享 `munk_n2` 三方 oracle、TL/R/A/a/E 与 `nonreuse/reuse/parallel` 一致性；S/Q 仍 deferred |
+| FP-2D | 完成；Re-Final Review `ACCEPTED` | Cubic spline SSP `S` parity（只关闭 `S` slice）：exact not-a-knot coefficient kernel（保留 legacy binary32 `1.0F/6.0F`）、real spline evaluator（节点连续梯度、无 node jump、非零 Hessian）、frequency-local complex spline evaluator（每频独立 coefficients）、共享 `munk_spline` 三方 oracle、TL/R/A/a/E 与三执行模式一致性（trace passes 2/1/1、cache fingerprint 前后不变）；FP-2D-R1 已收紧 250 Hz Origin oracle policy、增加 C++ decoded-payload exact gate 与真实跨节点 no-jump regression；`Q`/`.ssp` 仍 deferred |
 
 ## RR-B4 验收基线
 
@@ -46,7 +49,11 @@ reflection event。以下内容不得写回 cache：
 
 ## 下一步
 
-Feature Sync 已满足关闭条件，当前没有获批的新实施阶段。最新 Influence
+FP-2D（cubic spline SSP `S`）已完成原 implementation、Batch Acceptance、
+FP-2D-R1 remediation 与独立 Re-Final Review，结论为 `ACCEPTED`。修复证据见
+`doc/workreports/FP-2D-R1_FINAL_REVIEW_REMEDIATION_REPORT.md`，批次总览见
+`doc/workreports/FP-2D_CUBIC_SPLINE_SSP_BATCH_REPORT.md`。除此之外，Feature Sync
+没有其他获批的新实施阶段。最新 Influence
 审计建议先评估无损的 Influence Geometry Reuse（IG-0），再决定是否进入带
 误差预算的频率重建（FI-0）；两者仍是候选路线，不自动启动。统一入口见
 [`PLAN_CURRENT_WORK.md`](../../../doc/plans/PLAN_CURRENT_WORK.md)，技术证据见

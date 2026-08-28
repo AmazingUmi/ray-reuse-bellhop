@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import platform
@@ -19,7 +20,7 @@ PROJECT_ROOT = STANDARD_CASES_ROOT.parents[1]
 sys.path.insert(0, str(CODES_ROOT))
 
 from case_model import CaseDefinition, discover_cases
-from compare_fields import compare_files
+from compare_fields import compare_files, decoded_complex64_payload
 from reference_snapshots import sha256_file, validate_candidate
 from standard_cases import (
     RAYREUSE_EXECUTION_MODES,
@@ -34,12 +35,70 @@ SCHEMA = "bellhop.standard_case.model_matrix"
 SCHEMA_VERSION = 1
 SUPPORTED_PROFILES = ("single", "broadband_smoke")
 
+# FP-2D-R1: the established 0.005 dB Munk-spline oracle remains unchanged
+# everywhere except the reviewed Origin-to-C++ 250 Hz comparison.  Keep this
+# policy in the matrix routing layer so it cannot widen a whole case, frequency,
+# or C++-to-C++ comparison accidentally.
+MUNK_SPLINE_ORIGIN_CPP_250_HZ = 250.0
+MUNK_SPLINE_ORIGIN_CPP_250_HZ_TL_DB = 0.0065
+
 
 @dataclass(frozen=True)
 class OutputSlice:
     frequency_hz: float
     frequency_index: int
     shade_path: Path
+
+
+def scoped_tl_absolute_db(
+    *,
+    case_id: str | None,
+    reference_label: str,
+    candidate_label: str,
+    frequency_hz: float,
+) -> float | None:
+    cpp_candidate = candidate_label == "f2cpp" or candidate_label.startswith(
+        "rayreuse-"
+    )
+    if (
+        case_id == "munk_spline"
+        and reference_label == "origin"
+        and cpp_candidate
+        and frequency_hz == MUNK_SPLINE_ORIGIN_CPP_250_HZ
+    ):
+        return MUNK_SPLINE_ORIGIN_CPP_250_HZ_TL_DB
+    return None
+
+
+def compare_decoded_payloads(
+    *,
+    reference_label: str,
+    candidate_label: str,
+    frequency_hz: float,
+    reference: OutputSlice,
+    candidate: OutputSlice,
+) -> dict[str, object]:
+    reference_payload = decoded_complex64_payload(
+        reference.shade_path, reference.frequency_index
+    )
+    candidate_payload = decoded_complex64_payload(
+        candidate.shade_path, candidate.frequency_index
+    )
+    return {
+        "reference": reference_label,
+        "candidate": candidate_label,
+        "frequency_hz": frequency_hz,
+        "encoding": "little-endian-complex64-c-order",
+        "reference_bytes": len(reference_payload),
+        "candidate_bytes": len(candidate_payload),
+        "reference_sha256": sha256_bytes(reference_payload),
+        "candidate_sha256": sha256_bytes(candidate_payload),
+        "passed": reference_payload == candidate_payload,
+    }
+
+
+def sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
 
 
 def load_manifest_slices(manifest_path: Path) -> dict[float, OutputSlice]:
@@ -78,6 +137,18 @@ def load_manifest_slices(manifest_path: Path) -> dict[float, OutputSlice]:
     return slices
 
 
+def resolve_tolerances_path(
+    definition: CaseDefinition, explicit_path: Path | None
+) -> Path:
+    """Resolve an explicit matrix override or the case's established policy."""
+    if explicit_path is not None:
+        return explicit_path.resolve()
+    case_path = definition.directory / "tolerances.toml"
+    if case_path.is_file():
+        return case_path.resolve()
+    return (CODES_ROOT / "tolerances.toml").resolve()
+
+
 def compare_slice_sets(
     *,
     reference_label: str,
@@ -85,6 +156,7 @@ def compare_slice_sets(
     reference_slices: dict[float, OutputSlice],
     candidate_slices: dict[float, OutputSlice],
     tolerances_path: Path,
+    case_id: str | None = None,
     gating_frequencies: set[float] | None = None,
     non_gating_reason: str | None = None,
 ) -> list[dict[str, object]]:
@@ -96,12 +168,19 @@ def compare_slice_sets(
     for frequency_hz in sorted(reference_slices):
         reference = reference_slices[frequency_hz]
         candidate = candidate_slices[frequency_hz]
+        tl_absolute_db = scoped_tl_absolute_db(
+            case_id=case_id,
+            reference_label=reference_label,
+            candidate_label=candidate_label,
+            frequency_hz=frequency_hz,
+        )
         passed, metrics = compare_files(
             reference.shade_path,
             candidate.shade_path,
             reference.frequency_index,
             candidate.frequency_index,
             tolerances_path,
+            transmission_loss_absolute_db=tl_absolute_db,
         )
         results.append(
             {
@@ -109,6 +188,11 @@ def compare_slice_sets(
                 "candidate": candidate_label,
                 "frequency_hz": frequency_hz,
                 "metrics": metrics,
+                "tolerance_policy": (
+                    "munk_spline_origin_cpp_250hz"
+                    if tl_absolute_db is not None
+                    else "default"
+                ),
                 "gating": (
                     gating_frequencies is None
                     or frequency_hz in gating_frequencies
@@ -199,6 +283,7 @@ def run_case_profile(
                 reference_slices=slices["origin"],
                 candidate_slices=slices[candidate_label],
                 tolerances_path=tolerances_path,
+                case_id=definition.case_id,
                 gating_frequencies=(
                     f2cpp_gating_frequencies
                     if candidate_label == "f2cpp"
@@ -219,10 +304,28 @@ def run_case_profile(
                 reference_slices=slices["f2cpp"],
                 candidate_slices=slices[candidate_label],
                 tolerances_path=tolerances_path,
+                case_id=definition.case_id,
                 gating_frequencies=f2cpp_gating_frequencies,
                 non_gating_reason=f2cpp_non_gating_reason,
             )
         )
+
+    payload_exact_results: list[dict[str, object]] = []
+    if (
+        definition.case_id == "munk_spline"
+        and MUNK_SPLINE_ORIGIN_CPP_250_HZ in slices["f2cpp"]
+    ):
+        frequency_hz = MUNK_SPLINE_ORIGIN_CPP_250_HZ
+        for candidate_label in rayreuse_labels:
+            payload_exact_results.append(
+                compare_decoded_payloads(
+                    reference_label="f2cpp",
+                    candidate_label=candidate_label,
+                    frequency_hz=frequency_hz,
+                    reference=slices["f2cpp"][frequency_hz],
+                    candidate=slices[candidate_label][frequency_hz],
+                )
+            )
 
     compact_results: list[dict[str, object]] = []
     if profile_name == "single":
@@ -268,13 +371,18 @@ def run_case_profile(
     )
     if cross_mode is not None:
         passed = passed and bool(cross_mode["identical"])
+    passed = passed and all(
+        bool(result["passed"]) for result in payload_exact_results
+    )
     return {
         "case_id": definition.case_id,
         "profile": profile_name,
+        "tolerances_path": str(tolerances_path),
         "frequencies_hz": list(definition.frequencies(profile_name)),
         "comparisons": comparisons,
         "compact_reference_comparisons": compact_results,
         "rayreuse_cross_mode": cross_mode,
+        "f2cpp_rayreuse_payload_exact": payload_exact_results,
         "f2cpp_broadband_scope": (
             None
             if profile_name == "single"
@@ -329,7 +437,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=STANDARD_CASES_ROOT / "results" / "model_matrix.json",
     )
     parser.add_argument(
-        "--tolerances", type=Path, default=CODES_ROOT / "tolerances.toml"
+        "--tolerances",
+        type=Path,
+        help=(
+            "override tolerances for every selected case; by default each "
+            "case-local tolerances.toml is used when present, otherwise the "
+            "shared codes/tolerances.toml"
+        ),
     )
     parser.add_argument(
         "--reference-root",
@@ -423,7 +537,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 adapters=adapters,
                 modes=modes,
                 work_root=invocation_root,
-                tolerances_path=args.tolerances.resolve(),
+                tolerances_path=resolve_tolerances_path(
+                    definition, args.tolerances
+                ),
                 reference_root=args.reference_root.resolve(),
             )
             for definition in selected
