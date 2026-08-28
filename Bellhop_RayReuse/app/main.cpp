@@ -423,6 +423,15 @@ void writeConfigurationSummary(std::ostream& stream,
   stream << "Point source (cylindrical coordinates)\n"
          << "Rectilinear receiver grid\n";
   writeBoundarySummary(stream, environment.seaSurface(), "top");
+  if (environment.soundSpeedProfile().interpolationKind() ==
+      rayreuse::SspInterpolationKind::Quadrilateral) {
+    stream << "Using range-dependent sound speed\n"
+           << "Number of SSP ranges = "
+           << environment.soundSpeedProfile()
+                  .quadrilateralGrid()
+                  ->rangeCount
+           << '\n';
+  }
   writeBoundarySummary(stream, environment.seabed(), "bottom");
   if (environment.soundSpeedProfile()
           .points()

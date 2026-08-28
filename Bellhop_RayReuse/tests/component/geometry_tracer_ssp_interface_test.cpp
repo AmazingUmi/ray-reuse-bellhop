@@ -1,7 +1,9 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "rayreuse/model/cubic_spline_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
@@ -23,6 +25,7 @@ using rayreuse::FlatBoundaryGeometry;
 using rayreuse::GeometryTracer;
 using rayreuse::IntegratorSettings;
 using rayreuse::N2LinearSsp;
+using rayreuse::QuadrilateralSspGrid;
 using rayreuse::RayPath;
 using rayreuse::RayState;
 using rayreuse::RayTerminationReason;
@@ -455,6 +458,240 @@ void testSplineSspInterfaceContract(Context& context) {
                 "spline extrapolation selects edge segments for the tracer");
 }
 
+// ---------------------------------------------------------------------------
+// Quadrilateral (Q) range-dependent fixtures
+// ---------------------------------------------------------------------------
+
+constexpr double kQStep = 50.0;
+constexpr double kQMinimumStep = 1.0e-3 * kQStep;
+constexpr double kQRangeNode = 350.0;
+constexpr double kQGridBack = 800.0;
+
+// The shared cross-gradient standard-case grid: depths [0, 100] m, ranges
+// [0, 350, 800] m, speeds [[1500, 1540, 1580], [1500, 1520, 1540]]. The
+// water column ends at 100 m; a 5-degree ray reaching the 400 m box edge
+// stays near 85 m depth, so it crosses the 350 m node without reflecting.
+Environment makeQCrossGradientEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1490.0, .density = 1000.0},
+           {.depth = 100.0, .soundSpeed = 1490.0, .density = 1100.0}},
+          SspInterpolationKind::Quadrilateral,
+          std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
+              .rangesMeters = {0.0, 350.0, 800.0},
+              .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
+                                   1500.0, 1520.0, 1540.0},
+              .depthCount = 2U,
+              .rangeCount = 3U})),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
+}
+
+// Uniform 1500 m/s matrix over depths [0, 200] m and ranges [0, 350, 800] m.
+// A horizontal launch from depth 100 keeps tangent (1, 0) exactly
+// (1500 * fl(1/1500) rounds to 1.0), so a 50 m step lands on every multiple of
+// 50—including the range nodes 350 and 800—without rounding, which makes grid
+// line ownership and step clamping deterministic.
+Environment makeQUniformEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 200.0, .soundSpeed = 1500.0, .density = 1100.0}},
+          SspInterpolationKind::Quadrilateral,
+          std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
+              .rangesMeters = {0.0, 350.0, 800.0},
+              .speedsDepthMajor = {1500.0, 1500.0, 1500.0,
+                                   1500.0, 1500.0, 1500.0},
+              .depthCount = 2U,
+              .rangeCount = 3U})),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(200.0));
+}
+
+// One internal depth node at 100 m (depth slopes 0 above and 0.5 below) in a
+// single range cell, so the depth-node machinery of the limiter runs under the
+// Q evaluator with no range-grid interaction.
+Environment makeQDepthNodeEnvironment() {
+  return Environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 200.0, .soundSpeed = 1550.0, .density = 1000.0}},
+          SspInterpolationKind::Quadrilateral,
+          std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
+              .rangesMeters = {0.0, 1000.0},
+              .speedsDepthMajor = {1500.0, 1500.0,
+                                   1500.0, 1500.0,
+                                   1550.0, 1550.0},
+              .depthCount = 3U,
+              .rangeCount = 2U})),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(200.0));
+}
+
+IntegratorSettings makeQSettings(std::size_t maximumRayPoints,
+                                 double rangeLimit) {
+  return IntegratorSettings{.stepLength = kQStep,
+                            .rangeLimit = rangeLimit,
+                            .depthLimit = 2000.0,
+                            .maximumRayPoints = maximumRayPoints};
+}
+
+void checkAllStepsAtOrAboveMinimum(Context& context, const RayPath& path,
+                                   const char* label) {
+  for (std::size_t index = 0; index < path.steps.size(); ++index) {
+    context.check(
+        path.steps[index].stepLength >= kQMinimumStep * (1.0 - 1.0e-9),
+        std::string(label) + " step " + std::to_string(index) +
+            " stays at or above the 1e-3 * nominal minimum clamp");
+  }
+}
+
+// A shallow ray over the cross-gradient grid crosses the 350 m range node: the
+// SSP range interval enters the limiter's min/max reduction, the trial lands
+// on the grid line (within the blend rounding of a bent ray), and the trace
+// continues past it without stalling. The bilinear anchor c(350, z) =
+// 1540 - 0.2 z holds from either side of the node.
+void testQCrossRangeBoundaryLandsOnGridLine(Context& context) {
+  const GeometryTracer tracer(makeQCrossGradientEnvironment(),
+                              makeQSettings(64U, 400.0));
+  const RayPath path = tracer.trace(Source{.depth = 50.0}, 5.0 * kPi / 180.0);
+
+  context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
+                "Q range-boundary trace exits the spatial box");
+  context.check(path.points.size() == path.steps.size() + 1U,
+                "Q range-boundary trace retains the points/steps invariant");
+
+  std::size_t alignedCount = 0U;
+  std::size_t alignedIndex = path.points.size();
+  std::size_t nearCount = 0U;
+  for (std::size_t index = 0; index < path.points.size(); ++index) {
+    const double range = path.points[index].position.range;
+    if (std::abs(range - kQRangeNode) <= 1.0e-4) {
+      ++alignedCount;
+      alignedIndex = index;
+      context.checkNear(path.points[index].soundSpeed,
+                        1540.0 - 0.2 * path.points[index].position.depth,
+                        1.0e-3,
+                        "the aligned grid-line point samples the node bilinear "
+                        "value");
+    }
+    if (std::abs(range - kQRangeNode) <= 0.1) {
+      ++nearCount;
+    }
+  }
+  context.check(alignedCount == 1U && nearCount <= 2U,
+                "the reduced trial lands on the 350 m grid line exactly once");
+  context.check(alignedIndex + 2U < path.points.size(),
+                "the trace continues beyond the aligned grid line");
+  // The blended landing of a bent ray stays a fraction of a millimetre left
+  // of the node, so the departing trial crosses the line again and ReduceStep
+  // replaces it with the Fortran minimum forward step.
+  context.checkNear(path.steps[alignedIndex].stepLength, kQMinimumStep, 1.0e-12,
+                    "the grid-line departure is clamped to the minimum step");
+
+  for (std::size_t index = 1; index < path.points.size(); ++index) {
+    context.check(path.points[index].position.range >
+                      path.points[index - 1U].position.range,
+                  "Q range crossing keeps strictly increasing range");
+  }
+  checkAllStepsAtOrAboveMinimum(context, path, "Q range crossing");
+}
+
+// The deterministic horizontal variant: the aligned 350 m point appears
+// exactly once, the step leaving it is the full nominal step (the exact node
+// belongs to the right-hand cell, so no clamp fires at an internal node), the
+// trace marches across the grid line without zero-step oscillation, and the
+// final box-exit step is exactly the 1e-3 * nominal minimum clamp.
+void testQHorizontalGridLineProgression(Context& context) {
+  const GeometryTracer tracer(makeQUniformEnvironment(),
+                              makeQSettings(32U, 700.0));
+  const RayPath path = tracer.trace(Source{.depth = 100.0}, 0.0);
+
+  context.check(path.terminationReason == RayTerminationReason::ExitedDomain,
+                "the horizontal Q trace exits the spatial box");
+  context.check(path.points.size() == path.steps.size() + 1U,
+                "the horizontal Q trace retains the points/steps invariant");
+
+  std::size_t alignedCount = 0U;
+  std::size_t alignedIndex = path.points.size();
+  for (std::size_t index = 0; index < path.points.size(); ++index) {
+    if (std::abs(path.points[index].position.range - kQRangeNode) <= 1.0e-12) {
+      ++alignedCount;
+      alignedIndex = index;
+    }
+  }
+  context.check(alignedCount == 1U,
+                "the exact horizontal landing stores the 350 m node once");
+  context.check(alignedIndex == 7U,
+                "the aligned node is the eighth point of the 50 m march");
+  context.checkNear(path.steps[alignedIndex].stepLength, kQStep, 0.0,
+                    "leaving the exact range node uses the full nominal step "
+                    "(right-cell ownership, no clamp)");
+
+  for (std::size_t index = 1; index < path.points.size(); ++index) {
+    context.check(path.points[index].position.range >
+                      path.points[index - 1U].position.range,
+                  "grid-line march makes strictly positive range progress");
+  }
+  for (std::size_t index = 0; index + 1U < path.steps.size(); ++index) {
+    context.checkNear(path.steps[index].stepLength, kQStep, 0.0,
+                      "grid-line march keeps the nominal step throughout");
+  }
+  context.checkNear(path.steps.back().stepLength, kQMinimumStep, 1.0e-15,
+                    "the box-exit departure clamps to exactly the 1e-3 "
+                    "minimum step");
+  checkAllStepsAtOrAboveMinimum(context, path, "Q horizontal march");
+}
+
+// The minimum-step clamp must stay in force under the Q evaluator at an SSP
+// depth node: the aligned 100 m node receives one Fortran minimum forward
+// step on departure, exactly as the range-independent backends do.
+void testQMinimumStepClampRetainedAtDepthNode(Context& context) {
+  const GeometryTracer tracer(makeQDepthNodeEnvironment(),
+                              makeQSettings(8U, 10000.0));
+  const RayPath path = tracer.trace(Source{.depth = 90.0}, 30.0 * kPi / 180.0);
+
+  context.check(path.terminationReason == RayTerminationReason::PointLimit,
+                "Q depth-node trace continues to the point limit");
+
+  std::size_t alignedCount = 0U;
+  std::size_t alignedIndex = path.points.size();
+  for (std::size_t index = 0; index < path.points.size(); ++index) {
+    if (std::abs(path.points[index].position.depth - 100.0) <= 1.0e-12) {
+      ++alignedCount;
+      alignedIndex = index;
+    }
+  }
+  context.check(alignedCount == 1U,
+                "the aligned 100 m depth node is stored exactly once");
+  context.check(alignedIndex + 1U < path.points.size(),
+                "the depth-node trace continues past the aligned node");
+  context.checkNear(path.steps[alignedIndex].stepLength, kQMinimumStep, 1.0e-14,
+                    "Q depth-node departure uses one minimum forward step");
+  context.check(path.points[alignedIndex + 1U].position.depth > 100.0,
+                "Q depth crossing updates the segment hint after the node");
+  checkAllStepsAtOrAboveMinimum(context, path, "Q depth node");
+}
+
+// With the spatial box beyond the grid back, the trace reaches the 800 m back
+// node exactly, and the next clamped minimum step already samples past the
+// grid in its midpoint, which the Q evaluator rejects: the tracer must report
+// NumericalFailure rather than loop at the back line.
+void testQBackNodeRejectedBeyondGrid(Context& context) {
+  const GeometryTracer tracer(makeQUniformEnvironment(),
+                              makeQSettings(32U, 10000.0));
+  const RayPath path = tracer.trace(Source{.depth = 100.0}, 0.0);
+
+  context.check(path.terminationReason == RayTerminationReason::NumericalFailure,
+                "stepping past the grid back terminates with a numerical "
+                "failure");
+  context.checkNear(path.points.back().position.range, kQGridBack, 1.0e-12,
+                    "the last completed point sits on the 800 m back node");
+  for (const auto& step : path.steps) {
+    context.checkNear(step.stepLength, kQStep, 0.0,
+                      "every completed back-node step is the nominal march");
+  }
+  checkAllStepsAtOrAboveMinimum(context, path, "Q back node");
+}
+
 }  // namespace
 
 int main() {
@@ -468,6 +705,10 @@ int main() {
   testN2SourceOnNodeMovesWithoutLooping(context);
   testN2SeaBoundariesReflect(context);
   testSplineSspInterfaceContract(context);
+  testQCrossRangeBoundaryLandsOnGridLine(context);
+  testQHorizontalGridLineProgression(context);
+  testQMinimumStepClampRetainedAtDepthNode(context);
+  testQBackNodeRejectedBeyondGrid(context);
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

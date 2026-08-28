@@ -20,6 +20,7 @@ struct StepLimitRequest {
   Vec2 initialPosition;
   Vec2 unitTangent;
   std::size_t initialSegmentIndex{};
+  std::size_t initialRangeSegmentIndex{};
   double nominalStepLength{};
   double proposedStepLength{};
 };
@@ -30,6 +31,7 @@ struct RayStepResult {
   RayState endState;
   StepQuadrature quadrature;
   std::size_t segmentIndex{};
+  std::size_t rangeSegmentIndex{};
 };
 
 // Advances one modified-Heun/box step.
@@ -40,6 +42,14 @@ struct RayStepResult {
 // and the returned quadrature weights describe the resulting blended update.
 //
 // This layer contains no reflection, absorption, or complex-time behavior.
+[[nodiscard]] RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
+                                    const RayState& initialState,
+                                    std::size_t initialSegmentIndex,
+                                    std::size_t initialRangeSegmentIndex,
+                                    double nominalStepLength,
+                                    const StepLimiter& limiter = {});
+
+// Range-independent compatibility overload. Its range hint is always zero.
 [[nodiscard]] RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
                                     const RayState& initialState,
                                     std::size_t initialSegmentIndex,

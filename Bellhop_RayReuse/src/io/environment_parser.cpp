@@ -488,6 +488,74 @@ struct ParsedBoundaryFile {
   return std::make_shared<const TabulatedReflectionTable>(std::move(points));
 }
 
+[[nodiscard]] SharedQuadrilateralSspGrid readQuadrilateralSspGrid(
+    const std::filesystem::path& path, std::size_t depthCount) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    throw BellhopError("unable to open quadrilateral SSP file: " +
+                       path.string());
+  }
+  RecordReader reader(input, path.string());
+  const std::string& source = reader.sourceName();
+  const Record countRecord = reader.require("quadrilateral SSP range count");
+  requireTokenCount(countRecord, 1U, source, "quadrilateral SSP range count");
+  const std::size_t rangeCount = parseCount(
+      countRecord, 0U, source, "quadrilateral SSP range count", false);
+  if (rangeCount < 2U) {
+    fail(source, countRecord.lineNumber,
+         "quadrilateral SSP requires at least two range profiles");
+  }
+  if (rangeCount > std::numeric_limits<std::size_t>::max() / depthCount) {
+    fail(source, countRecord.lineNumber,
+         "quadrilateral SSP grid dimensions overflow");
+  }
+  if (rangeCount * depthCount > kMaximumVectorValues) {
+    fail(source, countRecord.lineNumber,
+         "quadrilateral SSP grid exceeds the supported sample limit");
+  }
+  const Record rangesRecord = reader.require("quadrilateral SSP ranges");
+  requireTokenCount(rangesRecord, rangeCount, source,
+                    "quadrilateral SSP ranges");
+  std::vector<double> ranges;
+  ranges.reserve(rangeCount);
+  for (std::size_t index = 0U; index < rangeCount; ++index) {
+    const double rangeKilometers = parseDouble(
+        rangesRecord, index, source, "quadrilateral SSP range");
+    const double rangeMeters = rangeKilometers * kKilometersToMeters;
+    if (!std::isfinite(rangeMeters)) {
+      fail(source, rangesRecord.lineNumber,
+           "quadrilateral SSP range conversion produced a non-finite value");
+    }
+    if (!ranges.empty() && ranges.back() >= rangeMeters) {
+      fail(source, rangesRecord.lineNumber,
+           "quadrilateral SSP ranges must be strictly increasing");
+    }
+    ranges.push_back(rangeMeters);
+  }
+  std::vector<double> speeds;
+  speeds.reserve(depthCount * rangeCount);
+  for (std::size_t depthIndex = 0U; depthIndex < depthCount; ++depthIndex) {
+    const Record rowRecord = reader.require("quadrilateral SSP speed row");
+    requireTokenCount(rowRecord, rangeCount, source,
+                      "quadrilateral SSP speed row");
+    for (std::size_t rangeIndex = 0U; rangeIndex < rangeCount; ++rangeIndex) {
+      const double speed = parseDouble(
+          rowRecord, rangeIndex, source, "quadrilateral SSP sound speed");
+      if (speed <= 0.0) {
+        fail(source, rowRecord.lineNumber,
+             "quadrilateral SSP sound speeds must be positive");
+      }
+      speeds.push_back(speed);
+    }
+  }
+  reader.requireEnd();
+  return std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{.rangesMeters = std::move(ranges),
+                           .speedsDepthMajor = std::move(speeds),
+                           .depthCount = depthCount,
+                           .rangeCount = rangeCount});
+}
+
 [[nodiscard]] ParsedBoundaryFile readBoundaryFile(
     const std::filesystem::path& path, double referenceDepth,
     BoundaryOrientation orientation, AttenuationUnit attenuationUnit,
@@ -755,8 +823,8 @@ struct ParsedRunType {
       interpolationKind = SspInterpolationKind::CubicSpline;
       break;
     case 'Q':
-      fail(source, topOptionsRecord.lineNumber,
-           "SSP interpolation option 'Q' is not supported");
+      interpolationKind = SspInterpolationKind::Quadrilateral;
+      break;
     default:
       fail(source, topOptionsRecord.lineNumber,
            "unknown SSP interpolation option '" +
@@ -769,9 +837,9 @@ struct ParsedRunType {
       (topOptions[4U] != ' ' && topOptions[4U] != '~' &&
        topOptions[4U] != '*')) {
     fail(source, topOptionsRecord.lineNumber,
-         "RR-B1 supports C-linear, N2-linear, PCHIP, and cubic-spline SSP, "
-         "V/R/A/G/F surfaces, optional Thorp, and optional piecewise-linear "
-         "topography");
+         "RR-B1 supports C-linear, N2-linear, PCHIP, cubic-spline, and "
+         "quadrilateral SSP, V/R/A/G/F surfaces, optional Thorp, and optional "
+         "piecewise-linear topography");
   }
   const AttenuationUnit attenuationUnit =
       parseAttenuationUnit(topOptions[2U], topOptionsRecord, source);
@@ -853,6 +921,16 @@ struct ParsedRunType {
   if (soundSpeedPoints.size() < 2U) {
     fail(source, waterRecord.lineNumber,
          "sound-speed profile requires at least two points");
+  }
+  SharedQuadrilateralSspGrid quadrilateralGrid;
+  if (interpolationKind == SspInterpolationKind::Quadrilateral) {
+    if (!environmentPath.has_value()) {
+      fail(source, topOptionsRecord.lineNumber,
+           "quadrilateral SSP requires parseFile so the sibling .ssp file "
+           "can be resolved");
+    }
+    quadrilateralGrid = readQuadrilateralSspGrid(
+        boundaryPath(*environmentPath, ".ssp"), soundSpeedPoints.size());
   }
 
   const double surfaceDepth = soundSpeedPoints.front().depth;
@@ -1143,7 +1221,8 @@ struct ParsedRunType {
   reader.requireEnd();
 
   Environment environment(
-      SoundSpeedProfile(std::move(soundSpeedPoints), interpolationKind),
+      SoundSpeedProfile(std::move(soundSpeedPoints), interpolationKind,
+                        std::move(quadrilateralGrid)),
       seaSurface, seabed);
   ReceiverGrid receivers(std::move(receiverDepths), std::move(receiverRanges));
   std::vector<double> frequencies = frequencyOverrideHz.has_value()

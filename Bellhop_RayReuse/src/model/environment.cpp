@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/model/quadrilateral_ssp.hpp"
 
 namespace rayreuse {
 namespace {
@@ -140,12 +142,46 @@ void validateReflectionTable(const SharedTabulatedReflectionTable& table) {
   }
 }
 
+void validateQuadrilateralGrid(const SharedQuadrilateralSspGrid& grid,
+                               std::size_t depthCount) {
+  if (!grid || grid->depthCount != depthCount || grid->depthCount < 2U ||
+      grid->rangeCount < 2U ||
+      grid->rangesMeters.size() != grid->rangeCount) {
+    throw ValidationError("quadrilateral SSP grid dimensions are invalid");
+  }
+  if (grid->rangeCount >
+      std::numeric_limits<std::size_t>::max() / grid->depthCount) {
+    throw ValidationError("quadrilateral SSP grid dimensions overflow");
+  }
+  if (grid->speedsDepthMajor.size() != grid->depthCount * grid->rangeCount) {
+    throw ValidationError("quadrilateral SSP grid sample count is invalid");
+  }
+  for (std::size_t index = 0U; index < grid->rangeCount; ++index) {
+    requireFinite(grid->rangesMeters[index], "quadrilateral SSP range");
+    if (index > 0U &&
+        grid->rangesMeters[index - 1U] >= grid->rangesMeters[index]) {
+      throw ValidationError(
+          "quadrilateral SSP ranges must be strictly increasing");
+    }
+  }
+  for (double speed : grid->speedsDepthMajor) {
+    requireFinite(speed, "quadrilateral SSP sound speed");
+    if (speed <= 0.0) {
+      throw ValidationError(
+          "quadrilateral SSP sound speeds must be positive");
+    }
+  }
+}
+
 }  // namespace
 
 SoundSpeedProfile::SoundSpeedProfile(
     std::vector<SoundSpeedPoint> points,
-    SspInterpolationKind interpolationKind)
-    : points_(std::move(points)), interpolationKind_(interpolationKind) {
+    SspInterpolationKind interpolationKind,
+    SharedQuadrilateralSspGrid quadrilateralGrid)
+    : points_(std::move(points)),
+      interpolationKind_(interpolationKind),
+      quadrilateralGrid_(std::move(quadrilateralGrid)) {
   if (points_.size() < 2U) {
     throw ValidationError("sound-speed profile requires at least two points");
   }
@@ -167,6 +203,12 @@ SoundSpeedProfile::SoundSpeedProfile(
           "sound-speed profile depths must be strictly increasing");
     }
   }
+  if (interpolationKind_ == SspInterpolationKind::Quadrilateral) {
+    validateQuadrilateralGrid(quadrilateralGrid_, points_.size());
+  } else if (quadrilateralGrid_) {
+    throw ValidationError(
+        "only quadrilateral SSP profiles can carry a quadrilateral grid");
+  }
 }
 
 const std::vector<SoundSpeedPoint>& SoundSpeedProfile::points() const noexcept {
@@ -183,6 +225,29 @@ double SoundSpeedProfile::maximumDepth() const noexcept {
 
 SspInterpolationKind SoundSpeedProfile::interpolationKind() const noexcept {
   return interpolationKind_;
+}
+
+const SharedQuadrilateralSspGrid& SoundSpeedProfile::quadrilateralGrid()
+    const noexcept {
+  return quadrilateralGrid_;
+}
+
+double SoundSpeedProfile::quadrilateralRealSoundSpeedAt(Vec2 position) const {
+  if (interpolationKind_ != SspInterpolationKind::Quadrilateral ||
+      !quadrilateralGrid_) {
+    throw ValidationError("quadrilateral SSP grid is not available");
+  }
+  requireFinite(position.range, "quadrilateral SSP query range");
+  requireFinite(position.depth, "quadrilateral SSP query depth");
+  if (position.range < quadrilateralGrid_->rangesMeters.front() ||
+      position.range > quadrilateralGrid_->rangesMeters.back() ||
+      position.depth < points_.front().depth ||
+      position.depth > points_.back().depth) {
+    throw ValidationError("quadrilateral SSP query is outside its grid");
+  }
+  // Launch planning must use the same depth-first arithmetic and cell
+  // selection as ray geometry, rather than a separately rounded interpolation.
+  return QuadrilateralSsp(*this).evaluate(position, 0U, 0U).soundSpeed;
 }
 
 BoundaryModel BoundaryModel::vacuum(double depth) {

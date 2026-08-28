@@ -11,6 +11,7 @@ enum class SspInterpolationKind {
   Pchip,
   N2Linear,
   CubicSpline,
+  Quadrilateral,
 };
 
 enum class SspGradientContinuity {
@@ -23,6 +24,7 @@ enum class SspGradientContinuity {
   switch (kind) {
     case SspInterpolationKind::CLinear:
     case SspInterpolationKind::N2Linear:
+    case SspInterpolationKind::Quadrilateral:
       return SspGradientContinuity::DiscontinuousAtNodes;
     case SspInterpolationKind::Pchip:
     case SspInterpolationKind::CubicSpline:
@@ -40,6 +42,8 @@ struct SoundSpeedHessian {
                                    const SoundSpeedHessian&) = default;
 };
 
+// Range cell identity of a transient query sample. It exists only on the
+// sample handed to the caller; frozen ray paths and caches never store it.
 struct SoundSpeedSample {
   double soundSpeed{};
   double imaginarySoundSpeed{};
@@ -47,6 +51,7 @@ struct SoundSpeedSample {
   SoundSpeedHessian soundSpeedHessian{};
   double density{};
   std::size_t segmentIndex{};
+  std::size_t rangeSegmentIndex{};
 };
 
 }  // namespace rayreuse

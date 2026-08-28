@@ -1,9 +1,13 @@
 # Bellhop RayReuse 当前进度
 
 > 更新日期：2026-08-28
-> 当前状态：FP-2D cubic spline SSP `S` parity 已完成施工、Batch Acceptance 与
-> FP-2D-R1 remediation；独立 Re-Final Review 结论为 `ACCEPTED`（只关闭 `S`
-> slice；`Q`/`.ssp` 仍 deferred）。
+> 当前状态：FP-2E quadrilateral SSP `Q`/`.ssp` 已完成施工与批次级 full
+> validation；原独立 Final Review 结论为 `FP-2E CHANGES_REQUIRED`，仅要求文档
+> scope 与工作树卫生修复。FP-2E-R1 已将声明收紧到二维 single point source、
+> single source depth、rectilinear receivers 下的 TL Cartesian Cerveny `CC`、R、
+> Cartesian GeoHat `G` A/a/E，现待独立 Re-Final Review。此前 FP-2D cubic spline `S` 已完成
+> 施工、Batch Acceptance 与 FP-2D-R1 remediation，独立 Re-Final Review 结论为
+> `ACCEPTED`。
 
 ## 已完成范围
 
@@ -17,6 +21,7 @@
 | FP-2B | 完成 | PCHIP SSP parity、`GeometrySspEvaluator`/`FrequencySspEvaluator`、共享 `munk_pchip` oracle 与三模式一致性 |
 | FP-2C | 完成（待最终验收） | N²-linear SSP `N` parity：real geometry（node jump + 非零 Hessian）与 frequency-local complex N² evaluator、共享 `munk_n2` 三方 oracle、TL/R/A/a/E 与 `nonreuse/reuse/parallel` 一致性；S/Q 仍 deferred |
 | FP-2D | 完成；Re-Final Review `ACCEPTED` | Cubic spline SSP `S` parity（只关闭 `S` slice）：exact not-a-knot coefficient kernel（保留 legacy binary32 `1.0F/6.0F`）、real spline evaluator（节点连续梯度、无 node jump、非零 Hessian）、frequency-local complex spline evaluator（每频独立 coefficients）、共享 `munk_spline` 三方 oracle、TL/R/A/a/E 与三执行模式一致性（trace passes 2/1/1、cache fingerprint 前后不变）；FP-2D-R1 已收紧 250 Hz Origin oracle policy、增加 C++ decoded-payload exact gate 与真实跨节点 no-jump regression；`Q`/`.ssp` 仍 deferred |
+| FP-2E | 完成施工与批次验证；FP-2E-R1 完成，待独立 Re-Final Review | Quadrilateral SSP `Q`/`.ssp` 的已验证范围严格限于二维 single point source、single source depth、rectilinear receivers：`.ssp` reader 与二维 grid、real geometry、frequency-local projection，以及 `q_range_dependent_cross_gradient`/`q_range_independent_control` oracle；产品仅声明 TL Cartesian Cerveny `CC`、R、Cartesian GeoHat `G` A/a/E，TL/A/a/E 的 `nonreuse/reuse/parallel` 一致（trace passes 2/1/1、fingerprint `2879552213476552188` 前后不变）。其他 Q beam/option 组合即使机制可达也未独立 oracle 验证，不声明 parity；3D/N×2D/line/multisource/irregular 不属本批次 |
 
 ## RR-B4 验收基线
 
@@ -49,8 +54,11 @@ reflection event。以下内容不得写回 cache：
 
 ## 下一步
 
-FP-2D（cubic spline SSP `S`）已完成原 implementation、Batch Acceptance、
-FP-2D-R1 remediation 与独立 Re-Final Review，结论为 `ACCEPTED`。修复证据见
+FP-2E（quadrilateral SSP `Q`/`.ssp`）已完成施工、批次级 full validation 与
+FP-2E-R1 文档/工作树修复，待独立 Re-Final Review；批次总览见
+`doc/workreports/FP-2E_QUADRILATERAL_SSP_BATCH_REPORT.md`。此前 FP-2D（cubic
+spline SSP `S`）已完成原 implementation、Batch Acceptance、FP-2D-R1 remediation
+与独立 Re-Final Review，结论为 `ACCEPTED`。修复证据见
 `doc/workreports/FP-2D-R1_FINAL_REVIEW_REMEDIATION_REPORT.md`，批次总览见
 `doc/workreports/FP-2D_CUBIC_SPLINE_SSP_BATCH_REPORT.md`。除此之外，Feature Sync
 没有其他获批的新实施阶段。最新 Influence

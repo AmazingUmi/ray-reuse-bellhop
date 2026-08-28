@@ -115,10 +115,12 @@ class GeometryStepLimiter {
  public:
   GeometryStepLimiter(const IntegratorSettings& integrator,
                       const std::vector<double>& profileDepths,
+                      const GeometrySspEvaluator& soundSpeedProfile,
                       const BoundaryGeometry& seaSurfaceGeometry,
                       const BoundaryGeometry& seabedGeometry)
       : integrator_(integrator),
         profileDepths_(profileDepths),
+        soundSpeedProfile_(soundSpeedProfile),
         seaSurfaceGeometry_(seaSurfaceGeometry),
         seabedGeometry_(seabedGeometry) {}
 
@@ -239,8 +241,14 @@ class GeometryStepLimiter {
         request.initialPosition.range, topSegmentIndex);
     const BoundaryGeometrySample bottom = seabedGeometry_.evaluateAtSegment(
         request.initialPosition.range, bottomSegmentIndex);
-    const double minimumRange = std::max(top.minimumRange, bottom.minimumRange);
-    const double maximumRange = std::min(top.maximumRange, bottom.maximumRange);
+    const double minimumRange =
+        std::max({top.minimumRange, bottom.minimumRange,
+                  soundSpeedProfile_.minimumRangeForSegment(
+                      request.initialRangeSegmentIndex)});
+    const double maximumRange =
+        std::min({top.maximumRange, bottom.maximumRange,
+                  soundSpeedProfile_.maximumRangeForSegment(
+                      request.initialRangeSegmentIndex)});
     if (trial.range < minimumRange) {
       reduceAtRange(request.initialPosition.range, request.unitTangent.range,
                     minimumRange, step);
@@ -273,6 +281,7 @@ class GeometryStepLimiter {
 
   const IntegratorSettings& integrator_;
   const std::vector<double>& profileDepths_;
+  const GeometrySspEvaluator& soundSpeedProfile_;
   const BoundaryGeometry& seaSurfaceGeometry_;
   const BoundaryGeometry& seabedGeometry_;
 };
@@ -338,8 +347,10 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
 
   const std::size_t initialSegment =
       soundSpeedProfile_.locateSegment(source.depth, 0U);
-  const SoundSpeedSample sourceSample =
-      soundSpeedProfile_.evaluateAtSegment(sourcePosition, initialSegment);
+  const std::size_t initialRangeSegment =
+      soundSpeedProfile_.locateRangeSegment(sourcePosition.range, 0U);
+  const SoundSpeedSample sourceSample = soundSpeedProfile_.evaluateAtSegments(
+      sourcePosition, initialSegment, initialRangeSegment);
 
   // Keep these as independent calls. Clang otherwise contracts adjacent
   // std::sin/std::cos calls to sincos, whose last bit can differ from the
@@ -395,14 +406,16 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
                .soundSpeed = sourceSample.soundSpeed,
                .realTravelTime = 0.0});
 
-  const GeometryStepLimiter geometryLimiter(integrator_, profileDepths_,
-                                            seaSurfaceGeometry, seabedGeometry);
+  const GeometryStepLimiter geometryLimiter(
+      integrator_, profileDepths_, soundSpeedProfile_, seaSurfaceGeometry,
+      seabedGeometry);
   const StepLimiter stepLimiter =
       [&geometryLimiter, &topSegmentIndex,
        &bottomSegmentIndex](const StepLimitRequest& request) {
         return geometryLimiter(request, topSegmentIndex, bottomSegmentIndex);
       };
   std::size_t segmentIndex = initialSegment;
+  std::size_t rangeSegmentIndex = initialRangeSegment;
   while (true) {
     if (path.points.size() >= integrator_.maximumRayPoints) {
       path.terminationReason = RayTerminationReason::PointLimit;
@@ -412,7 +425,7 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
     RayStepResult result;
     try {
       result = stepRay(soundSpeedProfile_, path.points.back(), segmentIndex,
-                       integrator_.stepLength, stepLimiter);
+                       rangeSegmentIndex, integrator_.stepLength, stepLimiter);
     } catch (const ValidationError&) {
       path.terminationReason = RayTerminationReason::NumericalFailure;
       return path;
@@ -451,7 +464,8 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
 
       try {
         const SoundSpeedSample arrivalSample = soundSpeedProfile_.evaluate(
-            result.endState.position, result.segmentIndex);
+            result.endState.position, result.segmentIndex,
+            result.rangeSegmentIndex);
         const bool isSurface = *boundary == ReflectionBoundary::SeaSurface;
         const std::size_t boundarySegmentIndex =
             isSurface ? endTopSegment : endBottomSegment;
@@ -499,6 +513,7 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
     path.steps.push_back(result.quadrature);
     path.points.push_back(std::move(result.endState));
     segmentIndex = result.segmentIndex;
+    rangeSegmentIndex = result.rangeSegmentIndex;
     topSegmentIndex = endTopSegment;
     bottomSegmentIndex = endBottomSegment;
 

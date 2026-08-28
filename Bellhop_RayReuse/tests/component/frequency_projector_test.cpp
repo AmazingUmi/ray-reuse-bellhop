@@ -832,6 +832,140 @@ void testSplineFrozenPathProjection(Context& context) {
   }
 }
 
+// FP-2E G02 quadrilateral leg of the frozen-path projection contract (the
+// testSplineFrozenPathProjection pattern): a real Q RayPath from the generic
+// GeometryTracer — crossing the 350 m range node of the shared cross-gradient
+// grid and reflecting off boundaries — is projected at two frequencies. Q real
+// c(r,z) may only act during the geometry trace, so both projections must
+// leave the frozen path unchanged field by field, keep the per-frequency
+// states independent, and repeat bit-stably.
+void testQuadrilateralFrozenPathProjection(Context& context) {
+  const Environment environment(
+      SoundSpeedProfile(
+          {{.depth = 0.0,
+            .soundSpeed = 1500.0,
+            .density = 1000.0,
+            .attenuation = thorpAttenuation()},
+           {.depth = 100.0,
+            .soundSpeed = 1500.0,
+            .density = 1100.0,
+            .attenuation = thorpAttenuation()}},
+          rayreuse::SspInterpolationKind::Quadrilateral,
+          std::make_shared<const rayreuse::QuadrilateralSspGrid>(
+              rayreuse::QuadrilateralSspGrid{
+                  .rangesMeters = {0.0, 350.0, 800.0},
+                  .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
+                                       1500.0, 1520.0, 1540.0},
+                  .depthCount = 2U,
+                  .rangeCount = 3U})),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
+  const RayPath path =
+      GeometryTracer(environment,
+                     IntegratorSettings{.stepLength = 50.0,
+                                        .rangeLimit = 400.0,
+                                        .depthLimit = 2000.0,
+                                        .maximumRayPoints = 64U})
+          .trace(Source{.depth = 50.0}, 20.0 * std::numbers::pi / 180.0);
+  context.check(path.points.size() >= 10U,
+                "quadrilateral frozen projection uses a nontrivial traced "
+                "path");
+  context.check(!path.events.empty(),
+                "quadrilateral frozen path includes at least one reflection");
+  context.check(
+      path.terminationReason == rayreuse::RayTerminationReason::ExitedDomain,
+      "quadrilateral frozen path exits the spatial box");
+  bool crossedRangeNode = false;
+  for (const RayState& point : path.points) {
+    if (point.position.range > 350.0) {
+      crossedRangeNode = true;
+      break;
+    }
+  }
+  context.check(crossedRangeNode,
+                "quadrilateral frozen path crosses the 350 m range node");
+
+  const RayPath before = path;
+  const FrequencyProjector projector(environment);
+  RayFrequencyState state1000 = projector.project(path, 1000.0, 1.0);
+  const RayFrequencyState state2000 = projector.project(path, 2000.0, 1.0);
+  const RayFrequencyState repeat1000 = projector.project(path, 1000.0, 1.0);
+
+  context.check(state1000.frequency == 1000.0 && state2000.frequency == 2000.0,
+                "quadrilateral projected states retain their own frequencies");
+  context.check(state1000.points.size() == path.points.size() &&
+                    state2000.points.size() == path.points.size(),
+                "quadrilateral projection stores one state per geometry point");
+  context.check(state1000.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating quadrilateral 1000 Hz projection has negative "
+                "imaginary travel time");
+  context.check(state2000.points.back().complexTravelTime.imag() < 0.0,
+                "attenuating quadrilateral 2000 Hz projection has negative "
+                "imaginary travel time");
+  context.check(
+      std::abs(state2000.points.back().complexTravelTime.imag() -
+               state1000.points.back().complexTravelTime.imag()) > 1.0e-9,
+      "Thorp reference attenuation separates the two quadrilateral frequency "
+      "states");
+  context.check(
+      repeat1000.points.back().complexTravelTime ==
+          state1000.points.back().complexTravelTime,
+      "repeating a quadrilateral projection at one frequency is bit-stable");
+
+  state1000.points.front().amplitude = 0.25;
+  context.checkNear(state2000.points.front().amplitude, 1.0, 0.0,
+                    "mutating one quadrilateral frequency state leaves the "
+                    "other untouched");
+
+  context.check(path.launchAngle == before.launchAngle &&
+                    path.points.size() == before.points.size() &&
+                    path.steps.size() == before.steps.size() &&
+                    path.events.size() == before.events.size() &&
+                    path.terminationReason == before.terminationReason,
+                "quadrilateral projection preserves the path container and "
+                "bookkeeping");
+  for (std::size_t index = 0U; index < path.points.size(); ++index) {
+    context.check(
+        path.points[index].position == before.points[index].position &&
+            path.points[index].slowness == before.points[index].slowness &&
+            path.points[index].dynamicP == before.points[index].dynamicP &&
+            path.points[index].dynamicQ == before.points[index].dynamicQ &&
+            path.points[index].soundSpeed ==
+                before.points[index].soundSpeed &&
+            path.points[index].realTravelTime ==
+                before.points[index].realTravelTime,
+        "quadrilateral projection leaves every geometry point unchanged");
+  }
+  for (std::size_t index = 0U; index < path.steps.size(); ++index) {
+    context.check(
+        path.steps[index].stepLength == before.steps[index].stepLength &&
+            path.steps[index].startWeight ==
+                before.steps[index].startWeight &&
+            path.steps[index].midpointWeight ==
+                before.steps[index].midpointWeight &&
+            path.steps[index].midpoint == before.steps[index].midpoint,
+        "quadrilateral projection leaves every step quadrature unchanged");
+  }
+  for (std::size_t index = 0U; index < path.events.size(); ++index) {
+    const ReflectionEvent& event = path.events[index];
+    const ReflectionEvent& previous = before.events[index];
+    context.check(
+        event.rayPointIndex == previous.rayPointIndex &&
+            event.reflectedRayPointIndex ==
+                previous.reflectedRayPointIndex &&
+            event.boundary == previous.boundary &&
+            event.boundarySegmentIndex == previous.boundarySegmentIndex &&
+            event.boundaryCurvature == previous.boundaryCurvature &&
+            event.position == previous.position &&
+            event.boundaryTangent == previous.boundaryTangent &&
+            event.outwardNormal == previous.outwardNormal &&
+            event.incidentSlowness == previous.incidentSlowness &&
+            event.reflectedSlowness == previous.reflectedSlowness &&
+            event.tangentSlowness == previous.tangentSlowness &&
+            event.normalSlowness == previous.normalSlowness,
+        "quadrilateral projection leaves every reflection event unchanged");
+  }
+}
+
 // FrequencyProjector consumes FrequencySspEvaluator, whose variant gains the
 // spline backend only in G01, so the projector-level frozen-path check for
 // spline (the testN2FrequencyProjection pattern, field by field) lands with
@@ -920,6 +1054,7 @@ int main() {
   testN2FrequencyProjection(context);
   testN2LosslessProjectionReusesFrozenTravelTime(context);
   testSplineFrozenPathProjection(context);
+  testQuadrilateralFrozenPathProjection(context);
   testSplineFrequencyStateIndependence(context);
   testInvalidInputs(context);
 

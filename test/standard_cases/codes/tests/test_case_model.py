@@ -115,8 +115,6 @@ class CaseModelTests(unittest.TestCase):
             "volume_attenuation_biological",
             "elastic_halfspace_flat",
             "elastic_halfspace_fluid_control",
-            "q_range_dependent_cross_gradient",
-            "q_range_independent_control",
             "multi_source_depths",
             "irregular_receiver_pairs",
             "ray_trace_vacuum_rigid",
@@ -133,6 +131,8 @@ class CaseModelTests(unittest.TestCase):
                     ("origin", "f2cpp"),
                 )
         for case_id in (
+            "q_range_dependent_cross_gradient",
+            "q_range_independent_control",
             "source_beam_pattern_directional",
             "source_beam_pattern_omni_control",
             "cartesian_component_pressure",

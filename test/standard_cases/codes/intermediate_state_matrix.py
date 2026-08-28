@@ -28,6 +28,7 @@ CASE_CONFIGURATIONS = {
     "munk_n2": "munk-n2",
     "munk_pchip": "munk-pchip",
     "munk_spline": "munk-spline",
+    "q_range_dependent_cross_gradient": "i5-quadrilateral",
 }
 
 

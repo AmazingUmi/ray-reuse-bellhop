@@ -43,20 +43,39 @@ struct SoundSpeedPoint {
   RawAttenuation attenuation{};
 };
 
+// Range-dependent real sound-speed samples for the Origin 2-D `Q` option.
+// Storage is depth-major: speedsDepthMajor[depthIndex * rangeCount +
+// rangeIndex].  The reference SoundSpeedProfile still owns depths, density,
+// and raw attenuation.
+struct QuadrilateralSspGrid {
+  std::vector<double> rangesMeters;
+  std::vector<double> speedsDepthMajor;
+  std::size_t depthCount{};
+  std::size_t rangeCount{};
+};
+
+using SharedQuadrilateralSspGrid =
+    std::shared_ptr<const QuadrilateralSspGrid>;
+
 class SoundSpeedProfile {
  public:
   explicit SoundSpeedProfile(
       std::vector<SoundSpeedPoint> points,
-      SspInterpolationKind interpolationKind = SspInterpolationKind::CLinear);
+      SspInterpolationKind interpolationKind = SspInterpolationKind::CLinear,
+      SharedQuadrilateralSspGrid quadrilateralGrid = {});
 
   [[nodiscard]] const std::vector<SoundSpeedPoint>& points() const noexcept;
   [[nodiscard]] double minimumDepth() const noexcept;
   [[nodiscard]] double maximumDepth() const noexcept;
   [[nodiscard]] SspInterpolationKind interpolationKind() const noexcept;
+  [[nodiscard]] const SharedQuadrilateralSspGrid& quadrilateralGrid()
+      const noexcept;
+  [[nodiscard]] double quadrilateralRealSoundSpeedAt(Vec2 position) const;
 
  private:
   std::vector<SoundSpeedPoint> points_;
   SspInterpolationKind interpolationKind_{SspInterpolationKind::CLinear};
+  SharedQuadrilateralSspGrid quadrilateralGrid_;
 };
 
 enum class BoundaryKind {

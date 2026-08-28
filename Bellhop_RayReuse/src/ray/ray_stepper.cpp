@@ -38,6 +38,7 @@ void validateState(const RayState& state, std::string_view name) {
                                   StepLimitPhase phase, Vec2 initialPosition,
                                   Vec2 unitTangent,
                                   std::size_t initialSegmentIndex,
+                                  std::size_t initialRangeSegmentIndex,
                                   double nominalStepLength,
                                   double proposedStepLength) {
   if (!limiter) {
@@ -49,6 +50,7 @@ void validateState(const RayState& state, std::string_view name) {
                                .initialPosition = initialPosition,
                                .unitTangent = unitTangent,
                                .initialSegmentIndex = initialSegmentIndex,
+                               .initialRangeSegmentIndex = initialRangeSegmentIndex,
                                .nominalStepLength = nominalStepLength,
                                .proposedStepLength = proposedStepLength});
   if (!std::isfinite(limitedStep) || limitedStep <= 0.0) {
@@ -101,7 +103,11 @@ void validateState(const RayState& state, std::string_view name) {
 
 void applyGradientJump(RayState& endState, const SoundSpeedSample& initialSample,
                        const SoundSpeedSample& endSample) {
-  if (endSample.segmentIndex == initialSample.segmentIndex) {
+  const bool crossedDepthSegment =
+      endSample.segmentIndex != initialSample.segmentIndex;
+  const bool crossedRangeSegment =
+      endSample.rangeSegmentIndex != initialSample.rangeSegmentIndex;
+  if (!crossedDepthSegment && !crossedRangeSegment) {
     return;
   }
 
@@ -112,11 +118,11 @@ void applyGradientJump(RayState& endState, const SoundSpeedSample& initialSample
   const double normalGradientJump = dot(gradientJump, rayNormal);
   const double tangentGradientJump = dot(gradientJump, endState.slowness);
 
-  // Discontinuous-at-node SSP backends (C-linear, N²-linear) are range
-  // independent, so a changed segment is a depth interface. This is the iSegz
-  // branch of Step.f90.
+  // Step.f90 gives a simultaneous depth/range crossing to the depth branch.
   const double incidenceTangent =
-      endState.slowness.range / endState.slowness.depth;
+      crossedDepthSegment
+          ? endState.slowness.range / endState.slowness.depth
+          : -endState.slowness.depth / endState.slowness.range;
   const double jumpCorrection =
       incidenceTangent *
       (2.0 * normalGradientJump - incidenceTangent * tangentGradientJump) /
@@ -131,6 +137,9 @@ void applyGradientJump(RayState& endState, const SoundSpeedSample& initialSample
   }
 }
 
+// Range-independent template body retained for the concrete CLinearSsp fast
+// path, whose evaluate() has no range-segment hint. Its StepLimitRequest
+// always carries range segment zero.
 template <typename SspType>
 RayStepResult stepRayImpl(const SspType& soundSpeedProfile,
                           const RayState& initialState,
@@ -150,7 +159,7 @@ RayStepResult stepRayImpl(const SspType& soundSpeedProfile,
 
   const double predictorStep = applyLimiter(
       limiter, StepLimitPhase::InitialTangent, initialState.position,
-      initialUnitTangent, initialSample.segmentIndex, nominalStepLength,
+      initialUnitTangent, initialSample.segmentIndex, 0U, nominalStepLength,
       nominalStepLength);
   const double halfPredictorStep = 0.5 * predictorStep;
   RayState midpoint =
@@ -164,7 +173,7 @@ RayStepResult stepRayImpl(const SspType& soundSpeedProfile,
 
   const double actualStep = applyLimiter(
       limiter, StepLimitPhase::PredictedMidpointTangent, initialState.position,
-      midpointUnitTangent, initialSample.segmentIndex, nominalStepLength,
+      midpointUnitTangent, initialSample.segmentIndex, 0U, nominalStepLength,
       predictorStep);
 
   const double midpointBlend = actualStep / (2.0 * halfPredictorStep);
@@ -233,10 +242,116 @@ RayStepResult stepRayImpl(const SspType& soundSpeedProfile,
 
 RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
                       const RayState& initialState,
+                      std::size_t initialSegmentIndex,
+                      std::size_t initialRangeSegmentIndex,
+                      double nominalStepLength,
+                      const StepLimiter& limiter) {
+  validateState(initialState, "initial ray state");
+  if (!std::isfinite(nominalStepLength) || nominalStepLength <= 0.0) {
+    throw ValidationError(
+        "nominal ray-step length must be finite and positive");
+  }
+
+  const SoundSpeedSample initialSample = soundSpeedProfile.evaluate(
+      initialState.position, initialSegmentIndex, initialRangeSegmentIndex);
+  const Vec2 initialUnitTangent =
+      initialSample.soundSpeed * initialState.slowness;
+
+  const double predictorStep = applyLimiter(
+      limiter, StepLimitPhase::InitialTangent, initialState.position,
+      initialUnitTangent, initialSample.segmentIndex,
+      initialSample.rangeSegmentIndex, nominalStepLength, nominalStepLength);
+  const double halfPredictorStep = 0.5 * predictorStep;
+  RayState midpoint =
+      predictorState(initialState, initialSample, halfPredictorStep);
+
+  const SoundSpeedSample midpointSample = soundSpeedProfile.evaluate(
+      midpoint.position, initialSample.segmentIndex,
+      initialSample.rangeSegmentIndex);
+  midpoint.soundSpeed = midpointSample.soundSpeed;
+  const Vec2 midpointUnitTangent =
+      midpointSample.soundSpeed * midpoint.slowness;
+
+  const double actualStep = applyLimiter(
+      limiter, StepLimitPhase::PredictedMidpointTangent, initialState.position,
+      midpointUnitTangent, initialSample.segmentIndex,
+      initialSample.rangeSegmentIndex, nominalStepLength, predictorStep);
+
+  const double midpointBlend = actualStep / (2.0 * halfPredictorStep);
+  const double startBlend = 1.0 - midpointBlend;
+  const double startWeight = actualStep * startBlend;
+  const double midpointWeight = actualStep * midpointBlend;
+
+  const double initialSoundSpeedSquared =
+      initialSample.soundSpeed * initialSample.soundSpeed;
+  const double midpointSoundSpeedSquared =
+      midpointSample.soundSpeed * midpointSample.soundSpeed;
+  const double initialCurvature =
+      soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          initialSample.soundSpeedHessian, initialState.slowness);
+  const double midpointCurvature =
+      soundSpeedNormalSecondDerivativeOverSquaredSpeed(
+          midpointSample.soundSpeedHessian, midpoint.slowness);
+
+  RayState endState = initialState;
+  endState.position = {
+      .range =
+          std::fma(midpointWeight, midpointUnitTangent.range,
+                   std::fma(startWeight, initialUnitTangent.range,
+                            initialState.position.range)),
+      .depth =
+          std::fma(midpointWeight, midpointUnitTangent.depth,
+                   std::fma(startWeight, initialUnitTangent.depth,
+                            initialState.position.depth))};
+  endState.slowness =
+      initialState.slowness -
+      (startWeight / initialSoundSpeedSquared) *
+          initialSample.soundSpeedGradient -
+      (midpointWeight / midpointSoundSpeedSquared) *
+          midpointSample.soundSpeedGradient;
+  endState.realTravelTime =
+      initialState.realTravelTime +
+      startWeight / initialSample.soundSpeed +
+      midpointWeight / midpointSample.soundSpeed;
+
+  for (std::size_t index = 0; index < endState.dynamicP.size(); ++index) {
+    endState.dynamicP[index] =
+        initialState.dynamicP[index] -
+        startWeight * initialCurvature * initialState.dynamicQ[index] -
+        midpointWeight * midpointCurvature * midpoint.dynamicQ[index];
+    endState.dynamicQ[index] =
+        initialState.dynamicQ[index] +
+        startWeight * initialSample.soundSpeed * initialState.dynamicP[index] +
+        midpointWeight * midpointSample.soundSpeed * midpoint.dynamicP[index];
+  }
+
+  const SoundSpeedSample endSample = soundSpeedProfile.evaluate(
+      endState.position, initialSample.segmentIndex,
+      initialSample.rangeSegmentIndex);
+  endState.soundSpeed = endSample.soundSpeed;
+  if (soundSpeedProfile.gradientContinuity() ==
+      SspGradientContinuity::DiscontinuousAtNodes) {
+    applyGradientJump(endState, initialSample, endSample);
+  }
+  validateState(endState, "ray-step result state");
+
+  return RayStepResult{
+      .endState = endState,
+      .quadrature =
+          StepQuadrature{.stepLength = actualStep,
+                         .startWeight = startWeight,
+                         .midpointWeight = midpointWeight,
+                         .midpoint = midpoint.position},
+      .segmentIndex = endSample.segmentIndex,
+      .rangeSegmentIndex = endSample.rangeSegmentIndex};
+}
+
+RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
+                      const RayState& initialState,
                       std::size_t initialSegmentIndex, double nominalStepLength,
                       const StepLimiter& limiter) {
-  return stepRayImpl(soundSpeedProfile, initialState, initialSegmentIndex,
-                     nominalStepLength, limiter);
+  return stepRay(soundSpeedProfile, initialState, initialSegmentIndex, 0U,
+                 nominalStepLength, limiter);
 }
 
 RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
