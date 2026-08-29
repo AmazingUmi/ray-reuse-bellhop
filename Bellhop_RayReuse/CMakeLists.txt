@@ -219,6 +219,12 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_boundary_geometry_tests
+    rayreuse.component.boundary_geometry
+    tests/component/boundary_geometry_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_environment_parser_tests
     rayreuse.component.environment_parser
     tests/component/environment_parser_test.cpp

@@ -1,12 +1,13 @@
 # Bellhop RayReuse 当前进度
 
 > 更新日期：2026-08-29
-> 当前状态：FP-2F source/receiver generalization（multisource 与 Cartesian
-> paired irregular receiver 的三方 oracle、broadband 三模式一致性与冻结基线
-> 对照）已完成施工、Batch Acceptance 与独立 Final Review，结论为
-> `FP-2F ACCEPTED`（2026-08-29）。下一批次 FP-2G boundary/material closure
-> DESIGN 阶段启动中。此前批次 FP-2E 的独立 Re-Final Review 结论为
-> `FP-2E ACCEPTED`（2026-08-29）。
+> 当前状态：FP-2F 与 FP-2G 均已完成全流程验收并 CLOSED，结论分别为
+> `FP-2F ACCEPTED`（commit `763c585`）与 `FP-2G ACCEPTED`（2026-08-29）。
+> 当前批次 FP-2H（Attenuation Closure）已自动启动并进入 DESIGN 阶段。
+> 串行批次（FP-2F→FP-2G→FP-2H）进度快照见
+> [`STATUS_FEATURE_PARITY_SEQUENCE_2026-08-29.md`](STATUS_FEATURE_PARITY_SEQUENCE_2026-08-29.md)。
+> 此前批次 FP-2E 的独立 Re-Final Review 结论为 `FP-2E ACCEPTED`
+> （2026-08-29）。
 
 ## 已完成范围
 
@@ -21,7 +22,8 @@
 | FP-2C | 完成（待最终验收） | N²-linear SSP `N` parity：real geometry（node jump + 非零 Hessian）与 frequency-local complex N² evaluator、共享 `munk_n2` 三方 oracle、TL/R/A/a/E 与 `nonreuse/reuse/parallel` 一致性；S/Q 仍 deferred |
 | FP-2D | 完成；Re-Final Review `ACCEPTED` | Cubic spline SSP `S` parity（只关闭 `S` slice）：exact not-a-knot coefficient kernel（保留 legacy binary32 `1.0F/6.0F`）、real spline evaluator（节点连续梯度、无 node jump、非零 Hessian）、frequency-local complex spline evaluator（每频独立 coefficients）、共享 `munk_spline` 三方 oracle、TL/R/A/a/E 与三执行模式一致性（trace passes 2/1/1、cache fingerprint 前后不变）；FP-2D-R1 已收紧 250 Hz Origin oracle policy、增加 C++ decoded-payload exact gate 与真实跨节点 no-jump regression；`Q`/`.ssp` 仍 deferred |
 | FP-2E | 完成；Re-Final Review `ACCEPTED`（2026-08-29） | Quadrilateral SSP `Q`/`.ssp` 的已验证范围严格限于二维 single point source、single source depth、rectilinear receivers：`.ssp` reader 与二维 grid、real geometry、frequency-local projection，以及 `q_range_dependent_cross_gradient`/`q_range_independent_control` oracle；产品仅声明 TL Cartesian Cerveny `CC`、R、Cartesian GeoHat `G` A/a/E，TL/A/a/E 的 `nonreuse/reuse/parallel` 一致（trace passes 2/1/1、fingerprint `2879552213476552188` 前后不变）。其他 Q beam/option 组合即使机制可达也未独立 oracle 验证，不声明 parity；3D/N×2D/line/multisource/irregular 不属本批次 |
-| FP-2F | 完成；Final Review `ACCEPTED`（2026-08-29） | Source/receiver generalization：multisource（`NSz ≥ 1` point source；per-source frozen fan cache；SHD/ARR/E/R per-source sequencing/header；trace passes `Nfreq×NSz/NSz/NSz`）与 Cartesian paired irregular receiver（run type 第 5 位 `I`、`NRz == NRr`；Cerveny `CC/IC/SC` 恒取 `Rz(1)` legacy 语义、GeoHat/GeoGaussian Cartesian paired 寻址、`PlotType='irregular '`、Cartesian `G/B` A/a/E paired）；8 个三方 oracle case（`multi_source_depths`、`irregular_receiver_pairs`、`arrival_multi_source`、`arrival_multi_source_binary`、`eigenray_irregular_pairs`、`ray_trace_vacuum_rigid`、`eigenray_geometric_hat`、`arrival_geometric_gaussian_irregular`）与六 case broadband 三模式逐字节一致；line source 仍 `GAP`；multisource × Q/ray-centered、irregular × Q 不声明 parity |
+| FP-2F | 完成；Final Review `ACCEPTED`（2026-08-29） | Source/receiver generalization：multisource（`NSz ≥ 1` point source；per-source frozen fan cache；SHD/ARR/E/R per-source sequencing/header；trace passes `Nfreq×NSz/NSz/NSz`）与 Cartesian paired irregular receiver（run type 第 5 位 `I`、`NRz == NRr`；Cerveny `CC/IC/SC` 恒取 `Rz(1)` legacy 语义、GeoHat/GeoGaussian Cartesian paired 寻址、`PlotType='irregular '`、Cartesian `G/B` A/a/E paired）；8 个三方 oracle case 与六 case broadband 三模式逐字节一致；line source 仍 `GAP` |
+| FP-2G | 完成；Final Review `ACCEPTED`（2026-08-29） | Boundary / material closure：canonical curvilinear short format `C` boundary（BND-04，459 角度 intermediate-state oracle 与 SHD 三方 closure，两频三模式 byte-identical）与 flat ordinary elastic halfspace P/S（BND-09，`elastic_halfspace_flat` 与 `elastic_halfspace_fluid_control` 三方 SHD 比较与 shear guard 全部 PASS，两频三模式 byte-identical 与逐频求值确认）；`CS`/`CL` 显式拒绝，curvilinear × long format/halfspace/multisource/irregular/Q 不声明 parity |
 
 ## RR-B4 验收基线
 
@@ -54,18 +56,4 @@ reflection event。以下内容不得写回 cache：
 
 ## 下一步
 
-FP-2F（source/receiver generalization）已完成施工与批次级验证（三方 oracle、
-broadband 三模式一致性、冻结基线对照），待独立 Final Review；执行期权威状态见
-`doc/worklists/FP-2F_SOURCE_RECEIVER_GENERALIZATION_WORKLIST.md`。此前 FP-2E
-（quadrilateral SSP `Q`/`.ssp`）已完成施工、批次级 full validation、FP-2E-R1
-remediation 与独立 Re-Final Review，结论为 `ACCEPTED`，批次总览见
-`doc/workreports/FP-2E_QUADRILATERAL_SSP_BATCH_REPORT.md`。FP-2D（cubic
-spline SSP `S`）已完成原 implementation、Batch Acceptance、FP-2D-R1 remediation
-与独立 Re-Final Review，结论为 `ACCEPTED`。修复证据见
-`doc/workreports/FP-2D-R1_FINAL_REVIEW_REMEDIATION_REPORT.md`，批次总览见
-`doc/workreports/FP-2D_CUBIC_SPLINE_SSP_BATCH_REPORT.md`。除此之外，Feature Sync
-没有其他获批的新实施阶段。最新 Influence
-审计建议先评估无损的 Influence Geometry Reuse（IG-0），再决定是否进入带
-误差预算的频率重建（FI-0）；两者仍是候选路线，不自动启动。统一入口见
-[`PLAN_CURRENT_WORK.md`](../../../doc/plans/PLAN_CURRENT_WORK.md)，技术证据见
-[`REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md`](../reports/REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md)。
+FP-2G（boundary/material closure）已获得独立 Final Review `ACCEPTED` 结论并 CLOSED；执行期权威状态见 `doc/worklists/FP-2G_BOUNDARY_MATERIAL_CLOSURE_WORKLIST.md` 与 Batch Report `doc/workreports/FP-2G_BOUNDARY_MATERIAL_CLOSURE_BATCH_REPORT.md`。按序列授权，当前已自动进入 FP-2H（Attenuation Closure）DESIGN 阶段。

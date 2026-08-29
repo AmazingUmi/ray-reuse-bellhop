@@ -116,8 +116,6 @@ class CaseModelTests(unittest.TestCase):
         for case_id in (
             "volume_attenuation_francois_garrison",
             "volume_attenuation_biological",
-            "elastic_halfspace_flat",
-            "elastic_halfspace_fluid_control",
             "cerveny_width_space_filling",
             "cerveny_width_wkb",
             "cerveny_curvature_double",
@@ -131,6 +129,8 @@ class CaseModelTests(unittest.TestCase):
                     ("origin", "f2cpp"),
                 )
         for case_id in (
+            "elastic_halfspace_flat",
+            "elastic_halfspace_fluid_control",
             "q_range_dependent_cross_gradient",
             "q_range_independent_control",
             "multi_source_depths",

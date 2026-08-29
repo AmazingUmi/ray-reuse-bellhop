@@ -39,6 +39,7 @@ using rayreuse::RayPath;
 using rayreuse::RayPathCache;
 using rayreuse::SimulationRunMode;
 using rayreuse::ValidationError;
+using rayreuse::Vec2;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
@@ -495,6 +496,153 @@ void testRrB1BoundarySidecarsAndFrozenEvents(Context& context) {
                         .seaSurface()
                         .kind() == BoundaryKind::GrainSizeHalfSpace,
                 "flat top G is accepted");
+}
+
+class TemporaryAtiHeaderCase {
+ public:
+  explicit TemporaryAtiHeaderCase(const std::string& atiFormat)
+      : directory_(std::filesystem::temp_directory_path() /
+                   "rayreuse_ati_header_matrix"),
+        environmentPath_(directory_ / "case.env") {
+    std::error_code cleanupError;
+    std::filesystem::remove_all(directory_, cleanupError);
+    std::filesystem::create_directories(directory_);
+    std::ofstream environment(environmentPath_);
+    if (!environment.is_open()) {
+      throw std::runtime_error("unable to stage ati header fixture");
+    }
+    environment << renderCase("i3_piecewise_boundaries", 100.0, 400U);
+    environment.close();
+
+    const std::filesystem::path source =
+        kCasesRoot / "i3_piecewise_boundaries";
+    for (const std::string extension : {".ati", ".bty"}) {
+      std::ifstream input(source / ("origin" + extension));
+      if (!input.is_open()) {
+        throw std::runtime_error("unable to open boundary fixture");
+      }
+      std::ostringstream buffer;
+      buffer << input.rdbuf();
+      std::string contents = buffer.str();
+      if (extension == ".ati") {
+        replaceFirst(contents, "LS", atiFormat);
+      }
+      std::ofstream output(directory_ / ("case" + extension));
+      output << contents;
+    }
+  }
+
+  TemporaryAtiHeaderCase(const TemporaryAtiHeaderCase&) = delete;
+  TemporaryAtiHeaderCase& operator=(const TemporaryAtiHeaderCase&) = delete;
+
+  ~TemporaryAtiHeaderCase() {
+    std::error_code cleanupError;
+    std::filesystem::remove_all(directory_, cleanupError);
+  }
+
+  [[nodiscard]] const std::filesystem::path& environmentPath() const noexcept {
+    return environmentPath_;
+  }
+
+ private:
+  std::filesystem::path directory_;
+  std::filesystem::path environmentPath_;
+};
+
+void expectValidationErrorWithMessage(Context& context,
+                                      const std::filesystem::path& path,
+                                      const std::string& fragment,
+                                      std::string_view message) {
+  try {
+    static_cast<void>(EnvironmentParser::parseFile(path));
+  } catch (const ValidationError& error) {
+    const std::string text = error.what();
+    context.check(text.find(fragment) != std::string::npos, message);
+    return;
+  }
+  context.check(false, std::string(message) + " (no exception)");
+}
+
+void testCurvilinearBoundaryHeaders(Context& context) {
+  const TemporaryStandardCase curvilinear("i3_curvilinear_oracle", 100.0, 459U);
+  const ParsedEnvironment parsedCurvilinear =
+      EnvironmentParser::parseFile(curvilinear.environmentPath());
+  const auto& curvilinearEnvironment =
+      parsedCurvilinear.simulationCase.environment();
+  context.check(
+      curvilinearEnvironment.seaSurface().geometry().interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::Curvilinear &&
+          curvilinearEnvironment.seabed().geometry().interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::Curvilinear,
+      "canonical 'C' .ati/.bty headers create curvilinear geometry");
+  context.check(
+      curvilinearEnvironment.seaSurface().geometry().nodes().size() == 5U &&
+              curvilinearEnvironment.seabed().geometry().nodes().size() == 5U,
+      "curvilinear short format reads every boundary node");
+  context.checkNear(
+      curvilinearEnvironment.seabed().geometry().nodes()[1U].range, 550.0, 0.0,
+      "curvilinear node ranges convert km to SI meters");
+  context.check(
+      curvilinearEnvironment.seaSurface().kind() == BoundaryKind::Vacuum &&
+              curvilinearEnvironment.seabed().kind() == BoundaryKind::Rigid,
+      "curvilinear oracle keeps vacuum top and rigid bottom");
+
+  const rayreuse::BoundaryGeometry& seabed =
+      curvilinearEnvironment.seabed().geometry();
+  const rayreuse::BoundaryGeometrySample interior =
+      seabed.reflectionSampleAtSegment(Vec2{.range = 800.0, .depth = 100.0},
+                                       2U);
+  context.check(interior.curvature != 0.0,
+                "curvilinear interior reflection frame carries non-zero "
+                "curvature");
+  context.check(std::abs(rayreuse::norm(interior.tangent) - 1.0) > 1.0e-9,
+                "curvilinear interior reflection frame is interpolated and "
+                "not unit length");
+  context.check(seabed.evaluateAtSegment(800.0, 2U).curvature == 0.0,
+                "curvilinear collision chord sample keeps zero curvature");
+  const rayreuse::BoundaryGeometrySample extension =
+      seabed.reflectionSampleAtSegment(Vec2{.range = -100.0, .depth = 111.0},
+                                       0U);
+  context.check(extension.curvature == 0.0 &&
+                    extension.tangent ==
+                        Vec2{.range = 1.0, .depth = 0.0},
+                "curvilinear extension segment falls back to the flat chord");
+
+  // Header accept/reject matrix, isomorphic to F2CPP readBoundaryFile.
+  const TemporaryAtiHeaderCase canonical("C");
+  const ParsedEnvironment parsedCanonical =
+      EnvironmentParser::parseFile(canonical.environmentPath());
+  context.check(
+      parsedCanonical.simulationCase.environment()
+              .seaSurface()
+              .geometry()
+              .interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::Curvilinear &&
+          parsedCanonical.simulationCase.environment()
+              .seabed()
+              .geometry()
+              .interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::PiecewiseLinear,
+      "'C' top with 'LS' bottom mixes interpolation kinds per boundary");
+
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("CS").environmentPath(),
+      "curvilinear short boundary format must use canonical 'C', not 'CS'",
+      "'CS' header is rejected with the canonical 'C' hint");
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("CL").environmentPath(),
+      "curvilinear short boundary format must use canonical 'C', not 'CL'",
+      "'CL' header is rejected with the canonical 'C' hint");
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("LC").environmentPath(),
+      "only piecewise-linear 'LS'/'LL' and canonical curvilinear short "
+      "format 'C' are supported",
+      "unknown two-character header is rejected");
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("S").environmentPath(),
+      "only piecewise-linear 'LS'/'LL' and canonical curvilinear short "
+      "format 'C' are supported",
+      "bare 'S' header is rejected");
 }
 
 void testAttenuationCases(Context& context) {
@@ -1092,6 +1240,7 @@ int main() {
   testCartesianCervenyComponents(context);
   testBoundaryCases(context);
   testRrB1BoundarySidecarsAndFrozenEvents(context);
+  testCurvilinearBoundaryHeaders(context);
   testAttenuationCases(context);
   testRrB4ProductRunTypes(context);
   testMultiSourceDepths(context);

@@ -304,7 +304,12 @@ void writeBoundarySummary(std::ostream& stream,
       break;
   }
   if (!boundary.geometry().isFlat()) {
-    stream << "Piecewise linear interpolation\n";
+    if (boundary.geometry().interpolationKind() ==
+        rayreuse::BoundaryInterpolationKind::Curvilinear) {
+      stream << "Curvilinear Interpolation\n";
+    } else {
+      stream << "Piecewise linear interpolation\n";
+    }
     if (boundary.hasRangeDependentMaterials()) {
       stream << "Long format (bathymetry and geoacoustics)\n";
     }

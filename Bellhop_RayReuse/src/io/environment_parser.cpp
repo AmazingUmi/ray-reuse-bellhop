@@ -570,9 +570,15 @@ struct ParsedBoundaryFile {
   const Record formatRecord = reader.require("boundary format");
   requireTokenCount(formatRecord, 1U, source, "boundary format");
   const std::string& format = formatRecord.tokens.front();
-  if (format != "LS" && format != "LL") {
+  if (format == "CS" || format == "CL") {
     fail(source, formatRecord.lineNumber,
-         "RR-B1 supports only piecewise-linear 'LS'/'LL' boundaries");
+         "curvilinear short boundary format must use canonical 'C', not '" +
+             format + "'");
+  }
+  if (format != "LS" && format != "LL" && format != "C") {
+    fail(source, formatRecord.lineNumber,
+         "only piecewise-linear 'LS'/'LL' and canonical curvilinear "
+         "short format 'C' are supported");
   }
   const bool longFormat = format == "LL";
 
@@ -647,13 +653,18 @@ struct ParsedBoundaryFile {
     }
   }
   reader.requireEnd();
+  BoundaryGeometry geometry =
+      format == "C"
+          ? BoundaryGeometry::curvilinear(
+                std::move(nodes), referenceDepth, orientation)
+          : BoundaryGeometry::piecewiseLinear(
+                std::move(nodes), referenceDepth, orientation);
   SharedLongBoundaryMaterials longMaterials;
   if (longFormat) {
     longMaterials = std::make_shared<const std::vector<AcousticMaterial>>(
         std::move(nodeMaterials));
   }
-  return ParsedBoundaryFile{.geometry = BoundaryGeometry::piecewiseLinear(
-                                std::move(nodes), referenceDepth, orientation),
+  return ParsedBoundaryFile{.geometry = std::move(geometry),
                             .longMaterials = std::move(longMaterials)};
 }
 
