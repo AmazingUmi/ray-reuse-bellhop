@@ -71,9 +71,10 @@ worker 不直接写文件；主 consumer 按 frequency index 稳定发布。
 - 环境解析或组合校验在新生命周期开始前失败时，旧有效产品保持不变；
 - 未支持组合返回非零状态，并在可用时写入 PRT `FATAL ERROR`；
 - ray-centered Cerveny 与 ray-centered GeoHat TL/A/a/E 都要求
-  point/single/C-linear、规则网格且 receiver ranges 至少两个并等间距；其中
-  TL GeoHat 使用 `Cg/Ig/Sg`，产品使用 `Ag/ag/Eg`。line source、irregular
-  receiver 等未支持组合不会静默退化。
+  规则网格且 receiver ranges 至少两个并等间距；其中
+  TL GeoHat 使用 `Cg/Ig/Sg`，产品使用 `Ag/ag/Eg`。未支持组合
+  （如 Simple Gaussian 搭配 line source、ray-centered 搭配 irregular、
+  3D/N×2D 等）返回非零状态，不会静默退化。
 
 ## 共享标准案例
 
