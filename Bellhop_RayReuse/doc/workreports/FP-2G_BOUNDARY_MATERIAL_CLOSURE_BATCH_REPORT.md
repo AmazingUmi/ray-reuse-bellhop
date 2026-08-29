@@ -70,4 +70,7 @@
 
 ## F. 结论
 
-FP-2G 施工与 Batch Acceptance 全部通过。无 HIGH/BLOCKER。提交独立 Final Review。
+FP-2G 施工与 Batch Acceptance 全部通过。无 HIGH/BLOCKER。
+独立 Final Review 结论：**`FP-2G ACCEPTED`**（2026-08-29）；
+Re-Final Review 结论：**`FP-2G ACCEPTED`**（2026-08-29）；
+**FP-2G CLOSED**（commit `eb27045`）。

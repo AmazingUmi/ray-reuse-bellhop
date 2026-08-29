@@ -2,7 +2,7 @@
 
 > Batch: FP-2G（canonical curvilinear `C` boundary + flat elastic P/S 的
 > executable oracle closure）
-> 状态：FINAL_REVIEW（CONSTRUCT 与 Batch Acceptance 已全部完成，已通过 A01/A02 Reviewer Checkpoint）
+> 状态：ACCEPTED / CLOSED（2026-08-29；Final Review ACCEPTED，Re-Final Review ACCEPTED，commit `eb27045`）
 > 参考证据：`doc/reports/REPORT_F2CPP_RAYREUSE_PARITY_2026-08-25.md` §4.5/§4.6
 > （DESIGN 启动基线为 BND-04 `ARCHITECTURAL_CONFLICT`、BND-09 `GAP`；本批次完成后已闭环为 `PARITY`）
 
@@ -370,4 +370,4 @@ Evidence 记录（2026-08-29，worker B02）：
 
 ## 5. Blockers / Findings
 
-- 无（CONSTRUCT 与 Batch Acceptance 已通过，A01/A02 Reviewer PASS，处于 Final Review 阶段）。
+- 无（FP-2G 已 ACCEPTED / CLOSED，Final Review ACCEPTED，Re-Final Review ACCEPTED，2026-08-29，commit `eb27045`）。

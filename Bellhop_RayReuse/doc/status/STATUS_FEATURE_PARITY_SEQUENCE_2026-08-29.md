@@ -33,7 +33,7 @@
 - 文档：`doc/worklists/FP-2F_SOURCE_RECEIVER_GENERALIZATION_WORKLIST.md`、
   `doc/workreports/FP-2F_SOURCE_RECEIVER_GENERALIZATION_BATCH_REPORT.md`。
 
-## 3. FP-2G 当前状态（进行中）
+## 3. FP-2G 完成情况（已关闭）
 
 ### 3.1 DESIGN（已冻结）
 
