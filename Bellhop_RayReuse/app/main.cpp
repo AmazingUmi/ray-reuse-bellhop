@@ -13,6 +13,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "rayreuse/error.hpp"
@@ -123,6 +124,27 @@ void printUsage(std::ostream& stream) {
       return "WKB beams";
   }
   throw rayreuse::ValidationError("beam width mode is invalid");
+}
+
+[[nodiscard]] std::string_view attenuationUnitLabel(
+    rayreuse::AttenuationUnit unit) {
+  switch (unit) {
+    case rayreuse::AttenuationUnit::NepersPerMeter:
+      return "nepers/m";
+    case rayreuse::AttenuationUnit::DecibelsPerMeter:
+      return "dB/m";
+    case rayreuse::AttenuationUnit::DecibelsPerMeterPowerLaw:
+      return "dB/m with power law";
+    case rayreuse::AttenuationUnit::DecibelsPerMeterKilohertz:
+      return "dB/mkHz";
+    case rayreuse::AttenuationUnit::DecibelsPerWavelength:
+      return "dB/wavelength";
+    case rayreuse::AttenuationUnit::QualityFactor:
+      return "Q";
+    case rayreuse::AttenuationUnit::LossParameter:
+      return "Loss parameter";
+  }
+  throw rayreuse::ValidationError("attenuation unit is invalid");
 }
 
 [[nodiscard]] std::string frequencyToken(double frequency) {
@@ -432,6 +454,12 @@ void writeConfigurationSummary(std::ostream& stream,
     stream << "Rectilinear receiver grid\n";
   }
   writeBoundarySummary(stream, environment.seaSurface(), "top");
+  stream << "Attenuation units: "
+         << attenuationUnitLabel(environment.soundSpeedProfile()
+                                     .points()
+                                     .front()
+                                     .attenuation.unit)
+         << '\n';
   if (environment.soundSpeedProfile().interpolationKind() ==
       rayreuse::SspInterpolationKind::Quadrilateral) {
     stream << "Using range-dependent sound speed\n"
@@ -442,11 +470,25 @@ void writeConfigurationSummary(std::ostream& stream,
            << '\n';
   }
   writeBoundarySummary(stream, environment.seabed(), "bottom");
-  if (environment.soundSpeedProfile()
-          .points()
-          .front()
-          .attenuation.volumeModel == rayreuse::VolumeAttenuationModel::Thorp) {
-    stream << "THORP volume attenuation added\n";
+  const rayreuse::VolumeAttenuation& volumeAttenuation =
+      environment.volumeAttenuation();
+  switch (volumeAttenuation.model) {
+    case rayreuse::VolumeAttenuationModel::None:
+      break;
+    case rayreuse::VolumeAttenuationModel::Thorp:
+      stream << "THORP volume attenuation added\n";
+      break;
+    case rayreuse::VolumeAttenuationModel::FrancoisGarrison:
+      stream << "Francois-Garrison volume attenuation added\n";
+      break;
+    case rayreuse::VolumeAttenuationModel::Biological: {
+      stream << "Biological attenaution\n";
+      const auto& layers =
+          *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+              volumeAttenuation.parameters);
+      stream << "Number of Bio Layers = " << layers.size() << '\n';
+      break;
+    }
   }
   stream << "launch angles = " << simulation.launchFanPlan().launchAngleCount
          << '\n'

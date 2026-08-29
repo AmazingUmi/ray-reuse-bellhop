@@ -4,6 +4,7 @@
 #include <complex>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <numbers>
 #include <optional>
 #include <stdexcept>
@@ -20,6 +21,7 @@ namespace {
 
 using rayreuse::BeamFamily;
 using rayreuse::BeamWidthMode;
+using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::BroadbandNonReuseResult;
@@ -27,6 +29,7 @@ using rayreuse::BroadbandNonReuseSolver;
 using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
@@ -43,7 +46,35 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
 using rayreuse::ValidationError;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
+
+VolumeAttenuation makeThorpAttenuation() {
+  return VolumeAttenuation{.model = VolumeAttenuationModel::Thorp};
+}
+
+VolumeAttenuation makeFrancoisGarrisonAttenuation(double temperature) {
+  return VolumeAttenuation{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = temperature,
+                                               .salinityPsu = 35.0,
+                                               .pH = 8.0,
+                                               .meanDepthMeters = 50.0}};
+}
+
+VolumeAttenuation makeBiologicalAttenuation(double coefficient) {
+  return VolumeAttenuation{
+      .model = VolumeAttenuationModel::Biological,
+      .parameters =
+          std::make_shared<const BiologicalAttenuationLayers>(
+              BiologicalAttenuationLayers{{
+                  .minimumDepth = 0.0,
+                  .maximumDepth = 100.0,
+                  .resonanceFrequency = 1000.0,
+                  .qualityFactor = 2.0,
+                  .attenuationCoefficientDecibelsPerKilometer = coefficient}})};
+}
 
 SimulationCase makeSimulation(
     std::vector<double> frequencies,
@@ -53,7 +84,8 @@ SimulationCase makeSimulation(
     BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
     BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
     CervenyCoordinateSystem coordinateSystem =
-        CervenyCoordinateSystem::Cartesian) {
+        CervenyCoordinateSystem::Cartesian,
+    VolumeAttenuation volumeAttenuation = {}) {
   return SimulationCase(
       Environment(
           SoundSpeedProfile(
@@ -61,7 +93,8 @@ SimulationCase makeSimulation(
                    .depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
                SoundSpeedPoint{
                    .depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}}),
-          BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0)),
+          BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0),
+          std::move(volumeAttenuation)),
       Source{.depth = 50.0, .amplitude = 1.0},
       ReceiverGrid({25.0, 50.0, 75.0}, {10.0, 55.0, 100.0}),
       FrequencyGrid(std::move(frequencies)),
@@ -74,6 +107,15 @@ SimulationCase makeSimulation(
                          .maximumRayPoints = 100U},
       SourceBeamPattern::omnidirectional(), runMode, beamFamily, fieldComponent,
       curvatureMode, beamWidthMode, coordinateSystem);
+}
+
+SimulationCase makeAttenuatedSimulation(
+    std::vector<double> frequencies, VolumeAttenuation volumeAttenuation) {
+  return makeSimulation(
+      std::move(frequencies), SimulationRunMode::Coherent,
+      BeamFamily::CervenyGaussian, FieldComponent::Pressure,
+      BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+      CervenyCoordinateSystem::Cartesian, std::move(volumeAttenuation));
 }
 
 std::vector<double> makeFrequencies(std::size_t count) {
@@ -212,6 +254,97 @@ void testRepeatedRunIsDeterministic(Context& context) {
           context, first.workspaces[index]->front(), second.workspaces[index]->front(),
           "repeated parallel pressure is bitwise deterministic");
     }
+  }
+}
+
+void testVolumeAttenuationExecutionInvariants(Context& context) {
+  const std::vector<VolumeAttenuation> models = {
+      makeThorpAttenuation(), makeFrancoisGarrisonAttenuation(10.0),
+      makeBiologicalAttenuation(100.0)};
+  const ParallelRayReuseSettings settings{
+      .workerCount = 3U, .outputQueueCapacity = 1U, .memoryBudgetBytes = 0U};
+
+  for (const VolumeAttenuation& model : models) {
+    const SimulationCase simulation =
+        makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, model);
+    const BroadbandNonReuseResult nonReuse =
+        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+    const SerialRayReuseResult serial =
+        SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+    const StreamedParallelRun first = runParallel(simulation, settings, true);
+    const StreamedParallelRun repeated = runParallel(simulation, settings, true);
+
+    context.check(
+        serial.statistics.cacheFingerprintVerified &&
+            serial.statistics.cacheFingerprintBefore ==
+                serial.statistics.cacheFingerprintAfter &&
+            first.statistics.cacheFingerprintVerified &&
+            first.statistics.cacheFingerprintBefore ==
+                first.statistics.cacheFingerprintAfter &&
+            repeated.statistics.cacheFingerprintVerified &&
+            repeated.statistics.cacheFingerprintBefore ==
+                repeated.statistics.cacheFingerprintAfter &&
+            first.statistics.cacheFingerprintBefore ==
+                repeated.statistics.cacheFingerprintBefore,
+        "Thorp/FG/biological serial and repeated parallel projection preserve "
+        "the frozen cache fingerprint");
+
+    for (std::size_t index = 0U; index < simulation.frequencies().size();
+         ++index) {
+      context.check(first.workspaces[index].has_value() &&
+                        repeated.workspaces[index].has_value(),
+                    "attenuated parallel runs publish every frequency");
+      if (!first.workspaces[index] || !repeated.workspaces[index]) continue;
+      checkWorkspaceEqual(
+          context, serial.frequencyResults[index].workspaces.front(),
+          nonReuse.frequencyResults[index].workspace,
+          "attenuated serial reuse pressure equals non-reuse bitwise");
+      checkWorkspaceEqual(
+          context, first.workspaces[index]->front(),
+          nonReuse.frequencyResults[index].workspace,
+          "attenuated parallel reuse pressure equals non-reuse bitwise");
+      checkWorkspaceEqual(
+          context, repeated.workspaces[index]->front(),
+          first.workspaces[index]->front(),
+          "repeated attenuated parallel pressure is bitwise deterministic");
+    }
+  }
+
+  for (const auto& parameterPair :
+       {std::pair{makeFrancoisGarrisonAttenuation(10.0),
+                  makeFrancoisGarrisonAttenuation(18.0)},
+        std::pair{makeBiologicalAttenuation(100.0),
+                  makeBiologicalAttenuation(250.0)}}) {
+    const SimulationCase firstSimulation = makeAttenuatedSimulation(
+        {500.0, 1000.0, 2000.0}, parameterPair.first);
+    const SimulationCase changedSimulation = makeAttenuatedSimulation(
+        {500.0, 1000.0, 2000.0}, parameterPair.second);
+    const SerialRayReuseResult first = SerialRayReuseSolver::solve(
+        firstSimulation, 1.0, 50.0, {}, true);
+    const SerialRayReuseResult changed = SerialRayReuseSolver::solve(
+        changedSimulation, 1.0, 50.0, {}, true);
+    context.check(
+        first.statistics.cacheFingerprintBefore ==
+                changed.statistics.cacheFingerprintBefore &&
+            first.statistics.cacheFingerprintBefore ==
+                first.statistics.cacheFingerprintAfter &&
+            changed.statistics.cacheFingerprintBefore ==
+                changed.statistics.cacheFingerprintAfter,
+        "changing FG/biological payload preserves identical frozen geometry");
+
+    bool pressureDiffers = false;
+    for (std::size_t index = 0U; index < first.frequencyResults.size(); ++index) {
+      pressureDiffers = pressureDiffers ||
+                        !std::equal(
+                            first.frequencyResults[index]
+                                .workspaces.front().pressure().begin(),
+                            first.frequencyResults[index]
+                                .workspaces.front().pressure().end(),
+                            changed.frequencyResults[index]
+                                .workspaces.front().pressure().begin());
+    }
+    context.check(pressureDiffers,
+                  "changing FG/biological payload changes projected pressure");
   }
 }
 
@@ -560,6 +693,7 @@ int main() {
   Context context;
   testFrequencyCounts(context);
   testRepeatedRunIsDeterministic(context);
+  testVolumeAttenuationExecutionInvariants(context);
   testCoherenceModesMatchAcrossExecution(context);
   testSimpleGaussianMatchesAcrossExecution(context);
   testCartesianComponentsMatchAcrossExecution(context);

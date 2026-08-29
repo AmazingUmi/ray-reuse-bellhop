@@ -10,6 +10,11 @@ namespace rayreuse {
 
 PchipFrequencySsp::PchipFrequencySsp(
     const SoundSpeedProfile& profile, double frequency)
+    : PchipFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
+
+PchipFrequencySsp::PchipFrequencySsp(
+    const SoundSpeedProfile& profile, double frequency,
+    const VolumeAttenuation& volumeAttenuation)
     : frequency_(frequency), realProfile_(profile) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
     throw ValidationError("frequency must be finite and positive");
@@ -18,7 +23,8 @@ PchipFrequencySsp::PchipFrequencySsp(
     depths_.push_back(point.depth);
     nodeSoundSpeeds_.emplace_back(
         point.soundSpeed,
-        convertAttenuation(point.attenuation, frequency_, point.soundSpeed)
+        convertAttenuation(point.attenuation, volumeAttenuation, frequency_,
+                           point.soundSpeed, point.depth)
             .imaginarySoundSpeed);
   }
   coefficients_ = computePchipCoefficients(depths_, nodeSoundSpeeds_);

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include "rayreuse/model/boundary_geometry.hpp"
@@ -34,6 +35,34 @@ struct RawAttenuation {
   double powerLawExponent{1.0};
   double transitionFrequency{1.0};
   VolumeAttenuationModel volumeModel{VolumeAttenuationModel::None};
+};
+
+struct FrancoisGarrisonParameters {
+  double temperatureCelsius{20.0};
+  double salinityPsu{35.0};
+  double pH{8.0};
+  double meanDepthMeters{};
+};
+
+struct BiologicalAttenuationLayer {
+  double minimumDepth{};
+  double maximumDepth{};
+  double resonanceFrequency{};
+  double qualityFactor{};
+  double attenuationCoefficientDecibelsPerKilometer{};
+};
+
+using BiologicalAttenuationLayers =
+    std::vector<BiologicalAttenuationLayer>;
+using SharedBiologicalAttenuationLayers =
+    std::shared_ptr<const BiologicalAttenuationLayers>;
+using VolumeAttenuationParameters =
+    std::variant<std::monostate, FrancoisGarrisonParameters,
+                 SharedBiologicalAttenuationLayers>;
+
+struct VolumeAttenuation {
+  VolumeAttenuationModel model{VolumeAttenuationModel::None};
+  VolumeAttenuationParameters parameters{};
 };
 
 struct SoundSpeedPoint {
@@ -167,17 +196,20 @@ class BoundaryModel {
 class Environment {
  public:
   Environment(SoundSpeedProfile soundSpeedProfile, BoundaryModel seaSurface,
-              BoundaryModel seabed);
+              BoundaryModel seabed,
+              VolumeAttenuation volumeAttenuation = {});
 
   [[nodiscard]] const SoundSpeedProfile& soundSpeedProfile() const noexcept;
   [[nodiscard]] const BoundaryModel& seaSurface() const noexcept;
   [[nodiscard]] const BoundaryModel& seabed() const noexcept;
+  [[nodiscard]] const VolumeAttenuation& volumeAttenuation() const noexcept;
   [[nodiscard]] double waterDepth() const noexcept;
 
  private:
   SoundSpeedProfile soundSpeedProfile_;
   BoundaryModel seaSurface_;
   BoundaryModel seabed_;
+  VolumeAttenuation volumeAttenuation_;
 };
 
 }  // namespace rayreuse

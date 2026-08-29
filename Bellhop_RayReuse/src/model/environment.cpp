@@ -142,6 +142,89 @@ void validateReflectionTable(const SharedTabulatedReflectionTable& table) {
   }
 }
 
+void validateVolumeAttenuation(const VolumeAttenuation& attenuation) {
+  switch (attenuation.model) {
+    case VolumeAttenuationModel::None:
+    case VolumeAttenuationModel::Thorp:
+      if (!std::holds_alternative<std::monostate>(attenuation.parameters)) {
+        throw ValidationError(
+            "None and Thorp volume attenuation require empty parameters");
+      }
+      return;
+    case VolumeAttenuationModel::FrancoisGarrison: {
+      const auto* parameters =
+          std::get_if<FrancoisGarrisonParameters>(&attenuation.parameters);
+      if (parameters == nullptr) {
+        throw ValidationError(
+            "Francois-Garrison volume attenuation requires its parameters");
+      }
+      requireFinite(parameters->temperatureCelsius,
+                    "volumeAttenuation.temperatureCelsius");
+      requireFinite(parameters->salinityPsu, "volumeAttenuation.salinityPsu");
+      requireFinite(parameters->pH, "volumeAttenuation.pH");
+      requireFinite(parameters->meanDepthMeters,
+                    "volumeAttenuation.meanDepthMeters");
+      if (parameters->temperatureCelsius <= -273.0) {
+        throw ValidationError(
+            "volumeAttenuation.temperatureCelsius must exceed -273 C");
+      }
+      if (parameters->salinityPsu < 0.0) {
+        throw ValidationError(
+            "volumeAttenuation.salinityPsu must be non-negative");
+      }
+      if (parameters->meanDepthMeters < 0.0) {
+        throw ValidationError(
+            "volumeAttenuation.meanDepthMeters must be non-negative");
+      }
+      return;
+    }
+    case VolumeAttenuationModel::Biological: {
+      const auto* layers =
+          std::get_if<SharedBiologicalAttenuationLayers>(
+              &attenuation.parameters);
+      if (layers == nullptr || !*layers) {
+        throw ValidationError(
+            "biological volume attenuation requires immutable layers");
+      }
+      if ((*layers)->size() > 200U) {
+        throw ValidationError(
+            "biological volume attenuation supports at most 200 layers");
+      }
+      for (const BiologicalAttenuationLayer& layer : **layers) {
+        requireFinite(layer.minimumDepth,
+                      "volumeAttenuation.layer.minimumDepth");
+        requireFinite(layer.maximumDepth,
+                      "volumeAttenuation.layer.maximumDepth");
+        requireFinite(layer.resonanceFrequency,
+                      "volumeAttenuation.layer.resonanceFrequency");
+        requireFinite(layer.qualityFactor,
+                      "volumeAttenuation.layer.qualityFactor");
+        requireFinite(
+            layer.attenuationCoefficientDecibelsPerKilometer,
+            "volumeAttenuation.layer.attenuationCoefficientDecibelsPerKilometer");
+        if (layer.minimumDepth > layer.maximumDepth) {
+          throw ValidationError(
+              "biological layer minimum depth must not exceed maximum depth");
+        }
+        if (layer.resonanceFrequency <= 0.0) {
+          throw ValidationError(
+              "biological layer resonance frequency must be positive");
+        }
+        if (layer.qualityFactor <= 0.0) {
+          throw ValidationError(
+              "biological layer quality factor must be positive");
+        }
+        if (layer.attenuationCoefficientDecibelsPerKilometer < 0.0) {
+          throw ValidationError(
+              "biological layer attenuation coefficient must be non-negative");
+        }
+      }
+      return;
+    }
+  }
+  throw ValidationError("unknown volume attenuation model");
+}
+
 void validateQuadrilateralGrid(const SharedQuadrilateralSspGrid& grid,
                                std::size_t depthCount) {
   if (!grid || grid->depthCount != depthCount || grid->depthCount < 2U ||
@@ -416,10 +499,13 @@ double BoundaryModel::materialAttenuationDepthAtSegment(
 }
 
 Environment::Environment(SoundSpeedProfile soundSpeedProfile,
-                         BoundaryModel seaSurface, BoundaryModel seabed)
+                         BoundaryModel seaSurface, BoundaryModel seabed,
+                         VolumeAttenuation volumeAttenuation)
     : soundSpeedProfile_(std::move(soundSpeedProfile)),
       seaSurface_(std::move(seaSurface)),
-      seabed_(std::move(seabed)) {
+      seabed_(std::move(seabed)),
+      volumeAttenuation_(std::move(volumeAttenuation)) {
+  validateVolumeAttenuation(volumeAttenuation_);
   if (seaSurface_.geometry().orientation() != BoundaryOrientation::Upper) {
     throw ValidationError("sea-surface geometry must be upper");
   }
@@ -466,6 +552,10 @@ const BoundaryModel& Environment::seaSurface() const noexcept {
 }
 
 const BoundaryModel& Environment::seabed() const noexcept { return seabed_; }
+
+const VolumeAttenuation& Environment::volumeAttenuation() const noexcept {
+  return volumeAttenuation_;
+}
 
 double Environment::waterDepth() const noexcept {
   return seabed_.depth() - seaSurface_.depth();

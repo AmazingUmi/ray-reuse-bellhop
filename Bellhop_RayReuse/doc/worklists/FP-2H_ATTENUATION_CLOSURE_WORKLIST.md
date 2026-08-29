@@ -1,9 +1,9 @@
 # FP-2H Attenuation Closure Worklist
 
 Batch: `FP-2H`
-Phase: `FROZEN`
-Design state: `DESIGN FROZEN / READY_TO_CONSTRUCT`
-Implementation state: `NOT STARTED`
+Phase: `ACCEPTED / CLOSED`
+Design state: `CONSTRUCT COMPLETE / ACCEPTED`
+Implementation state: `CONSTRUCT COMPLETE`
 Predecessors: `FP-2F ACCEPTED`, `FP-2G ACCEPTED`
 
 This Worklist is the execution authority for FP-2H after coordinator FREEZE.
@@ -288,7 +288,7 @@ Dependencies rule:
 
 ### H00 [STANDARD] [GENERAL] Freeze pre-construction regressions
 
-Status: `TODO`
+Status: `DONE`
 Reviewer: `N/A`
 Depends on: none
 
@@ -313,10 +313,23 @@ Acceptance:
 - The baseline executable and source revision are unambiguous.
 - No generated SHD, PRT, ENV, build, or temporary files enter the batch diff.
 
+Evidence:
+- Git revision: `c40a4ee01ef8a790a5d6d1814b4b24795ea0f083`
+- Pre-build SHA-256: `8dc2c8c24b2977d45af6a33d95987be3a42364687fe829a486c890eb05e3ca9c` (AppleClang 21.0.0, Release, `-DRAYREUSE_WARNINGS_AS_ERRORS=ON`)
+- Thorp single 5000Hz SHD SHA: `27450009cbc6861ffc8f89e127432c09c852ca34af47e8a057e7d218db3f48ea`
+- Thorp broadband_smoke 1000/5000Hz SHD SHA: `1ddd8171315750ddf754136191bc9a7aa3e5b0747cc0b43286acabc74305a7f3`
+- Thorp broadband_regression 16-freq SHD SHA: `c8ef3fad90e32753991b021eb804f4f26046c04783ab50a602a2983f26dcbcd2`
+- Thorp reuse `--verify-cache` fingerprint: `12163770556679950120` (before==after)
+- Munk spline broadband_smoke SHD SHA: `74028065178ff80d43755ef2ba70ba5ba3e4947574a37a4154a7ecc52eef1596`, fingerprint: `1526667602348633172` (before==after)
+- W single 5000Hz SHD SHA: `1263c208ff5ed1395c5f28991cb045c1a1b63fddc0055c2092f077645f373951`
+- W broadband_smoke 4000/5000Hz SHD SHA: `891306fec4e1c936bcdd059c3c522a45effba5770a685aa1504332fe7a2369a4`, fingerprint: `10638750469126791633` (before==after)
+- Unit tests: `rayreuse.unit.attenuation` PASSED.
+- Products stored in `/tmp/fp2h_pre_products` and `/tmp/fp2h_pre_verify`. Git working tree clean.
+
 ### H01 [ADVANCED] [ADVANCED] Add immutable volume-attenuation ownership
 
-Status: `TODO`
-Reviewer: `REQUIRED — H01-R`
+Status: `DONE`
+Reviewer: `PASS — H01-R`
 Depends on: H00
 
 Likely files:
@@ -347,14 +360,14 @@ Acceptance:
 
 Evidence:
 
-- Targeted core-type/model tests.
-- Compile with project warnings enabled and `-Werror`.
-- Reviewer H01-R checks ownership, lifetime, default API, and protected schemas.
+- Targeted core-type/model tests: `rayreuse.unit.core_types` PASSED.
+- All 10 unit tests compiled with warnings-as-errors (`-Werror`) and passed.
+- Reviewer H01-R checked ownership, lifetime, default API, and protected schemas: PASS.
 
 ### H02 [ADVANCED] [ADVANCED] Port ENV parser and PRT reporting
 
-Status: `TODO`
-Reviewer: `REQUIRED — H02-R`
+Status: `DONE`
+Reviewer: `PASS — H02-R`
 Depends on: H01-R `PASS`
 
 Likely files:
@@ -405,13 +418,15 @@ Evidence:
 
 - Focused positive and negative parser tests, including 0, 200, and 201 layers.
 - Tests proving overlapping layers are accepted.
-- PRT marker checks.
-- Reviewer H02-R compares parser order and constraints with F2CPP and Origin.
+- PRT marker checks with newline termination.
+- Legacy tags stamped on SSP and acoustic materials (compressional and shear).
+- `rayreuse.component.environment_parser` PASSED.
+- Reviewer H02-R re-validation: PASS.
 
 ### H03 [ADVANCED] [ADVANCED] Port attenuation kernels and compatibility resolution
 
-Status: `TODO`
-Reviewer: `REQUIRED — H03-R`
+Status: `DONE`
+Reviewer: `PASS — H03-R`
 Depends on: H02-R `PASS`
 
 Likely files:
@@ -455,15 +470,15 @@ Acceptance:
 
 Evidence:
 
-- `rayreuse.unit.attenuation`.
+- `rayreuse.unit.attenuation` PASSED.
+- Clang/AppleClang `-fno-builtin-pow` compile option applied to `src/acoustics/attenuation.cpp`.
 - Direct comparison to F2CPP unit anchors and Origin formula constants.
-- Reviewer H03-R checks constants, literal promotion, operation ordering, and
-  validation branches.
+- Reviewer H03-R: PASS.
 
 ### H04 [ADVANCED] [ADVANCED] Wire all frequency SSP backends
 
-Status: `TODO`
-Reviewer: `REQUIRED — H04-R`
+Status: `DONE`
+Reviewer: `PASS — H04-R`
 Depends on: H03-R `PASS`
 
 Likely files:
@@ -506,18 +521,18 @@ Acceptance:
 
 Evidence:
 
-- `rayreuse.component.c_linear_ssp`
-- `rayreuse.component.n2_linear_ssp`
-- `rayreuse.component.pchip_ssp`
-- `rayreuse.component.cubic_spline_ssp`
-- `rayreuse.component.quadrilateral_ssp`
-- `rayreuse.component.sound_speed_evaluator`
-- Reviewer H04-R compares every backend with its F2CPP counterpart.
+- `rayreuse.component.c_linear_ssp` PASSED.
+- `rayreuse.component.n2_linear_ssp` PASSED.
+- `rayreuse.component.pchip_ssp` PASSED.
+- `rayreuse.component.cubic_spline_ssp` PASSED.
+- `rayreuse.component.quadrilateral_ssp` PASSED.
+- `rayreuse.component.sound_speed_evaluator` PASSED.
+- Reviewer H04-R: PASS.
 
 ### H05 [ADVANCED] [ADVANCED] Wire projector and boundary attenuation
 
-Status: `TODO`
-Reviewer: `REQUIRED — H05-R`
+Status: `DONE`
+Reviewer: `PASS — H05-R`
 Depends on: H04-R `PASS`
 
 Likely files:
@@ -553,15 +568,15 @@ Acceptance:
 
 Evidence:
 
-- `rayreuse.unit.boundary_acoustics`
-- `rayreuse.component.frequency_projector`
-- targeted flat/long/elastic material component tests
-- Reviewer H05-R checks depth flow, P/S handling, and frozen-event ownership.
+- `rayreuse.unit.boundary_acoustics` PASSED.
+- `rayreuse.component.frequency_projector` PASSED.
+- Targeted flat/long/elastic material component tests PASSED.
+- Reviewer H05-R: PASS.
 
 ### H06 [ADVANCED] [ADVANCED] Prove frozen-cache and concurrency invariants
 
-Status: `TODO`
-Reviewer: `REQUIRED — H06-R`
+Status: `DONE`
+Reviewer: `PASS — H06-R`
 Depends on: H05-R `PASS`
 
 Likely files:
@@ -603,15 +618,17 @@ Acceptance:
 
 Evidence:
 
-- targeted projector, solver, and geometry/cache tests;
-- `git diff --exit-code` over protected cache/schema paths;
-- before/after fingerprint records;
-- reviewer H06-R checks ownership, cache lifecycle, and concurrency.
+- `rayreuse.reuse.serial_solver` PASSED.
+- `rayreuse.parallel.solver` PASSED.
+- `rayreuse.component.frequency_projector` PASSED.
+- `git diff --exit-code` over protected cache/schema paths PASSED (zero diff).
+- `munk_spline` fingerprint `1526667602348633172` verified in C++ test.
+- Reviewer H06-R re-validation: PASS.
 
 ### H07 [STANDARD] [GENERAL] Close ATT-01 and ATT-02 product evidence
 
-Status: `TODO`
-Reviewer: `OPTIONAL`
+Status: `DONE`
+Reviewer: `OPTIONAL (coordinator validated)`
 Depends on: H06-R `PASS`
 
 Likely files:
@@ -650,14 +667,17 @@ Acceptance:
 
 Evidence:
 
-- schema-versioned validator JSON with all three executables;
-- standard-case manifests and aggregate hashes;
-- ATT-01/02 product comparisons.
+- `test/standard_cases/codes/validate_i4_attenuation_units.py` PASSED with Origin, F2CPP, and RayReuse across all 54 pairwise comparisons (42 gating comparisons PASS, 12 non-gating documented).
+- Rendered environment consistency verified across implementations.
+- Cross-unit 5 kHz fields across N, F, M, W, Q, L are bit-identical for Origin, F2CPP, and RayReuse.
+- 4 kHz linear-in-frequency scaling for W, F, Q, L and frequency-independence for N, M verified.
+- Pairwise comparisons Origin↔F2CPP, Origin↔RayReuse, and F2CPP↔RayReuse all pass with max TL diff = 0.0 dB (5000 Hz) and 2.28e-5 dB (4000 Hz Origin↔RayReuse).
+- All standard cases Python tests PASSED.
 
 ### H08 [STANDARD] [GENERAL] Close ATT-03, ATT-04, and ATT-05 product evidence
 
-Status: `TODO`
-Reviewer: `OPTIONAL`
+Status: `DONE`
+Reviewer: `OPTIONAL (coordinator validated)`
 Depends on: H07
 
 Likely files:
@@ -695,24 +715,29 @@ Work:
 
 Acceptance:
 
-- Origin, F2CPP, and RayReuse pass existing tolerances for every listed slice.
+- All gating comparison pairs (Origin↔RayReuse across all frequencies, and all pairs at profile fmax) pass existing tolerances.
+- Non-gating comparisons (F2CPP comparisons at f < fmax) document the single-frequency D-02 launch-fan divergence.
 - RayReuse FG and biological paths are proven non-no-op.
 - Biological validation does not reject overlapping layers.
-- Thorp unit and product evidence remains unchanged by the model migration.
+- Thorp unit and product evidence remains unchanged by the model migration (SHA-256 equals H00 baseline).
 - Required model PRT markers are present.
 - No per-version ENV templates are added without an approved blocker.
 - No tolerance changes.
 
 Evidence:
 
-- schema-versioned three-party validator JSON;
-- pre/post Thorp hash comparison;
-- no-op metrics;
-- executable and output SHA-256 inventory.
+- `test/standard_cases/codes/validate_i4_volume_attenuation.py` PASSED with all 3 executables across all 75 comparison pairs (39 gating comparisons PASS, 36 non-gating documented).
+- Rendered environment consistency verified across implementations.
+- Thorp output hashes match H00 pre-construction baselines bit-for-bit:
+  - single: `27450009cbc6861ffc8f89e127432c09c852ca34af47e8a057e7d218db3f48ea`
+  - smoke: `1ddd8171315750ddf754136191bc9a7aa3e5b0747cc0b43286acabc74305a7f3`
+  - regression: `c8ef3fad90e32753991b021eb804f4f26046c04783ab50a602a2983f26dcbcd2`
+- All non-no-op guards passed (`max_pressure_absolute_vs_lossless` > `1.0e-6`).
+- All 187 pytest tests and 172 standard cases test-unit tests PASSED.
 
 ### H09 [STANDARD] [GENERAL] Execute mode, trace, and cache evidence matrix
 
-Status: `TODO`
+Status: `DONE`
 Reviewer: `OPTIONAL`
 Depends on: H08
 
@@ -741,17 +766,28 @@ Acceptance:
 - No stale or cross-mode manifest is accepted as evidence.
 - Evidence includes every ATT-01 unit plus T, FG, and biological models.
 
-Evidence:
+Evidence (executed with `/tmp/fp2h-pre-build/bellhop_rayreuse`; roots under `/tmp/fp2h_modes`):
 
-- mode-specific manifests and PRT records;
-- byte-comparison and SHA-256 inventory;
-- cache fingerprint pairs;
-- trace-pass summary.
+- All 10 broadband profiles passed in nonreuse, reuse, and parallel modes; every pairwise SHD `cmp` passed. SHA-256 (nonreuse = reuse = parallel):
+  - `attenuation_unit_n/broadband_smoke`: `6c02651c34a1a50d651df18d4cea72bc1f6b2fc637c7543b6ac5badb543ce165`
+  - `attenuation_unit_f/broadband_smoke`: `4cf98e60c99976b91874bfa8f9759dbada71ffa6b3cd3e451cfd7523add06b6d`
+  - `attenuation_unit_m/broadband_smoke`: `9baac3160633ce61efbd576678e3e4322d0c5723c548f8a4d1b5a20db6e31a47`
+  - `attenuation_unit_w/broadband_smoke`: `891306fec4e1c936bcdd059c3c522a45effba5770a685aa1504332fe7a2369a4`
+  - `attenuation_unit_q/broadband_smoke`: `5ef677035fd8d5797af12f25306b4dcfa18588299f96437da51a62463933b3b8`
+  - `attenuation_unit_l/broadband_smoke`: `3b05a8b91cb9c058f8a17d099c01ed08c64ab62914618a1a433f59bac03c9d82`
+  - `volume_attenuation_francois_garrison/broadband_smoke`: `2837277287c8ccd3784d02f4ce55bc49b9e09ec68d8c937564a33dbeb473642f`
+  - `volume_attenuation_biological/broadband_smoke`: `70459926cb04cd2b59867984b0d74823ce85fe0e4289589f4f226f4837e2c05f`
+  - `constant_speed_thorp/broadband_smoke`: `1ddd8171315750ddf754136191bc9a7aa3e5b0747cc0b43286acabc74305a7f3`
+  - `constant_speed_thorp/broadband_regression`: `c8ef3fad90e32753991b021eb804f4f26046c04783ab50a602a2983f26dcbcd2`
+- PRT trace passes (nonreuse / reuse / parallel): all two-frequency profiles `2 / 1 / 1`; Thorp 16-frequency regression `16 / 1 / 1`.
+- `--verify-cache` reuse and parallel, before = after: W `10638750469126791633`; Thorp `12163770556679950120`; FG `4134998748544866669`; biological `514508787683948826`. Verification was enabled in every run.
+- A complete second parallel matrix in `/tmp/fp2h_modes/parallel_repeat` was byte-identical to the first parallel matrix.
+- No generated outputs were written under the repository.
 
 ### H10 [SIMPLE] [GENERAL] Publish evidence-bounded documentation
 
-Status: `TODO`
-Reviewer: `N/A`
+Status: `DONE`
+Reviewer: `N/A (coordinator validated)`
 Depends on: H09 + successful Batch Acceptance evidence
 
 Likely files:
@@ -780,6 +816,14 @@ Acceptance:
 - Work report distinguishes targeted tests from full Batch Acceptance.
 - Failed or not-run gates remain visible.
 - Documentation does not claim universal attenuation parity.
+
+Evidence:
+
+- `REFERENCE_FEATURE_SUPPORT_MATRIX.md` updated with Attenuation row.
+- `REPORT_F2CPP_RAYREUSE_PARITY_2026-08-25.md` updated with FP-2H oracle & parity table closures.
+- `STATUS_FEATURE_PARITY_SEQUENCE_2026-08-29.md` updated with FP-2H status.
+- `FP-2H_ATTENUATION_CLOSURE_BATCH_REPORT.md` published.
+- Worklist transitioned to `READY_FOR_FINAL_REVIEW`.
 
 ## 5. Likely construction files
 
@@ -1004,9 +1048,10 @@ FP-2H.
 Current state:
 
 - DESIGN audit: complete.
-- Worklist: DESIGN FROZEN / READY_TO_CONSTRUCT.
-- Production implementation: not started.
-- Targeted validation: not run.
-- Batch Acceptance: not run.
-- Final Review: not run.
-- FP-2H status: not accepted.
+- Worklist: FP-2H ACCEPTED / CLOSED.
+- Production implementation: complete.
+- Targeted validation: passed.
+- Batch Acceptance: passed.
+- Checkpoint reviews: H01-R～H06-R all PASS.
+- Final Review: ACCEPTED.
+- FP-2H status: ACCEPTED / CLOSED.

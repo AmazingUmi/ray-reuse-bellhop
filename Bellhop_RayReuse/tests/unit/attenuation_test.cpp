@@ -1,8 +1,10 @@
 #include "rayreuse/acoustics/attenuation.hpp"
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <numbers>
 
 #include "rayreuse/error.hpp"
@@ -13,15 +15,23 @@ namespace {
 using rayreuse::AttenuationConversion;
 using rayreuse::attenuationNpPerMeter;
 using rayreuse::AttenuationUnit;
+using rayreuse::BiologicalAttenuationLayer;
+using rayreuse::BiologicalAttenuationLayers;
+using rayreuse::biologicalAttenuationNpPerMeter;
 using rayreuse::convertAttenuation;
+using rayreuse::FrancoisGarrisonParameters;
+using rayreuse::francoisGarrisonAttenuationNpPerMeter;
 using rayreuse::imaginarySoundSpeedFromAttenuation;
 using rayreuse::RawAttenuation;
 using rayreuse::thorpAttenuationNpPerMeter;
 using rayreuse::ValidationError;
+using rayreuse::VolumeAttenuation;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
 constexpr double kDecibelsPerNeper = 8.6858896;
+constexpr double kLegacyDecibelsPerKilometerPerNeper =
+    static_cast<double>(8685.8896F);
 
 RawAttenuation rawAttenuation(double value, AttenuationUnit unit) {
   return RawAttenuation{
@@ -96,6 +106,223 @@ void testThorpAndImaginarySoundSpeed(Context& context) {
                 "the high-frequency no-attenuation case stays exactly zero");
   context.check(zero.imaginarySoundSpeed == 0.0,
                 "zero attenuation produces exactly zero imaginary speed");
+}
+
+void testFrancoisGarrisonOracle(Context& context) {
+  constexpr FrancoisGarrisonParameters canonical{
+      .temperatureCelsius = 20.0,
+      .salinityPsu = 35.0,
+      .pH = 8.0,
+      .meanDepthMeters = 0.0,
+  };
+  struct Anchor {
+    double frequency;
+    double decibelsPerKilometer;
+  };
+  constexpr std::array anchors{
+      Anchor{10.0, 7.01348825486111722e-6},
+      Anchor{100.0, 6.98801686474176636e-4},
+      Anchor{1000.0, 5.17084696772871361e-2},
+      Anchor{10000.0, 7.36946806223103268e-1},
+      Anchor{50000.0, 1.29959477197854376e1},
+  };
+  for (const Anchor& anchor : anchors) {
+    context.checkNear(
+        francoisGarrisonAttenuationNpPerMeter(canonical, anchor.frequency),
+        anchor.decibelsPerKilometer /
+            kLegacyDecibelsPerKilometerPerNeper,
+        2.0e-20, "Francois-Garrison matches the gfortran oracle");
+  }
+
+  constexpr FrancoisGarrisonParameters cold{
+      .temperatureCelsius = 10.0,
+      .salinityPsu = 35.0,
+      .pH = 8.0,
+      .meanDepthMeters = 1000.0,
+  };
+  constexpr FrancoisGarrisonParameters warm{
+      .temperatureCelsius = 25.0,
+      .salinityPsu = 35.0,
+      .pH = 8.0,
+      .meanDepthMeters = 1000.0,
+  };
+  context.checkNear(
+      francoisGarrisonAttenuationNpPerMeter(cold, 10000.0),
+      8.45396087874079272e-1 / kLegacyDecibelsPerKilometerPerNeper,
+      2.0e-20, "Francois-Garrison cold branch matches Origin");
+  context.checkNear(
+      francoisGarrisonAttenuationNpPerMeter(warm, 10000.0),
+      5.93874271560436817e-1 / kLegacyDecibelsPerKilometerPerNeper,
+      2.0e-20, "Francois-Garrison warm branch matches Origin");
+}
+
+void testBiologicalOracle(Context& context) {
+  const BiologicalAttenuationLayer first{
+      .minimumDepth = 100.0,
+      .maximumDepth = 200.0,
+      .resonanceFrequency = 1000.0,
+      .qualityFactor = 10.0,
+      .attenuationCoefficientDecibelsPerKilometer = 0.25,
+  };
+  const BiologicalAttenuationLayer second{
+      .minimumDepth = 200.0,
+      .maximumDepth = 300.0,
+      .resonanceFrequency = 500.0,
+      .qualityFactor = 5.0,
+      .attenuationCoefficientDecibelsPerKilometer = 0.5,
+  };
+  const BiologicalAttenuationLayers layers{first, second};
+  struct Anchor {
+    double depth;
+    double expected;
+    const char* message;
+  };
+  constexpr std::array anchors{
+      Anchor{99.0, 0.0, "above biological layers is lossless"},
+      Anchor{100.0, 2.87823136280544820e-3, "top endpoint is inclusive"},
+      Anchor{199.0, 2.87823136280544820e-3, "layer interior matches"},
+      Anchor{200.0, 2.97377431260811885e-3,
+             "shared endpoint accumulates both layers"},
+      Anchor{300.0, 9.55429498026704745e-5,
+             "bottom endpoint is inclusive"},
+      Anchor{301.0, 0.0, "below biological layers is lossless"},
+  };
+  for (const Anchor& anchor : anchors) {
+    context.checkNear(
+        biologicalAttenuationNpPerMeter(layers, anchor.depth, 1000.0),
+        anchor.expected, 0.0, anchor.message);
+  }
+  context.checkNear(biologicalAttenuationNpPerMeter({}, 200.0, 1000.0),
+                    0.0, 0.0, "zero biological layers are supported");
+
+  const BiologicalAttenuationLayers maximumLayers(200U, first);
+  context.checkNear(
+      biologicalAttenuationNpPerMeter(maximumLayers, 100.0, 1000.0),
+      200.0 * 2.87823136280544820e-3, 2.0e-15,
+      "200 biological layers are supported and additive");
+  const BiologicalAttenuationLayers tooManyLayers(201U, first);
+  context.expectThrows<ValidationError>(
+      [&tooManyLayers] {
+        static_cast<void>(biologicalAttenuationNpPerMeter(
+            tooManyLayers, 100.0, 1000.0));
+      },
+      "201 biological layers are rejected");
+}
+
+void testCompatibilityResolution(Context& context) {
+  constexpr double frequency = 1000.0;
+  constexpr double soundSpeed = 1500.0;
+  constexpr double depth = 100.0;
+  const double base = 1.0e-5;
+  const double thorp = thorpAttenuationNpPerMeter(frequency);
+  const FrancoisGarrisonParameters fgParameters{};
+  const double fg =
+      francoisGarrisonAttenuationNpPerMeter(fgParameters, frequency);
+  const BiologicalAttenuationLayers layers{{
+      .minimumDepth = 0.0,
+      .maximumDepth = 200.0,
+      .resonanceFrequency = 500.0,
+      .qualityFactor = 5.0,
+      .attenuationCoefficientDecibelsPerKilometer = 0.5,
+  }};
+  const double biological =
+      biologicalAttenuationNpPerMeter(layers, depth, frequency);
+  const VolumeAttenuation none{};
+  const VolumeAttenuation thorpEnvironment{
+      .model = VolumeAttenuationModel::Thorp};
+  const VolumeAttenuation fgEnvironment{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = fgParameters};
+  const VolumeAttenuation biologicalEnvironment{
+      .model = VolumeAttenuationModel::Biological,
+      .parameters =
+          std::make_shared<const BiologicalAttenuationLayers>(layers)};
+
+  auto raw = rawAttenuation(base, AttenuationUnit::NepersPerMeter);
+  context.checkNear(attenuationNpPerMeter(raw, none, frequency, soundSpeed,
+                                         depth),
+                    base, 0.0, "raw None and environment None use base only");
+  raw.volumeModel = VolumeAttenuationModel::Thorp;
+  context.checkNear(attenuationNpPerMeter(raw, none, frequency, soundSpeed,
+                                         depth),
+                    base + thorp, 0.0,
+                    "raw Thorp and environment None preserve legacy Thorp");
+  raw.volumeModel = VolumeAttenuationModel::None;
+  context.checkNear(attenuationNpPerMeter(raw, thorpEnvironment, frequency,
+                                         soundSpeed, depth),
+                    base + thorp, 0.0,
+                    "raw None and environment Thorp add Thorp");
+  context.checkNear(attenuationNpPerMeter(raw, fgEnvironment, frequency,
+                                         soundSpeed, depth),
+                    base + fg, 0.0,
+                    "raw None and environment Francois-Garrison add FG");
+  context.checkNear(attenuationNpPerMeter(raw, biologicalEnvironment,
+                                         frequency, soundSpeed, depth),
+                    base + biological, 0.0,
+                    "raw None and environment biological add biological");
+  raw.volumeModel = VolumeAttenuationModel::Thorp;
+  context.checkNear(attenuationNpPerMeter(raw, thorpEnvironment, frequency,
+                                         soundSpeed, depth),
+                    base + thorp, 0.0,
+                    "matching Thorp models add volume exactly once");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, fgEnvironment, frequency, soundSpeed, depth));
+      },
+      "raw Thorp conflicts with environment Francois-Garrison");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, biologicalEnvironment, frequency, soundSpeed, depth));
+      },
+      "raw Thorp conflicts with environment biological");
+  raw.volumeModel = VolumeAttenuationModel::FrancoisGarrison;
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, none, frequency, soundSpeed, depth));
+      },
+      "raw Francois-Garrison without environment parameters is rejected");
+  context.checkNear(attenuationNpPerMeter(raw, fgEnvironment, frequency,
+                                         soundSpeed, depth),
+                    base + fg, 0.0,
+                    "matching Francois-Garrison adds volume exactly once");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, thorpEnvironment, frequency, soundSpeed, depth));
+      },
+      "raw Francois-Garrison conflicts with environment Thorp");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, biologicalEnvironment, frequency, soundSpeed, depth));
+      },
+      "raw Francois-Garrison conflicts with environment biological");
+  raw.volumeModel = VolumeAttenuationModel::Biological;
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, none, frequency, soundSpeed, depth));
+      },
+      "raw biological without environment parameters is rejected");
+  context.checkNear(attenuationNpPerMeter(raw, biologicalEnvironment,
+                                         frequency, soundSpeed, depth),
+                    base + biological, 0.0,
+                    "matching biological adds volume exactly once");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, thorpEnvironment, frequency, soundSpeed, depth));
+      },
+      "raw biological conflicts with environment Thorp");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(attenuationNpPerMeter(
+            raw, fgEnvironment, frequency, soundSpeed, depth));
+      },
+      "raw biological conflicts with environment Francois-Garrison");
 }
 
 void testLegacyAdditionalUnits(Context& context) {
@@ -229,6 +456,9 @@ int main() {
   Context context;
   testRequiredUnits(context);
   testThorpAndImaginarySoundSpeed(context);
+  testFrancoisGarrisonOracle(context);
+  testBiologicalOracle(context);
+  testCompatibilityResolution(context);
   testLegacyAdditionalUnits(context);
   testRawInputIsImmutable(context);
   testInvalidAndUnsupportedInputs(context);

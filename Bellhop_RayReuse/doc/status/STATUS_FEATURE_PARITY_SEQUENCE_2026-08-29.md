@@ -13,7 +13,7 @@
 | FP-2E（前置补验收） | Quadrilateral SSP `Q`/`.ssp` | Re-Final Review `ACCEPTED`（2026-08-29），前置补验收仅覆盖文档 scope/工作树两项 R1 修复 |
 | FP-2F | Source/Receiver Generalization | **全流程完成：`ACCEPTED`，commit `763c585`** |
 | FP-2G | Boundary/Material Closure | **全流程完成：`ACCEPTED`**（Re-Final Review `ACCEPTED` 2026-08-29） |
-| FP-2H | Attenuation Closure | **DESIGN 进行中**（architect 规划中） |
+| FP-2H | Attenuation Closure | **全流程完成：`ACCEPTED / CLOSED`** |
 
 ## 2. FP-2F 完成情况（已关闭）
 
@@ -69,17 +69,32 @@ A01+A02 reviewer checkpoint 审查已获得 `PASS` 结论。A03–B02 全部完�
 
 FP-2G 已 CLOSED。按序列授权，自动进入 FP-2H DESIGN 阶段。
 
-## 4. FP-2H 输入事实（未开始）
+## 4. FP-2H 完成情况（已关闭）
 
-- 候选方向：N/F/M/Q/L attenuation product oracle closure、
-  Francois–Garrison、biological attenuation。
-- 已知事实（来自 FP-2G DESIGN 审计，供 FP-2H architect 复核）：
-  - attenuation units 转换（N/F/M/W/Q/L）runtime 与 unit tests 已存在，
-    六个 `attenuation_unit_*` 共享 case 仅缺 rayreuse allow-list 与三方
-    比较（纯证据闭环，原 FP-2G C 轨设计可参考）；
-  - `volume_attenuation_francois_garrison` / `volume_attenuation_biological`
-    为真实实现 gap（RayReuse parser 显式拒绝），需独立实现设计；
-  - W 单位的 ATT-02 parity 目前仅由其他 case 间接佐证。
+### 4.1 DESIGN（已冻结）
+
+- 目标：全面闭环 ATT-01～ATT-05，覆盖 N/F/M/W/Q/L 单位、W 频率响应、Thorp 保护、FG、Biological（0–200 层重叠）、五大 SSP 节点优先转换、边界材料衰减接入及三模式逐字节一致性。
+- Worklist：`doc/worklists/FP-2H_ATTENUATION_CLOSURE_WORKLIST.md`。
+
+### 4.2 CONSTRUCT 进度与审查
+
+| Task | 等级 | 状态 | Reviewer | 关键证据 |
+|---|---|---|---|---|
+| H00 冻结前置基线 | STANDARD | DONE | N/A | 捕获 pre-FP-2H SHA-256、Thorp 单频/smoke/16频回归基线、W 基线、Munk spline 指纹 `1526667602348633172` |
+| H01 不可变衰减所有权 | ADVANCED | DONE | PASS (H01-R) | `Environment` 增加 `VolumeAttenuation`，FG 值所有权与 Biological 共享层，单元测试全覆盖 |
+| H02 ENV 解析与 PRT 报告 | ADVANCED | DONE | PASS (H02-R) | 3–6 字符选项、FG 4 参数、Biological 0–200 层；PRT 生成 Thorp/FG/Biological 标记 |
+| H03 衰减内核与兼容性裁决 | ADVANCED | DONE | PASS (H03-R) | `-fno-builtin-pow` 编译选项；FG 与 Biological 内核；§3.2 矩阵（防双重衰减）；单元测试覆盖 5 锚点与 16 组合 |
+| H04 五频域 SSP 后端接入 | ADVANCED | DONE | PASS (H04-R) | C/N/P/S/Q 五后端节点优先转换；Q 衰减用参考节点实声速；组件测试验证生物层深度与基线不变 |
+| H05 投影器与边界衰减接入 | ADVANCED | DONE | PASS (H05-R) | 边界声学函数接收 `VolumeAttenuation`；纵/横波衰减；长格式 `1.0e20` legacy 深度；粒度隔离；`FrequencyProjector` 接入 |
+| H06 冻结缓存与并发不变性 | ADVANCED | DONE | PASS (H06-R) | 证明受保护文件零改动；单频/串行/并行复用指纹前后不变；参数变化压强不同但几何与指纹完全相同；Munk spline 锚点不变 |
+| H07 ATT-01 / ATT-02 闭环 | STANDARD | DONE | N/A | 6 个 `attenuation_unit_*` case.toml 增加 rayreuse；`validate_i4_attenuation_units.py` 执行 54 组配对比较（42 组 gating 全部 PASS，12 组非 gating 记录 F2CPP 单频自规划差异）；5 kHz 跨单位逐位相同；4 kHz 频率缩放通过 |
+| H08 ATT-03 / 04 / 05 闭环 | STANDARD | DONE | N/A | FG 与 Biological case.toml 增加 rayreuse；`validate_i4_volume_attenuation.py` 执行 75 组配对比较（39 组 gating 全部 PASS，36 组非 gating 记录 F2CPP 单频自规划差异）；Thorp SHA-256 与 H00 逐位一致；9 个非 no-op guard 全过 |
+| H09 模式/追踪/缓存证据矩阵 | STANDARD | DONE | N/A | 10 个宽带 profile 在 nonreuse/reuse/parallel 下 SHD 逐字节一致；追踪次数 2/1/1 与 16/1/1；`--verify-cache` before==after 全量通过 |
+| H10 文档发布与批次报告 | SIMPLE | DONE | N/A | 发布矩阵、进度快照、批次报告，Worklist 与批次状态转为 `ACCEPTED / CLOSED` |
+
+### 4.3 审查与验收状态
+
+H01-R～H06-R 六个 ADVANCED reviewer checkpoint 审查全获 `PASS`。Batch Acceptance 亲验通过（41/41 CTest, 187 pytest, 172 test-unit, ATT-01/02 54 组比较, ATT-03/04/05 75 组比较, 10 宽带三模式 byte-identical 与 cache fingerprint 守恒）。Final Review 结论为 **`ACCEPTED`**。FP-2H 已 **`CLOSED`**。
 
 ## 5. 全局注意事项
 

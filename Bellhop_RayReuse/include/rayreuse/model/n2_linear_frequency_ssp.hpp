@@ -20,6 +20,8 @@ namespace rayreuse {
 class N2LinearFrequencySsp {
  public:
   N2LinearFrequencySsp(const SoundSpeedProfile& profile, double frequency);
+  N2LinearFrequencySsp(const SoundSpeedProfile& profile, double frequency,
+                       const VolumeAttenuation& volumeAttenuation);
 
   [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
       noexcept {

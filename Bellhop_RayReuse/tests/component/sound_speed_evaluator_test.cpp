@@ -27,6 +27,9 @@ using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
 using rayreuse::CubicSplineFrequencySsp;
 using rayreuse::CubicSplineSsp;
+using rayreuse::BoundaryModel;
+using rayreuse::Environment;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencySspEvaluator;
 using rayreuse::GeometrySspEvaluator;
 using rayreuse::N2LinearFrequencySsp;
@@ -41,6 +44,8 @@ using rayreuse::SspInterpolationKind;
 using rayreuse::sspGradientContinuity;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
 SoundSpeedProfile makePiecewiseProfile(
@@ -339,6 +344,63 @@ void testCubicSplineDispatchIsExact(Context& context) {
       "silent fallback backend");
 }
 
+void testExplicitAndEnvironmentVolumeDispatch(Context& context) {
+  const VolumeAttenuation thorp{.model = VolumeAttenuationModel::Thorp};
+  const VolumeAttenuation fg{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = 10.0,
+                                               .salinityPsu = 35.0,
+                                               .pH = 8.0,
+                                               .meanDepthMeters = 100.0}};
+  const auto layers = std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
+      rayreuse::BiologicalAttenuationLayers{{
+          .minimumDepth = 0.0, .maximumDepth = 100.0,
+          .resonanceFrequency = 1000.0, .qualityFactor = 2.0,
+          .attenuationCoefficientDecibelsPerKilometer = 10.0}});
+  const VolumeAttenuation biological{
+      .model = VolumeAttenuationModel::Biological, .parameters = layers};
+  for (const SspInterpolationKind kind :
+       {SspInterpolationKind::CLinear, SspInterpolationKind::N2Linear,
+        SspInterpolationKind::Pchip, SspInterpolationKind::CubicSpline}) {
+    const SoundSpeedProfile profile = makePiecewiseProfile(kind);
+    context.check(FrequencySspEvaluator(profile, 1000.0).isLossless(),
+                  "evaluator None forwarding remains lossless");
+    context.check(!FrequencySspEvaluator(profile, 1000.0, thorp).isLossless(),
+                  "evaluator forwards Thorp to its backend");
+    context.check(!FrequencySspEvaluator(profile, 1000.0, fg).isLossless(),
+                  "evaluator forwards FG to its backend");
+    const FrequencySspEvaluator bio(profile, 1000.0, biological);
+    context.check(bio.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U)
+                          .imaginarySoundSpeed > 0.0 &&
+                      bio.evaluate(Vec2{.range = 0.0, .depth = 100.0}, 0U)
+                          .imaginarySoundSpeed > 0.0 &&
+                      std::abs(bio.evaluate(
+                                   Vec2{.range = 0.0, .depth = 300.0}, 1U)
+                                   .imaginarySoundSpeed) < 1.0e-12,
+                  "evaluator biological dispatch preserves endpoint/depth semantics");
+    context.check(bio.evaluate(Vec2{.range = 0.0, .depth = 200.0}, 1U)
+                          .imaginarySoundSpeed > 0.0,
+                  "evaluator biological dispatch preserves node-first interpolation");
+    const auto low = FrequencySspEvaluator(profile, 500.0, biological).evaluate(
+        Vec2{.range = 0.0, .depth = 50.0}, 0U);
+    static_cast<void>(FrequencySspEvaluator(profile, 2000.0, biological).evaluate(
+        Vec2{.range = 0.0, .depth = 50.0}, 0U));
+    const auto repeated = FrequencySspEvaluator(profile, 500.0, biological).evaluate(
+        Vec2{.range = 0.0, .depth = 50.0}, 0U);
+    context.check(low.imaginarySoundSpeed == repeated.imaginarySoundSpeed,
+                  "evaluator low/high/low dispatch is deterministic");
+  }
+
+  const SoundSpeedProfile profile = makePiecewiseProfile();
+  const Environment environment(profile, BoundaryModel::vacuum(0.0),
+                                BoundaryModel::rigid(300.0), biological);
+  const FrequencySspEvaluator fromEnvironment(environment, 1000.0);
+  const FrequencySspEvaluator explicitModel(profile, 1000.0, biological);
+  checkSameSample(context,
+                  explicitModel.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U),
+                  fromEnvironment.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U));
+}
+
 void testPchipNonzeroCurvature(Context& context) {
   const auto munkEnvironment =
       rayreuse::test::makeMunkEnvironment(SspInterpolationKind::Pchip);
@@ -360,6 +422,7 @@ int main() {
   testPchipDispatchIsExact(context);
   testN2LinearDispatchIsExact(context);
   testCubicSplineDispatchIsExact(context);
+  testExplicitAndEnvironmentVolumeDispatch(context);
   testPchipNonzeroCurvature(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

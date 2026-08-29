@@ -106,8 +106,7 @@ short format `C` boundary（BND-04）与 flat ordinary elastic halfspace P/S（B
   `Dss = Dxx·t1³` curvature、`std::fma` 插值 node frame），tracer seam 保持 chord collision +
   interpolated reflection frame + two-consecutive-outside 终止；`CS`/`CL` 显式拒绝，
   curvilinear × long format/halfspace/multisource/irregular/Q 不声明 parity。
-- 部分 attenuation/material 路径（FG/biological，ATT-01 证据闭环）虽有 parser 或组件实现，
-  但尚待后续批次（FP-2H）完成 oracle 闭环。
+- 衰减模型与单位语义（ATT-01～ATT-05，含 N/F/M/W/Q/L 单位、Thorp 保护、FG 与 Biological 体积衰减及边界衰减）已由 FP-2H 全面完成 oracle 闭环。
 
 本审计没有把 RayReuse 旧矩阵中的 `Deferred` 当作新 scope，也没有因为 class/file
 存在就判定支持。
@@ -170,6 +169,7 @@ frequency-local product schema。
 | `FP2E-ORACLE` | 共享 `q_range_dependent_cross_gradient` 与 `q_range_independent_control`：F2CPP/RayReuse `i5-quadrilateral` geometry probe CSV 逐字节一致（SHA-256 `4e22fd057eeca5dcabca171aeeb9129fba09e7616c0d8fdb5621f26c6029d32f`；715 points/714 steps/0 events @`-0.002626749710359303` rad）；Origin intermediate-state oracle（`generate_i5_q_oracle.py` ALPHA_INDEX=150）PASS，worst scaled `1.06e-9`（t_z@131）；Origin final-field 走既有 `validate_i5_quadrilateral_ssp.py` policy：12 个 field comparison（6 Origin→F2CPP + 6 Origin→RayReuse，两 case × single/broadband × 1000/2000 Hz）全部 PASS，range-dependent worst TL `1.53e-05 dB`（tolerance `0.001 dB`）、control worst `0.0113 dB`（既有 `tolerances_i5_q_control.toml` `0.02 dB`），tolerance 未动；SSP=`Q` 产品在两频 1000/2000 Hz 下 TL（`CC` SHD）/R/A/a/E 共 8 对文件 F2CPP=RayReuse byte-identical；两频 nonreuse/reuse/parallel SHD 逐字节一致（SHA-256 `b53c02cba0a1372ac13123937643106579ddaed5bb77db7515d2440cc263ed2f`），PRT Trace passes 2/1/1，reuse/parallel cache fingerprint before/after 均为 `2879552213476552188`；C/P/N/S probe 四 SHA 与 C/P/N/S broadband SHD 冻结值、`munk_spline` fingerprint `1526667602348633172` 均不变 |
 | `FP2F-ORACLE` | 共享 multisource/irregular 八 case（validator 二进制 = `build/fp2f-clean/bellhop_rayreuse`）：`multi_source_depths`（TL `CC` NSz=3）origin↔rayreuse max \|Δp\| `2.049e-08`、max TL diff `3.81e-05 dB`（与 origin↔f2cpp 同 metric 同 tolerance，未放宽），f2cpp↔rayreuse decoded payload exact，source depths 向量 (20,50,80) 与 SHD dims `[1,1,1,1,3,11,51]` exact；`irregular_receiver_pairs`（`CC RI` paired）f2cpp↔rayreuse payload exact、origin↔rayreuse max \|Δp\| `3.79e-09`、max TL diff `3.81e-06 dB`、irregular header axes/record shape exact；`ray_trace_vacuum_rigid`（R 双源）f2cpp↔rayreuse 与 origin↔rayreuse max coordinate error 均 `0.0 m`；`arrival_multi_source`/`arrival_multi_source_binary`（A ASCII/a binary 双源，各 162 records）与 `arrival_geometric_gaussian_irregular`（A paired，335 records）origin↔rayreuse 与 f2cpp↔rayreuse 全字段 0 ULP；`eigenray_irregular_pairs`（E paired）max coordinate error `0.0 m`、双源 header count guard 通过；六个 broadband case（`multi_source_depths`/`irregular_receiver_pairs`/`arrival_multi_source`/`arrival_multi_source_binary`/`eigenray_irregular_pairs`/`eigenray_geometric_hat`）`nonreuse/reuse/parallel` 每频产品逐字节一致，trace passes 两频双源 `4/2/2`、两频三源 `6/3/3`、两频单源 `2/1/1`，reuse/parallel per-source cache fingerprint before==after；R 保持单频（双源 `ray_trace_vacuum_rigid` 通过，reuse/parallel 对 R 显式拒绝）；C/P/N/S probe SHA 与 broadband SHD 基线、`munk_spline` fingerprint `1526667602348633172`、Q fingerprint `2879552213476552188` 全部不变 |
 | `FP2G-ORACLE` | 共享 `i3_curvilinear_oracle`（459 角度 probe 对拍 459/459 PASS，worst scaled error 3.24e-4；F2CPP↔RayReuse SHD max TL diff 0.0 dB，Origin↔RayReuse max TL diff 7.63e-06 dB，符合既有 tolerance 0.001 dB；两频 100/200 Hz nonreuse/reuse/parallel SHD byte-identical、Trace passes 2/1/1、--verify-cache 通过）与 `elastic_halfspace_flat` / `elastic_halfspace_fluid_control`（F2CPP↔RayReuse SHD max TL diff 0.0 dB，Origin↔RayReuse max TL diff 2.59e-04 dB，符合既有 tolerance 0.001 dB；MINIMUM_SHEAR_EFFECT shear guards 全部 PASS；两频 1000/2000 Hz nonreuse/reuse/parallel SHD byte-identical、Trace passes 2/1/1、--verify-cache 通过）；既有冻结基线（munk_spline, Q, multisource, irregular 等）全部保持不变 |
+| `FP2H-ORACLE` | 共享 6 个 `attenuation_unit_*`（ATT-01/02，5 kHz 跨单位 N/F/M/W/Q/L 压强逐位相同，4 kHz 频率缩放与 W 语义校验全 PASS，54 组三方配对比较中 42 组 gating 全部 PASS，12 组非 gating 记录 F2CPP 单频自规划差异）、`constant_speed_thorp`（ATT-03，单频、两频 smoke 与 16 频 regression 输出 SHA 逐位等于 H00 冻结基线）、`volume_attenuation_francois_garrison`（ATT-04，单频 5 kHz 与 smoke 5/10 kHz 全 PASS，5 个 FG 频率锚点与 20°C 粘滞分支对齐）及 `volume_attenuation_biological`（ATT-05，单频 5 kHz 与 smoke 2.5/5 kHz 全 PASS，支持多层重叠与端点闭区间）；75 组体积衰减三方配对比较中 39 组 gating 全部 PASS，36 组非 gating 记录 F2CPP 单频自规划差异；9 个非 no-op guard 全部通过（差异 > 1e-6）；五大频域 SSP 后端与边界声学衰减全部打通；所有 10 个宽带 profile 在 nonreuse/reuse/parallel 下 SHD 逐字节一致，Trace passes 呈现 2/1/1 与 16/1/1，--verify-cache before==after 严格守恒 |
 
 ## 4. Production feature parity 表
 
@@ -240,11 +240,11 @@ frequency-local product schema。
 
 | Feature | F2CPP | RayReuse | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| ATT-01 — attenuation units N/F/M/Q/L | 支持并有 executable standard cases | parser/转换函数存在，unit tests 存在；相应 per-unit shared executable cases 明确排除 RayReuse | `GAP` | `Bellhop_RayReuse/src/acoustics/attenuation.cpp`, unit tests, `STD` allow-list；缺 product-level oracle 闭环 |
-| ATT-02 — attenuation unit W | 支持 | 支持 | `PARITY` | 多个共享 RayReuse environment/material case + component/unit regression |
-| ATT-03 — Thorp water-column/boundary attenuation | 支持 | 支持 | `PARITY` | shared `constant_speed_thorp` + unit/component regression |
-| ATT-04 — Francois–Garrison | 支持 | parser/attenuation model 显式拒绝 | `GAP` | `F-PARSER`, `R-PARSER`, RayReuse attenuation dispatch throw path, `STD` |
-| ATT-05 — biological attenuation | 支持 | parser/attenuation model 显式拒绝 | `GAP` | 同 ATT-04 |
+| ATT-01 — attenuation units N/F/M/Q/L | 支持并有 executable standard cases | parser/转换函数、单元测试及 6 个 `attenuation_unit_*` 共享 case 三方比较全部 PASS，5 kHz 跨单位压强逐位相同 | `PARITY` | `F-PARSER`, `R-PARSER`, `F-TL`, `R-TL`, `STD`, `TEST`, `FP2H-ORACLE` |
+| ATT-02 — attenuation unit W | 支持 | 支持 | `PARITY` | 多个共享 RayReuse environment/material case + component/unit regression，4 kHz 频率缩放保护 |
+| ATT-03 — Thorp water-column/boundary attenuation | 支持 | 支持 | `PARITY` | shared `constant_speed_thorp` + unit/component regression，单频/smoke/16频回归 SHA-256 逐位不变 |
+| ATT-04 — Francois–Garrison | 支持 | 支持，`Environment` 值所有权，20°C 粘滞分支与 FMA 对齐，5 频率锚点与 shared case 三方全 PASS | `PARITY` | `F-PARSER`, `R-PARSER`, `F-TL`, `R-TL`, `STD`, `TEST`, `FP2H-ORACLE` |
+| ATT-05 — biological attenuation | 支持 | 支持，`Environment` 不可变共享层所有权，0–200 层支持重叠与端点闭区间，shared case 三方全 PASS | `PARITY` | `F-PARSER`, `R-PARSER`, `F-TL`, `R-TL`, `STD`, `TEST`, `FP2H-ORACLE` |
 | ATT-06 — elastic boundary P/S attenuation in current W/LL slice | 支持 | 支持，保持逐频 complex reflection result | `PARITY` | shared elastic LL case、raw projection/component tests；其他 unit 受 ATT-01 约束 |
 
 ### 4.7 Products
@@ -634,9 +634,6 @@ ArrivalWorkspace 和 Eigenray hits 为 per-(frequency, source) 临时状态。�
 ### A. 当前完整 GAP 列表
 
 1. `SRC-02` / `PRD-08`：line source 及其产品 scaling。
-2. `ATT-01`：attenuation units N/F/M/Q/L 缺 RayReuse product-level oracle 闭环（移交 FP-2H）。
-3. `ATT-04`：Francois–Garrison attenuation。
-4. `ATT-05`：biological attenuation。
 
 `SSP-03`（N2-linear）已由 FP-2C 关闭、`SSP-04`（spline `S`）已由 FP-2D 关闭、
 `SSP-05` 的 evaluator/geometry 与已验证产品 slice（quadrilateral `Q`/`.ssp`，
@@ -644,7 +641,8 @@ ArrivalWorkspace 和 Eigenray hits 为 per-(frequency, source) 临时状态。�
 `G` A/a/E）已由 FP-2E 关闭；`SRC-04`/`PRD-07`（multisource）与
 `REC-02`/`REC-03`/`PRD-06`（Cartesian paired irregular）已由 FP-2F 在
 oracle-validated 范围内关闭；`BND-04`（canonical curvilinear `C` boundary，限 V/R short format）
-与 `BND-09`（flat `A` ordinary elastic halfspace P/S）已由 FP-2G 在 oracle-validated 范围内关闭——
+与 `BND-09`（flat `A` ordinary elastic halfspace P/S）已由 FP-2G 在 oracle-validated 范围内关闭；
+`ATT-01`、`ATT-04`、`ATT-05`（衰减单位与 Francois–Garrison / Biological 体积衰减）已由 FP-2H 全面关闭——
 均不再列于 GAP；未验证 Q beam/option 组合、multisource × ray-centered、
 curvilinear × halfspace/long format 等机制可达组合不因此获得 parity。`TL-10`、`REC-05`、
 `BND-10` 不在
@@ -653,9 +651,9 @@ GAP 列表，因为它们是
 
 ### B. 按优先级分组
 
-- **P0 — 主功能 / 后续架构**：已清空——FP-2F 与 FP-2G 关闭了 source/receiver 维度与边界曲率/弹性半空间的 parity gap。
-- **P1 — 重要 parity gap**：SRC-02/PRD-08、ATT-04、ATT-05。
-- **P2 — 外围或证据闭环 gap**：ATT-01。
+- **P0 — 主功能 / 后续架构**：已清空——FP-2F、FP-2G、FP-2H 关闭了 source/receiver 维度、边界曲率/弹性半空间以及全部衰减模型（ATT-01～05）的 parity gap。
+- **P1 — 重要 parity gap**：SRC-02/PRD-08（line source）。
+- **P2 — 外围或证据闭环 gap**：已清空。
 
 ### C. 后续阶段状态
 
@@ -665,8 +663,8 @@ cubic spline `S` parity；FP-2E 已关闭 quadrilateral `Q`/`.ssp` 的已验证�
 `G` A/a/E）；FP-2F 已关闭 multisource（SRC-04/PRD-07）与 Cartesian paired
 irregular receiver（REC-02/REC-03/PRD-06）的 oracle-validated slice；FP-2G 已关闭
 canonical curvilinear `C` boundary（BND-04，限 V/R short format）与 flat ordinary
-elastic halfspace P/S（BND-09）。其他 Q
-beam/option 组合或 curvilinear 拓展组合不据此获得 parity。后续批次为 FP-2H（Attenuation Closure）。
+elastic halfspace P/S（BND-09）；FP-2H 已关闭全部衰减单位与模型（ATT-01～ATT-05）。其他 Q
+beam/option 组合或 curvilinear 拓展组合不据此获得 parity。
 line source、Influence Geometry Reuse 和频率插值仍为独立后续范围，不能从既有 abstraction 推断已支持。
 
 ### D. FP-1A～FP-2G 更新状态

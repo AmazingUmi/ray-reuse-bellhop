@@ -95,8 +95,7 @@ RayFrequencyState FrequencyProjector::project(const RayPath& path,
                                               double sourceAmplitude) const {
   validateProjectionInput(path, frequency, sourceAmplitude);
 
-  FrequencySspEvaluator soundSpeedProfile(environment_.soundSpeedProfile(),
-                                          frequency);
+  FrequencySspEvaluator soundSpeedProfile(environment_, frequency);
   const bool losslessProfile = soundSpeedProfile.isLossless();
   const std::optional<std::complex<double>> uniformComplexSoundSpeed =
       soundSpeedProfile.uniformComplexSoundSpeed();
@@ -141,13 +140,16 @@ RayFrequencyState FrequencyProjector::project(const RayPath& path,
                     event.tangentSlowness, event.normalSlowness)
           : useFrozenLongMaterial
               ? evaluateAcousticHalfSpaceAcoustics(
-                    event.longMaterialOverride->material, frequency,
+                    event.longMaterialOverride->material,
+                    event.longMaterialOverride->attenuationEvaluationDepth,
+                    environment_.volumeAttenuation(), frequency,
                     waterSample.density, event.tangentSlowness,
                     event.normalSlowness)
-              : evaluateBoundaryAcoustics(boundary, event.boundarySegmentIndex,
-                                          frequency, waterSample.density,
-                                          event.tangentSlowness,
-                                          event.normalSlowness);
+              : evaluateBoundaryAcoustics(
+                    boundary, event.boundarySegmentIndex,
+                    environment_.volumeAttenuation(), frequency,
+                    waterSample.density, event.tangentSlowness,
+                    event.normalSlowness);
       next.amplitude *= acoustics.amplitudeMultiplier;
       next.reflectionPhase += acoustics.phaseIncrement;
       next.active = current.active && amplitudeRemainsActive(next.amplitude);

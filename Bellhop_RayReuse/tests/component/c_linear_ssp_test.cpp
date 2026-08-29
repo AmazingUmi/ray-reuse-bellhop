@@ -1,7 +1,10 @@
+#include "rayreuse/acoustics/attenuation.hpp"
+#include "rayreuse/model/c_linear_frequency_ssp.hpp"
 #include "rayreuse/model/c_linear_ssp.hpp"
 
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,10 +15,16 @@
 
 namespace {
 
+using rayreuse::BiologicalAttenuationLayer;
+using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
+using rayreuse::FrancoisGarrisonParameters;
+using rayreuse::RawAttenuation;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::ValidationError;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::Vec2;
 using rayreuse::test::Context;
 
@@ -136,6 +145,70 @@ void testNodeArrivalSideSemantics(Context& context) {
                     "density is continuous across a profile node");
 }
 
+void testVolumeAttenuationProjection(Context& context) {
+  const SoundSpeedProfile profile(
+      {{.depth = 0.0, .soundSpeed = 1400.0, .density = 1000.0},
+       {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 200.0, .soundSpeed = 1600.0, .density = 1000.0}});
+  const VolumeAttenuation thorp{.model = VolumeAttenuationModel::Thorp};
+  const VolumeAttenuation fg{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = 10.0,
+                                               .salinityPsu = 35.0,
+                                               .pH = 8.0,
+                                               .meanDepthMeters = 100.0}};
+  const auto layers = std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
+      rayreuse::BiologicalAttenuationLayers{{
+          .minimumDepth = 0.0, .maximumDepth = 100.0,
+          .resonanceFrequency = 1000.0, .qualityFactor = 2.0,
+          .attenuationCoefficientDecibelsPerKilometer = 10.0}});
+  const VolumeAttenuation biological{
+      .model = VolumeAttenuationModel::Biological, .parameters = layers};
+
+  context.check(CLinearFrequencySsp(profile, 1000.0).isLossless(),
+                "C explicit None path remains exactly lossless");
+  context.check(!CLinearFrequencySsp(profile, 1000.0, thorp).isLossless(),
+                "C explicit Thorp path is lossy");
+  context.check(!CLinearFrequencySsp(profile, 1000.0, fg).isLossless(),
+                "C explicit FG path is lossy");
+  const CLinearFrequencySsp bio(profile, 1000.0, biological);
+  const auto lower = bio.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U);
+  const auto upper = bio.evaluate(Vec2{.range = 0.0, .depth = 100.0}, 0U);
+  const auto outside = bio.evaluate(Vec2{.range = 0.0, .depth = 200.0}, 1U);
+  context.check(lower.imaginarySoundSpeed > 0.0 &&
+                    upper.imaginarySoundSpeed > 0.0 &&
+                    outside.imaginarySoundSpeed == 0.0,
+                "C biological endpoints are inclusive and outside node is lossless");
+  const auto interpolated =
+      bio.evaluate(Vec2{.range = 0.0, .depth = 150.0}, 1U);
+  context.check(interpolated.imaginarySoundSpeed > 0.0,
+                "C biological loss is converted at nodes before interpolation");
+  const auto lowFirst = CLinearFrequencySsp(profile, 500.0, biological)
+                            .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  static_cast<void>(CLinearFrequencySsp(profile, 2000.0, biological)
+                        .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U));
+  const auto lowSecond = CLinearFrequencySsp(profile, 500.0, biological)
+                             .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  context.check(lowFirst.imaginarySoundSpeed ==
+                    lowSecond.imaginarySoundSpeed,
+                "C low/high/low construction is deterministic");
+
+  RawAttenuation legacyThorp{};
+  legacyThorp.volumeModel = VolumeAttenuationModel::Thorp;
+  const SoundSpeedProfile legacy(
+      {{.depth = 0.0, .soundSpeed = 1400.0, .density = 1000.0,
+        .attenuation = legacyThorp},
+       {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0,
+        .attenuation = legacyThorp}});
+  const auto legacySample = CLinearFrequencySsp(legacy, 1000.0).evaluate(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  const auto explicitSample = CLinearFrequencySsp(legacy, 1000.0, thorp).evaluate(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  context.check(legacySample.imaginarySoundSpeed ==
+                    explicitSample.imaginarySoundSpeed,
+                "C legacy and matching explicit Thorp baselines are exact");
+}
+
 void testValidation(Context& context) {
   const CLinearSsp ssp(makePiecewiseLinearProfile());
 
@@ -195,6 +268,7 @@ int main() {
   testConstantProfile(context);
   testPiecewiseLinearProfile(context);
   testNodeArrivalSideSemantics(context);
+  testVolumeAttenuationProjection(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

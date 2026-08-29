@@ -10,6 +10,11 @@ namespace rayreuse {
 
 N2LinearFrequencySsp::N2LinearFrequencySsp(
     const SoundSpeedProfile& profile, double frequency)
+    : N2LinearFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
+
+N2LinearFrequencySsp::N2LinearFrequencySsp(
+    const SoundSpeedProfile& profile, double frequency,
+    const VolumeAttenuation& volumeAttenuation)
     : frequency_(frequency), realProfile_(profile) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
     throw ValidationError("frequency must be finite and positive");
@@ -18,7 +23,8 @@ N2LinearFrequencySsp::N2LinearFrequencySsp(
     depths_.push_back(point.depth);
     nodeSoundSpeeds_.emplace_back(
         point.soundSpeed,
-        convertAttenuation(point.attenuation, frequency_, point.soundSpeed)
+        convertAttenuation(point.attenuation, volumeAttenuation, frequency_,
+                           point.soundSpeed, point.depth)
             .imaginarySoundSpeed);
   }
   segments_.reserve(nodeSoundSpeeds_.size() - 1U);

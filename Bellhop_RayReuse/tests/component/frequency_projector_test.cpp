@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <numbers>
 #include <string>
 #include <utility>
@@ -23,6 +24,7 @@
 namespace {
 
 using rayreuse::AcousticMaterial;
+using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::AttenuationUnit;
 using rayreuse::BoundaryKind;
 using rayreuse::BoundaryModel;
@@ -31,6 +33,7 @@ using rayreuse::CubicSplineFrequencySsp;
 using rayreuse::convertAttenuation;
 using rayreuse::Environment;
 using rayreuse::FrequencyProjector;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometryTracer;
 using rayreuse::IntegratorSettings;
@@ -47,6 +50,7 @@ using rayreuse::Source;
 using rayreuse::StepQuadrature;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
+using rayreuse::VolumeAttenuation;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
@@ -485,6 +489,118 @@ void testProjectionDoesNotMutateGeometry(Context& context) {
   lowWorkspace.clear();
   context.check(highWorkspace.at(0U, 0U) == std::complex<double>{3.0, 4.0},
                 "clearing one frequency workspace does not alter another");
+}
+
+void testEnvironmentVolumeAttenuationProjection(Context& context) {
+  const auto layers = std::make_shared<const BiologicalAttenuationLayers>(
+      BiologicalAttenuationLayers{{
+          .minimumDepth = 0.0,
+          .maximumDepth = 100.0,
+          .resonanceFrequency = 1000.0,
+          .qualityFactor = 2.0,
+          .attenuationCoefficientDecibelsPerKilometer = 100.0}});
+  const VolumeAttenuation biological{
+      .model = VolumeAttenuationModel::Biological, .parameters = layers};
+  const VolumeAttenuation fg{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = 10.0,
+                                               .salinityPsu = 35.0,
+                                               .pH = 8.0,
+                                               .meanDepthMeters = 50.0}};
+  const AcousticMaterial fluid{.compressionalSoundSpeed = 1800.0,
+                               .shearSoundSpeed = 0.0,
+                               .density = 1800.0};
+  const SoundSpeedProfile profile(
+      {{.depth = 0.0, .soundSpeed = kSoundSpeed, .density = kWaterDensity},
+       {.depth = 100.0, .soundSpeed = kSoundSpeed, .density = kWaterDensity}});
+  const BoundaryModel bottom = BoundaryModel::acousticHalfSpace(100.0, fluid);
+  const Environment losslessEnvironment(profile, BoundaryModel::vacuum(0.0),
+                                        bottom);
+  const Environment biologicalEnvironment(
+      profile, BoundaryModel::vacuum(0.0), bottom, biological);
+  const Environment fgEnvironment(profile, BoundaryModel::vacuum(0.0), bottom,
+                                  fg);
+
+  const double tangent = std::sin(std::numbers::pi / 6.0) / kSoundSpeed;
+  const double normal = std::cos(std::numbers::pi / 6.0) / kSoundSpeed;
+  const Vec2 start{.range = 0.0, .depth = 50.0};
+  const Vec2 reflection{.range = 100.0, .depth = 100.0};
+  const ReflectionEvent event = makeReflectionEvent(
+      1U, ReflectionBoundary::Seabed, reflection, tangent, normal);
+  RayPath path;
+  path.points = {makeRayState(start, {.range = 1.0 / kSoundSpeed, .depth = 0.0}),
+                 makeRayState(reflection, event.incidentSlowness,
+                              100.0 / kSoundSpeed),
+                 makeRayState(reflection, event.reflectedSlowness,
+                              100.0 / kSoundSpeed)};
+  path.steps = {StepQuadrature{.stepLength = 100.0,
+                               .startWeight = 0.0,
+                               .midpointWeight = 100.0,
+                               .midpoint = {.range = 50.0, .depth = 75.0}}};
+  path.events = {event};
+
+  const auto lossless =
+      FrequencyProjector(losslessEnvironment).project(path, 500.0, 1.0);
+  const FrequencyProjector biologicalProjector(biologicalEnvironment);
+  const auto biologicalLow = biologicalProjector.project(path, 500.0, 1.0);
+  const auto biologicalHigh = biologicalProjector.project(path, 2000.0, 1.0);
+  const auto biologicalRepeated = biologicalProjector.project(path, 500.0, 1.0);
+  const auto fgState = FrequencyProjector(fgEnvironment).project(path, 500.0, 1.0);
+  context.check(biologicalLow.points.back().complexTravelTime.imag() < 0.0 &&
+                    fgState.points.back().complexTravelTime.imag() < 0.0,
+                "projector applies biological and FG water-column loss");
+  context.check(biologicalLow.points.back().amplitude !=
+                    lossless.points.back().amplitude,
+                "ordinary boundary reflection includes environment volume loss");
+  context.check(biologicalHigh.points.back().complexTravelTime !=
+                    biologicalLow.points.back().complexTravelTime,
+                "volume attenuation remains frequency local");
+  context.check(biologicalRepeated.points.back().complexTravelTime ==
+                        biologicalLow.points.back().complexTravelTime &&
+                    biologicalRepeated.points.back().amplitude ==
+                        biologicalLow.points.back().amplitude &&
+                    biologicalRepeated.points.back().reflectionPhase ==
+                        biologicalLow.points.back().reflectionPhase,
+                "500-2000-500 projection is deterministic");
+
+  RayPath longPath = path;
+  longPath.events.front().longMaterialOverride = rayreuse::FrozenBoundaryMaterial{
+      .material = fluid,
+      .attenuationEvaluationDepth =
+          rayreuse::kLegacyLongBoundaryAttenuationDepth};
+  const auto longState = biologicalProjector.project(longPath, 500.0, 1.0);
+  context.checkNear(longState.points.back().amplitude,
+                    lossless.points.back().amplitude, 0.0,
+                    "long material legacy depth excludes biological boundary loss");
+
+  const AcousticMaterial elastic{.compressionalSoundSpeed = 2000.0,
+                                 .shearSoundSpeed = 1000.0,
+                                 .density = 2000.0};
+  const Environment elasticEnvironment(
+      profile, BoundaryModel::vacuum(0.0),
+      BoundaryModel::acousticHalfSpace(100.0, elastic), biological);
+  const auto elasticState =
+      FrequencyProjector(elasticEnvironment).project(path, 500.0, 1.0);
+  const Environment elasticLosslessEnvironment(
+      profile, BoundaryModel::vacuum(0.0),
+      BoundaryModel::acousticHalfSpace(100.0, elastic));
+  const auto elasticLossless =
+      FrequencyProjector(elasticLosslessEnvironment).project(path, 500.0, 1.0);
+  context.check(elasticState.points.back().amplitude !=
+                    elasticLossless.points.back().amplitude,
+                "elastic reflection applies volume loss to material modes");
+
+  const BoundaryModel grain = BoundaryModel::grainSizeHalfSpace(100.0, 3.0);
+  const auto grainLossless = FrequencyProjector(Environment(
+      profile, BoundaryModel::vacuum(0.0), grain)).project(path, 500.0, 1.0);
+  const auto grainBiological = FrequencyProjector(Environment(
+      profile, BoundaryModel::vacuum(0.0), grain, biological))
+                                  .project(path, 500.0, 1.0);
+  context.check(grainBiological.points.back().amplitude ==
+                        grainLossless.points.back().amplitude &&
+                    grainBiological.points.back().reflectionPhase ==
+                        grainLossless.points.back().reflectionPhase,
+                "grain-size reflection ignores environment volume attenuation");
 }
 
 void testInvalidInputs(Context& context) {
@@ -1050,6 +1166,7 @@ int main() {
   testAcousticReflectionAndActiveCutoff(context);
   testMunkReflectionOracle(context);
   testProjectionDoesNotMutateGeometry(context);
+  testEnvironmentVolumeAttenuationProjection(context);
   testPchipFrequencyProjection(context);
   testN2FrequencyProjection(context);
   testN2LosslessProjectionReusesFrozenTravelTime(context);

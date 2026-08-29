@@ -11,6 +11,11 @@ namespace rayreuse {
 
 QuadrilateralFrequencySsp::QuadrilateralFrequencySsp(
     const SoundSpeedProfile& profile, double frequency)
+    : QuadrilateralFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
+
+QuadrilateralFrequencySsp::QuadrilateralFrequencySsp(
+    const SoundSpeedProfile& profile, double frequency,
+    const VolumeAttenuation& volumeAttenuation)
     : frequency_(frequency),
       realProfile_(profile),
       grid_(profile.quadrilateralGrid()) {
@@ -26,7 +31,8 @@ QuadrilateralFrequencySsp::QuadrilateralFrequencySsp(
     // Preserve Origin's node-first ordering.  In particular, point.soundSpeed
     // is the ENV reference value and must not be replaced by a Q-matrix value.
     imaginarySoundSpeeds_.push_back(
-        convertAttenuation(point.attenuation, frequency_, point.soundSpeed)
+        convertAttenuation(point.attenuation, volumeAttenuation, frequency_,
+                           point.soundSpeed, point.depth)
             .imaginarySoundSpeed);
   }
 }

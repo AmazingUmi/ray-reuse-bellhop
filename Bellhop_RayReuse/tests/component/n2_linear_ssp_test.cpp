@@ -1,7 +1,9 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/n2_linear_frequency_ssp.hpp"
@@ -11,11 +13,14 @@
 namespace {
 
 using rayreuse::AttenuationUnit;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::N2LinearFrequencySsp;
 using rayreuse::N2LinearSsp;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::SspInterpolationKind;
 using rayreuse::ValidationError;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::Vec2;
 using rayreuse::test::Context;
 
@@ -129,6 +134,68 @@ void testFrequencyComplexOracle(Context& context) {
                 "nonuniform N2 profile has no uniform fast path");
 }
 
+void testVolumePaths(Context& context) {
+  const SoundSpeedProfile source(
+      {{.depth = 0.0, .soundSpeed = 1400.0, .density = 1000.0},
+       {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 200.0, .soundSpeed = 1600.0, .density = 1000.0}},
+      SspInterpolationKind::N2Linear);
+  const VolumeAttenuation thorp{.model = VolumeAttenuationModel::Thorp};
+  const VolumeAttenuation fg{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = 10.0,
+                                               .salinityPsu = 35.0,
+                                               .pH = 8.0,
+                                               .meanDepthMeters = 100.0}};
+  const auto layers = std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
+      rayreuse::BiologicalAttenuationLayers{{
+          .minimumDepth = 0.0, .maximumDepth = 100.0,
+          .resonanceFrequency = 1000.0, .qualityFactor = 2.0,
+          .attenuationCoefficientDecibelsPerKilometer = 10.0}});
+  const VolumeAttenuation bioModel{
+      .model = VolumeAttenuationModel::Biological, .parameters = layers};
+  context.check(N2LinearFrequencySsp(source, 1000.0).isLossless(),
+                "N None path is exactly lossless");
+  context.check(!N2LinearFrequencySsp(source, 1000.0, thorp).isLossless(),
+                "N Thorp path is lossy");
+  context.check(!N2LinearFrequencySsp(source, 1000.0, fg).isLossless(),
+                "N FG path is lossy");
+  auto legacyPoints = source.points();
+  for (auto& point : legacyPoints) {
+    point.attenuation.volumeModel = VolumeAttenuationModel::Thorp;
+  }
+  const SoundSpeedProfile legacyThorp(std::move(legacyPoints),
+                                      SspInterpolationKind::N2Linear);
+  context.check(
+      N2LinearFrequencySsp(source, 1000.0, thorp)
+              .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U)
+              .imaginarySoundSpeed ==
+          N2LinearFrequencySsp(legacyThorp, 1000.0)
+              .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U)
+              .imaginarySoundSpeed,
+      "N explicit and legacy Thorp baselines are exact");
+  const N2LinearFrequencySsp bio(source, 1000.0, bioModel);
+  context.check(bio.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U)
+                        .imaginarySoundSpeed > 0.0 &&
+                    bio.evaluate(Vec2{.range = 0.0, .depth = 100.0}, 0U)
+                        .imaginarySoundSpeed > 0.0 &&
+                    bio.evaluate(Vec2{.range = 0.0, .depth = 200.0}, 1U)
+                            .imaginarySoundSpeed == 0.0,
+                "N biological endpoints are inclusive and outside node is lossless");
+  context.check(bio.evaluate(Vec2{.range = 0.0, .depth = 150.0}, 1U)
+                        .imaginarySoundSpeed > 0.0,
+                "N biological loss is node-first, not query-depth converted");
+  const auto low = N2LinearFrequencySsp(source, 500.0, bioModel).evaluate(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  static_cast<void>(N2LinearFrequencySsp(source, 2000.0, bioModel).evaluate(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U));
+  const auto repeated = N2LinearFrequencySsp(source, 500.0, bioModel).evaluate(
+      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  context.check(low.soundSpeed == repeated.soundSpeed &&
+                    low.imaginarySoundSpeed == repeated.imaginarySoundSpeed,
+                "N low/high/low evaluation is deterministic");
+}
+
 void testValidation(Context& context) {
   const N2LinearSsp profile(makeProfile());
   context.expectThrows<ValidationError>(
@@ -168,6 +235,7 @@ int main() {
   testRealFortranOracle(context);
   testNodeAndExtrapolationSemantics(context);
   testFrequencyComplexOracle(context);
+  testVolumePaths(context);
   testValidation(context);
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

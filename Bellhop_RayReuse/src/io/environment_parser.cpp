@@ -820,11 +820,11 @@ struct ParsedRunType {
   const Record topOptionsRecord = reader.require("top/SSP options");
   requireTokenCount(topOptionsRecord, 1U, source, "top/SSP options");
   std::string topOptions = topOptionsRecord.tokens.front();
-  if (topOptions.size() < 3U || topOptions.size() > 5U) {
+  if (topOptions.size() < 3U || topOptions.size() > 6U) {
     fail(source, topOptionsRecord.lineNumber,
-         "top/SSP options must contain between three and five characters");
+         "top/SSP options must contain between three and six characters");
   }
-  topOptions.resize(5U, ' ');
+  topOptions.resize(6U, ' ');
   SspInterpolationKind interpolationKind{};
   switch (topOptions.front()) {
     case 'C':
@@ -850,19 +850,93 @@ struct ParsedRunType {
   if ((topOptions[1U] != 'V' && topOptions[1U] != 'R' &&
        topOptions[1U] != 'A' && topOptions[1U] != 'G' &&
        topOptions[1U] != 'F') ||
-      (topOptions[3U] != ' ' && topOptions[3U] != 'T') ||
+      (topOptions[3U] != ' ' && topOptions[3U] != 'T' &&
+       topOptions[3U] != 'F' && topOptions[3U] != 'B') ||
       (topOptions[4U] != ' ' && topOptions[4U] != '~' &&
-       topOptions[4U] != '*')) {
+       topOptions[4U] != '*') ||
+      topOptions[5U] != ' ') {
     fail(source, topOptionsRecord.lineNumber,
-         "RR-B1 supports C-linear, N2-linear, PCHIP, cubic-spline, and "
-         "quadrilateral SSP, V/R/A/G/F surfaces, optional Thorp, and optional "
-         "piecewise-linear topography");
+         "only V/R/A/G/F surfaces, N/F/M/W/Q/L attenuation units with "
+         "optional T/F/B volume attenuation, and optional boundary "
+         "topography are supported");
   }
   const AttenuationUnit attenuationUnit =
       parseAttenuationUnit(topOptions[2U], topOptionsRecord, source);
-  const VolumeAttenuationModel volumeModel = topOptions[3U] == 'T'
-                                                 ? VolumeAttenuationModel::Thorp
-                                                 : VolumeAttenuationModel::None;
+  VolumeAttenuation volumeAttenuation;
+  switch (topOptions[3U]) {
+    case ' ':
+      volumeAttenuation.model = VolumeAttenuationModel::None;
+      break;
+    case 'T':
+      volumeAttenuation.model = VolumeAttenuationModel::Thorp;
+      break;
+    case 'F': {
+      volumeAttenuation.model = VolumeAttenuationModel::FrancoisGarrison;
+      const Record parametersRecord =
+          reader.require("Francois-Garrison parameters");
+      requireTokenCount(parametersRecord, 4U, source,
+                        "Francois-Garrison parameters");
+      FrancoisGarrisonParameters parameters{
+          .temperatureCelsius = parseDouble(
+              parametersRecord, 0U, source, "Francois-Garrison temperature"),
+          .salinityPsu = parseDouble(parametersRecord, 1U, source,
+                                     "Francois-Garrison salinity"),
+          .pH = parseDouble(parametersRecord, 2U, source,
+                            "Francois-Garrison pH"),
+          .meanDepthMeters = parseDouble(
+              parametersRecord, 3U, source, "Francois-Garrison mean depth")};
+      if (parameters.temperatureCelsius <= -273.0 ||
+          parameters.salinityPsu < 0.0 || parameters.meanDepthMeters < 0.0 ||
+          !std::isfinite(parameters.pH)) {
+        fail(source, parametersRecord.lineNumber,
+             "Francois-Garrison parameters require temperature above -273 C, "
+             "non-negative salinity and mean depth, and finite pH");
+      }
+      volumeAttenuation.parameters = parameters;
+      break;
+    }
+    case 'B': {
+      volumeAttenuation.model = VolumeAttenuationModel::Biological;
+      const Record countRecord = reader.require("biological layer count");
+      requireTokenCount(countRecord, 1U, source, "biological layer count");
+      const std::size_t layerCount = parseCount(
+          countRecord, 0U, source, "biological layer count", true, 200U);
+      BiologicalAttenuationLayers layers;
+      layers.reserve(layerCount);
+      for (std::size_t index = 0U; index < layerCount; ++index) {
+        const Record layerRecord =
+            reader.require("biological attenuation layer");
+        requireTokenCount(layerRecord, 5U, source,
+                          "biological attenuation layer");
+        BiologicalAttenuationLayer layer{
+            .minimumDepth = parseDouble(layerRecord, 0U, source,
+                                        "biological minimum depth"),
+            .maximumDepth = parseDouble(layerRecord, 1U, source,
+                                        "biological maximum depth"),
+            .resonanceFrequency = parseDouble(
+                layerRecord, 2U, source, "biological resonance frequency"),
+            .qualityFactor = parseDouble(layerRecord, 3U, source,
+                                         "biological quality factor"),
+            .attenuationCoefficientDecibelsPerKilometer = parseDouble(
+                layerRecord, 4U, source,
+                "biological attenuation coefficient")};
+        if (layer.minimumDepth > layer.maximumDepth ||
+            layer.resonanceFrequency <= 0.0 || layer.qualityFactor <= 0.0 ||
+            layer.attenuationCoefficientDecibelsPerKilometer < 0.0) {
+          fail(source, layerRecord.lineNumber,
+               "biological attenuation layers require ordered depths, "
+               "positive resonance frequency and quality factor, and a "
+               "non-negative attenuation coefficient");
+        }
+        layers.push_back(layer);
+      }
+      volumeAttenuation.parameters =
+          std::make_shared<const BiologicalAttenuationLayers>(
+              std::move(layers));
+      break;
+    }
+  }
+  const VolumeAttenuationModel volumeModel = volumeAttenuation.model;
   std::optional<ParsedAcousticHalfSpace> topAcousticHalfSpace;
   std::optional<ParsedGrainSizeHalfSpace> topGrainSizeHalfSpace;
   if (topOptions[1U] == 'A') {
@@ -1249,7 +1323,7 @@ struct ParsedRunType {
   Environment environment(
       SoundSpeedProfile(std::move(soundSpeedPoints), interpolationKind,
                         std::move(quadrilateralGrid)),
-      seaSurface, seabed);
+      seaSurface, seabed, std::move(volumeAttenuation));
   ReceiverGrid receivers(std::move(receiverDepths), std::move(receiverRanges),
                          runType.receiverLayout);
   std::vector<double> frequencies = frequencyOverrideHz.has_value()

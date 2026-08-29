@@ -17,13 +17,14 @@ namespace rayreuse {
 // ENV reference-profile node is converted at the requested frequency first,
 // using that node's reference real sound speed and raw attenuation; the
 // converted values are then interpolated only in depth.  RayReuse carries the
-// volume attenuation model inside RawAttenuation, so the conversion uses the
-// shared three-argument convertAttenuation like every other frequency
-// evaluator.
+// explicit environment volume attenuation model and node depth.
 class QuadrilateralFrequencySsp {
  public:
   QuadrilateralFrequencySsp(const SoundSpeedProfile& profile,
                             double frequency);
+  QuadrilateralFrequencySsp(
+      const SoundSpeedProfile& profile, double frequency,
+      const VolumeAttenuation& volumeAttenuation);
 
   [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
       noexcept {

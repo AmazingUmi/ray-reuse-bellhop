@@ -12,6 +12,8 @@ namespace rayreuse {
 class PchipFrequencySsp {
  public:
   PchipFrequencySsp(const SoundSpeedProfile& profile, double frequency);
+  PchipFrequencySsp(const SoundSpeedProfile& profile, double frequency,
+                    const VolumeAttenuation& volumeAttenuation);
 
   [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
       noexcept {

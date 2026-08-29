@@ -23,6 +23,8 @@ namespace rayreuse {
 class CubicSplineFrequencySsp {
  public:
   CubicSplineFrequencySsp(const SoundSpeedProfile& profile, double frequency);
+  CubicSplineFrequencySsp(const SoundSpeedProfile& profile, double frequency,
+                          const VolumeAttenuation& volumeAttenuation);
 
   [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
       noexcept {

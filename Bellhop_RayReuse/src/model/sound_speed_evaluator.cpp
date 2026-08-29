@@ -32,18 +32,19 @@ makeGeometryBackend(const SoundSpeedProfile& profile) {
 [[nodiscard]] std::variant<CLinearFrequencySsp, PchipFrequencySsp,
                            N2LinearFrequencySsp, CubicSplineFrequencySsp,
                            QuadrilateralFrequencySsp>
-makeFrequencyBackend(const SoundSpeedProfile& profile, double frequency) {
+makeFrequencyBackend(const SoundSpeedProfile& profile, double frequency,
+                     const VolumeAttenuation& volumeAttenuation) {
   switch (profile.interpolationKind()) {
     case SspInterpolationKind::CLinear:
-      return CLinearFrequencySsp(profile, frequency);
+      return CLinearFrequencySsp(profile, frequency, volumeAttenuation);
     case SspInterpolationKind::Pchip:
-      return PchipFrequencySsp(profile, frequency);
+      return PchipFrequencySsp(profile, frequency, volumeAttenuation);
     case SspInterpolationKind::N2Linear:
-      return N2LinearFrequencySsp(profile, frequency);
+      return N2LinearFrequencySsp(profile, frequency, volumeAttenuation);
     case SspInterpolationKind::CubicSpline:
-      return CubicSplineFrequencySsp(profile, frequency);
+      return CubicSplineFrequencySsp(profile, frequency, volumeAttenuation);
     case SspInterpolationKind::Quadrilateral:
-      return QuadrilateralFrequencySsp(profile, frequency);
+      return QuadrilateralFrequencySsp(profile, frequency, volumeAttenuation);
   }
   throw ValidationError("SSP interpolation kind is invalid");
 }
@@ -167,8 +168,18 @@ SoundSpeedSample GeometrySspEvaluator::evaluate(
 
 FrequencySspEvaluator::FrequencySspEvaluator(
     const SoundSpeedProfile& profile, double frequency)
+    : FrequencySspEvaluator(profile, frequency, VolumeAttenuation{}) {}
+
+FrequencySspEvaluator::FrequencySspEvaluator(
+    const SoundSpeedProfile& profile, double frequency,
+    const VolumeAttenuation& volumeAttenuation)
     : interpolationKind_(profile.interpolationKind()),
-      backend_(makeFrequencyBackend(profile, frequency)) {}
+      backend_(makeFrequencyBackend(profile, frequency, volumeAttenuation)) {}
+
+FrequencySspEvaluator::FrequencySspEvaluator(
+    const Environment& environment, double frequency)
+    : FrequencySspEvaluator(environment.soundSpeedProfile(), frequency,
+                            environment.volumeAttenuation()) {}
 
 SspInterpolationKind FrequencySspEvaluator::interpolationKind() const noexcept {
   return interpolationKind_;

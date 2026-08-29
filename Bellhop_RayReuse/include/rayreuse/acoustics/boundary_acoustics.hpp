@@ -25,10 +25,18 @@ struct BoundaryAcousticsResult {
 [[nodiscard]] BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
     const AcousticMaterial& material, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness);
+[[nodiscard]] BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
+    const AcousticMaterial& material, double attenuationEvaluationDepth,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness);
 
 [[nodiscard]] BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
     const AcousticMaterial& material, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness);
+[[nodiscard]] BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
+    const AcousticMaterial& material, double attenuationEvaluationDepth,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness);
 
 [[nodiscard]] BoundaryAcousticsResult evaluateGrainSizeHalfSpaceAcoustics(
     const GrainSizeMaterial& material, double frequency, double waterSoundSpeed,
@@ -46,8 +54,17 @@ struct BoundaryAcousticsResult {
     const BoundaryModel& boundary, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness);
 [[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary, const VolumeAttenuation& volumeAttenuation,
+    double frequency, double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness);
+[[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
     double frequency, double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness);
+[[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness,
     double outwardNormalSlowness);
 
 }  // namespace rayreuse

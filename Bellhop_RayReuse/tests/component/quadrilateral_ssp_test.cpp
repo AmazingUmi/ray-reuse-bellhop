@@ -31,6 +31,7 @@ using rayreuse::convertAttenuation;
 using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
 using rayreuse::EnvironmentParser;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencySspEvaluator;
 using rayreuse::GeometrySspEvaluator;
 using rayreuse::QuadrilateralFrequencySsp;
@@ -46,6 +47,7 @@ using rayreuse::SspInterpolationKind;
 using rayreuse::sspGradientContinuity;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
+using rayreuse::VolumeAttenuation;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
@@ -649,6 +651,94 @@ void testFrequencyImaginaryAnchors(Context& context) {
       "uniform Q shortcut uses the real matrix rather than ENV reference c");
 }
 
+void testExplicitVolumePaths(Context& context) {
+  const auto grid = std::make_shared<const QuadrilateralSspGrid>(
+      QuadrilateralSspGrid{
+          .rangesMeters = {0.0, 100.0},
+          .speedsDepthMajor = {2000.0, 2100.0, 2000.0, 2100.0,
+                               2000.0, 2100.0},
+          .depthCount = 3U, .rangeCount = 2U});
+  const SoundSpeedProfile source(
+      {{.depth = 0.0, .soundSpeed = 1400.0, .density = 1000.0},
+       {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 200.0, .soundSpeed = 1600.0, .density = 1000.0}},
+      SspInterpolationKind::Quadrilateral, grid);
+  const VolumeAttenuation thorp{.model = VolumeAttenuationModel::Thorp};
+  const VolumeAttenuation fg{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = 10.0,
+                                               .salinityPsu = 35.0,
+                                               .pH = 8.0,
+                                               .meanDepthMeters = 100.0}};
+  const auto layers = std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
+      rayreuse::BiologicalAttenuationLayers{{
+          .minimumDepth = 0.0, .maximumDepth = 100.0,
+          .resonanceFrequency = 1000.0, .qualityFactor = 2.0,
+          .attenuationCoefficientDecibelsPerKilometer = 10.0}});
+  const VolumeAttenuation biological{
+      .model = VolumeAttenuationModel::Biological, .parameters = layers};
+  context.check(QuadrilateralFrequencySsp(source, 1000.0).isLossless(),
+                "Q None path is exactly lossless");
+  context.check(!QuadrilateralFrequencySsp(source, 1000.0, thorp).isLossless(),
+                "Q Thorp path is lossy");
+  context.check(!QuadrilateralFrequencySsp(source, 1000.0, fg).isLossless(),
+                "Q FG path is lossy");
+  const SoundSpeedProfile legacyThorp = makeThorpProfile();
+  context.check(
+      QuadrilateralFrequencySsp(makeAttenuatingProfile(), 1000.0, thorp)
+              .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
+              .imaginarySoundSpeed !=
+          QuadrilateralFrequencySsp(legacyThorp, 1000.0)
+              .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
+              .imaginarySoundSpeed,
+      "Q base attenuation remains additive to the Thorp baseline");
+  auto legacyPoints = source.points();
+  for (auto& point : legacyPoints) {
+    point.attenuation.volumeModel = VolumeAttenuationModel::Thorp;
+  }
+  const SoundSpeedProfile matchingLegacy(
+      std::move(legacyPoints), SspInterpolationKind::Quadrilateral, grid);
+  context.check(
+      QuadrilateralFrequencySsp(source, 1000.0, thorp)
+              .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
+              .imaginarySoundSpeed ==
+          QuadrilateralFrequencySsp(matchingLegacy, 1000.0)
+              .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
+              .imaginarySoundSpeed,
+      "Q explicit and legacy Thorp baselines are exact");
+  const QuadrilateralFrequencySsp bio(source, 1000.0, biological);
+  const FrequencySspEvaluator dispatched(source, 1000.0, biological);
+  checkSameSample(context,
+                  bio.evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U),
+                  dispatched.evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U),
+                  "Q evaluator forwards the explicit biological model");
+  context.check(bio.evaluate(Vec2{.range = 50.0, .depth = 0.0}, 0U)
+                        .imaginarySoundSpeed > 0.0 &&
+                    bio.evaluate(Vec2{.range = 50.0, .depth = 100.0}, 0U)
+                        .imaginarySoundSpeed > 0.0 &&
+                    bio.evaluate(Vec2{.range = 50.0, .depth = 200.0}, 1U)
+                            .imaginarySoundSpeed == 0.0,
+                "Q biological endpoints are inclusive and outside node is lossless");
+  const auto interpolated =
+      bio.evaluate(Vec2{.range = 50.0, .depth = 150.0}, 1U);
+  context.check(interpolated.imaginarySoundSpeed > 0.0,
+                "Q biological loss is node-first, not query-depth converted");
+  const double expectedUpper =
+      convertAttenuation(source.points()[1U].attenuation, biological, 1000.0,
+                         1500.0, 100.0).imaginarySoundSpeed;
+  context.check(bio.evaluate(Vec2{.range = 50.0, .depth = 100.0}, 0U)
+                        .imaginarySoundSpeed == expectedUpper,
+                "Q attenuation uses the ENV reference speed, not Q matrix speed");
+  const auto low = QuadrilateralFrequencySsp(source, 500.0, biological).evaluate(
+      Vec2{.range = 50.0, .depth = 50.0}, 0U);
+  static_cast<void>(QuadrilateralFrequencySsp(source, 2000.0, biological).evaluate(
+      Vec2{.range = 50.0, .depth = 50.0}, 0U));
+  const auto repeated = QuadrilateralFrequencySsp(source, 500.0, biological).evaluate(
+      Vec2{.range = 50.0, .depth = 50.0}, 0U);
+  context.check(low.imaginarySoundSpeed == repeated.imaginarySoundSpeed,
+                "Q low/high/low evaluation is deterministic");
+}
+
 void testTwoFrequencyIndependence(Context& context) {
   const SoundSpeedProfile profile = makeThorpProfile();
   const Vec2 position{.range = 175.0, .depth = 25.0};
@@ -846,6 +936,7 @@ int main() {
   testDensityInterpolation(context);
   testEvaluatorDispatch(context);
   testFrequencyImaginaryAnchors(context);
+  testExplicitVolumePaths(context);
   testTwoFrequencyIndependence(context);
   testParserQuadrilateral(context);
   if (context.failureCount() != 0) {

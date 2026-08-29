@@ -17,6 +17,11 @@ constexpr double kFortranSixth = static_cast<double>(1.0F / 6.0F);
 
 CubicSplineFrequencySsp::CubicSplineFrequencySsp(
     const SoundSpeedProfile& profile, double frequency)
+    : CubicSplineFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
+
+CubicSplineFrequencySsp::CubicSplineFrequencySsp(
+    const SoundSpeedProfile& profile, double frequency,
+    const VolumeAttenuation& volumeAttenuation)
     : frequency_(frequency), realProfile_(profile) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
     throw ValidationError("frequency must be finite and positive");
@@ -25,7 +30,8 @@ CubicSplineFrequencySsp::CubicSplineFrequencySsp(
     depths_.push_back(point.depth);
     nodeSoundSpeeds_.emplace_back(
         point.soundSpeed,
-        convertAttenuation(point.attenuation, frequency_, point.soundSpeed)
+        convertAttenuation(point.attenuation, volumeAttenuation, frequency_,
+                           point.soundSpeed, point.depth)
             .imaginarySoundSpeed);
   }
   coefficients_ =

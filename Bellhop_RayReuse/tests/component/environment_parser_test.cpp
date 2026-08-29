@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -137,6 +138,22 @@ ParsedEnvironment parseText(const std::string& contents,
                             const std::string& name) {
   std::istringstream input(contents);
   return EnvironmentParser::parse(input, name);
+}
+
+std::string renderVolumeAttenuationCase(const std::string& options,
+                                        const std::string& parameterRecords) {
+  std::string contents = renderCase("constant_speed_direct", 1000.0, 20U);
+  replaceFirst(contents, "'CVW'", "'" + options + "'");
+  const std::size_t optionsPosition = contents.find("'" + options + "'");
+  if (optionsPosition == std::string::npos) {
+    throw std::runtime_error("unable to locate volume attenuation options");
+  }
+  const std::size_t lineEnd = contents.find('\n', optionsPosition);
+  if (lineEnd == std::string::npos) {
+    throw std::runtime_error("volume attenuation options line is truncated");
+  }
+  contents.insert(lineEnd + 1U, parameterRecords);
+  return contents;
 }
 
 void testDirectCase(Context& context) {
@@ -645,6 +662,223 @@ void testCurvilinearBoundaryHeaders(Context& context) {
       "bare 'S' header is rejected");
 }
 
+void testVolumeAttenuationParsing(Context& context) {
+  for (const std::string& options :
+       {std::string("CVW"), std::string("CVW "), std::string("CVW  "),
+        std::string("CVW   ")}) {
+    const ParsedEnvironment parsed = parseText(
+        renderVolumeAttenuationCase(options, ""), "option_padding.env");
+    context.check(parsed.simulationCase.environment().volumeAttenuation().model ==
+                      VolumeAttenuationModel::None,
+                  "three-to-six-character top options pad to no volume model");
+  }
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parseText(
+            renderVolumeAttenuationCase("CVW  X", ""),
+            "occupied_sixth_option.env"));
+      },
+      "a non-blank sixth top option is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parseText(
+            renderVolumeAttenuationCase("CVW    ", ""),
+            "seven_character_option.env"));
+      },
+      "top options longer than six characters are rejected");
+
+  const ParsedEnvironment fg = parseText(
+      renderVolumeAttenuationCase("CVWF", "12.5 34.0 8.1 750.0 /\n"),
+      "francois_garrison.env");
+  const auto& fgEnvironment = fg.simulationCase.environment();
+  const auto& fgParameters = std::get<rayreuse::FrancoisGarrisonParameters>(
+      fgEnvironment.volumeAttenuation().parameters);
+  context.check(
+      fgEnvironment.volumeAttenuation().model ==
+              VolumeAttenuationModel::FrancoisGarrison &&
+          fgParameters.temperatureCelsius == 12.5 &&
+          fgParameters.salinityPsu == 34.0 && fgParameters.pH == 8.1 &&
+          fgParameters.meanDepthMeters == 750.0,
+      "Francois-Garrison parameters parse into Environment ownership");
+  context.check(
+      fgEnvironment.soundSpeedProfile()
+                  .points()
+                  .front()
+                  .attenuation.volumeModel ==
+              VolumeAttenuationModel::FrancoisGarrison &&
+          fgEnvironment.seabed()
+                  .material()
+                  ->compressionalAttenuation.volumeModel ==
+              VolumeAttenuationModel::FrancoisGarrison &&
+          fgEnvironment.seabed()
+                  .material()
+                  ->shearAttenuation.volumeModel ==
+              VolumeAttenuationModel::FrancoisGarrison,
+      "Francois-Garrison stamps matching SSP and half-space legacy tags");
+  const ParsedEnvironment sharedFg = parseText(
+      renderCase("volume_attenuation_francois_garrison", 1000.0, 40U),
+      "shared_francois_garrison.env");
+  context.check(sharedFg.simulationCase.environment()
+                        .volumeAttenuation()
+                        .model == VolumeAttenuationModel::FrancoisGarrison,
+                "shared Francois-Garrison origin.env.in parses");
+
+  for (const auto& [parameters, label] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"", "missing Francois-Garrison parameter record"},
+           {"12 34 8 /\n", "missing Francois-Garrison token"},
+           {"-273 34 8 100 /\n", "temperature at absolute-zero guard"},
+           {"-274 34 8 100 /\n", "temperature below absolute-zero guard"},
+           {"12 -1 8 100 /\n", "negative salinity"},
+           {"12 34 8 -1 /\n", "negative mean depth"},
+           {"nan 34 8 100 /\n", "non-finite temperature"},
+           {"12 inf 8 100 /\n", "non-finite salinity"},
+           {"12 34 nan 100 /\n", "non-finite pH"},
+           {"12 34 8 inf /\n", "non-finite mean depth"}}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          static_cast<void>(parseText(
+              renderVolumeAttenuationCase("CVWF", parameters),
+              "bad_francois_garrison.env"));
+        },
+        label);
+  }
+
+  const ParsedEnvironment noBiologicalLayers = parseText(
+      renderVolumeAttenuationCase("CVWB", "0 /\n"), "zero_bio.env");
+  const auto& emptyLayers = *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+      noBiologicalLayers.simulationCase.environment()
+          .volumeAttenuation()
+          .parameters);
+  context.check(emptyLayers.empty(), "zero biological layers are accepted");
+
+  const ParsedEnvironment overlapping = parseText(
+      renderVolumeAttenuationCase(
+          "CVWB", "2 /\n10 30 1000 2 0.5 /\n20 40 2000 3 1.5 /\n"),
+      "overlapping_bio.env");
+  const auto& overlappingLayers =
+      *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          overlapping.simulationCase.environment()
+              .volumeAttenuation()
+              .parameters);
+  context.check(
+      overlappingLayers.size() == 2U &&
+          overlappingLayers[0U].maximumDepth >
+              overlappingLayers[1U].minimumDepth &&
+          overlapping.simulationCase.environment()
+                  .soundSpeedProfile()
+                  .points()
+                  .front()
+                  .attenuation.volumeModel ==
+              VolumeAttenuationModel::Biological &&
+          overlapping.simulationCase.environment()
+                  .seabed()
+                  .material()
+                  ->compressionalAttenuation.volumeModel ==
+              VolumeAttenuationModel::Biological &&
+          overlapping.simulationCase.environment()
+                  .seabed()
+                  .material()
+                  ->shearAttenuation.volumeModel ==
+              VolumeAttenuationModel::Biological,
+      "overlapping biological layers parse and stamp legacy tags");
+  const ParsedEnvironment sharedBiological = parseText(
+      renderCase("volume_attenuation_biological", 1000.0, 40U),
+      "shared_biological.env");
+  context.check(
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          sharedBiological.simulationCase.environment()
+              .volumeAttenuation()
+              .parameters)
+              ->size() == 2U,
+      "shared biological origin.env.in parses");
+
+  std::ostringstream twoHundredRecords;
+  twoHundredRecords << "200 /\n";
+  for (std::size_t index = 0U; index < 200U; ++index) {
+    twoHundredRecords << index << ' ' << (index + 1U) << " 1000 2 0.5 /\n";
+  }
+  const ParsedEnvironment maximumLayers = parseText(
+      renderVolumeAttenuationCase("CVWB", twoHundredRecords.str()),
+      "maximum_bio.env");
+  context.check(
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          maximumLayers.simulationCase.environment()
+              .volumeAttenuation()
+              .parameters)
+              ->size() == 200U,
+      "the biological layer limit of 200 is accepted");
+
+  for (const auto& [records, label] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"", "missing biological layer count record"},
+           {"201 /\n", "more than 200 biological layers"},
+           {"-1 /\n", "negative biological layer count"},
+           {"1 /\n", "missing biological layer record"},
+           {"1 /\n0 1 1000 2 /\n", "missing biological layer token"},
+           {"1 /\n2 1 1000 2 0.5 /\n", "reversed biological depths"},
+           {"1 /\n0 1 0 2 0.5 /\n", "zero biological resonance frequency"},
+           {"1 /\n0 1 -1 2 0.5 /\n", "negative biological resonance frequency"},
+           {"1 /\n0 1 1000 0 0.5 /\n", "zero biological quality factor"},
+           {"1 /\n0 1 1000 -1 0.5 /\n", "negative biological quality factor"},
+           {"1 /\n0 1 1000 2 -0.5 /\n",
+            "negative biological attenuation coefficient"},
+           {"1 /\n0 nan 1000 2 0.5 /\n", "non-finite biological layer"}}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          static_cast<void>(parseText(
+              renderVolumeAttenuationCase("CVWB", records),
+              "bad_biological.env"));
+        },
+        label);
+  }
+}
+
+void testPrtVolumeAttenuationMarkers(Context& context) {
+  const std::filesystem::path executable =
+      std::filesystem::current_path() / "bellhop_rayreuse";
+  context.check(std::filesystem::exists(executable),
+                "PRT marker test locates the bellhop_rayreuse executable");
+  if (!std::filesystem::exists(executable)) {
+    return;
+  }
+
+  const auto checkMarkers = [&](const std::string& name,
+                                const std::string& options,
+                                const std::string& parameterRecords,
+                                const std::vector<std::string>& markers) {
+    const std::filesystem::path directory =
+        std::filesystem::temp_directory_path() / ("rayreuse_h02_" + name);
+    std::error_code error;
+    std::filesystem::remove_all(directory, error);
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path root = directory / "case";
+    {
+      std::ofstream environment(root.string() + ".env");
+      environment << renderVolumeAttenuationCase(options, parameterRecords);
+    }
+    const std::string command = "\"" + executable.string() + "\" \"" +
+                                root.string() + "\" >/dev/null 2>&1";
+    static_cast<void>(std::system(command.c_str()));
+    std::ifstream printLog(root.string() + ".prt");
+    std::ostringstream contents;
+    contents << printLog.rdbuf();
+    for (const std::string& marker : markers) {
+      context.check(contents.str().find(marker) != std::string::npos,
+                    name + " PRT contains marker: " + marker);
+    }
+    std::filesystem::remove_all(directory, error);
+  };
+
+  checkMarkers("thorp", "CVWT", "",
+               {"THORP volume attenuation added\n"});
+  checkMarkers("francois_garrison", "CVWF", "12 34 8 500 /\n",
+               {"Francois-Garrison volume attenuation added\n"});
+  checkMarkers("biological", "CVWB",
+               "2 /\n10 30 1000 2 0.5 /\n20 40 2000 3 1.5 /\n",
+               {"Biological attenaution\n", "Number of Bio Layers = 2\n"});
+}
+
 void testAttenuationCases(Context& context) {
   const ParsedEnvironment lossless = parseText(
       renderCase("constant_speed_no_attenuation_5khz", 5000.0, 10000U),
@@ -661,11 +895,14 @@ void testAttenuationCases(Context& context) {
       "lossless case keeps volume attenuation disabled");
   context.check(
       thorp.simulationCase.environment()
-              .soundSpeedProfile()
-              .points()
-              .front()
-              .attenuation.volumeModel == VolumeAttenuationModel::Thorp,
-      "Thorp case enables volume attenuation at every SSP node");
+                  .volumeAttenuation()
+                  .model == VolumeAttenuationModel::Thorp &&
+          thorp.simulationCase.environment()
+                  .soundSpeedProfile()
+                  .points()
+                  .front()
+                  .attenuation.volumeModel == VolumeAttenuationModel::Thorp,
+      "Thorp case owns its model and enables it at every SSP node");
   context.check(thorp.simulationCase.environment()
                         .seabed()
                         .material()
@@ -1241,6 +1478,8 @@ int main() {
   testBoundaryCases(context);
   testRrB1BoundarySidecarsAndFrozenEvents(context);
   testCurvilinearBoundaryHeaders(context);
+  testVolumeAttenuationParsing(context);
+  testPrtVolumeAttenuationMarkers(context);
   testAttenuationCases(context);
   testRrB4ProductRunTypes(context);
   testMultiSourceDepths(context);

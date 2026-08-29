@@ -66,6 +66,13 @@ if(RAYREUSE_ENABLE_SANITIZERS)
   endif()
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
+  set_source_files_properties(
+    src/acoustics/attenuation.cpp
+    PROPERTIES COMPILE_OPTIONS "-fno-builtin-pow"
+  )
+endif()
+
 add_library(
   bellhop_rayreuse_core
   STATIC

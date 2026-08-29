@@ -2,6 +2,7 @@
 #include <complex>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <numbers>
 #include <numeric>
 #include <stdexcept>
@@ -21,9 +22,12 @@ namespace {
 using rayreuse::BeamFamily;
 using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryCurvatureMode;
+using rayreuse::BiologicalAttenuationLayer;
+using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::BoundaryModel;
 using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
@@ -51,15 +55,214 @@ using rayreuse::SourceBeamPatternSample;
 using rayreuse::StepQuadrature;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
-Environment makeEnvironment() {
+Environment makeEnvironment(VolumeAttenuation volumeAttenuation = {}) {
   std::vector<SoundSpeedPoint> points{
       {.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
       {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0},
   };
   return Environment(SoundSpeedProfile(std::move(points)),
-                     BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+                     BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0),
+                     std::move(volumeAttenuation));
+}
+
+void testVolumeAttenuationOwnership(Context& context) {
+  const VolumeAttenuation defaultAttenuation;
+  context.check(defaultAttenuation.model == VolumeAttenuationModel::None &&
+                    std::holds_alternative<std::monostate>(
+                        defaultAttenuation.parameters),
+                "volume attenuation defaults to None with empty parameters");
+
+  const Environment defaultEnvironment = makeEnvironment();
+  context.check(
+      defaultEnvironment.volumeAttenuation().model ==
+              VolumeAttenuationModel::None &&
+          std::holds_alternative<std::monostate>(
+              defaultEnvironment.volumeAttenuation().parameters),
+      "existing Environment construction defaults to lossless volume model");
+  const Environment explicitNone = makeEnvironment(
+      {.model = VolumeAttenuationModel::None, .parameters = std::monostate{}});
+  const Environment thorp = makeEnvironment(
+      {.model = VolumeAttenuationModel::Thorp, .parameters = std::monostate{}});
+  context.check(explicitNone.volumeAttenuation().model ==
+                        VolumeAttenuationModel::None &&
+                    thorp.volumeAttenuation().model ==
+                        VolumeAttenuationModel::Thorp,
+                "None and Thorp accept explicit empty parameters");
+
+  const FrancoisGarrisonParameters validFrancoisGarrison{
+      .temperatureCelsius = 12.5,
+      .salinityPsu = 34.0,
+      .pH = 7.8,
+      .meanDepthMeters = 750.0};
+  const VolumeAttenuation explicitFrancoisGarrison{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = validFrancoisGarrison};
+  const Environment francoisGarrison =
+      makeEnvironment(explicitFrancoisGarrison);
+  const auto* storedFrancoisGarrison =
+      std::get_if<FrancoisGarrisonParameters>(
+          &francoisGarrison.volumeAttenuation().parameters);
+  context.check(
+      storedFrancoisGarrison != nullptr &&
+          storedFrancoisGarrison->temperatureCelsius == 12.5 &&
+          storedFrancoisGarrison->meanDepthMeters == 750.0,
+      "Francois-Garrison parameters are value-owned by Environment");
+
+  const auto emptyLayers =
+      std::make_shared<const BiologicalAttenuationLayers>();
+  const Environment emptyBiological = makeEnvironment(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = emptyLayers});
+  context.check(
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          emptyBiological.volumeAttenuation().parameters)
+          ->empty(),
+      "biological attenuation accepts zero immutable layers");
+
+  BiologicalAttenuationLayers overlapping{
+      {.minimumDepth = 100.0,
+       .maximumDepth = 300.0,
+       .resonanceFrequency = 1000.0,
+       .qualityFactor = 2.0,
+       .attenuationCoefficientDecibelsPerKilometer = 0.5},
+      {.minimumDepth = 200.0,
+       .maximumDepth = 400.0,
+       .resonanceFrequency = 2000.0,
+       .qualityFactor = 3.0,
+       .attenuationCoefficientDecibelsPerKilometer = 0.25}};
+  const auto sharedLayers =
+      std::make_shared<const BiologicalAttenuationLayers>(overlapping);
+  const Environment biological = makeEnvironment(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = sharedLayers});
+  const long ownersBeforeCopy = sharedLayers.use_count();
+  const Environment biologicalCopy = biological;
+  const auto& storedLayers =
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          biological.volumeAttenuation().parameters);
+  const auto& copiedLayers =
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          biologicalCopy.volumeAttenuation().parameters);
+  context.check(storedLayers->size() == 2U,
+                "biological attenuation accepts overlapping layers");
+  context.check(storedLayers.get() == copiedLayers.get() &&
+                    sharedLayers.use_count() == ownersBeforeCopy + 1,
+                "copied environments share biological layers immutably");
+
+  BiologicalAttenuationLayers maximumLayers(200U, overlapping.front());
+  const Environment maximumBiological = makeEnvironment(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+           std::move(maximumLayers))});
+  context.check(
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          maximumBiological.volumeAttenuation().parameters)
+              ->size() == 200U,
+      "biological attenuation accepts exactly 200 layers");
+
+  const auto expectInvalid = [&context](VolumeAttenuation attenuation,
+                                        const std::string& message) {
+    context.expectThrows<ValidationError>(
+        [attenuation = std::move(attenuation)]() mutable {
+          static_cast<void>(makeEnvironment(std::move(attenuation)));
+        },
+        message);
+  };
+  expectInvalid({.model = VolumeAttenuationModel::None,
+                 .parameters = validFrancoisGarrison},
+                "None rejects Francois-Garrison parameters");
+  expectInvalid({.model = VolumeAttenuationModel::Thorp,
+                 .parameters = validFrancoisGarrison},
+                "Thorp rejects Francois-Garrison parameters");
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = std::monostate{}},
+                "Francois-Garrison rejects empty parameters");
+  expectInvalid({.model = VolumeAttenuationModel::Biological,
+                 .parameters = std::monostate{}},
+                "biological attenuation rejects a mismatched variant");
+  expectInvalid(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = rayreuse::SharedBiologicalAttenuationLayers{}},
+      "biological attenuation rejects a null immutable layer pointer");
+  expectInvalid(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+           201U, overlapping.front())},
+      "biological attenuation rejects more than 200 layers");
+
+  FrancoisGarrisonParameters invalidFrancoisGarrison =
+      validFrancoisGarrison;
+  invalidFrancoisGarrison.salinityPsu = -1.0;
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = invalidFrancoisGarrison},
+                "Francois-Garrison rejects negative salinity");
+  invalidFrancoisGarrison = validFrancoisGarrison;
+  invalidFrancoisGarrison.temperatureCelsius = -273.0;
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = invalidFrancoisGarrison},
+                "Francois-Garrison rejects temperatures at absolute zero");
+  invalidFrancoisGarrison = validFrancoisGarrison;
+  invalidFrancoisGarrison.meanDepthMeters = -1.0;
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = invalidFrancoisGarrison},
+                "Francois-Garrison rejects negative mean depth");
+  for (std::size_t field = 0U; field < 4U; ++field) {
+    invalidFrancoisGarrison = validFrancoisGarrison;
+    double* values[] = {&invalidFrancoisGarrison.temperatureCelsius,
+                        &invalidFrancoisGarrison.salinityPsu,
+                        &invalidFrancoisGarrison.pH,
+                        &invalidFrancoisGarrison.meanDepthMeters};
+    *values[field] = std::numeric_limits<double>::infinity();
+    expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                   .parameters = invalidFrancoisGarrison},
+                  "Francois-Garrison rejects every non-finite field");
+  }
+
+  const auto expectInvalidLayer = [&expectInvalid](
+                                      BiologicalAttenuationLayer layer,
+                                      const std::string& message) {
+    expectInvalid(
+        {.model = VolumeAttenuationModel::Biological,
+         .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+             BiologicalAttenuationLayers{layer})},
+        message);
+  };
+  BiologicalAttenuationLayer invalidLayer = overlapping.front();
+  invalidLayer.minimumDepth = 301.0;
+  expectInvalidLayer(invalidLayer,
+                     "biological layer rejects reversed depth bounds");
+  for (double resonance : {-1.0, 0.0}) {
+    invalidLayer = overlapping.front();
+    invalidLayer.resonanceFrequency = resonance;
+    expectInvalidLayer(invalidLayer,
+                       "biological layer requires positive resonance");
+  }
+  for (double qualityFactor : {-1.0, 0.0}) {
+    invalidLayer = overlapping.front();
+    invalidLayer.qualityFactor = qualityFactor;
+    expectInvalidLayer(invalidLayer,
+                       "biological layer requires positive quality factor");
+  }
+  invalidLayer = overlapping.front();
+  invalidLayer.attenuationCoefficientDecibelsPerKilometer = -1.0;
+  expectInvalidLayer(invalidLayer,
+                     "biological layer rejects negative attenuation");
+  for (std::size_t field = 0U; field < 5U; ++field) {
+    invalidLayer = overlapping.front();
+    double* values[] = {
+        &invalidLayer.minimumDepth,
+        &invalidLayer.maximumDepth,
+        &invalidLayer.resonanceFrequency,
+        &invalidLayer.qualityFactor,
+        &invalidLayer.attenuationCoefficientDecibelsPerKilometer};
+    *values[field] = std::numeric_limits<double>::quiet_NaN();
+    expectInvalidLayer(invalidLayer,
+                       "biological layer rejects every non-finite field");
+  }
 }
 
 SimulationCase makeSimulationCase(std::vector<double> frequencies) {
@@ -1042,6 +1245,7 @@ void testFrequencyWorkspace(Context& context) {
 int main() {
   Context context;
   testVec2(context);
+  testVolumeAttenuationOwnership(context);
   testSimulationCase(context);
   testSimulationProductMetadata(context);
   testReceiverGridLayouts(context);

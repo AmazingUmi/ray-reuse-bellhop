@@ -18,6 +18,8 @@ namespace rayreuse {
 class CLinearFrequencySsp {
  public:
   CLinearFrequencySsp(const SoundSpeedProfile& profile, double frequency);
+  CLinearFrequencySsp(const SoundSpeedProfile& profile, double frequency,
+                      const VolumeAttenuation& volumeAttenuation);
 
   [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
       noexcept {

@@ -111,11 +111,9 @@ class CaseModelTests(unittest.TestCase):
             with self.subTest(unit=suffix):
                 self.assertEqual(
                     self.cases[f"attenuation_unit_{suffix}"].supported_versions,
-                    ("origin", "f2cpp"),
+                    ("origin", "f2cpp", "rayreuse"),
                 )
         for case_id in (
-            "volume_attenuation_francois_garrison",
-            "volume_attenuation_biological",
             "cerveny_width_space_filling",
             "cerveny_width_wkb",
             "cerveny_curvature_double",
@@ -127,6 +125,15 @@ class CaseModelTests(unittest.TestCase):
                 self.assertEqual(
                     self.cases[case_id].supported_versions,
                     ("origin", "f2cpp"),
+                )
+        for case_id in (
+            "volume_attenuation_francois_garrison",
+            "volume_attenuation_biological",
+        ):
+            with self.subTest(case=case_id):
+                self.assertEqual(
+                    self.cases[case_id].supported_versions,
+                    ("origin", "f2cpp", "rayreuse"),
                 )
         for case_id in (
             "elastic_halfspace_flat",

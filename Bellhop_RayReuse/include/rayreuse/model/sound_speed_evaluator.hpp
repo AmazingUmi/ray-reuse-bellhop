@@ -64,6 +64,9 @@ class GeometrySspEvaluator {
 class FrequencySspEvaluator {
  public:
   FrequencySspEvaluator(const SoundSpeedProfile& profile, double frequency);
+  FrequencySspEvaluator(const SoundSpeedProfile& profile, double frequency,
+                        const VolumeAttenuation& volumeAttenuation);
+  FrequencySspEvaluator(const Environment& environment, double frequency);
 
   [[nodiscard]] SspInterpolationKind interpolationKind() const noexcept;
   [[nodiscard]] SspGradientContinuity gradientContinuity() const noexcept;
