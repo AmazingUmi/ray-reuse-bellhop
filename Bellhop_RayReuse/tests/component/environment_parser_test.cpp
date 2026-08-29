@@ -619,6 +619,192 @@ void testRrB4ProductRunTypes(Context& context) {
       "irregular receiver arrivals are explicitly rejected");
 }
 
+std::string renderIrregularHatCase(const std::string& runType,
+                                  const std::string& rangeCount,
+                                  const std::string& rangeList) {
+  std::string contents =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+  replaceFirst(contents, "\n1\n50.0 /\n7\n20.0  80.0 /\n21\n0.02  0.25 /",
+               "\n1\n50.0 /\n3\n20.0  50.0  80.0 /\n" + rangeCount + "\n" +
+                   rangeList + " /");
+  replaceFirst(contents, "'CG'", "'" + runType + "'");
+  return contents;
+}
+
+void testMultiSourceDepths(Context& context) {
+  const std::string direct = renderCase("constant_speed_direct", 50.0, 300U);
+
+  std::string explicitDepths = direct;
+  replaceFirst(explicitDepths, "\n1                       ! NSD",
+               "\n3                       ! NSD");
+  replaceFirst(explicitDepths, "\n500.0 /",
+                   "\n300.0  700.0  500.0 /");
+  const ParsedEnvironment parsedExplicit =
+      parseText(explicitDepths, "multi_source_explicit.env");
+  const auto& explicitSources = parsedExplicit.simulationCase.sources();
+  context.check(
+      parsedExplicit.simulationCase.sourceCount() == 3U &&
+              explicitSources.size() == 3U &&
+              parsedExplicit.simulationCase.source().depth == 300.0 &&
+              explicitSources[1U].depth == 500.0 &&
+              explicitSources[2U].depth == 700.0,
+      "three explicit source depths parse and sort ascending");
+  context.check(
+      explicitSources[0U].amplitude == 1.0 &&
+              explicitSources[1U].amplitude == 1.0 &&
+              explicitSources[2U].amplitude == 1.0,
+      "parsed sources use the F2CPP unit amplitude convention");
+
+  std::string subtabDepths = direct;
+  replaceFirst(subtabDepths, "\n1                       ! NSD",
+               "\n3                       ! NSD");
+  replaceFirst(subtabDepths, "\n500.0 /", "\n300.0  700.0 /");
+  const ParsedEnvironment parsedSubtab =
+      parseText(subtabDepths, "multi_source_subtab.env");
+  context.check(
+      parsedSubtab.simulationCase.sourceCount() == 3U &&
+              parsedSubtab.simulationCase.source().depth == 300.0 &&
+              parsedSubtab.simulationCase.sources()[1U].depth == 500.0 &&
+              parsedSubtab.simulationCase.sources()[2U].depth == 700.0,
+      "source-depth subtabulation endpoints expand to the depth vector");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "\n1                       ! NSD",
+                     "\n0                       ! NSD");
+        static_cast<void>(parseText(contents, "zero_sources.env"));
+      },
+      "a zero source-depth count is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "\n1                       ! NSD",
+                     "\n2                       ! NSD");
+        static_cast<void>(parseText(contents, "source_count_mismatch.env"));
+      },
+      "a source-depth vector shorter than the declared count is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "\n1                       ! NSD",
+                     "\n2                       ! NSD");
+        replaceFirst(contents, "\n500.0 /", "\n500.0  1500.0 /");
+        static_cast<void>(parseText(contents, "source_below_bottom.env"));
+      },
+      "a source depth outside the water column is rejected");
+
+  std::string rayDepths =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 80U);
+  replaceFirst(rayDepths, "\n1\n50.0 /", "\n2\n30.0  70.0 /");
+  replaceFirst(rayDepths, "'CG'", "'R'");
+  const ParsedEnvironment parsedRay =
+      parseText(rayDepths, "multi_source_ray.env");
+  context.check(
+      parsedRay.simulationCase.runMode() == SimulationRunMode::RayTrace &&
+              parsedRay.simulationCase.sourceCount() == 2U &&
+              parsedRay.simulationCase.source().depth == 30.0 &&
+              parsedRay.simulationCase.sources()[1U].depth == 70.0,
+      "ray-trace run types accept a sorted two-source depth vector");
+}
+
+void testIrregularReceiverLayouts(Context& context) {
+  const ParsedEnvironment plain = parseText(
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U),
+      "rectilinear_control.env");
+  context.check(
+      plain.simulationCase.receivers().layout() ==
+              rayreuse::ReceiverGridLayout::Rectilinear &&
+          !plain.simulationCase.receivers().isIrregular() &&
+          plain.simulationCase.receivers().receiversPerRange() == 7U,
+      "an unqualified run type keeps the rectilinear layout");
+
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CG  I  ", SimulationRunMode::Coherent},
+           {"IG  I  ", SimulationRunMode::Incoherent},
+           {"SG  I  ", SimulationRunMode::SemiCoherent},
+           {"CB  I  ", SimulationRunMode::Coherent},
+           {"AG  I  ", SimulationRunMode::AsciiArrivals},
+           {"aG  I  ", SimulationRunMode::BinaryArrivals},
+           {"EB  I  ", SimulationRunMode::Eigenray}}) {
+    const ParsedEnvironment parsed = parseText(
+        renderIrregularHatCase(runType, "3", "0.02  0.10  0.25"),
+        "irregular_" + runType + ".env");
+    const auto& receivers = parsed.simulationCase.receivers();
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+                receivers.layout() == rayreuse::ReceiverGridLayout::Irregular &&
+                receivers.isIrregular() && receivers.depthCount() == 3U &&
+                receivers.rangeCount() == 3U &&
+                receivers.receiversPerRange() == 1U &&
+                receivers.depthAt(0U, 0U) == 20.0 &&
+                receivers.depthAt(0U, 1U) == 50.0 &&
+                receivers.depthAt(0U, 2U) == 80.0,
+        "paired irregular receivers parse for TL, arrival, and eigenray run "
+        "types");
+  }
+
+  std::string cervenyIrregular =
+      renderCase("constant_speed_direct", 50.0, 300U);
+  replaceFirst(cervenyIrregular,
+               "\n21                      ! NRD\n400.0  600.0 /",
+               "\n3                       ! NRD\n400.0  500.0  600.0 /");
+  replaceFirst(cervenyIrregular,
+               "\n51                      ! NR\n0.1  5.0 /",
+               "\n3                       ! NR\n1.0  2.0  3.0 /");
+  replaceFirst(cervenyIrregular, "'CC'", "'CC  I  '");
+  const ParsedEnvironment parsedCerveny =
+      parseText(cervenyIrregular, "irregular_cerveny.env");
+  context.check(
+      parsedCerveny.simulationCase.receivers().isIrregular() &&
+              parsedCerveny.simulationCase.receivers().receiversPerRange() ==
+                  1U &&
+              parsedCerveny.simulationCase.receivers().ranges()[1U] == 2000.0,
+      "Cartesian Cerveny accepts an irregular grid with uniform paired ranges");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(parseText(
+            renderIrregularHatCase("CG  I  ", "4", "0.02  0.10  0.20  0.25"),
+            "irregular_count_mismatch.env"));
+      },
+      "an irregular layout with unequal depth and range counts is rejected");
+  for (const std::string& runType :
+       {"CR  I  ", "Cg  I  ", "Ag  I  "}) {
+    context.expectThrows<ValidationError>(
+        [&, runType] {
+          static_cast<void>(parseText(
+              renderIrregularHatCase(runType, "3", "0.02  0.06  0.10"),
+              "irregular_ray_centered.env"));
+        },
+        "ray-centered beam families reject the irregular layout");
+  }
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(parseText(renderIrregularHatCase("CS  I  ", "3",
+                                                           "0.02  0.10  0.25"),
+                                    "irregular_simple_gaussian.env"));
+      },
+      "Simple Gaussian beams reject the irregular layout");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+        replaceFirst(contents, "'CG'", "'R   I  '");
+        static_cast<void>(parseText(contents, "irregular_ray_trace.env"));
+      },
+      "ray-trace run types keep the blank/R-only fifth run-type letter");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+        replaceFirst(contents, "'CG'", "'CG X'");
+        static_cast<void>(parseText(contents, "line_source.env"));
+      },
+      "line-source run types remain explicitly rejected");
+}
+
 void testMunkCase(Context& context) {
   const ParsedEnvironment parsed = parseText(
       renderCase("munk_cerveny_cc", 50.0, 1000U), "munk_cerveny_cc.env");
@@ -908,6 +1094,8 @@ int main() {
   testRrB1BoundarySidecarsAndFrozenEvents(context);
   testAttenuationCases(context);
   testRrB4ProductRunTypes(context);
+  testMultiSourceDepths(context);
+  testIrregularReceiverLayouts(context);
   testMunkCase(context);
   testFortranNumericSpelling(context);
   testUnsupportedAndMalformedInput(context);

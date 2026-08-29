@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <numbers>
+#include <numeric>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -26,7 +27,12 @@ using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
+using rayreuse::kMaximumReceiverGridValues;
+using rayreuse::kMaximumRunRayCount;
 using rayreuse::LaunchFan;
+using rayreuse::LaunchFanPlan;
+using rayreuse::LaunchFanPlanningInput;
+using rayreuse::LaunchFanPlanner;
 using rayreuse::RayFrequencyPoint;
 using rayreuse::RayFrequencyState;
 using rayreuse::RayPath;
@@ -34,6 +40,7 @@ using rayreuse::RayPathCache;
 using rayreuse::RayState;
 using rayreuse::RayTerminationReason;
 using rayreuse::ReceiverGrid;
+using rayreuse::ReceiverGridLayout;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SoundSpeedPoint;
@@ -182,6 +189,10 @@ void testSimulationCase(Context& context) {
   context.check(simulation.launchFanPlan().launchAngles.size() ==
                     simulation.launchFanPlan().launchAngleCount,
                 "SimulationCase stores the complete derived launch fan");
+  context.check(simulation.sourceCount() == 1U &&
+                    simulation.sources().front().depth == 500.0 &&
+                    simulation.source().depth == 500.0,
+                "single-source cases expose exactly one sorted source");
 
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(makeSimulationCase({})); },
@@ -487,6 +498,343 @@ void testSimulationProductMetadata(Context& context) {
       "SimulationCase rejects an invalid coordinate enum");
 }
 
+SimulationCase makeSourceCase(
+    std::vector<Source> sources, ReceiverGrid receivers,
+    SimulationRunMode runMode = SimulationRunMode::Coherent,
+    BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+    CervenyCoordinateSystem coordinates = CervenyCoordinateSystem::Cartesian,
+    LaunchFan fan = LaunchFan{.minimumAngle = -0.1,
+                              .maximumAngle = 0.1,
+                              .explicitLaunchAngleCount = 301U},
+    Environment environment = makeEnvironment()) {
+  return SimulationCase(
+      std::move(environment), std::move(sources), std::move(receivers),
+      FrequencyGrid({50.0}), fan,
+      IntegratorSettings{.stepLength = 10.0,
+                         .rangeLimit = 5100.0,
+                         .depthLimit = 1100.0,
+                         .maximumRayPoints = 10000U},
+      SourceBeamPattern::omnidirectional(), runMode, beamFamily,
+      FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+      BeamWidthMode::MinimumWidth, coordinates);
+}
+
+void testReceiverGridLayouts(Context& context) {
+  const ReceiverGrid rectilinear({10.0, 20.0, 30.0}, {100.0, 200.0, 300.0});
+  context.check(
+      rectilinear.layout() == ReceiverGridLayout::Rectilinear &&
+          !rectilinear.isIrregular() &&
+          rectilinear.receiversPerRange() == 3U &&
+          rectilinear.depthAt(0U, 2U) == 10.0 &&
+          rectilinear.depthAt(2U, 0U) == 30.0,
+      "rectilinear receiver grids keep depth-indexed addressing");
+  context.expectThrows<std::out_of_range>(
+      [&rectilinear] { static_cast<void>(rectilinear.depthAt(3U, 0U)); },
+      "rectilinear addressing rejects an invalid depth index");
+  context.expectThrows<std::out_of_range>(
+      [&rectilinear] { static_cast<void>(rectilinear.depthAt(0U, 3U)); },
+      "receiver addressing rejects an invalid range index");
+
+  const ReceiverGrid irregular({15.0, 25.0, 35.0}, {100.0, 200.0, 300.0},
+                               ReceiverGridLayout::Irregular);
+  context.check(irregular.layout() == ReceiverGridLayout::Irregular &&
+                    irregular.isIrregular() &&
+                    irregular.depthCount() == 3U &&
+                    irregular.receiversPerRange() == 1U &&
+                    irregular.depthAt(0U, 0U) == 15.0 &&
+                    irregular.depthAt(0U, 2U) == 35.0,
+                "irregular receiver pairs address one depth per range");
+  context.expectThrows<std::out_of_range>(
+      [&irregular] { static_cast<void>(irregular.depthAt(1U, 0U)); },
+      "irregular addressing rejects a second depth index");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(ReceiverGrid(
+            {10.0, 20.0}, {100.0, 200.0, 300.0},
+            ReceiverGridLayout::Irregular));
+      },
+      "irregular receiver grids require matching coordinate counts");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(ReceiverGrid(
+            {10.0, 20.0, 30.0}, {-100.0, 200.0, 300.0},
+            ReceiverGridLayout::Irregular));
+      },
+      "irregular receiver ranges stay non-negative");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(ReceiverGrid(
+            {30.0, 20.0, 10.0}, {100.0, 200.0, 300.0},
+            ReceiverGridLayout::Irregular));
+      },
+      "irregular receiver depths stay strictly increasing");
+  const ReceiverGrid singlePair({10.0}, {100.0},
+                                ReceiverGridLayout::Irregular);
+  context.check(singlePair.receiversPerRange() == 1U &&
+                    singlePair.depthAt(0U, 0U) == 10.0,
+                "a single irregular receiver pair is accepted");
+}
+
+void testMultiSourceCases(Context& context) {
+  const SimulationCase unordered = makeSourceCase(
+      {{.depth = 900.0, .amplitude = 3.0},
+       {.depth = 100.0, .amplitude = 1.0},
+       {.depth = 500.0, .amplitude = 2.0}},
+      ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}));
+  context.check(unordered.sourceCount() == 3U &&
+                    unordered.sources()[0U].depth == 100.0 &&
+                    unordered.sources()[1U].depth == 500.0 &&
+                    unordered.sources()[2U].depth == 900.0 &&
+                    unordered.source().depth == 100.0,
+                "multi-source cases sort sources by ascending depth");
+
+  const SimulationCase tied = makeSourceCase(
+      {{.depth = 500.0, .amplitude = 1.0},
+       {.depth = 100.0, .amplitude = 3.0},
+       {.depth = 500.0, .amplitude = 2.0}},
+      ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}));
+  context.check(tied.sources()[0U].depth == 100.0 &&
+                    tied.sources()[0U].amplitude == 3.0 &&
+                    tied.sources()[1U].amplitude == 1.0 &&
+                    tied.sources()[2U].amplitude == 2.0,
+                "equal-depth sources keep their input order");
+
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {}, ReceiverGrid({400.0, 500.0, 600.0},
+                             {100.0, 1000.0, 5000.0})));
+      },
+      "multi-source cases require at least one source");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 100.0}, {.depth = 1500.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "every source must lie strictly inside the water column");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = -10.0}, {.depth = 500.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "sources above the surface are rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 0.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "sources on the surface boundary are rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0, .amplitude = -1.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "multi-source cases keep the non-negative amplitude rule");
+
+  const SimulationCase pairedBoundary = makeSourceCase(
+      {{.depth = 500.0}},
+      ReceiverGrid({0.0, 500.0, 999.0}, {100.0, 1000.0, 5000.0},
+                   ReceiverGridLayout::Irregular));
+  context.check(pairedBoundary.receivers().isIrregular() &&
+                    pairedBoundary.receivers().receiversPerRange() == 1U,
+                "irregular pairs on the water boundaries are accepted");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0}},
+            ReceiverGrid({1500.0}, {100.0},
+                         ReceiverGridLayout::Irregular)));
+      },
+      "irregular pairs below the seabed are rejected");
+}
+
+void testMultiSourceFanPlanning(Context& context) {
+  const Environment uniform1600(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1600.0, .density = 1000.0},
+           {.depth = 1000.0, .soundSpeed = 1600.0, .density = 1000.0}}),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+  const LaunchFan fullFan{
+      .minimumAngle = -std::numbers::pi, .maximumAngle = std::numbers::pi};
+  const ReceiverGrid receivers({400.0, 500.0, 600.0},
+                               {100.0, 1000.0, 5000.0});
+  const IntegratorSettings integrator{
+      .stepLength = 10.0, .rangeLimit = 5100.0, .depthLimit = 1100.0,
+      .maximumRayPoints = 10000U};
+  const auto makeFanCase = [&uniform1600, &receivers, &integrator,
+                            &fullFan](std::vector<Source> sources) {
+    return SimulationCase(
+        uniform1600, std::move(sources), receivers, FrequencyGrid({400.0}),
+        fullFan, integrator);
+  };
+  const auto expectedCount = [](double sourceSoundSpeed) {
+    return LaunchFanPlanner::plan(LaunchFanPlanningInput{
+               .frequencies = {400.0},
+               .sourceSoundSpeed = sourceSoundSpeed,
+               .waterDepth = 1000.0,
+               .maximumRange = 5000.0,
+               .minimumLaunchAngle = -std::numbers::pi,
+               .maximumLaunchAngle = std::numbers::pi})
+        .launchAngleCount;
+  };
+  const std::size_t localSpeedCount = expectedCount(1600.0);
+  const std::size_t referenceSpeedCount = expectedCount(1500.0);
+  context.check(localSpeedCount != referenceSpeedCount,
+                "fan-planning speeds must produce distinguishable counts");
+
+  const SimulationCase single = makeFanCase({{.depth = 500.0}});
+  context.check(
+      single.launchFanPlan().launchAngleCount == localSpeedCount,
+      "single-source fan planning evaluates the local source sound speed");
+
+  const SimulationCase multi =
+      makeFanCase({{.depth = 300.0}, {.depth = 700.0}});
+  context.check(
+      multi.launchFanPlan().launchAngleCount == referenceSpeedCount,
+      "multi-source fan planning uses the 1500 m/s reference speed");
+}
+
+void testSourceReceiverWorkspaceLimits(Context& context) {
+  std::vector<double> manyDepths(2000U);
+  std::iota(manyDepths.begin(), manyDepths.end(), 0.0);
+  for (double& depth : manyDepths) {
+    depth *= 0.5;
+  }
+  std::vector<double> manyRanges(1001U);
+  std::iota(manyRanges.begin(), manyRanges.end(), 0.0);
+  const ReceiverGrid oversizedGrid(std::move(manyDepths),
+                                   std::move(manyRanges));
+
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    context.expectThrows<ValidationError>(
+        [&oversizedGrid, mode] {
+          static_cast<void>(makeSourceCase({{.depth = 500.0}}, oversizedGrid,
+                                           mode));
+        },
+        "every TL mode rejects an oversized source/receiver workspace");
+  }
+  const SimulationCase rayOnly = makeSourceCase(
+      {{.depth = 500.0}}, oversizedGrid, SimulationRunMode::RayTrace);
+  context.check(rayOnly.receivers().depthCount() == 2000U,
+                "ray-trace products skip the pressure workspace limit");
+
+  std::vector<double> workspaceDepths(1001U);
+  std::iota(workspaceDepths.begin(), workspaceDepths.end(), 0.0);
+  std::vector<double> workspaceRanges(1000U);
+  std::iota(workspaceRanges.begin(), workspaceRanges.end(), 0.0);
+  const ReceiverGrid largeButValidGrid(std::move(workspaceDepths),
+                                       std::move(workspaceRanges));
+  const SimulationCase singleSource = makeSourceCase(
+      {{.depth = 500.0}}, largeButValidGrid);
+  context.check(singleSource.receivers().rangeCount() == 1000U,
+                "a single source keeps the maximum pressure workspace");
+  context.expectThrows<ValidationError>(
+      [&largeButValidGrid] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 400.0}, {.depth = 600.0}}, largeButValidGrid));
+      },
+      "multi-source retained workspaces are rejected before receiver scans");
+
+  const std::size_t pairCount = kMaximumReceiverGridValues / 2U + 1U;
+  std::vector<double> pairedDepths(pairCount);
+  std::vector<double> pairedRanges(pairCount);
+  for (std::size_t index = 0U; index < pairCount; ++index) {
+    pairedDepths[index] = 500.0 + static_cast<double>(index) * 1.0e-6;
+    pairedRanges[index] = static_cast<double>(index);
+  }
+  const ReceiverGrid largeIrregularGrid(
+      std::move(pairedDepths), std::move(pairedRanges),
+      ReceiverGridLayout::Irregular);
+  const SimulationCase irregularCase = makeSourceCase(
+      {{.depth = 500.0}}, largeIrregularGrid);
+  context.check(irregularCase.receivers().isIrregular() &&
+                    irregularCase.receivers().rangeCount() == pairCount,
+                "irregular pairs count one pressure value per range");
+}
+
+void testRunRayCountLimit(Context& context) {
+  const LaunchFan hugeFan{
+      .minimumAngle = -0.1, .maximumAngle = 0.1,
+      .explicitLaunchAngleCount = kMaximumRunRayCount + 1U};
+  context.expectThrows<ValidationError>(
+      [&hugeFan] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            CervenyCoordinateSystem::Cartesian, hugeFan));
+      },
+      "the per-run ray count cannot exceed the supported limit");
+  const LaunchFan limitFan{
+      .minimumAngle = -0.1, .maximumAngle = 0.1,
+      .explicitLaunchAngleCount = kMaximumRunRayCount};
+  const SimulationCase atLimit = makeSourceCase(
+      {{.depth = 500.0}},
+      ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+      SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+      CervenyCoordinateSystem::Cartesian, limitFan);
+  context.check(atLimit.launchFanPlan().launchAngleCount ==
+                    kMaximumRunRayCount,
+                "exactly one limit of rays for one source is accepted");
+  const LaunchFan halfLimitFan{
+      .minimumAngle = -0.1, .maximumAngle = 0.1,
+      .explicitLaunchAngleCount = kMaximumRunRayCount / 2U + 1U};
+  context.expectThrows<ValidationError>(
+      [&halfLimitFan] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 400.0}, {.depth = 600.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            CervenyCoordinateSystem::Cartesian, halfLimitFan));
+      },
+      "multi-source runs count rays across every source fan");
+}
+
+void testIrregularModelRejections(Context& context) {
+  const ReceiverGrid irregular({400.0, 500.0, 600.0},
+                               {100.0, 1000.0, 5000.0},
+                               ReceiverGridLayout::Irregular);
+  const SimulationCase cervenyTl =
+      makeSourceCase({{.depth = 500.0}}, irregular);
+  context.check(cervenyTl.receivers().isIrregular(),
+                "Cartesian Cerveny TL accepts irregular receiver pairs");
+  const SimulationCase geometricHatArrivals = makeSourceCase(
+      {{.depth = 500.0}}, irregular, SimulationRunMode::AsciiArrivals,
+      BeamFamily::GeometricHat);
+  context.check(geometricHatArrivals.runMode() ==
+                    SimulationRunMode::AsciiArrivals,
+                "Cartesian geometric-hat arrivals accept irregular pairs");
+  context.expectThrows<ValidationError>(
+      [&irregular] {
+        static_cast<void>(makeSourceCase({{.depth = 500.0}}, irregular,
+                                         SimulationRunMode::Coherent,
+                                         BeamFamily::CervenyGaussian,
+                                         CervenyCoordinateSystem::RayCentered));
+      },
+      "ray-centered Cerveny TL rejects irregular receiver grids");
+  context.expectThrows<ValidationError>(
+      [&irregular] {
+        static_cast<void>(makeSourceCase({{.depth = 500.0}}, irregular,
+                                         SimulationRunMode::Coherent,
+                                         BeamFamily::GeometricHat,
+                                         CervenyCoordinateSystem::RayCentered));
+      },
+      "ray-centered geometric hat rejects irregular receiver grids");
+  context.expectThrows<ValidationError>(
+      [&irregular] {
+        static_cast<void>(makeSourceCase({{.depth = 500.0}}, irregular,
+                                         SimulationRunMode::Coherent,
+                                         BeamFamily::SimpleGaussian));
+      },
+      "simple Gaussian beams require a rectilinear receiver grid");
+}
+
 void testRayPathCache(Context& context) {
   RayPathCache cache;
   cache.reserve(1U);
@@ -696,6 +1044,12 @@ int main() {
   testVec2(context);
   testSimulationCase(context);
   testSimulationProductMetadata(context);
+  testReceiverGridLayouts(context);
+  testMultiSourceCases(context);
+  testMultiSourceFanPlanning(context);
+  testSourceReceiverWorkspaceLimits(context);
+  testRunRayCountLimit(context);
+  testIrregularModelRejections(context);
   testRayPathCache(context);
   testFrequencyWorkspace(context);
 

@@ -272,6 +272,12 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_irregular_receiver_influence_tests
+    rayreuse.component.irregular_receiver_influence
+    tests/component/irregular_receiver_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_single_frequency_solver_tests
     rayreuse.component.single_frequency_solver
     tests/component/single_frequency_solver_test.cpp
@@ -294,6 +300,18 @@ if(BUILD_TESTING)
     rayreuse.parallel.solver
     tests/component/parallel_ray_reuse_solver_test.cpp
     "component;parallel;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_multi_source_product_tests
+    rayreuse.component.multi_source_product
+    tests/component/multi_source_product_test.cpp
+    "component;reuse;parallel"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_multi_source_writer_tests
+    rayreuse.component.multi_source_writer
+    tests/component/multi_source_writer_test.cpp
+    component
   )
   add_rayreuse_test(
     bellhop_rayreuse_c_linear_ssp_tests

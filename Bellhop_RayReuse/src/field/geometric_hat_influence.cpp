@@ -91,7 +91,7 @@ void validateField(
       pressureWorkspace != nullptr ? pressureWorkspace->rangeCount()
                                    : intensityWorkspace->rangeCount();
   if (workspaceFrequency != state.frequency ||
-      workspaceDepthCount != receivers.depthCount() ||
+      workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
     throw ValidationError(
         "geometric hat workspace metadata must match the run");
@@ -127,7 +127,8 @@ void validateField(
   }
   if (diagnosticRequest.has_value() &&
       (diagnosticRequest->receiverRangeIndex >= receivers.rangeCount() ||
-       diagnosticRequest->receiverDepthIndex >= receivers.depthCount())) {
+       diagnosticRequest->receiverDepthIndex >=
+           receivers.receiversPerRange())) {
     throw ValidationError(
         "geometric hat diagnostic receiver index is out of range");
   }
@@ -466,10 +467,13 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateField(
       const double receiverRange = ranges[receiverIndex];
       if (receiverRange >= std::min(previousRange, rightRange) &&
           receiverRange < std::max(previousRange, rightRange)) {
-        for (std::size_t depthIndex = 0U; depthIndex < receivers_.depthCount();
-             ++depthIndex) {
+        // Origin InfluenceGeoHatCart pairs each irregular receiver range
+        // with Pos%Rz(ir); rectilinear grids keep the shared depth rows.
+        for (std::size_t depthIndex = 0U;
+             depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
           const Vec2 receiver{.range = receiverRange,
-                              .depth = receivers_.depths()[depthIndex]};
+                              .depth = receivers_.depthAt(depthIndex,
+                                                          receiverIndex)};
           const Vec2 offset = receiver - path.points[leftIndex].position;
           const double interpolationWeight =
               fortranDotProduct2D(offset, tangent) / segmentLength;
@@ -847,8 +851,9 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
       const double receiverRange = ranges[receiverIndex];
       if (receiverRange >= std::min(previousRange, rightRange) &&
           receiverRange < std::max(previousRange, rightRange)) {
-        for (std::size_t di = 0U; di < receivers_.depthCount(); ++di) {
-          const Vec2 receiver{receiverRange, receivers_.depths()[di]};
+        for (std::size_t di = 0U; di < receivers_.receiversPerRange(); ++di) {
+          const Vec2 receiver{receiverRange,
+                              receivers_.depthAt(di, receiverIndex)};
           const Vec2 offset = receiver - path.points[left].position;
           const double weight = fortranDotProduct2D(offset, tangent) / length;
           const double normalOffset =
@@ -961,8 +966,9 @@ void GeometricHatInfluence::collectEigenrayHits(const EigenrayHitSink& sink,
       const double receiverRange = ranges[receiverIndex];
       if (receiverRange >= std::min(previousRange, rightRange) &&
           receiverRange < std::max(previousRange, rightRange)) {
-        for (std::size_t di = 0U; di < receivers_.depthCount(); ++di) {
-          const Vec2 receiver{receiverRange, receivers_.depths()[di]};
+        for (std::size_t di = 0U; di < receivers_.receiversPerRange(); ++di) {
+          const Vec2 receiver{receiverRange,
+                              receivers_.depthAt(di, receiverIndex)};
           const Vec2 offset = receiver - path.points[left].position;
           const double weight = fortranDotProduct2D(offset, tangent) / length;
           const double q =

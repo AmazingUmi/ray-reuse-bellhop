@@ -240,6 +240,7 @@ def declared_beam_family_marker(definition: CaseDefinition) -> str:
 def validate_print_output(
     definition: CaseDefinition,
     print_path: Path,
+    version: str | None = None,
 ) -> None:
     if not print_path.is_file() or print_path.stat().st_size == 0:
         raise RuntimeError(f"missing print output: {print_path}")
@@ -267,7 +268,12 @@ def validate_print_output(
         common_markers = ("Arrivals calculation, ASCII  file output", receiver_grid_marker)
     else:
         common_markers = ("Arrivals calculation, binary file output", receiver_grid_marker)
-    for marker in common_markers + definition.prt_markers:
+    version_markers = (
+        definition.version_prt_markers.get(version, ())
+        if version is not None
+        else ()
+    )
+    for marker in common_markers + definition.prt_markers + version_markers:
         if marker not in print_contents:
             raise RuntimeError(
                 f"{definition.case_id}: PRT marker missing: {marker!r}"
@@ -304,8 +310,9 @@ def validate_output(
     frequency_hz: float,
     print_path: Path,
     output_path: Path,
+    version: str | None = None,
 ) -> None:
-    validate_print_output(definition, print_path)
+    validate_print_output(definition, print_path, version)
     expected_suffix = {
         "shd": ".shd",
         "ray": ".ray",
@@ -380,7 +387,7 @@ def validate_broadband_output(
 ) -> None:
     frequencies = tuple(float(value) for value in frequencies_hz)
     require_rayreuse_execution_mode(execution_mode)
-    validate_print_output(definition, print_path)
+    validate_print_output(definition, print_path, "rayreuse")
     print_contents = print_path.read_text(errors="replace")
     print_lines = {
         line.strip() for line in print_contents.splitlines()
@@ -390,8 +397,13 @@ def validate_broadband_output(
         "reuse": "execution mode = broadband reuse",
         "parallel": "execution mode = broadband parallel reuse",
     }[execution_mode]
+    # Frozen multi-source statistics (FP-2F worklist §1.5):
+    # non-reuse traces once per (frequency, source); reuse/parallel trace
+    # each source fan exactly once.
     expected_trace_passes = (
-        len(frequencies) if execution_mode == "nonreuse" else 1
+        len(frequencies) * definition.source_depth_count
+        if execution_mode == "nonreuse"
+        else definition.source_depth_count
     )
     for marker in (
         expected_mode_marker,
@@ -436,7 +448,7 @@ def validate_broadband_product_outputs(
 ) -> None:
     """Validate independent per-frequency ARR/E products from one run."""
     require_rayreuse_execution_mode(execution_mode)
-    validate_print_output(definition, print_path)
+    validate_print_output(definition, print_path, "rayreuse")
     print_lines = {
         line.strip() for line in print_path.read_text(errors="replace").splitlines()
     }
@@ -445,8 +457,12 @@ def validate_broadband_product_outputs(
         "reuse": "execution mode = broadband reuse",
         "parallel": "execution mode = broadband parallel reuse",
     }[execution_mode]
+    # Frozen multi-source statistics (FP-2F worklist §1.5): see
+    # validate_broadband_output.
     expected_trace_passes = (
-        len(frequencies_hz) if execution_mode == "nonreuse" else 1
+        len(frequencies_hz) * definition.source_depth_count
+        if execution_mode == "nonreuse"
+        else definition.source_depth_count
     )
     for marker in (
         expected_mode_marker,
@@ -804,7 +820,8 @@ def process_case(
 
         if stage in ("validate", "test"):
             validate_output(
-                definition, frequency_hz, print_path, output_path
+                definition, frequency_hz, print_path, output_path,
+                adapter.name,
             )
             status = "passed"
 

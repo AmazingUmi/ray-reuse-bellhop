@@ -28,6 +28,8 @@ CASES = (
     "arrival_geometric_hat_ray_centered_binary",
     "arrival_geometric_gaussian_irregular",
     "arrival_line_directional_multisource",
+    "arrival_multi_source",
+    "arrival_multi_source_binary",
     "arrival_zero",
 )
 RAYREUSE_CASES = (
@@ -35,6 +37,9 @@ RAYREUSE_CASES = (
     "arrival_geometric_hat_binary",
     "arrival_geometric_hat_ray_centered",
     "arrival_geometric_hat_ray_centered_binary",
+    "arrival_geometric_gaussian_irregular",
+    "arrival_multi_source",
+    "arrival_multi_source_binary",
     "arrival_zero",
 )
 ULP_LIMIT = 8
@@ -231,6 +236,9 @@ def _effects(
     multi = products["arrival_line_directional_multisource"]
     if multi.source_count != 2 or not all(any(cell.count for cell in source.cells) for source in multi.sources):
         raise ValueError("line/directional multi-source case lacks separated non-empty source bodies")
+    multi_point = products["arrival_multi_source"]
+    if multi_point.source_count != 2 or not all(any(cell.count for cell in source.cells) for source in multi_point.sources):
+        raise ValueError("point-source multi-source case lacks separated non-empty source bodies")
     amplitudes = [arrival.amplitude for cell in multi.cells for arrival in cell.arrivals]
     if len({float32_bits(value) for value in amplitudes}) < 2:
         raise ValueError("line/directional case does not expose directional amplitude variation")
@@ -275,6 +283,11 @@ def validate(
             products[version]["arrival_geometric_hat_ray_centered"],
             products[version]["arrival_geometric_hat_ray_centered_binary"],
             f"{version} Ag/ag encoding pair",
+        )
+        comparison[f"{version}_multi_source_ascii_binary"] = compare_arrival_products(
+            products[version]["arrival_multi_source"],
+            products[version]["arrival_multi_source_binary"],
+            f"{version} point-source A/a encoding pair",
         )
     if "rayreuse" in implementations:
         for case_id in RAYREUSE_CASES:

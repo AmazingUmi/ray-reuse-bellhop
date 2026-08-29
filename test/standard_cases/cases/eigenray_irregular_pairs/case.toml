@@ -1,8 +1,8 @@
-id = "eigenray_geometric_hat"
-description = "Cartesian geometric-hat eigenrays with two ordered sources and reflected prefixes"
+id = "eigenray_irregular_pairs"
+description = "Cartesian geometric-hat eigenrays on paired irregular receivers"
 output_kind = "eigenray"
 origin_template = "origin.env.in"
-source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]
+source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 irregular receiver grammar"]
 
 [compatibility]
 versions = ["origin", "f2cpp", "rayreuse"]
@@ -16,8 +16,7 @@ maximum_angle_deg = 60.0
 policy = "shared_fmax"
 
 [validation]
-source_depth_count = 2
-prt_markers = ["VACUUM", "Perfectly RIGID", "Eigenray trace run", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Irregular grid", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
 prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
 
 [profiles.single]

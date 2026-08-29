@@ -107,7 +107,7 @@ void validateField(
       pressureWorkspace != nullptr ? pressureWorkspace->rangeCount()
                                    : intensityWorkspace->rangeCount();
   if (workspaceFrequency != state.frequency ||
-      workspaceDepthCount != receivers.depthCount() ||
+      workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
     throw ValidationError(
         "geometric Gaussian workspace metadata must match the run");
@@ -145,7 +145,8 @@ void validateField(
   }
   if (diagnosticRequest.has_value() &&
       (diagnosticRequest->receiverRangeIndex >= receivers.rangeCount() ||
-       diagnosticRequest->receiverDepthIndex >= receivers.depthCount())) {
+       diagnosticRequest->receiverDepthIndex >=
+           receivers.receiversPerRange())) {
     throw ValidationError(
         "geometric Gaussian diagnostic receiver index is out of range");
   }
@@ -276,10 +277,14 @@ GeometricGaussianInfluence::accumulateField(
       const double receiverRange = ranges[receiverIndex];
       if (receiverRange >= std::min(previousRange, rightRange) &&
           receiverRange < std::max(previousRange, rightRange)) {
+        // Origin InfluenceGeoGaussianCart pairs each irregular receiver
+        // range with Pos%Rz(ir); rectilinear grids keep the shared depth
+        // rows.
         for (std::size_t depthIndex = 0U;
-             depthIndex < receivers_.depthCount(); ++depthIndex) {
+             depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
           const Vec2 receiver{.range = receiverRange,
-                              .depth = receivers_.depths()[depthIndex]};
+                              .depth = receivers_.depthAt(depthIndex,
+                                                          receiverIndex)};
           if (receiver.depth < minimumDepth ||
               receiver.depth > maximumDepth) {
             continue;
@@ -506,8 +511,8 @@ void GeometricGaussianInfluence::accumulateArrivals(
       const double receiverRange = ranges[receiverIndex];
       if (receiverRange >= std::min(previousRange, rightRange) &&
           receiverRange < std::max(previousRange, rightRange)) {
-        for (std::size_t di = 0U; di < receivers_.depthCount(); ++di) {
-          const double receiverDepth = receivers_.depths()[di];
+        for (std::size_t di = 0U; di < receivers_.receiversPerRange(); ++di) {
+          const double receiverDepth = receivers_.depthAt(di, receiverIndex);
           if (receiverDepth < minDepth || receiverDepth > maxDepth) continue;
           const Vec2 receiver{receiverRange, receiverDepth};
           const Vec2 offset = receiver - path.points[left].position;
@@ -627,8 +632,8 @@ void GeometricGaussianInfluence::collectEigenrayHits(
       const double receiverRange = ranges[receiverIndex];
       if (receiverRange >= std::min(previousRange, rightRange) &&
           receiverRange < std::max(previousRange, rightRange)) {
-        for (std::size_t di = 0U; di < receivers_.depthCount(); ++di) {
-          const double receiverDepth = receivers_.depths()[di];
+        for (std::size_t di = 0U; di < receivers_.receiversPerRange(); ++di) {
+          const double receiverDepth = receivers_.depthAt(di, receiverIndex);
           if (receiverDepth < minimumDepth || receiverDepth > maximumDepth)
             continue;
           const Vec2 receiver{receiverRange, receiverDepth};

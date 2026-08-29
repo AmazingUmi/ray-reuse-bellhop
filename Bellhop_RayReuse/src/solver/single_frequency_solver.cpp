@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <numbers>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "rayreuse/cache/ray_path_cache.hpp"
@@ -38,6 +40,16 @@ void requireSimulationFrequency(const SimulationCase& simulation,
     throw ValidationError(
         "requested frequency does not belong to the simulation");
   }
+}
+
+void accumulateFrequencyTimings(SingleFrequencyTimings& total,
+                                const SingleFrequencyTimings& value) {
+  total.traceSeconds += value.traceSeconds;
+  total.projectSeconds += value.projectSeconds;
+  total.influenceSeconds += value.influenceSeconds;
+  total.scaleSeconds += value.scaleSeconds;
+  accumulateCartesianCervenyStatistics(total.influenceStatistics,
+                                       value.influenceStatistics);
 }
 
 }  // namespace
@@ -96,19 +108,37 @@ SingleFrequencyResult SingleFrequencySolver::solve(
 
 RayFanTraceResult SingleFrequencySolver::traceRayFan(
     const SimulationCase& simulation) {
+  return traceSourceFan(simulation, 0U);
+}
+
+RayFanTraceResult SingleFrequencySolver::traceSourceFan(
+    const SimulationCase& simulation, std::size_t sourceIndex) {
+  if (sourceIndex >= simulation.sourceCount()) {
+    throw ValidationError("source index is out of range");
+  }
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
+  const Source& source = simulation.sources()[sourceIndex];
   GeometryTracer tracer(simulation);
   RayPathCache rayCache;
   rayCache.reserve(launchFan.launchAngleCount);
 
   const Clock::time_point traceBegin = Clock::now();
   std::size_t totalRayPointCount = 0U;
-  for (const double launchAngle : launchFan.launchAngles) {
-    RayPath path = tracer.trace(simulation.source(), launchAngle);
+  for (std::size_t launchIndex = 0U;
+       launchIndex < launchFan.launchAngles.size(); ++launchIndex) {
+    const double launchAngle = launchFan.launchAngles[launchIndex];
+    RayPath path = tracer.trace(source, launchAngle);
     if (path.terminationReason != RayTerminationReason::ExitedDomain) {
+      // F2CPP diagnostic format (source index, launch index, angle, reason).
+      // RayReuse RayPath carries no terminationDetail field, so the optional
+      // F2CPP ", detail: ..." tail has no counterpart here.
       throw ValidationError(
           "single-frequency solve encountered a ray that did not "
-          "exit the spatial domain normally");
+          "exit the spatial domain normally (source index " +
+          std::to_string(sourceIndex) + ", launch index " +
+          std::to_string(launchIndex) + ", angle " +
+          std::to_string(launchAngle) + ", reason " +
+          std::to_string(static_cast<int>(path.terminationReason)) + ")");
     }
     totalRayPointCount += path.points.size();
     rayCache.append(std::move(path));
@@ -122,9 +152,36 @@ RayFanTraceResult SingleFrequencySolver::traceRayFan(
       .traceSeconds = elapsedSeconds(traceBegin, traceEnd)};
 }
 
-SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
+std::vector<RayFanTraceResult> SingleFrequencySolver::traceAllSourceFans(
+    const SimulationCase& simulation) {
+  std::vector<RayFanTraceResult> sourceTraces;
+  sourceTraces.reserve(simulation.sourceCount());
+  for (std::size_t sourceIndex = 0U;
+       sourceIndex < simulation.sourceCount(); ++sourceIndex) {
+    sourceTraces.push_back(traceSourceFan(simulation, sourceIndex));
+  }
+  return sourceTraces;
+}
+
+std::size_t SingleFrequencyResult::sourceCount() const noexcept {
+  return 1U + additionalSourceWorkspaces.size();
+}
+
+const FrequencyWorkspace& SingleFrequencyResult::sourceWorkspace(
+    std::size_t sourceIndex) const {
+  if (sourceIndex == 0U) {
+    return workspace;
+  }
+  if (sourceIndex > additionalSourceWorkspaces.size()) {
+    throw ValidationError("source workspace index is out of range");
+  }
+  return additionalSourceWorkspaces[sourceIndex - 1U];
+}
+
+SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
     const SimulationCase& simulation, double frequency,
-    const RayPathCache& rayCache, double epsilonMultiplier, double loopRange,
+    const RayPathCache& rayCache, std::size_t sourceIndex,
+    double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings) {
   requireSimulationFrequency(simulation, frequency);
   if (!isTransmissionLossMode(simulation.runMode())) {
@@ -135,12 +192,25 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
   if (!rayCache.frozen()) {
     throw ValidationError("frequency projection requires a frozen ray cache");
   }
+  if (sourceIndex >= simulation.sourceCount()) {
+    throw ValidationError("source index is out of range");
+  }
+  const Source& source = simulation.sources()[sourceIndex];
+  if (rayCache.size() > 0U && !rayCache.at(0U).points.empty() &&
+      rayCache.at(0U).points.front().position.depth != source.depth) {
+    // The frozen cache schema carries no source field (frozen decision), so
+    // pairing is validated structurally: a per-source cache starts at the
+    // source depth it was traced from.
+    throw ValidationError(
+        "frequency projection requires a ray cache traced from the "
+        "requested source");
+  }
 
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const GeometrySspEvaluator soundSpeedProfile(
       simulation.environment().soundSpeedProfile());
   const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
-      Vec2{.range = 0.0, .depth = simulation.source().depth}, 0U);
+      Vec2{.range = 0.0, .depth = source.depth}, 0U);
   const double sourceSoundSpeed = sourceSample.soundSpeed;
   if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
       simulation.beamFamily() != BeamFamily::GeometricHat &&
@@ -210,13 +280,12 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
     const double patternAmplitude =
         simulation.sourceBeamPattern().amplitudeForLaunchAngle(
             path.launchAngle);
-    const double baseSourceAmplitude =
-        simulation.source().amplitude * patternAmplitude;
+    const double baseSourceAmplitude = source.amplitude * patternAmplitude;
     const double projectedSourceAmplitude =
         usesLloydMirror(simulation.runMode())
             ? semiCoherentProjectedSourceAmplitude(
                   baseSourceAmplitude, frequency, sourceSoundSpeed,
-                  simulation.source().depth, path.launchAngle)
+                  source.depth, path.launchAngle)
             : baseSourceAmplitude;
     if (!std::isfinite(projectedSourceAmplitude) ||
         projectedSourceAmplitude < 0.0) {
@@ -318,17 +387,56 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
           .influenceStatistics = influenceStatistics}};
 }
 
+SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
+    const SimulationCase& simulation, double frequency,
+    const RayPathCache& rayCache, double epsilonMultiplier, double loopRange,
+    CartesianCervenySettings influenceSettings) {
+  return solveFrequencyFromSourceCache(simulation, frequency, rayCache, 0U,
+                                       epsilonMultiplier, loopRange,
+                                       influenceSettings);
+}
+
 SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
     const SimulationCase& simulation, double frequency,
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings) {
   requireSimulationFrequency(simulation, frequency);
-  RayFanTraceResult trace = traceRayFan(simulation);
-  SingleFrequencyResult result =
-      solveFrequencyFromCache(simulation, frequency, trace.cache,
-                              epsilonMultiplier, loopRange, influenceSettings);
-  result.timings.traceSeconds = trace.traceSeconds;
-  return result;
+  // F2CPP structure: trace each source's fan independently, then project each
+  // frozen per-source cache with that source's source-term inputs.
+  const std::vector<RayFanTraceResult> sourceTraces =
+      traceAllSourceFans(simulation);
+  std::vector<FrequencyWorkspace> sourceWorkspaces;
+  sourceWorkspaces.reserve(sourceTraces.size());
+  SingleFrequencyTimings totalTimings;
+  std::size_t rayCount = 0U;
+  std::size_t totalRayPointCount = 0U;
+  std::size_t peakRayCacheBytes = 0U;
+  for (std::size_t sourceIndex = 0U; sourceIndex < sourceTraces.size();
+       ++sourceIndex) {
+    SingleFrequencyResult sourceResult = solveFrequencyFromSourceCache(
+        simulation, frequency, sourceTraces[sourceIndex].cache, sourceIndex,
+        epsilonMultiplier, loopRange, influenceSettings);
+    sourceResult.timings.traceSeconds =
+        sourceTraces[sourceIndex].traceSeconds;
+    rayCount += sourceResult.rayCount;
+    totalRayPointCount += sourceResult.totalRayPointCount;
+    peakRayCacheBytes =
+        std::max(peakRayCacheBytes, sourceResult.rayCacheBytes);
+    accumulateFrequencyTimings(totalTimings, sourceResult.timings);
+    sourceWorkspaces.push_back(std::move(sourceResult.workspace));
+  }
+  std::vector<FrequencyWorkspace> additionalSourceWorkspaces;
+  additionalSourceWorkspaces.reserve(sourceWorkspaces.size() - 1U);
+  for (std::size_t index = 1U; index < sourceWorkspaces.size(); ++index) {
+    additionalSourceWorkspaces.push_back(std::move(sourceWorkspaces[index]));
+  }
+  return SingleFrequencyResult{
+      .workspace = std::move(sourceWorkspaces.front()),
+      .additionalSourceWorkspaces = std::move(additionalSourceWorkspaces),
+      .rayCount = rayCount,
+      .totalRayPointCount = totalRayPointCount,
+      .rayCacheBytes = peakRayCacheBytes,
+      .timings = totalTimings};
 }
 
 }  // namespace rayreuse

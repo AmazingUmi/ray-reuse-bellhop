@@ -5,6 +5,7 @@
 #include <iterator>
 #include <limits>
 #include <numbers>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -31,6 +32,15 @@ void validateStrictlyIncreasing(const std::vector<double>& values,
       throw ValidationError(name + " must be strictly increasing");
     }
   }
+}
+
+std::size_t checkedProduct(std::size_t left, std::size_t right,
+                           const std::string& name) {
+  if (left != 0U &&
+      right > std::numeric_limits<std::size_t>::max() / left) {
+    throw ValidationError(name + " dimensions overflow size_t");
+  }
+  return left * right;
 }
 
 void validateRunMode(SimulationRunMode mode) {
@@ -165,12 +175,20 @@ bool usesLloydMirror(SimulationRunMode mode) {
 }
 
 ReceiverGrid::ReceiverGrid(std::vector<double> depths,
-                           std::vector<double> ranges)
-    : depths_(std::move(depths)), ranges_(std::move(ranges)) {
+                           std::vector<double> ranges,
+                           ReceiverGridLayout layout)
+    : depths_(std::move(depths)),
+      ranges_(std::move(ranges)),
+      layout_(layout) {
   validateStrictlyIncreasing(depths_, "receiver depths");
   validateStrictlyIncreasing(ranges_, "receiver ranges");
   if (ranges_.front() < 0.0) {
     throw ValidationError("receiver ranges must be non-negative");
+  }
+  if (layout_ == ReceiverGridLayout::Irregular &&
+      depths_.size() != ranges_.size()) {
+    throw ValidationError(
+        "irregular receiver depth and range counts must match");
   }
 }
 
@@ -185,6 +203,25 @@ const std::vector<double>& ReceiverGrid::ranges() const noexcept {
 std::size_t ReceiverGrid::depthCount() const noexcept { return depths_.size(); }
 
 std::size_t ReceiverGrid::rangeCount() const noexcept { return ranges_.size(); }
+
+std::size_t ReceiverGrid::receiversPerRange() const noexcept {
+  return isIrregular() ? 1U : depthCount();
+}
+
+ReceiverGridLayout ReceiverGrid::layout() const noexcept { return layout_; }
+
+bool ReceiverGrid::isIrregular() const noexcept {
+  return layout_ == ReceiverGridLayout::Irregular;
+}
+
+double ReceiverGrid::depthAt(std::size_t pressureDepthIndex,
+                             std::size_t rangeIndex) const {
+  if (rangeIndex >= ranges_.size() ||
+      pressureDepthIndex >= receiversPerRange()) {
+    throw std::out_of_range("receiver-grid index is out of range");
+  }
+  return isIrregular() ? depths_[rangeIndex] : depths_[pressureDepthIndex];
+}
 
 FrequencyGrid::FrequencyGrid(std::vector<double> values)
     : values_(std::move(values)) {
@@ -295,8 +332,25 @@ SimulationCase::SimulationCase(Environment environment, Source source,
                                BoundaryCurvatureMode curvatureMode,
                                BeamWidthMode beamWidthMode,
                                CervenyCoordinateSystem cervenyCoordinateSystem)
+    : SimulationCase(
+          std::move(environment), std::vector<Source>{source},
+          std::move(receivers), std::move(frequencies), launchFan, integrator,
+          std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent,
+          curvatureMode, beamWidthMode, cervenyCoordinateSystem) {}
+
+SimulationCase::SimulationCase(Environment environment,
+                               std::vector<Source> sources,
+                               ReceiverGrid receivers,
+                               FrequencyGrid frequencies, LaunchFan launchFan,
+                               IntegratorSettings integrator,
+                               SourceBeamPattern sourceBeamPattern,
+                               SimulationRunMode runMode, BeamFamily beamFamily,
+                               FieldComponent fieldComponent,
+                               BoundaryCurvatureMode curvatureMode,
+                               BeamWidthMode beamWidthMode,
+                               CervenyCoordinateSystem cervenyCoordinateSystem)
     : environment_(std::move(environment)),
-      source_(source),
+      sources_(std::move(sources)),
       receivers_(std::move(receivers)),
       frequencies_(std::move(frequencies)),
       integrator_(integrator),
@@ -328,6 +382,11 @@ SimulationCase::SimulationCase(Environment environment, Source source,
         "ray-centered coordinates are supported only for Cerveny TL or "
         "geometric-hat TL/arrivals/eigenrays");
   }
+  if (cervenyCoordinateSystem_ == CervenyCoordinateSystem::RayCentered &&
+      receivers_.isIrregular()) {
+    throw ValidationError(
+        "ray-centered beam families do not support irregular receiver grids");
+  }
   if (cervenyCoordinateSystem_ == CervenyCoordinateSystem::RayCentered) {
     validateRayCenteredReceiverRanges(receivers_);
   }
@@ -337,8 +396,10 @@ SimulationCase::SimulationCase(Environment environment, Source source,
     throw ValidationError("only Cerveny TL supports non-pressure components");
   }
   if (beamFamily_ == BeamFamily::SimpleGaussian &&
-      runMode_ != SimulationRunMode::Coherent) {
-    throw ValidationError("simple Gaussian TL requires coherent pressure");
+      (runMode_ != SimulationRunMode::Coherent || receivers_.isIrregular())) {
+    throw ValidationError(
+        "simple Gaussian beams require coherent point-source TL on a "
+        "rectilinear receiver grid");
   }
   if (curvatureMode_ != BoundaryCurvatureMode::Standard &&
       (!isTransmissionLossMode(runMode_) ||
@@ -351,22 +412,50 @@ SimulationCase::SimulationCase(Environment environment, Source source,
        beamFamily_ != BeamFamily::CervenyGaussian)) {
     throw ValidationError("only Cerveny TL supports non-minimum beam widths");
   }
-  requireFinite(source_.depth, "source.depth");
-  requireFinite(source_.amplitude, "source.amplitude");
-  const Vec2 sourcePosition{.range = 0.0, .depth = source_.depth};
-  if (environment_.seaSurface().geometry().interiorSignedDistance(
-          sourcePosition, 0U) <= 0.0 ||
-      environment_.seabed().geometry().interiorSignedDistance(sourcePosition,
-                                                              0U) <= 0.0) {
-    throw ValidationError("source depth must be strictly inside the water");
+  if (sources_.empty()) {
+    throw ValidationError("at least one source is required");
   }
-  if (source_.amplitude < 0.0) {
-    throw ValidationError("source amplitude must be non-negative");
+  for (const Source& source : sources_) {
+    requireFinite(source.depth, "source.depth");
+    requireFinite(source.amplitude, "source.amplitude");
+    if (source.amplitude < 0.0) {
+      throw ValidationError("source amplitude must be non-negative");
+    }
+  }
+  std::stable_sort(
+      sources_.begin(), sources_.end(),
+      [](const Source& left, const Source& right) {
+        return left.depth < right.depth;
+      });
+  if (isTransmissionLossMode(runMode_)) {
+    const std::size_t receiverValueCount = checkedProduct(
+        receivers_.receiversPerRange(), receivers_.rangeCount(),
+        "receiver grid");
+    if (checkedProduct(sources_.size(), receiverValueCount,
+                       "source/receiver workspace") >
+        kMaximumReceiverGridValues) {
+      throw ValidationError(
+          "source/receiver workspaces exceed the supported pressure-value "
+          "limit");
+    }
+  }
+  for (const Source& source : sources_) {
+    const Vec2 sourcePosition{.range = 0.0, .depth = source.depth};
+    if (environment_.seaSurface().geometry().interiorSignedDistance(
+            sourcePosition, 0U) <= 0.0 ||
+        environment_.seabed().geometry().interiorSignedDistance(sourcePosition,
+                                                                0U) <= 0.0) {
+      throw ValidationError("source depth must be strictly inside the water");
+    }
   }
 
-  for (double range : receivers_.ranges()) {
-    for (double depth : receivers_.depths()) {
-      const Vec2 receiverPosition{.range = range, .depth = depth};
+  for (std::size_t rangeIndex = 0U; rangeIndex < receivers_.rangeCount();
+       ++rangeIndex) {
+    for (std::size_t depthIndex = 0U;
+         depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
+      const Vec2 receiverPosition{
+          .range = receivers_.ranges()[rangeIndex],
+          .depth = receivers_.depthAt(depthIndex, rangeIndex)};
       if (environment_.seaSurface().geometry().interiorSignedDistance(
               receiverPosition, 0U) < 0.0 ||
           environment_.seabed().geometry().interiorSignedDistance(
@@ -393,12 +482,20 @@ SimulationCase::SimulationCase(Environment environment, Source source,
     throw ValidationError("integrator.maximumRayPoints must be at least two");
   }
 
-  const GeometrySspEvaluator soundSpeedProfile(environment_.soundSpeedProfile());
-  const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
-      Vec2{.range = 0.0, .depth = source_.depth}, 0U);
+  // Origin builds one angle fan outside the source loop. With multiple
+  // sources the automatic-count criterion uses the 1500 m/s reference speed;
+  // each source's local speed enters the per-source solver inputs instead.
+  double sourceSoundSpeed = 1500.0;
+  if (sources_.size() == 1U) {
+    const GeometrySspEvaluator soundSpeedProfile(
+        environment_.soundSpeedProfile());
+    const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
+        Vec2{.range = 0.0, .depth = sources_.front().depth}, 0U);
+    sourceSoundSpeed = sourceSample.soundSpeed;
+  }
   launchFanPlan_ = LaunchFanPlanner::plan(LaunchFanPlanningInput{
       .frequencies = frequencies_.values(),
-      .sourceSoundSpeed = sourceSample.soundSpeed,
+      .sourceSoundSpeed = sourceSoundSpeed,
       .waterDepth = environment_.waterDepth(),
       .maximumRange = receivers_.ranges().back(),
       .minimumLaunchAngle = launchFan.minimumAngle,
@@ -407,6 +504,10 @@ SimulationCase::SimulationCase(Environment environment, Source source,
       .inputDegreeBounds = launchFan.inputDegreeBounds,
       .rayTraceMode = runMode_ == SimulationRunMode::RayTrace,
   });
+  if (checkedProduct(launchFanPlan_.launchAngleCount, sources_.size(),
+                     "ray count") > kMaximumRunRayCount) {
+    throw ValidationError("ray count exceeds the supported run limit");
+  }
   for (double launchAngle : launchFanPlan_.launchAngles) {
     const double patternAmplitude =
         sourceBeamPattern_.amplitudeForLaunchAngle(launchAngle);
@@ -422,7 +523,17 @@ const Environment& SimulationCase::environment() const noexcept {
   return environment_;
 }
 
-const Source& SimulationCase::source() const noexcept { return source_; }
+const Source& SimulationCase::source() const noexcept {
+  return sources_.front();
+}
+
+const std::vector<Source>& SimulationCase::sources() const noexcept {
+  return sources_;
+}
+
+std::size_t SimulationCase::sourceCount() const noexcept {
+  return sources_.size();
+}
 
 const ReceiverGrid& SimulationCase::receivers() const noexcept {
   return receivers_;

@@ -122,14 +122,18 @@ RayWriter::RayWriter(std::filesystem::path outputPath, std::string title,
   }
   static_cast<void>(
       checkedOriginInt32(launchAngles_.size(), "RAY launch-angle count"));
+  static_cast<void>(
+      checkedOriginInt32(simulation_.sourceCount(), "RAY source count"));
   title.insert(0U, "BELLHOP- ");
   if (title.size() > 70U) {
     title.resize(70U);
   }
+  // Origin ReadEnvironmentBell ray-file header: NSx NSy NSz on one line
+  // (always `1 1 NSz` in 2-D RayReuse runs).
   output_ << std::setprecision(std::numeric_limits<double>::max_digits10)
           << '\'' << title << "'\n"
           << frequency_ << '\n'
-          << "1 1 1\n"
+          << "1 1 " << simulation_.sourceCount() << '\n'
           << launchAngles_.size() << " 1\n"
           << simulation_.environment().seaSurface().depth() << '\n'
           << simulation_.environment().seabed().depth() << '\n'
@@ -147,15 +151,19 @@ RayWriter::~RayWriter() {
   }
 }
 
-void RayWriter::append(const RayPathCache& cache) {
-  if (finalized_ || appended_) {
-    throw ValidationError("ray writer accepts exactly one launch fan");
+void RayWriter::appendSource(std::size_t sourceIndex,
+                             const RayPathCache& cache) {
+  if (finalized_ || sourceIndex != nextSourceIndex_ ||
+      sourceIndex >= simulation_.sourceCount()) {
+    throw ValidationError("ray writer source order is invalid");
   }
   if (!cache.frozen() || cache.size() != launchAngles_.size()) {
-    throw ValidationError("ray writer requires one complete frozen launch fan");
+    throw ValidationError(
+        "ray writer requires one complete frozen launch fan per source");
   }
   const double topDepth = simulation_.environment().seaSurface().depth();
   const double bottomDepth = simulation_.environment().seabed().depth();
+  const Source& source = simulation_.sources()[sourceIndex];
   std::size_t launchIndex = 0U;
   for (const RayPath& path : cache.paths()) {
     if (path.launchAngle != launchAngles_[launchIndex]) {
@@ -164,7 +172,7 @@ void RayWriter::append(const RayPathCache& cache) {
           "canonical order");
     }
     const double sourceAmplitude =
-        simulation_.source().amplitude *
+        source.amplitude *
         simulation_.sourceBeamPattern().amplitudeForLaunchAngle(
             path.launchAngle);
     const RayFrequencyState frequencyState =
@@ -192,11 +200,15 @@ void RayWriter::append(const RayPathCache& cache) {
   if (!output_) {
     throw BellhopError("failed while writing temporary ray output");
   }
-  appended_ = true;
+  ++nextSourceIndex_;
+}
+
+void RayWriter::append(const RayPathCache& cache) {
+  appendSource(0U, cache);
 }
 
 void RayWriter::finalize() {
-  if (finalized_ || !appended_) {
+  if (finalized_ || nextSourceIndex_ != simulation_.sourceCount()) {
     throw ValidationError("ray writer cannot finalize an incomplete run");
   }
   output_.close();

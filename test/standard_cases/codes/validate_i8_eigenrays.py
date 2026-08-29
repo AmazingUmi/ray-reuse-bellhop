@@ -19,11 +19,14 @@ CASES = (
     "eigenray_geometric_hat",
     "eigenray_geometric_hat_ray_centered",
     "eigenray_geometric_gaussian",
+    "eigenray_irregular_pairs",
     "eigenray_zero",
 )
 RAYREUSE_CASES = (
+    "eigenray_geometric_hat",
     "eigenray_geometric_hat_ray_centered",
     "eigenray_geometric_gaussian",
+    "eigenray_irregular_pairs",
     "eigenray_zero",
 )
 CONTROL = "ray_trace_vacuum_rigid"
@@ -130,6 +133,9 @@ def _effect_summary(products: dict[str, EigenrayOutput], control_point_counts: t
             raise ValueError("RayReuse eigenray matrix has no successful hit")
         if not any(ray.top_bounces or ray.bottom_bounces for ray in nonzero):
             raise ValueError("RayReuse eigenray stream did not observe reflected prefixes")
+        multi = products["eigenray_geometric_hat"]
+        if math.prod(multi.header.source_counts) != 2:
+            raise ValueError("RayReuse eigenray matrix lost the two-source header")
         return {
             "zero_blocks": 0,
             "nonzero_blocks": len(nonzero),
@@ -138,6 +144,7 @@ def _effect_summary(products: dict[str, EigenrayOutput], control_point_counts: t
             "bottom_bounce_total": sum(ray.bottom_bounces for ray in nonzero),
             "prefix_point_minimum": min(ray.point_count for ray in nonzero),
             "prefix_point_maximum": max(ray.point_count for ray in nonzero),
+            "multi_source_header_count": 2,
             "scope": "rayreuse representative shared cases",
         }
     nonzero = [

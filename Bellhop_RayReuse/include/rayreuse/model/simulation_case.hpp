@@ -11,18 +11,34 @@
 
 namespace rayreuse {
 
+inline constexpr std::size_t kMaximumReceiverGridValues = 2'000'000U;
+inline constexpr std::size_t kMaximumRunRayCount = 2'000'000U;
+
+enum class ReceiverGridLayout {
+  Rectilinear,
+  Irregular,
+};
+
 class ReceiverGrid {
  public:
-  ReceiverGrid(std::vector<double> depths, std::vector<double> ranges);
+  ReceiverGrid(
+      std::vector<double> depths, std::vector<double> ranges,
+      ReceiverGridLayout layout = ReceiverGridLayout::Rectilinear);
 
   [[nodiscard]] const std::vector<double>& depths() const noexcept;
   [[nodiscard]] const std::vector<double>& ranges() const noexcept;
   [[nodiscard]] std::size_t depthCount() const noexcept;
   [[nodiscard]] std::size_t rangeCount() const noexcept;
+  [[nodiscard]] std::size_t receiversPerRange() const noexcept;
+  [[nodiscard]] ReceiverGridLayout layout() const noexcept;
+  [[nodiscard]] bool isIrregular() const noexcept;
+  [[nodiscard]] double depthAt(std::size_t pressureDepthIndex,
+                               std::size_t rangeIndex) const;
 
  private:
   std::vector<double> depths_;
   std::vector<double> ranges_;
+  ReceiverGridLayout layout_{ReceiverGridLayout::Rectilinear};
 };
 
 class FrequencyGrid {
@@ -136,9 +152,24 @@ class SimulationCase {
       BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
       CervenyCoordinateSystem cervenyCoordinateSystem =
           CervenyCoordinateSystem::Cartesian);
+  SimulationCase(
+      Environment environment, std::vector<Source> sources,
+      ReceiverGrid receivers, FrequencyGrid frequencies,
+      LaunchFan launchFan, IntegratorSettings integrator,
+      SourceBeamPattern sourceBeamPattern =
+          SourceBeamPattern::omnidirectional(),
+      SimulationRunMode runMode = SimulationRunMode::Coherent,
+      BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+      FieldComponent fieldComponent = FieldComponent::Pressure,
+      BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
+      BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+      CervenyCoordinateSystem cervenyCoordinateSystem =
+          CervenyCoordinateSystem::Cartesian);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
+  [[nodiscard]] const std::vector<Source>& sources() const noexcept;
+  [[nodiscard]] std::size_t sourceCount() const noexcept;
   [[nodiscard]] const ReceiverGrid& receivers() const noexcept;
   [[nodiscard]] const FrequencyGrid& frequencies() const noexcept;
   [[nodiscard]] const LaunchFanPlan& launchFanPlan() const noexcept;
@@ -154,7 +185,7 @@ class SimulationCase {
 
  private:
   Environment environment_;
-  Source source_;
+  std::vector<Source> sources_;
   ReceiverGrid receivers_;
   FrequencyGrid frequencies_;
   LaunchFanPlan launchFanPlan_;

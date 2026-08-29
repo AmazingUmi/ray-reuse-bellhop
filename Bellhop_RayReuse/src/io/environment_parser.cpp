@@ -659,6 +659,7 @@ struct ParsedBoundaryFile {
 
 struct ParsedRunType {
   SimulationRunMode runMode{};
+  ReceiverGridLayout receiverLayout{ReceiverGridLayout::Rectilinear};
   CervenyCoordinateSystem cervenyCoordinateSystem{};
   BeamFamily beamFamily{};
   bool usesSourceBeamPattern{};
@@ -686,8 +687,9 @@ struct ParsedRunType {
       runType[0U] == 'C' && runType[1U] == 'S';
   const bool transmissionLoss =
       standardTransmissionLoss || simpleGaussianTransmissionLoss;
-  const bool rayTrace =
-      runType[0U] == 'R' && (runType[1U] == ' ' || runType[1U] == 'G');
+  const bool rayTrace = runType[0U] == 'R' &&
+                        (runType[1U] == ' ' || runType[1U] == 'G') &&
+                        (runType[4U] == ' ' || runType[4U] == 'R');
   const bool arrivals =
       (runType[0U] == 'A' || runType[0U] == 'a') &&
       (runType[1U] == 'G' || runType[1U] == 'g' || runType[1U] == 'B');
@@ -711,10 +713,6 @@ struct ParsedRunType {
     fail(sourceName, record.lineNumber,
          "line-source run types are not supported by RayReuse");
   }
-  if (runType[4U] == 'I') {
-    fail(sourceName, record.lineNumber,
-         "irregular receiver grids are not supported by RayReuse");
-  }
   if (arrivals || eigenray) {
     if (runType[1U] != 'G' && runType[1U] != 'g' &&
         runType[1U] != 'B') {
@@ -722,6 +720,10 @@ struct ParsedRunType {
            "arrival and eigenray run types require G, g, or B beams");
     }
   }
+  // The irregular ('I') receiver layout is accepted for TL, arrival, and
+  // eigenray run types; the grammar above already restricts ray trace 'R'
+  // to a blank or 'R' fifth letter, matching the F2CPP parser matrix.
+  const bool irregularReceivers = runType[4U] == 'I';
   runType[3U] = 'R';
   runType[4U] = 'R';
   runType[5U] = '2';
@@ -768,6 +770,10 @@ struct ParsedRunType {
                                     : BeamFamily::GeometricGaussian;
   }
   return ParsedRunType{.runMode = mode,
+                       .receiverLayout =
+                           irregularReceivers
+                               ? ReceiverGridLayout::Irregular
+                               : ReceiverGridLayout::Rectilinear,
                        .cervenyCoordinateSystem = coordinateSystem,
                        .beamFamily = beamFamily,
                        .usesSourceBeamPattern = runType[2U] == '*'};
@@ -1062,10 +1068,6 @@ struct ParsedRunType {
   requireTokenCount(sourceCountRecord, 1U, source, "source-depth count");
   const std::size_t sourceCount =
       parseCount(sourceCountRecord, 0U, source, "source-depth count");
-  if (sourceCount != 1U) {
-    fail(source, sourceCountRecord.lineNumber,
-         "Bellhop RayReuse supports exactly one source depth");
-  }
   const std::vector<double> sourceDepths =
       parseVector(reader, sourceCount, "source depths", true, 1.0);
 
@@ -1094,6 +1096,19 @@ struct ParsedRunType {
       runType.cervenyCoordinateSystem ==
           CervenyCoordinateSystem::RayCentered) {
     requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
+  }
+  if ((runType.beamFamily == BeamFamily::CervenyGaussian ||
+       runType.beamFamily == BeamFamily::GeometricHat) &&
+      runType.cervenyCoordinateSystem ==
+          CervenyCoordinateSystem::RayCentered &&
+      runType.receiverLayout == ReceiverGridLayout::Irregular) {
+    fail(source, runTypeRecord.lineNumber,
+         "ray-centered beam families do not support irregular receiver grids");
+  }
+  if (runType.receiverLayout == ReceiverGridLayout::Irregular &&
+      receiverDepths.size() != receiverRanges.size()) {
+    fail(source, runTypeRecord.lineNumber,
+         "irregular receiver grid requires equal depth and range counts");
   }
 
   SourceBeamPattern sourceBeamPattern = SourceBeamPattern::omnidirectional();
@@ -1224,13 +1239,19 @@ struct ParsedRunType {
       SoundSpeedProfile(std::move(soundSpeedPoints), interpolationKind,
                         std::move(quadrilateralGrid)),
       seaSurface, seabed);
-  ReceiverGrid receivers(std::move(receiverDepths), std::move(receiverRanges));
+  ReceiverGrid receivers(std::move(receiverDepths), std::move(receiverRanges),
+                         runType.receiverLayout);
   std::vector<double> frequencies = frequencyOverrideHz.has_value()
                                         ? std::move(*frequencyOverrideHz)
                                         : std::move(environmentFrequencies);
+  std::vector<Source> sources;
+  sources.reserve(sourceDepths.size());
+  for (const double sourceDepth : sourceDepths) {
+    sources.push_back(Source{.depth = sourceDepth, .amplitude = 1.0});
+  }
   SimulationCase simulationCase(
       std::move(environment),
-      Source{.depth = sourceDepths.front(), .amplitude = 1.0},
+      std::move(sources),
       std::move(receivers), FrequencyGrid(std::move(frequencies)),
       LaunchFan{
           .minimumAngle = minimumLaunchAngleDegrees * degreesToRadians,

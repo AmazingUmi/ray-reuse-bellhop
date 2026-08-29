@@ -95,10 +95,13 @@ class CaseModelTests(unittest.TestCase):
                 "arrival_geometric_hat_ray_centered_binary",
                 "arrival_geometric_gaussian_irregular",
                 "arrival_line_directional_multisource",
+                "arrival_multi_source",
+                "arrival_multi_source_binary",
                 "arrival_zero",
                 "eigenray_geometric_hat",
                 "eigenray_geometric_hat_ray_centered",
                 "eigenray_geometric_gaussian",
+                "eigenray_irregular_pairs",
                 "eigenray_zero",
             },
         )
@@ -115,9 +118,6 @@ class CaseModelTests(unittest.TestCase):
             "volume_attenuation_biological",
             "elastic_halfspace_flat",
             "elastic_halfspace_fluid_control",
-            "multi_source_depths",
-            "irregular_receiver_pairs",
-            "ray_trace_vacuum_rigid",
             "cerveny_width_space_filling",
             "cerveny_width_wkb",
             "cerveny_curvature_double",
@@ -133,6 +133,11 @@ class CaseModelTests(unittest.TestCase):
         for case_id in (
             "q_range_dependent_cross_gradient",
             "q_range_independent_control",
+            "multi_source_depths",
+            "irregular_receiver_pairs",
+            "ray_trace_vacuum_rigid",
+            "eigenray_geometric_hat",
+            "arrival_geometric_gaussian_irregular",
             "source_beam_pattern_directional",
             "source_beam_pattern_omni_control",
             "cartesian_component_pressure",
@@ -521,11 +526,49 @@ class CaseModelTests(unittest.TestCase):
         ray_case = self.cases["ray_trace_vacuum_rigid"]
         self.assertEqual(ray_case.output_kind, "ray")
         self.assertIsNone(ray_case.expected_dimensions)
-        self.assertEqual(ray_case.supported_versions, ("origin", "f2cpp"))
+        self.assertEqual(
+            ray_case.supported_versions,
+            ("origin", "f2cpp", "rayreuse"),
+        )
         self.assertEqual(
             ray_case.shared_launch_angle_count(ray_case.frequencies("single")),
             5,
         )
+
+    def test_source_depth_count_defaults_to_single_source(self) -> None:
+        for case_id in ("constant_speed_direct", "irregular_receiver_pairs",
+                        "eigenray_irregular_pairs"):
+            with self.subTest(case=case_id):
+                self.assertEqual(self.cases[case_id].source_depth_count, 1)
+
+    def test_multi_source_cases_declare_source_depth_count(self) -> None:
+        expected = {
+            "multi_source_depths": 3,
+            "arrival_multi_source": 2,
+            "arrival_multi_source_binary": 2,
+            "eigenray_geometric_hat": 2,
+            "ray_trace_vacuum_rigid": 1,
+        }
+        for case_id, count in expected.items():
+            with self.subTest(case=case_id):
+                self.assertEqual(self.cases[case_id].source_depth_count, count)
+
+    def test_source_depth_count_must_be_positive(self) -> None:
+        source = self.cases["arrival_multi_source"].directory
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            target = Path(temporary_directory) / "case"
+            shutil.copytree(source, target)
+            manifest = target / "case.toml"
+            contents = manifest.read_text(encoding="utf-8")
+            contents = contents.replace(
+                "source_depth_count = 2",
+                "source_depth_count = 0",
+            )
+            manifest.write_text(contents, encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "source_depth_count must be positive"
+            ):
+                load_case(target)
 
     def test_rayreuse_product_cases_are_in_shared_manifest(self) -> None:
         expected = {
@@ -534,9 +577,14 @@ class CaseModelTests(unittest.TestCase):
             "arrival_geometric_hat_binary": "arrivals_binary",
             "arrival_geometric_hat_ray_centered": "arrivals_ascii",
             "arrival_geometric_hat_ray_centered_binary": "arrivals_binary",
+            "arrival_geometric_gaussian_irregular": "arrivals_ascii",
+            "arrival_multi_source": "arrivals_ascii",
+            "arrival_multi_source_binary": "arrivals_binary",
             "arrival_zero": "arrivals_ascii",
+            "eigenray_geometric_hat": "eigenray",
             "eigenray_geometric_hat_ray_centered": "eigenray",
             "eigenray_geometric_gaussian": "eigenray",
+            "eigenray_irregular_pairs": "eigenray",
             "eigenray_zero": "eigenray",
         }
         for case_id, output_kind in expected.items():

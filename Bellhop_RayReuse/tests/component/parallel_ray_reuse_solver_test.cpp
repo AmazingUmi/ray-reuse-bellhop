@@ -86,7 +86,8 @@ std::vector<double> makeFrequencies(std::size_t count) {
 }
 
 struct StreamedParallelRun {
-  std::vector<std::optional<rayreuse::FrequencyWorkspace>> workspaces;
+  std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
+      workspaces;
   std::vector<std::size_t> callbackCounts;
   ParallelRayReuseStatistics statistics;
 };
@@ -95,18 +96,20 @@ StreamedParallelRun runParallel(const SimulationCase& simulation,
                                 ParallelRayReuseSettings settings,
                                 bool verifyCacheFingerprint = false) {
   StreamedParallelRun run{
-      .workspaces = std::vector<std::optional<rayreuse::FrequencyWorkspace>>(
-          simulation.frequencies().size()),
+      .workspaces =
+          std::vector<
+              std::optional<std::vector<rayreuse::FrequencyWorkspace>>>(
+              simulation.frequencies().size()),
       .callbackCounts =
           std::vector<std::size_t>(simulation.frequencies().size(), 0U),
       .statistics = {}};
   run.statistics = ParallelRayReuseSolver::solveStreaming(
       simulation, 1.0, 50.0,
       [&run](std::size_t frequencyIndex,
-             rayreuse::FrequencyWorkspace&& workspace,
+             std::vector<rayreuse::FrequencyWorkspace>&& sourceWorkspaces,
              const rayreuse::SingleFrequencyTimings&) {
         ++run.callbackCounts.at(frequencyIndex);
-        run.workspaces.at(frequencyIndex).emplace(std::move(workspace));
+        run.workspaces.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
       },
       settings, {}, verifyCacheFingerprint);
   return run;
@@ -180,11 +183,11 @@ void testFrequencyCounts(Context& context) {
       context.check(parallel.workspaces[index].has_value(),
                     "parallel run returns every indexed workspace");
       if (parallel.workspaces[index]) {
-        checkWorkspaceEqual(context, *parallel.workspaces[index],
-                            serial.frequencyResults[index].workspace,
+        checkWorkspaceEqual(context, parallel.workspaces[index]->front(),
+                            serial.frequencyResults[index].workspaces.front(),
                             "parallel pressure is bitwise equal to "
                             "serial reuse");
-        checkWorkspaceEqual(context, *parallel.workspaces[index],
+        checkWorkspaceEqual(context, parallel.workspaces[index]->front(),
                             nonReuse.frequencyResults[index].workspace,
                             "parallel pressure is bitwise equal to "
                             "non-reuse");
@@ -206,7 +209,7 @@ void testRepeatedRunIsDeterministic(Context& context) {
                   "repeated parallel runs return every workspace");
     if (first.workspaces[index] && second.workspaces[index]) {
       checkWorkspaceEqual(
-          context, *first.workspaces[index], *second.workspaces[index],
+          context, first.workspaces[index]->front(), second.workspaces[index]->front(),
           "repeated parallel pressure is bitwise deterministic");
     }
   }
@@ -247,11 +250,12 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
         if (!parallel.workspaces[index].has_value()) {
           continue;
         }
-        checkWorkspaceEqual(context, reuse.frequencyResults[index].workspace,
+        checkWorkspaceEqual(
+            context, reuse.frequencyResults[index].workspaces.front(),
                             nonReuse.frequencyResults[index].workspace,
                             "serial reuse C/I/S is bitwise equal to non-reuse");
         checkWorkspaceEqual(
-            context, *parallel.workspaces[index],
+            context, parallel.workspaces[index]->front(),
             nonReuse.frequencyResults[index].workspace,
             "parallel reuse C/I/S is bitwise equal to non-reuse");
       }
@@ -287,11 +291,11 @@ void testSimpleGaussianMatchesAcrossExecution(Context& context) {
       continue;
     }
     checkWorkspaceEqual(
-        context, reuse.frequencyResults[index].workspace,
+        context, reuse.frequencyResults[index].workspaces.front(),
         nonReuse.frequencyResults[index].workspace,
         "serial reuse Simple Gaussian is bitwise equal to non-reuse");
     checkWorkspaceEqual(
-        context, *parallel.workspaces[index],
+        context, parallel.workspaces[index]->front(),
         nonReuse.frequencyResults[index].workspace,
         "parallel reuse Simple Gaussian is bitwise equal to non-reuse");
   }
@@ -341,19 +345,19 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
               continue;
             }
             checkWorkspaceEqual(
-                context, reuse.frequencyResults[index].workspace,
+                context, reuse.frequencyResults[index].workspaces.front(),
                 nonReuse.frequencyResults[index].workspace,
                 "Cartesian width/curvature serial reuse equals non-reuse "
                 "bitwise");
             checkWorkspaceEqual(
-                context, *parallel.workspaces[index],
+                context, parallel.workspaces[index]->front(),
                 nonReuse.frequencyResults[index].workspace,
                 "Cartesian width/curvature parallel reuse equals non-reuse "
                 "bitwise");
             if (pressure.has_value()) {
               checkWorkspaceEqual(
-                  context, reuse.frequencyResults[index].workspace,
-                  pressure->frequencyResults[index].workspace,
+                  context, reuse.frequencyResults[index].workspaces.front(),
+                  pressure->frequencyResults[index].workspaces.front(),
                   "Cartesian P/V/H legacy selectors are bitwise identical");
             }
           }
@@ -408,11 +412,11 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
               continue;
             }
             checkWorkspaceEqual(
-                context, reuse.frequencyResults[index].workspace,
+                context, reuse.frequencyResults[index].workspaces.front(),
                 nonReuse.frequencyResults[index].workspace,
                 "ray-centered serial reuse equals non-reuse bitwise");
             checkWorkspaceEqual(
-                context, *parallel.workspaces[index],
+                context, parallel.workspaces[index]->front(),
                 nonReuse.frequencyResults[index].workspace,
                 "ray-centered parallel reuse equals non-reuse bitwise");
           }
@@ -452,11 +456,12 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
       context.check(parallel.workspaces[index].has_value(),
                     "parallel ray-centered GeoHat returns every frequency");
       if (!parallel.workspaces[index].has_value()) continue;
-      checkWorkspaceEqual(context, reuse.frequencyResults[index].workspace,
+      checkWorkspaceEqual(
+          context, reuse.frequencyResults[index].workspaces.front(),
                           nonReuse.frequencyResults[index].workspace,
                           "ray-centered GeoHat reuse equals non-reuse bitwise");
       checkWorkspaceEqual(
-          context, *parallel.workspaces[index],
+          context, parallel.workspaces[index]->front(),
           nonReuse.frequencyResults[index].workspace,
           "ray-centered GeoHat parallel equals non-reuse bitwise");
     }
@@ -504,7 +509,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
             ParallelRayReuseSettings{.workerCount = 0U,
                                      .outputQueueCapacity = 1U,
@@ -515,7 +520,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
             ParallelRayReuseSettings{.workerCount = 1U,
                                      .outputQueueCapacity = 0U,
@@ -526,7 +531,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
             ParallelRayReuseSettings{.workerCount = 1U,
                                      .outputQueueCapacity = 3U,
@@ -537,7 +542,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {
               throw std::runtime_error("consumer failure");
             },

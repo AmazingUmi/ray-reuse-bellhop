@@ -4,7 +4,7 @@ origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 ReadSzRz", "Bellhop_origin/Bellhop/bellhop.f90 SourceDepth loop"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0
@@ -16,7 +16,11 @@ policy = "shared_fmax"
 
 [validation]
 shd_dimensions = [1, 1, 1, 1, 3, 11, 51]
+source_depth_count = 3
 prt_markers = ["VACUUM", "Perfectly RIGID"]
+# Origin echoes multi-source depths as "Number of Source z-coordinates, Sz";
+# F2CPP and RayReuse summarize them as "source depths = N" instead.
+version_prt_markers = { f2cpp = ["source depths = 3"], rayreuse = ["source depths = 3"] }
 prt_forbidden_markers = ["THORP volume attenuation added"]
 
 [profiles.single]

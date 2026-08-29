@@ -22,7 +22,7 @@ std::size_t checkedProduct(std::size_t lhs, std::size_t rhs) {
 FrequencyWorkspace::FrequencyWorkspace(double frequency,
                                        const ReceiverGrid& receivers)
     : frequency_(frequency),
-      depthCount_(receivers.depthCount()),
+      depthCount_(receivers.receiversPerRange()),
       rangeCount_(receivers.rangeCount()),
       pressure_(checkedProduct(depthCount_, rangeCount_)) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
@@ -74,7 +74,7 @@ std::size_t FrequencyWorkspace::flatIndex(std::size_t depthIndex,
 IntensityWorkspace::IntensityWorkspace(double frequency,
                                        const ReceiverGrid& receivers)
     : frequency_(frequency),
-      depthCount_(receivers.depthCount()),
+      depthCount_(receivers.receiversPerRange()),
       rangeCount_(receivers.rangeCount()),
       intensity_(checkedProduct(depthCount_, rangeCount_)) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {

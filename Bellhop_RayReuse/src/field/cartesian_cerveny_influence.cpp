@@ -171,7 +171,7 @@ void validateAccumulateInput(
       throw ValidationError("Cartesian Cerveny amplitude must be non-negative");
     }
   }
-  if (workspaceDepthCount != receivers.depthCount() ||
+  if (workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
     throw ValidationError(
         "Cartesian Cerveny workspace and receiver-grid sizes must match");
@@ -219,7 +219,7 @@ void validateAccumulateInput(
   }
   if (request.has_value() &&
       (request->receiverRangeIndex >= receivers.rangeCount() ||
-       request->receiverDepthIndex >= receivers.depthCount())) {
+       request->receiverDepthIndex >= receivers.receiversPerRange())) {
     throw ValidationError(
         "Cartesian Cerveny diagnostic receiver index is out of range");
   }
@@ -257,7 +257,7 @@ void validatePrevalidatedInput(const FrequencyWorkspace* pressureWorkspace,
         "prevalidated Cartesian Cerveny workspace and ray frequencies "
         "must match");
   }
-  if (workspaceDepthCount != receivers.depthCount() ||
+  if (workspaceDepthCount != receivers.receiversPerRange() ||
       workspaceRangeCount != receivers.rangeCount()) {
     throw ValidationError(
         "prevalidated Cartesian Cerveny workspace and receiver-grid "
@@ -651,6 +651,15 @@ CartesianCervenyInfluence::accumulateImpl(
   const double ratio = std::sqrt(std::abs(std::cos(path.launchAngle)));
   const std::vector<double>& receiverRanges = receivers_.ranges();
   const std::vector<double>& receiverDepths = receivers_.depths();
+  const std::size_t receiversPerRange = receivers_.receiversPerRange();
+  // InfluenceCervenyCart in the 2-D Origin tree allocates one pressure row
+  // for an irregular grid but still reads Pos%Rz(iz), where iz is always
+  // one, instead of Pos%Rz(ir).  F2CPP preserves that observable legacy
+  // behavior for CC, so a paired irregular CC run evaluates every range at
+  // the first depth; the complete coordinate vectors remain in the SHD
+  // header for compatibility with the irregular file layout.
+  const bool irregularReceivers = receivers_.isIrregular();
+  const double irregularReceiverDepth = receiverDepths.front();
   const double seaSurfaceDepth = environment_.seaSurface().depth();
   const double seabedDepth = environment_.seabed().depth();
   const std::span<std::complex<double>> pressure =
@@ -742,11 +751,14 @@ CartesianCervenyInfluence::accumulateImpl(
       requireFiniteComplex(principal, "Cartesian Cerveny principal constant");
       requireFiniteComplex(corrected, "Cartesian Cerveny corrected constant");
 
-      for (std::size_t depthIndex = 0U; depthIndex < receiverDepths.size();
+      for (std::size_t depthIndex = 0U; depthIndex < receiversPerRange;
            ++depthIndex) {
         if constexpr (CollectStatistics) {
           ++statistics->receiverDepthEvaluations;
         }
+        const double receiverDepth = irregularReceivers
+                                         ? irregularReceiverDepth
+                                         : receiverDepths[depthIndex];
         const bool captureDiagnostic =
             diagnosticRequest.has_value() &&
             diagnosticRequest->receiverRangeIndex == rangeIndex &&
@@ -766,7 +778,7 @@ CartesianCervenyInfluence::accumulateImpl(
                     : (imageIndex == 1U ? CervenyImageKind::Surface
                                         : CervenyImageKind::Bottom);
             images[imageIndex] =
-                evaluateImage(kind, receiverDepths[depthIndex], position.depth,
+                evaluateImage(kind, receiverDepth, position.depth,
                               seaSurfaceDepth, seabedDepth, angularFrequency,
                               beamWindowSquared, radiusMax, slowness, tau,
                               gamma, rightAmplitude, rightReflectionPhase);
@@ -784,7 +796,7 @@ CartesianCervenyInfluence::accumulateImpl(
           }
         } else {
           imageSum = evaluateImageContributions<ImageCount, CollectStatistics>(
-              receiverDepths[depthIndex], position.depth, seaSurfaceDepth,
+              receiverDepth, position.depth, seaSurfaceDepth,
               seabedDepth, angularFrequency, beamWindowSquared, radiusMax,
               slowness, tau, gamma, rightAmplitude, rightReflectionPhase,
               statistics);

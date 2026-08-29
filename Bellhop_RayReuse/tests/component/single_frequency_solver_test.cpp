@@ -368,6 +368,139 @@ void testBeamWidthDoesNotChangeFrozenGeometry(Context& context) {
                 "bitwise unchanged");
 }
 
+SimulationCase makeMultiSourceSimulation(std::vector<Source> sources,
+                                         std::size_t maximumRayPoints) {
+  return SimulationCase(
+      makeEnvironment(), std::move(sources),
+      ReceiverGrid(linearGrid(400.0, 600.0, 5U),
+                   linearGrid(100.0, 1000.0, 10U)),
+      FrequencyGrid({50.0}),
+      LaunchFan{.minimumAngle = -5.0 * std::numbers::pi / 180.0,
+                .maximumAngle = 5.0 * std::numbers::pi / 180.0,
+                .explicitLaunchAngleCount = 300U},
+      IntegratorSettings{.stepLength = 10.0,
+                         .rangeLimit = 1100.0,
+                         .depthLimit = 1100.0,
+                         .maximumRayPoints = maximumRayPoints});
+}
+
+void testPerSourceTraceProducesIndependentFrozenCaches(Context& context) {
+  const SimulationCase simulation = makeMultiSourceSimulation(
+      {{.depth = 750.0, .amplitude = 1.0},
+       {.depth = 250.0, .amplitude = 1.0},
+       {.depth = 500.0, .amplitude = 1.0}},
+      1000U);
+  context.check(simulation.sourceCount() == 3U &&
+                    simulation.sources()[0U].depth == 250.0 &&
+                    simulation.sources()[1U].depth == 500.0 &&
+                    simulation.sources()[2U].depth == 750.0,
+                "per-source trace fixture receives depth-sorted sources");
+
+  const std::vector<rayreuse::RayFanTraceResult> sourceTraces =
+      SingleFrequencySolver::traceAllSourceFans(simulation);
+  context.check(sourceTraces.size() == simulation.sourceCount(),
+                "per-source trace yields exactly one trace result per source");
+  bool fansComplete = true;
+  bool cachesFrozen = true;
+  bool cachesMatchSourceDepth = true;
+  std::vector<std::uint64_t> fingerprints;
+  fingerprints.reserve(sourceTraces.size());
+  for (std::size_t sourceIndex = 0U; sourceIndex < sourceTraces.size();
+       ++sourceIndex) {
+    const rayreuse::RayFanTraceResult& trace = sourceTraces[sourceIndex];
+    fansComplete =
+        fansComplete && trace.cache.size() > 0U &&
+        trace.cache.size() == simulation.launchFanPlan().launchAngleCount;
+    cachesFrozen = cachesFrozen && trace.cache.frozen();
+    cachesMatchSourceDepth =
+        cachesMatchSourceDepth &&
+        trace.cache.at(0U).points.front().position.range == 0.0 &&
+        trace.cache.at(0U).points.front().position.depth ==
+            simulation.sources()[sourceIndex].depth;
+    fingerprints.push_back(trace.cache.contentFingerprint());
+  }
+  context.check(fansComplete,
+                "each per-source cache holds the complete shared launch fan");
+  context.check(cachesFrozen, "each per-source cache is independently frozen");
+  context.check(cachesMatchSourceDepth,
+                "cache index pairs with the depth-sorted source index");
+  context.check(fingerprints.size() == 3U &&
+                    fingerprints[0U] != fingerprints[1U] &&
+                    fingerprints[1U] != fingerprints[2U] &&
+                    fingerprints[0U] != fingerprints[2U],
+                "distinct source depths trace distinct frozen geometries");
+
+  const std::vector<rayreuse::RayFanTraceResult> repeatTraces =
+      SingleFrequencySolver::traceAllSourceFans(simulation);
+  bool repeatFingerprintsStable = repeatTraces.size() == fingerprints.size();
+  for (std::size_t sourceIndex = 0U; sourceIndex < fingerprints.size();
+       ++sourceIndex) {
+    repeatFingerprintsStable =
+        repeatFingerprintsStable &&
+        repeatTraces[sourceIndex].cache.contentFingerprint() ==
+            fingerprints[sourceIndex];
+  }
+  context.check(repeatFingerprintsStable,
+                "per-source fingerprints are stable across trace passes");
+
+  const rayreuse::RayFanTraceResult firstSourceTrace =
+      SingleFrequencySolver::traceRayFan(simulation);
+  context.check(
+      firstSourceTrace.cache.contentFingerprint() == fingerprints[0U] &&
+          firstSourceTrace.totalRayPointCount ==
+              sourceTraces[0U].totalRayPointCount,
+      "legacy first-source fan entry matches per-source entry zero");
+}
+
+void testSingleSourcePerSourceTraceEquivalence(Context& context) {
+  const SimulationCase simulation = makeSimulation(1000U);
+  const rayreuse::RayFanTraceResult legacy =
+      SingleFrequencySolver::traceRayFan(simulation);
+  const std::vector<rayreuse::RayFanTraceResult> perSource =
+      SingleFrequencySolver::traceAllSourceFans(simulation);
+  context.check(
+      simulation.sourceCount() == 1U && perSource.size() == 1U &&
+          perSource[0U].cache.frozen() &&
+          perSource[0U].cache.size() == legacy.cache.size() &&
+          perSource[0U].cache.contentFingerprint() ==
+              legacy.cache.contentFingerprint() &&
+          perSource[0U].totalRayPointCount == legacy.totalRayPointCount,
+      "NSz==1 per-source trace reproduces the legacy single-source fan");
+}
+
+void testPerSourceTraceDiagnostics(Context& context) {
+  const SimulationCase simulation = makeMultiSourceSimulation(
+      {{.depth = 500.0, .amplitude = 1.0}, {.depth = 700.0, .amplitude = 1.0}},
+      1000U);
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(
+            SingleFrequencySolver::traceSourceFan(simulation, 2U));
+      },
+      "per-source trace rejects an out-of-range source index");
+
+  const SimulationCase pointLimited = makeMultiSourceSimulation(
+      {{.depth = 500.0, .amplitude = 1.0}, {.depth = 700.0, .amplitude = 1.0}},
+      20U);
+  std::string diagnostic;
+  try {
+    static_cast<void>(
+        SingleFrequencySolver::traceSourceFan(pointLimited, 1U));
+  } catch (const ValidationError& error) {
+    diagnostic = error.what();
+  }
+  context.check(!diagnostic.empty() &&
+                    diagnostic.rfind("single-frequency solve encountered a "
+                                     "ray that did not exit the spatial domain "
+                                     "normally (source index 1, launch index ",
+                                     0U) == 0U &&
+                    diagnostic.find(", angle ") != std::string::npos &&
+                    diagnostic.find(", reason ") != std::string::npos &&
+                    diagnostic.back() == ')',
+                "per-source trace failures carry the F2CPP-aligned "
+                "source-index diagnostic");
+}
+
 void testSourceBeamPatternScalesAllCoherenceModes(Context& context) {
   const double amplitude = std::pow(10.0, -6.0 / 20.0);
   for (const SimulationRunMode mode :
@@ -846,6 +979,9 @@ int main() {
   testCartesianCurvatureModesPreserveFieldSemantics(context);
   testCartesianBeamWidthModesPreserveFieldSemantics(context);
   testBeamWidthDoesNotChangeFrozenGeometry(context);
+  testPerSourceTraceProducesIndependentFrozenCaches(context);
+  testSingleSourcePerSourceTraceEquivalence(context);
+  testPerSourceTraceDiagnostics(context);
   testSourceBeamPatternScalesAllCoherenceModes(context);
   testGeometricHatCoherenceAndDirectionalPattern(context);
   testGeometricGaussianCoherenceAndDirectionalPattern(context);

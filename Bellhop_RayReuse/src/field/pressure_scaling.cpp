@@ -39,7 +39,7 @@ void scaleCoherentPointPressure(FrequencyWorkspace& workspace,
   if (sourceSoundSpeed <= 0.0) {
     throw ValidationError("source sound speed must be positive");
   }
-  if (workspace.depthCount() != receivers.depthCount() ||
+  if (workspace.depthCount() != receivers.receiversPerRange() ||
       workspace.rangeCount() != receivers.rangeCount()) {
     throw ValidationError(
         "pressure-scaling workspace and receiver-grid sizes must match");
@@ -97,7 +97,7 @@ FrequencyWorkspace scalePointIntensityToPressure(
     const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
     double launchAngleSpacingRadians, double sourceSoundSpeed,
     bool geometricNormalization) {
-  if (workspace.depthCount() != receivers.depthCount() ||
+  if (workspace.depthCount() != receivers.receiversPerRange() ||
       workspace.rangeCount() != receivers.rangeCount()) {
     throw ValidationError(
         "intensity-scaling workspace and receiver-grid sizes must match");

@@ -113,8 +113,11 @@ class ShdFrequencyWriter::Impl {
   Impl(const std::filesystem::path& path, std::string_view title,
        const SimulationCase& simulation)
       : frequencies_(simulation.frequencies().values()),
+        sourceDepths_(sourceDepthList(simulation)),
         receiverDepthCount_(simulation.receivers().depthCount()),
+        receiversPerRange_(simulation.receivers().receiversPerRange()),
         receiverRangeCount_(simulation.receivers().rangeCount()),
+        irregular_(simulation.receivers().isIrregular()),
         written_(frequencies_.size(), false),
         path_(path) {
     validateTitle(title);
@@ -132,7 +135,8 @@ class ShdFrequencyWriter::Impl {
 
   ~Impl() noexcept = default;
 
-  void writeFrequency(std::size_t index, const FrequencyWorkspace& workspace) {
+  void writeFrequency(std::size_t index, const FrequencyWorkspace& first,
+                      std::span<const FrequencyWorkspace> additional) {
     if (finalized_) {
       throw ValidationError(
           "cannot write a frequency after finalizing SHD output");
@@ -143,41 +147,60 @@ class ShdFrequencyWriter::Impl {
     if (written_[index]) {
       throw ValidationError("SHD frequency index has already been written");
     }
-    if (workspace.frequency() != frequencies_[index]) {
-      throw ValidationError("SHD workspace frequency does not match its index");
-    }
-    if (workspace.depthCount() != receiverDepthCount_ ||
-        workspace.rangeCount() != receiverRangeCount_) {
+    if (additional.size() != sourceDepths_.size() - 1U) {
       throw ValidationError(
-          "SHD workspace dimensions must match the receiver grid");
+          "SHD source workspace count must match the simulation sources");
     }
+    const auto workspaceForSource =
+        [&](std::size_t sourceIndex) -> const FrequencyWorkspace& {
+      return sourceIndex == 0U ? first : additional[sourceIndex - 1U];
+    };
 
-    // Validate the complete workspace before modifying its file slot.
-    for (const std::complex<double> pressure : workspace.pressure()) {
-      requireFiniteComplex(pressure, "SHD pressure");
-      static_cast<void>(
-          checkedFloat32(pressure.real(), "SHD pressure real part"));
-      static_cast<void>(
-          checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
+    // Validate every source workspace before modifying any file slot.
+    for (std::size_t sourceIndex = 0U; sourceIndex < sourceDepths_.size();
+         ++sourceIndex) {
+      const FrequencyWorkspace& workspace = workspaceForSource(sourceIndex);
+      if (workspace.frequency() != frequencies_[index]) {
+        throw ValidationError(
+            "SHD workspace frequency does not match its index");
+      }
+      if (workspace.depthCount() != receiversPerRange_ ||
+          workspace.rangeCount() != receiverRangeCount_) {
+        throw ValidationError(
+            "SHD workspace dimensions must match the receiver grid");
+      }
+      for (const std::complex<double> pressure : workspace.pressure()) {
+        requireFiniteComplex(pressure, "SHD pressure");
+        static_cast<void>(
+            checkedFloat32(pressure.real(), "SHD pressure real part"));
+        static_cast<void>(
+            checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
+      }
     }
 
     std::vector<std::byte> record(recordBytes_);
-    for (std::size_t depthIndex = 0U; depthIndex < receiverDepthCount_;
-         ++depthIndex) {
-      const std::size_t recordIndex =
-          kHeaderRecordCount + index * receiverDepthCount_ + depthIndex;
-      seekToRecord(recordIndex);
-      for (std::size_t rangeIndex = 0U; rangeIndex < receiverRangeCount_;
-           ++rangeIndex) {
-        const std::complex<double> pressure =
-            workspace.at(depthIndex, rangeIndex);
-        storeFloat32(record, 8U * rangeIndex,
-                     checkedFloat32(pressure.real(), "SHD pressure real part"));
-        storeFloat32(
-            record, 8U * rangeIndex + 4U,
-            checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
+    for (std::size_t sourceIndex = 0U; sourceIndex < sourceDepths_.size();
+         ++sourceIndex) {
+      const FrequencyWorkspace& workspace = workspaceForSource(sourceIndex);
+      for (std::size_t depthIndex = 0U; depthIndex < receiversPerRange_;
+           ++depthIndex) {
+        const std::size_t recordIndex =
+            kHeaderRecordCount + index * recordsPerFrequency_ +
+            sourceIndex * receiversPerRange_ + depthIndex;
+        seekToRecord(recordIndex);
+        for (std::size_t rangeIndex = 0U; rangeIndex < receiverRangeCount_;
+             ++rangeIndex) {
+          const std::complex<double> pressure =
+              workspace.at(depthIndex, rangeIndex);
+          storeFloat32(record, 8U * rangeIndex,
+                       checkedFloat32(pressure.real(),
+                                      "SHD pressure real part"));
+          storeFloat32(
+              record, 8U * rangeIndex + 4U,
+              checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
+        }
+        writeRecord(output_, record);
       }
-      writeRecord(output_, record);
     }
 
     written_[index] = true;
@@ -203,6 +226,16 @@ class ShdFrequencyWriter::Impl {
  private:
   static constexpr std::size_t kHeaderRecordCount = 10U;
 
+  static std::vector<double> sourceDepthList(
+      const SimulationCase& simulation) {
+    std::vector<double> depths;
+    depths.reserve(simulation.sourceCount());
+    for (const Source& source : simulation.sources()) {
+      depths.push_back(source.depth);
+    }
+    return depths;
+  }
+
   static void validateTitle(std::string_view title) {
     if (title.empty() || title.size() > 80U) {
       throw ValidationError(
@@ -224,8 +257,9 @@ class ShdFrequencyWriter::Impl {
     for (const double frequency : frequencies_) {
       requireFinite(frequency, "SHD frequency");
     }
-    static_cast<void>(
-        checkedFloat32(simulation.source().depth, "SHD source depth"));
+    for (const double depth : sourceDepths_) {
+      static_cast<void>(checkedFloat32(depth, "SHD source depth"));
+    }
     for (const double depth : simulation.receivers().depths()) {
       static_cast<void>(checkedFloat32(depth, "SHD receiver depth"));
     }
@@ -238,7 +272,7 @@ class ShdFrequencyWriter::Impl {
     constexpr std::size_t bearingCount = 1U;
     constexpr std::size_t sourceXCount = 1U;
     constexpr std::size_t sourceYCount = 1U;
-    constexpr std::size_t sourceDepthCount = 1U;
+    const std::size_t sourceDepthCount = sourceDepths_.size();
 
     if (frequencies_.size() > std::numeric_limits<std::size_t>::max() / 2U) {
       throw ValidationError("SHD frequency count overflow");
@@ -246,6 +280,12 @@ class ShdFrequencyWriter::Impl {
     if (receiverRangeCount_ > std::numeric_limits<std::size_t>::max() / 2U) {
       throw ValidationError("SHD receiver-range count overflow");
     }
+    if (sourceDepthCount >
+        std::numeric_limits<std::size_t>::max() / receiversPerRange_) {
+      throw ValidationError("SHD source-record count overflow");
+    }
+    const std::size_t recordsPerSource = receiversPerRange_;
+    recordsPerFrequency_ = sourceDepthCount * recordsPerSource;
 
     const std::size_t recordWords = std::max(
         {kMinimumRecordWords, 2U * frequencies_.size(), 2U * bearingCount,
@@ -263,11 +303,11 @@ class ShdFrequencyWriter::Impl {
 
     if (frequencies_.size() >
         (std::numeric_limits<std::size_t>::max() - kHeaderRecordCount) /
-            receiverDepthCount_) {
+            recordsPerFrequency_) {
       throw ValidationError("SHD record count overflow");
     }
     totalRecordCount_ =
-        kHeaderRecordCount + frequencies_.size() * receiverDepthCount_;
+        kHeaderRecordCount + frequencies_.size() * recordsPerFrequency_;
     if (totalRecordCount_ >
         std::numeric_limits<std::size_t>::max() / recordBytes_) {
       throw ValidationError("SHD file size overflow");
@@ -283,6 +323,8 @@ class ShdFrequencyWriter::Impl {
     const ReceiverGrid& receivers = simulation.receivers();
     const std::int32_t frequencyCount32 =
         checkedInt32(frequencies_.size(), "SHD frequency count");
+    const std::int32_t sourceDepthCount32 =
+        checkedInt32(sourceDepths_.size(), "SHD source-depth count");
     const std::int32_t receiverDepthCount32 =
         checkedInt32(receiverDepthCount_, "SHD receiver-depth count");
     const std::int32_t receiverRangeCount32 =
@@ -298,14 +340,16 @@ class ShdFrequencyWriter::Impl {
     storeText(record, 4U, 80U, title);
     writeClearedRecord();
 
-    storeText(record, 0U, 10U, "rectilin  ");
+    // Origin writes PlotType = 'rectilin  ' / 'irregular ' (LEN=10) keyed by
+    // the receiver-grid layout (ReadEnvironmentBell OpenOutputFiles).
+    storeText(record, 0U, 10U, irregular_ ? "irregular " : "rectilin  ");
     writeClearedRecord();
 
     storeInt32(record, 0U, frequencyCount32);
     storeInt32(record, 4U, 1);
     storeInt32(record, 8U, 1);
     storeInt32(record, 12U, 1);
-    storeInt32(record, 16U, 1);
+    storeInt32(record, 16U, sourceDepthCount32);
     storeInt32(record, 20U, receiverDepthCount32);
     storeInt32(record, 24U, receiverRangeCount32);
     storeFloat64(record, 28U, frequencies_.front());
@@ -324,8 +368,10 @@ class ShdFrequencyWriter::Impl {
     storeFloat64(record, 0U, 0.0);
     writeClearedRecord();
 
-    storeFloat32(record, 0U,
-                 checkedFloat32(simulation.source().depth, "SHD source depth"));
+    for (std::size_t index = 0U; index < sourceDepths_.size(); ++index) {
+      storeFloat32(record, 4U * index,
+                   checkedFloat32(sourceDepths_[index], "SHD source depth"));
+    }
     writeClearedRecord();
 
     for (std::size_t index = 0U; index < receiverDepthCount_; ++index) {
@@ -359,8 +405,12 @@ class ShdFrequencyWriter::Impl {
   }
 
   std::vector<double> frequencies_;
+  std::vector<double> sourceDepths_;
   std::size_t receiverDepthCount_{};
+  std::size_t receiversPerRange_{};
   std::size_t receiverRangeCount_{};
+  std::size_t recordsPerFrequency_{};
+  bool irregular_{};
   std::size_t recordBytes_{};
   std::int32_t recordWords32_{};
   std::size_t totalRecordCount_{};
@@ -389,7 +439,33 @@ void ShdFrequencyWriter::writeFrequency(std::size_t index,
   if (!impl_) {
     throw ValidationError("cannot write with a moved-from SHD writer");
   }
-  impl_->writeFrequency(index, workspace);
+  impl_->writeFrequency(index, workspace, {});
+}
+
+void ShdFrequencyWriter::writeFrequency(
+    std::size_t index, const FrequencyWorkspace& firstSourceWorkspace,
+    std::span<const FrequencyWorkspace> additionalSourceWorkspaces) {
+  if (!impl_) {
+    throw ValidationError("cannot write with a moved-from SHD writer");
+  }
+  impl_->writeFrequency(index, firstSourceWorkspace,
+                        additionalSourceWorkspaces);
+}
+
+void ShdFrequencyWriter::writeFrequency(
+    std::size_t index,
+    std::span<const FrequencyWorkspace> sourceWorkspaces) {
+  if (!impl_) {
+    throw ValidationError("cannot write with a moved-from SHD writer");
+  }
+  if (sourceWorkspaces.empty()) {
+    throw ValidationError(
+        "SHD source workspace count must match the simulation sources");
+  }
+  impl_->writeFrequency(
+      index, sourceWorkspaces.front(),
+      std::span<const FrequencyWorkspace>(sourceWorkspaces.begin() + 1,
+                                          sourceWorkspaces.end()));
 }
 
 void ShdFrequencyWriter::finalize() {
@@ -407,10 +483,41 @@ void ShdWriter::writeSingleFrequency(const std::filesystem::path& path,
                    std::span<const FrequencyWorkspace>(&workspace, 1U));
 }
 
+void ShdWriter::writeSingleFrequency(
+    const std::filesystem::path& path, std::string_view title,
+    const SimulationCase& simulation,
+    const FrequencyWorkspace& firstSourceWorkspace,
+    std::span<const FrequencyWorkspace> additionalSourceWorkspaces) {
+  if (simulation.frequencies().size() != 1U) {
+    throw ValidationError(
+        "SHD single-frequency output requires a single-frequency simulation");
+  }
+  ShdFrequencyWriter writer(path, title, simulation);
+  writer.writeFrequency(0U, firstSourceWorkspace, additionalSourceWorkspaces);
+  writer.finalize();
+}
+
 void ShdWriter::writeFrequencies(
     const std::filesystem::path& path, std::string_view title,
     const SimulationCase& simulation,
     std::span<const FrequencyWorkspace> workspaces) {
+  const std::vector<double>& frequencies = simulation.frequencies().values();
+  if (workspaces.size() != frequencies.size()) {
+    throw ValidationError(
+        "SHD workspace count must match the simulation frequency count");
+  }
+
+  ShdFrequencyWriter writer(path, title, simulation);
+  for (std::size_t index = 0U; index < workspaces.size(); ++index) {
+    writer.writeFrequency(index, workspaces[index]);
+  }
+  writer.finalize();
+}
+
+void ShdWriter::writeFrequencies(
+    const std::filesystem::path& path, std::string_view title,
+    const SimulationCase& simulation,
+    const std::vector<std::vector<FrequencyWorkspace>>& workspaces) {
   const std::vector<double>& frequencies = simulation.frequencies().values();
   if (workspaces.size() != frequencies.size()) {
     throw ValidationError(

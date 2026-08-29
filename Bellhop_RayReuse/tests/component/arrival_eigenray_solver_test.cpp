@@ -102,31 +102,34 @@ void testArrivalModes(Context& context) {
       parallelUnchanged(2U);
   const ArrivalSolverStatistics reuse = ArrivalSolver::solve(
       simulation,
-      [&](std::size_t index, const RayPathCache& cache,
-          const ArrivalWorkspace& workspace) {
-        const std::uint64_t before = cache.contentFingerprint();
-        serial[index] = snapshot(workspace);
-        serialFingerprint[index] = cache.contentFingerprint();
+      [&](std::size_t index, const std::vector<RayPathCache>& caches,
+          const std::vector<ArrivalWorkspace>& workspaces) {
+        const std::uint64_t before =
+            caches.front().contentFingerprint();
+        serial[index] = snapshot(workspaces.front());
+        serialFingerprint[index] = caches.front().contentFingerprint();
         serialUnchanged[index] = before == serialFingerprint[index];
       },
       true);
   const ArrivalSolverStatistics nonreuseStats = ArrivalSolver::solveNonReuse(
       simulation,
-      [&](std::size_t index, const RayPathCache& cache,
-          const ArrivalWorkspace& workspace) {
-        const std::uint64_t before = cache.contentFingerprint();
-        nonreuse[index] = snapshot(workspace);
-        nonreuseFingerprint[index] = cache.contentFingerprint();
+      [&](std::size_t index, const std::vector<RayPathCache>& caches,
+          const std::vector<ArrivalWorkspace>& workspaces) {
+        const std::uint64_t before =
+            caches.front().contentFingerprint();
+        nonreuse[index] = snapshot(workspaces.front());
+        nonreuseFingerprint[index] = caches.front().contentFingerprint();
         nonreuseUnchanged[index] = before == nonreuseFingerprint[index];
       },
       true);
   const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveParallel(
       simulation,
-      [&](std::size_t index, const RayPathCache& cache,
-          const ArrivalWorkspace& workspace) {
-        const std::uint64_t before = cache.contentFingerprint();
-        parallel[index] = snapshot(workspace);
-        parallelFingerprint[index] = cache.contentFingerprint();
+      [&](std::size_t index, const std::vector<RayPathCache>& caches,
+          const std::vector<ArrivalWorkspace>& workspaces) {
+        const std::uint64_t before =
+            caches.front().contentFingerprint();
+        parallel[index] = snapshot(workspaces.front());
+        parallelFingerprint[index] = caches.front().contentFingerprint();
         parallelUnchanged[index] = before == parallelFingerprint[index];
       },
       2U, true);
@@ -187,8 +190,10 @@ void testDirectionalArrivalProjection(Context& context) {
   const auto capture = [](const SimulationCase& simulation) {
     FrequencyArrivals records(simulation.frequencies().size());
     static_cast<void>(ArrivalSolver::solve(
-        simulation, [&](std::size_t frequencyIndex, const RayPathCache&,
-                        const ArrivalWorkspace& workspace) {
+        simulation,
+        [&](std::size_t frequencyIndex, const std::vector<RayPathCache>&,
+            const std::vector<ArrivalWorkspace>& workspaces) {
+          const ArrivalWorkspace& workspace = workspaces.front();
           for (std::size_t cell = 0U; cell < workspace.receiverCellCount();
                ++cell) {
             const auto arrivals = workspace.cellAt(cell);
@@ -232,36 +237,42 @@ void testEigenrayModes(Context& context) {
       parallelUnchanged(2U);
   const EigenraySolverStatistics reuseStats = EigenraySolver::solve(
       simulation,
-      [&](std::size_t f, const RayPathCache& cache, const auto& hits) {
-        const std::uint64_t before = cache.contentFingerprint();
-        for (const auto& [launch, hit] : hits)
+      [&](std::size_t f, const std::vector<RayPathCache>& caches,
+          const std::vector<EigenraySourceHits>& sourceHits) {
+        const std::uint64_t before =
+            caches.front().contentFingerprint();
+        for (const auto& [launch, hit] : sourceHits.front())
           reuse[f].emplace_back(launch, hit.receiverRangeIndex,
                                 hit.receiverDepthIndex, hit.prefixPointCount);
-        reuseFingerprint[f] = cache.contentFingerprint();
+        reuseFingerprint[f] = caches.front().contentFingerprint();
         reuseUnchanged[f] = before == reuseFingerprint[f];
       },
       true);
   const EigenraySolverStatistics nonreuseStats = EigenraySolver::solveNonReuse(
       simulation,
-      [&](std::size_t f, const RayPathCache& cache, const auto& hits) {
-        const std::uint64_t before = cache.contentFingerprint();
-        for (const auto& [launch, hit] : hits)
+      [&](std::size_t f, const std::vector<RayPathCache>& caches,
+          const std::vector<EigenraySourceHits>& sourceHits) {
+        const std::uint64_t before =
+            caches.front().contentFingerprint();
+        for (const auto& [launch, hit] : sourceHits.front())
           nonreuse[f].emplace_back(launch, hit.receiverRangeIndex,
                                    hit.receiverDepthIndex,
                                    hit.prefixPointCount);
-        nonreuseFingerprint[f] = cache.contentFingerprint();
+        nonreuseFingerprint[f] = caches.front().contentFingerprint();
         nonreuseUnchanged[f] = before == nonreuseFingerprint[f];
       },
       true);
   const EigenraySolverStatistics parallelStats = EigenraySolver::solveParallel(
       simulation,
-      [&](std::size_t f, const RayPathCache& cache, const auto& hits) {
-        const std::uint64_t before = cache.contentFingerprint();
-        for (const auto& [launch, hit] : hits)
+      [&](std::size_t f, const std::vector<RayPathCache>& caches,
+          const std::vector<EigenraySourceHits>& sourceHits) {
+        const std::uint64_t before =
+            caches.front().contentFingerprint();
+        for (const auto& [launch, hit] : sourceHits.front())
           parallel[f].emplace_back(launch, hit.receiverRangeIndex,
                                    hit.receiverDepthIndex,
                                    hit.prefixPointCount);
-        parallelFingerprint[f] = cache.contentFingerprint();
+        parallelFingerprint[f] = caches.front().contentFingerprint();
         parallelUnchanged[f] = before == parallelFingerprint[f];
       },
       2U, true);
@@ -304,8 +315,10 @@ void testRayCenteredProductModes(Context& context) {
                  std::int32_t>;
   using ArrivalProducts = std::vector<std::vector<ArrivalIdentity>>;
   const auto arrivalConsumer = [](ArrivalProducts& products) {
-    return [&products](std::size_t frequencyIndex, const RayPathCache&,
-                       const ArrivalWorkspace& workspace) {
+    return [&products](std::size_t frequencyIndex,
+                       const std::vector<RayPathCache>&,
+                       const std::vector<ArrivalWorkspace>& workspaces) {
+      const ArrivalWorkspace& workspace = workspaces.front();
       for (std::size_t cell = 0U; cell < workspace.receiverCellCount(); ++cell) {
         for (const Arrival& arrival : workspace.cellAt(cell)) {
           products[frequencyIndex].emplace_back(
@@ -347,9 +360,10 @@ void testRayCenteredProductModes(Context& context) {
       std::tuple<std::size_t, std::size_t, std::size_t, std::size_t>;
   using HitProducts = std::vector<std::vector<HitIdentity>>;
   const auto hitConsumer = [](HitProducts& products) {
-    return [&products](std::size_t frequencyIndex, const RayPathCache&,
-                       const auto& hits) {
-      for (const auto& [launchIndex, hit] : hits) {
+    return [&products](std::size_t frequencyIndex,
+                       const std::vector<RayPathCache>&,
+                       const std::vector<EigenraySourceHits>& sourceHits) {
+      for (const auto& [launchIndex, hit] : sourceHits.front()) {
         products[frequencyIndex].emplace_back(
             launchIndex, hit.receiverRangeIndex, hit.receiverDepthIndex,
             hit.prefixPointCount);
@@ -382,10 +396,11 @@ void testGaussianEigenraySegmentEnvelope(Context& context) {
   std::size_t hitCount = 0U;
   const EigenraySolverStatistics statistics = EigenraySolver::solve(
       simulation,
-      [&](std::size_t frequencyIndex, const RayPathCache&, const auto& hits) {
+      [&](std::size_t frequencyIndex, const std::vector<RayPathCache>&,
+          const std::vector<EigenraySourceHits>& sourceHits) {
         context.check(frequencyIndex == 0U,
                       "Gaussian eigenray standard-case frequency identity");
-        hitCount += hits.size();
+        hitCount += sourceHits.front().size();
       });
   context.check(statistics.totalHitCount == 1418U && hitCount == 1418U,
                 "existing eigenray_geometric_gaussian case retains the "
@@ -413,12 +428,13 @@ void testEmptyProducts(Context& context) {
                        ArrivalEncoding::Binary);
   bool sawZeroHitFrequency = false;
   const EigenraySolverStatistics emptyStats = EigenraySolver::solve(
-      eigenraySimulation, [&](std::size_t frequencyIndex,
-                              const RayPathCache& cache, const auto& hits) {
+      eigenraySimulation,
+      [&](std::size_t frequencyIndex, const std::vector<RayPathCache>& caches,
+          const std::vector<EigenraySourceHits>& sourceHits) {
         if (frequencyIndex != 1U) return;
-        sawZeroHitFrequency = hits.empty();
+        sawZeroHitFrequency = sourceHits.front().empty();
         EigenrayWriter::write(eigenrayPath, "empty", eigenraySimulation, 100.0,
-                              cache, hits);
+                              caches.front(), sourceHits.front());
       });
   static_cast<void>(emptyStats);
   std::ifstream ascii(asciiPath);
@@ -483,14 +499,16 @@ void testProductValidation(Context& context) {
       [&] {
         static_cast<void>(ArrivalSolver::solve(
             eigenraySimulation,
-            [](std::size_t, const RayPathCache&, const ArrivalWorkspace&) {}));
+            [](std::size_t, const std::vector<RayPathCache>&,
+               const std::vector<ArrivalWorkspace>&) {}));
       },
       "Arrival solver rejects a non-Arrival run mode");
   context.expectThrows<ValidationError>(
       [&] {
         static_cast<void>(EigenraySolver::solve(
             binarySimulation,
-            [](std::size_t, const RayPathCache&, const auto&) {}));
+            [](std::size_t, const std::vector<RayPathCache>&,
+               const std::vector<EigenraySourceHits>&) {}));
       },
       "Eigenray solver rejects a non-Eigenray run mode");
   std::error_code ignored;

@@ -58,11 +58,15 @@ void checkPressureEqual(Context& context,
                         const rayreuse::SingleFrequencyResult& expected,
                         const char* message) {
   context.check(
-      actual.workspace.frequency() == expected.workspace.frequency() &&
-          actual.workspace.depthCount() == expected.workspace.depthCount() &&
-          actual.workspace.rangeCount() == expected.workspace.rangeCount() &&
-          std::equal(actual.workspace.pressure().begin(),
-                     actual.workspace.pressure().end(),
+      actual.workspaces.size() == expected.sourceCount() &&
+          actual.workspaces.front().frequency() ==
+              expected.workspace.frequency() &&
+          actual.workspaces.front().depthCount() ==
+              expected.workspace.depthCount() &&
+          actual.workspaces.front().rangeCount() ==
+              expected.workspace.rangeCount() &&
+          std::equal(actual.workspaces.front().pressure().begin(),
+                     actual.workspaces.front().pressure().end(),
                      expected.workspace.pressure().begin(),
                      expected.workspace.pressure().end()),
       message);
@@ -77,8 +81,8 @@ void testTwoFrequencySerialReuse(Context& context) {
       rayreuse::CartesianCervenySettings{.collectStatistics = true}, true);
 
   context.check(reuse.frequencyResults.size() == 2U &&
-                    reuse.frequencyResults[0].workspace.frequency() == 50.0 &&
-                    reuse.frequencyResults[1].workspace.frequency() == 100.0,
+                    reuse.frequencyResults[0].workspaces.front().frequency() == 50.0 &&
+                    reuse.frequencyResults[1].workspaces.front().frequency() == 100.0,
                 "serial reuse preserves input frequency order");
   checkPressureEqual(context, reuse.frequencyResults[0],
                      nonReuse.frequencyResults[0],
@@ -135,37 +139,51 @@ void testStreamingSerialReuse(Context& context) {
   const SimulationCase simulation = makeSimulation();
   const SerialRayReuseResult collected =
       SerialRayReuseSolver::solve(simulation, 1.0, 50.0);
-  std::vector<std::optional<rayreuse::FrequencyWorkspace>> streamed(
-      simulation.frequencies().size());
+  std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
+      streamed(simulation.frequencies().size());
   std::vector<std::size_t> callbackCounts(simulation.frequencies().size(), 0U);
+  std::vector<std::size_t> callbackSourceCounts(
+      simulation.frequencies().size(), 0U);
   std::vector<std::size_t> callbackOrder;
 
   const rayreuse::SerialRayReuseStatistics statistics =
       SerialRayReuseSolver::solveStreaming(
           simulation, 1.0, 50.0,
           [&](std::size_t frequencyIndex,
-              rayreuse::FrequencyWorkspace&& workspace,
+              std::vector<rayreuse::FrequencyWorkspace>&& sourceWorkspaces,
               const rayreuse::SingleFrequencyTimings&) {
             ++callbackCounts.at(frequencyIndex);
+            callbackSourceCounts.at(frequencyIndex) = sourceWorkspaces.size();
             callbackOrder.push_back(frequencyIndex);
-            streamed.at(frequencyIndex).emplace(std::move(workspace));
+            streamed.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
           });
 
   context.check(callbackOrder == std::vector<std::size_t>{0U, 1U},
                 "serial streaming callback preserves frequency order");
   context.check(callbackCounts == std::vector<std::size_t>{1U, 1U},
                 "serial streaming callback consumes every frequency once");
+  context.check(callbackSourceCounts ==
+                    std::vector<std::size_t>{1U, 1U},
+                "single-source streaming publishes one workspace per "
+                "frequency");
   context.check(statistics.tracePassCount == 1U,
                 "serial streaming traces the ray fan once");
 
   for (std::size_t index = 0U; index < streamed.size(); ++index) {
     context.check(
         streamed[index].has_value() &&
+            streamed[index]->size() == 1U &&
             std::equal(
-                streamed[index]->pressure().begin(),
-                streamed[index]->pressure().end(),
-                collected.frequencyResults[index].workspace.pressure().begin(),
-                collected.frequencyResults[index].workspace.pressure().end()),
+                streamed[index]->front().pressure().begin(),
+                streamed[index]->front().pressure().end(),
+                collected.frequencyResults[index]
+                    .workspaces.front()
+                    .pressure()
+                    .begin(),
+                collected.frequencyResults[index]
+                    .workspaces.front()
+                    .pressure()
+                    .end()),
         "serial streamed workspace is bitwise equal to "
         "the collected result");
   }

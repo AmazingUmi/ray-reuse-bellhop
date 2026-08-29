@@ -86,7 +86,7 @@ ArrivalWorkspace::ArrivalWorkspace(double frequency,
                                    const ReceiverGrid& receivers,
                                    std::optional<std::size_t> capacityOverride)
     : frequency_(frequency),
-      depthCount_(receivers.depthCount()),
+      depthCount_(receivers.receiversPerRange()),
       rangeCount_(receivers.rangeCount()) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
     throw ValidationError(
