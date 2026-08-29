@@ -74,3 +74,13 @@
 
 整个 Feature Parity 序列（FP-1A～FP-2I）已全面完成并 **CLOSED**。
 **Bellhop_F2CPP → Bellhop_RayReuse Production Feature Parity COMPLETE（GAP = 0）**。
+
+## 7. Repository-level final acceptance（2026-08-30）
+
+2026-08-30 repository-level final acceptance 已完成 Re-Final Review，结论为
+**ACCEPTED**。Accepted production HEAD 为 `0721fb3`；final acceptance
+documentation commit 为 `88ba8b7`。最终整体验收结论与 Performance Snapshot 见
+[`REPORT_FEATURE_PARITY_FINAL.md`](../reports/REPORT_FEATURE_PARITY_FINAL.md)。
+
+本文仍是 2026-08-29 的 sequence snapshot；以上附记只记录该序列已被后续
+repository-level acceptance 正式关闭，不改写各 Batch 当时的数字和证据。

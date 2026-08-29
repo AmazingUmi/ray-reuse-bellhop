@@ -1,11 +1,28 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-08-29
+> 更新日期：2026-08-30
+> Accepted production HEAD：`0721fb3036ebaa26bbd72fcb20458e9118317457`
+> （`0721fb3`）
+> Final acceptance documentation commit：`88ba8b7`
+> Production Feature Parity：**COMPLETE**
+> Remaining F2CPP parity GAP：**0**
 > 当前状态：`Bellhop_F2CPP → Bellhop_RayReuse` Production Feature Parity 序列
-> 全部完成（RR-B1～RR-B4、FP-2A～FP-2I 全部 `ACCEPTED / CLOSED`）。
+> 全部完成（RR-B1～RR-B4、FP-1A～FP-2I 全部 `ACCEPTED / CLOSED`）。
 > 最后一个功能批次 FP-2I（Line Source Closure）已全流程验收通过。
 > 全仓库功能支持矩阵与对齐报告已同步封板：
 > **F2CPP → RayReuse Production Feature Parity COMPLETE（GAP = 0）**。
+
+`0721fb3` 是 accepted production parity HEAD；`88ba8b7` 是最终验收文档记录
+commit，不替代 production acceptance identity。
+
+## 最终整体验收入口
+
+- [`REPORT_FEATURE_PARITY_FINAL.md`](../reports/REPORT_FEATURE_PARITY_FINAL.md)：
+  repository-level final acceptance、精简 health verification 与 Performance Snapshot；
+- [`FEATURE_PARITY_FINAL_ACCEPTANCE_WORKLIST.md`](../worklists/FEATURE_PARITY_FINAL_ACCEPTANCE_WORKLIST.md)：
+  最终整体验收执行记录；
+- [`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)：
+  当前 production feature boundary。
 
 ## 已完成范围
 

@@ -1,9 +1,14 @@
 # Bellhop_F2CPP → Bellhop_RayReuse Feature Parity Final Report
 
-> Acceptance date: 2026-08-30  
-> Accepted HEAD: `0721fb3036ebaa26bbd72fcb20458e9118317457` (`0721fb3`)  
-> Verdict: **Production Feature Parity COMPLETE**  
-> Remaining F2CPP production parity GAP: **0**
+> Acceptance date: 2026-08-30
+> Accepted production HEAD: `0721fb3036ebaa26bbd72fcb20458e9118317457` (`0721fb3`)
+> Final acceptance documentation commit: `88ba8b7`
+> Verdict: **Production Feature Parity COMPLETE**
+> Remaining F2CPP parity GAP: **0**
+
+`0721fb3` identifies the production code accepted for parity. `88ba8b7` records
+the repository-level final acceptance documentation and does not replace or move
+the accepted production identity.
 
 ## 1. Executive Summary
 
@@ -68,8 +73,7 @@ Some retained Batch Reports were not subsequently rewritten to embed every
 standalone final-review transcript. This is an archival limitation, not a feature
 GAP: the repository closeout and status records contain no open finding, retained
 remediation/re-review records close the known `CHANGES_REQUIRED` findings, and
-the final repository-level review is required to accept this report before the
-acceptance is closed.
+the repository-level Re-Final Review accepted this report on 2026-08-30.
 
 ## 3. Feature Parity Summary
 

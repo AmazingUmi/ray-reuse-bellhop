@@ -1223,12 +1223,17 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
 - `Bellhop_origin/Makefile` 在当前 macOS 工具链上可重现构建二维
   `Bellhop_origin/bin/bellhop`；目录中的 `.exe` 只作为旧平台制品保留；
 - `Bellhop_F2CPP/` 已完成二维单频复刻并封板，`Bellhop_RayReuse/` 已完成
-  独立宽带 nonreuse、串行 reuse、有界频率并行及 RR-B1～RR-B4 Feature Sync；
+  独立宽带 nonreuse、串行 reuse、有界频率并行，并已完成 RR-B1～RR-B4、
+  FP-1A～FP-2I 全部 production Feature Parity；
 - Fortran oracle 的权威基线仍是原始二维单频 Bellhop，不把实验文件解释为
   原模型的正式宽带实现；
 - `freqVec`、部分多频 SHD 头处理和测试目录中的宽带结果，是此前尝试多频计算时直接拷入的实验文件，不代表原始模型已经具备或验证了宽带基础设施；
 - 验证链依次使用可重现的原始单频 Bellhop、C++ 单频复刻和宽带非复用基线；
-  H4 本地跨编译器验证和后续 Feature Sync 均已完成；
+  H4 本地跨编译器验证和后续 production Feature Parity 均已完成；
+- accepted production HEAD 为 `0721fb3`，正式结论为
+  `Production Feature Parity: COMPLETE`、`Remaining F2CPP parity GAP: 0`；
+  repository-level 证据见
+  [`REPORT_FEATURE_PARITY_FINAL.md`](../../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)；
 - 当前没有获批的新数值实施阶段；研究候选和外部发布决策见
   [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md)。
 

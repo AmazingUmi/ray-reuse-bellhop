@@ -40,7 +40,7 @@ RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 
 该哈希只标识上述本机内部验证产物，不代表签名、公证或跨平台发行认证。
 
-### G 阶段关闭产物
+### 2026-08-01 内部验证快照
 
 2026-08-01 在同一 Darwin arm64 本机以干净源提交
 `06e390fc9338e2b94c29b9492027c3a59391dd5d` 再次运行工程门并通过，生成同名
@@ -49,9 +49,10 @@ RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 - `bellhop-rayreuse-0.1.0-Darwin-arm64.tar.gz`
 - SHA-256：`9b5e512ffe73c1e12f5da642e291dbbf2886d8b60ef288f747df705ae3b4ea08`
 
-本轮同时通过完整质量门和三模型数值矩阵；其工具链、模型二进制身份、误差
+该次验证同时通过完整质量门和三模型数值矩阵；其工具链、模型二进制身份、误差
 上限和 RSS 见 [`REPORT_MODEL_MATRIX_06E390F_2026-08-01.md`](../reports/REPORT_MODEL_MATRIX_06E390F_2026-08-01.md)。
-前一哈希保留为 `b04ccbc` 的历史内部构建记录，不再代表当前工作树制品。
+两个哈希都只标识各自日期和 source commit 的历史内部构建，不代表当前 source
+HEAD 或后续生成的 artifact。
 
 ## 对外发布前置条件
 
