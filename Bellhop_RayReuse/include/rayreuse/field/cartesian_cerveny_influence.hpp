@@ -108,7 +108,8 @@ class CartesianCervenyInfluence {
   CartesianCervenyInfluence(
       Environment environment, ReceiverGrid receivers,
       CartesianCervenySettings settings = {},
-      BeamWidthMode widthMode = BeamWidthMode::MinimumWidth);
+      BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
@@ -160,6 +161,7 @@ class CartesianCervenyInfluence {
   ReceiverGrid receivers_;
   CartesianCervenySettings settings_;
   BeamWidthMode widthMode_;
+  SourceGeometry sourceGeometry_{SourceGeometry::Point};
   GeometrySspEvaluator soundSpeedProfile_;
   double receiverRangeDelta_{};
 };

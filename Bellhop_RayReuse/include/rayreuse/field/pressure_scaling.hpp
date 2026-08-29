@@ -5,6 +5,26 @@
 
 namespace rayreuse {
 
+void scaleCoherentCartesianPressure(
+    FrequencyWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed,
+    SourceGeometry sourceGeometry = SourceGeometry::Point);
+
+void scaleCoherentGeometricPressure(
+    FrequencyWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed,
+    SourceGeometry sourceGeometry = SourceGeometry::Point);
+
+[[nodiscard]] FrequencyWorkspace scaleCartesianIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed,
+    SourceGeometry sourceGeometry = SourceGeometry::Point);
+
+[[nodiscard]] FrequencyWorkspace scaleGeometricIntensityToPressure(
+    const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
+    double launchAngleSpacingRadians, double sourceSoundSpeed,
+    SourceGeometry sourceGeometry = SourceGeometry::Point);
+
 void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
                                          const ReceiverGrid& receivers,
                                          double launchAngleSpacingRadians,

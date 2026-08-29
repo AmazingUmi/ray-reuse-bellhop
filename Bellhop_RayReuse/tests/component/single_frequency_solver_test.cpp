@@ -46,6 +46,7 @@ using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
+using rayreuse::SourceGeometry;
 using rayreuse::ValidationError;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
@@ -83,7 +84,8 @@ SimulationCase makeSimulation(
     BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
     BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
     CervenyCoordinateSystem coordinateSystem =
-        CervenyCoordinateSystem::Cartesian) {
+        CervenyCoordinateSystem::Cartesian,
+    SourceGeometry sourceGeometry = SourceGeometry::Point) {
   return SimulationCase(
       makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
       ReceiverGrid(linearGrid(400.0, 600.0, 5U),
@@ -97,7 +99,7 @@ SimulationCase makeSimulation(
                          .depthLimit = 1100.0,
                          .maximumRayPoints = maximumRayPoints},
       std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent,
-      curvatureMode, beamWidthMode, coordinateSystem);
+      curvatureMode, beamWidthMode, coordinateSystem, sourceGeometry);
 }
 
 SimulationCase makeCurvatureSimulation(
@@ -968,6 +970,40 @@ void testSplineEnvironmentSolverSmoke(Context& context) {
                 "solve, excluding a silent fallback backend");
 }
 
+void testSourceGeometryChangesFieldOnly(Context& context) {
+  const SingleFrequencyResult point = SingleFrequencySolver::solve(
+      makeSimulation(1000U, {50.0}, SimulationRunMode::Coherent,
+                     SourceBeamPattern::omnidirectional(),
+                     BeamFamily::CervenyGaussian, FieldComponent::Pressure,
+                     BoundaryCurvatureMode::Standard,
+                     BeamWidthMode::MinimumWidth,
+                     CervenyCoordinateSystem::Cartesian, SourceGeometry::Point),
+      1.0, 500.0);
+  const SingleFrequencyResult line = SingleFrequencySolver::solve(
+      makeSimulation(1000U, {50.0}, SimulationRunMode::Coherent,
+                     SourceBeamPattern::omnidirectional(),
+                     BeamFamily::CervenyGaussian, FieldComponent::Pressure,
+                     BoundaryCurvatureMode::Standard,
+                     BeamWidthMode::MinimumWidth,
+                     CervenyCoordinateSystem::Cartesian, SourceGeometry::Line),
+      1.0, 500.0);
+  context.check(
+      point.rayCount == line.rayCount &&
+          point.totalRayPointCount == line.totalRayPointCount &&
+          point.rayCacheBytes == line.rayCacheBytes,
+      "point/line source selection leaves frozen geometry metrics unchanged");
+  bool fieldDiffers = false;
+  for (std::size_t index = 0U; index < point.workspace.pressure().size();
+       ++index) {
+    if (point.workspace.pressure()[index] != line.workspace.pressure()[index]) {
+      fieldDiffers = true;
+      break;
+    }
+  }
+  context.check(fieldDiffers,
+                "point/line source selection changes the scaled field");
+}
+
 }  // namespace
 
 int main() {
@@ -989,6 +1025,7 @@ int main() {
   testAbnormalRayTerminationFails(context);
   testExplicitFrequencyEntryPoint(context);
   testSixCaseSanitizerSmoke(context);
+  testSourceGeometryChangesFieldOnly(context);
   testSplineEnvironmentSolverSmoke(context);
 
   if (context.failureCount() != 0) {

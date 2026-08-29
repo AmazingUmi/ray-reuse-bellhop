@@ -38,6 +38,7 @@ RAYREUSE_CASES = (
     "arrival_geometric_hat_ray_centered",
     "arrival_geometric_hat_ray_centered_binary",
     "arrival_geometric_gaussian_irregular",
+    "arrival_line_directional_multisource",
     "arrival_multi_source",
     "arrival_multi_source_binary",
     "arrival_zero",

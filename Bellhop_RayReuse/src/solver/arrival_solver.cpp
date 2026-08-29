@@ -109,8 +109,10 @@ ArrivalWorkspace projectArrivals(const SimulationCase& simulation,
   ArrivalWorkspace workspace(frequency, simulation.receivers());
   const FrequencyProjector projector(simulation.environment());
   GeometricHatInfluence hat(simulation.receivers(),
-                            simulation.cervenyCoordinateSystem());
-  GeometricGaussianInfluence gaussian(simulation.receivers());
+                            simulation.cervenyCoordinateSystem(),
+                            simulation.sourceGeometry());
+  GeometricGaussianInfluence gaussian(simulation.receivers(),
+                                      simulation.sourceGeometry());
   for (const RayPath& path : cache.paths()) {
     const double sourceAmplitude =
         source.amplitude *
@@ -199,8 +201,10 @@ ArrivalSolverStatistics ArrivalSolver::solve(
     const double frequency = simulation.frequencies().values()[fi];
     const FrequencyProjector projector(simulation.environment());
     GeometricHatInfluence hat(simulation.receivers(),
-                              simulation.cervenyCoordinateSystem());
-    GeometricGaussianInfluence gaussian(simulation.receivers());
+                              simulation.cervenyCoordinateSystem(),
+                              simulation.sourceGeometry());
+    GeometricGaussianInfluence gaussian(simulation.receivers(),
+                                        simulation.sourceGeometry());
     std::vector<ArrivalWorkspace> workspaces;
     workspaces.reserve(caches.size());
     for (std::size_t sourceIndex = 0U; sourceIndex < caches.size();

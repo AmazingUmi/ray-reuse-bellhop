@@ -42,7 +42,8 @@ class RayCenteredCervenyInfluence {
       CartesianCervenySettings settings = {},
       BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
       SimulationRunMode runMode = SimulationRunMode::Coherent,
-      FieldComponent fieldComponent = FieldComponent::Pressure);
+      FieldComponent fieldComponent = FieldComponent::Pressure,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] std::optional<RayCenteredCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
@@ -71,6 +72,7 @@ class RayCenteredCervenyInfluence {
   BeamWidthMode widthMode_{BeamWidthMode::MinimumWidth};
   SimulationRunMode runMode_{SimulationRunMode::Coherent};
   FieldComponent fieldComponent_{FieldComponent::Pressure};
+  SourceGeometry sourceGeometry_{SourceGeometry::Point};
   double receiverRangeDelta_{};
 };
 

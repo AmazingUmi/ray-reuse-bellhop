@@ -39,6 +39,7 @@ using rayreuse::ParsedEnvironment;
 using rayreuse::RayPath;
 using rayreuse::RayPathCache;
 using rayreuse::SimulationRunMode;
+using rayreuse::SourceGeometry;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
 using rayreuse::VolumeAttenuationModel;
@@ -1180,14 +1181,56 @@ void testIrregularReceiverLayouts(Context& context) {
         static_cast<void>(parseText(contents, "irregular_ray_trace.env"));
       },
       "ray-trace run types keep the blank/R-only fifth run-type letter");
+}
+
+void testSourceGeometry(Context& context) {
+  const std::string point = renderCase("constant_speed_direct", 50.0, 300U);
+  std::string line = point;
+  replaceFirst(line, "'CC'", "'CC X'");
+  const ParsedEnvironment parsed = parseText(line, "line_source.env");
+  context.check(
+      parsed.simulationCase.sourceGeometry() == SourceGeometry::Line,
+      "run-type fourth character X selects a line source");
+
+  std::string explicitPoint = point;
+  replaceFirst(explicitPoint, "'CC'", "'CC R'");
+  context.check(
+      parseText(explicitPoint, "point_source.env")
+              .simulationCase.sourceGeometry() == SourceGeometry::Point,
+      "run-type fourth character R selects a point source");
+
   context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents =
-            renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
-        replaceFirst(contents, "'CG'", "'CG X'");
-        static_cast<void>(parseText(contents, "line_source.env"));
+      [&point] {
+        std::string invalid = point;
+        replaceFirst(invalid, "'CC'", "'CC Y'");
+        static_cast<void>(parseText(invalid, "invalid_source_geometry.env"));
       },
-      "line-source run types remain explicitly rejected");
+      "parser rejects an unknown source-geometry character");
+
+  std::string semiLine = point;
+  replaceFirst(semiLine, "'CC'", "'SC X'");
+  const ParsedEnvironment semiParsed = parseText(semiLine, "semi_line.env");
+  context.check(
+      semiParsed.simulationCase.sourceGeometry() == SourceGeometry::Line &&
+          semiParsed.simulationCase.runMode() == SimulationRunMode::SemiCoherent,
+      "semi-coherent mode composes with explicit line-source character");
+
+  std::string hatLine =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+  replaceFirst(hatLine, "'CG'", "'CG X'");
+  const ParsedEnvironment hatParsed = parseText(hatLine, "hat_line.env");
+  context.check(
+      hatParsed.simulationCase.sourceGeometry() == SourceGeometry::Line &&
+          hatParsed.simulationCase.beamFamily() == BeamFamily::GeometricHat,
+      "geometric hat family preserves line-source character");
+
+  context.expectThrows<ValidationError>(
+      [&point] {
+        std::string simpleGaussianLine = point;
+        replaceFirst(simpleGaussianLine, "'CC'", "'CS X'");
+        static_cast<void>(parseText(simpleGaussianLine, "simple_gaussian_line.env"));
+      },
+      "simple Gaussian rejects line sources");
 }
 
 void testMunkCase(Context& context) {
@@ -1471,6 +1514,7 @@ void testSspInterpolationKinds(Context& context) {
 int main() {
   Context context;
   testDirectCase(context);
+  testSourceGeometry(context);
   testSspInterpolationKinds(context);
   testFrequencyOverride(context);
   testEnvironmentFrequencyList(context);

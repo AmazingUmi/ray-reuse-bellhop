@@ -78,6 +78,15 @@ void validateFieldComponent(FieldComponent component) {
   throw ValidationError("field component is invalid");
 }
 
+void validateSourceGeometry(SourceGeometry geometry) {
+  switch (geometry) {
+    case SourceGeometry::Point:
+    case SourceGeometry::Line:
+      return;
+  }
+  throw ValidationError("simulation case source geometry is invalid");
+}
+
 void validateCurvatureMode(BoundaryCurvatureMode mode) {
   switch (mode) {
     case BoundaryCurvatureMode::Standard:
@@ -322,33 +331,31 @@ double SourceBeamPattern::maximumAngleDegrees() const noexcept {
   return anglesDegrees_.back();
 }
 
-SimulationCase::SimulationCase(Environment environment, Source source,
-                               ReceiverGrid receivers,
-                               FrequencyGrid frequencies, LaunchFan launchFan,
-                               IntegratorSettings integrator,
-                               SourceBeamPattern sourceBeamPattern,
-                               SimulationRunMode runMode, BeamFamily beamFamily,
-                               FieldComponent fieldComponent,
-                               BoundaryCurvatureMode curvatureMode,
-                               BeamWidthMode beamWidthMode,
-                               CervenyCoordinateSystem cervenyCoordinateSystem)
+SimulationCase::SimulationCase(
+    Environment environment, Source source, ReceiverGrid receivers,
+    FrequencyGrid frequencies, LaunchFan launchFan,
+    IntegratorSettings integrator, SourceBeamPattern sourceBeamPattern,
+    SimulationRunMode runMode, BeamFamily beamFamily,
+    FieldComponent fieldComponent, BoundaryCurvatureMode curvatureMode,
+    BeamWidthMode beamWidthMode,
+    CervenyCoordinateSystem cervenyCoordinateSystem,
+    SourceGeometry sourceGeometry)
     : SimulationCase(
           std::move(environment), std::vector<Source>{source},
           std::move(receivers), std::move(frequencies), launchFan, integrator,
           std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent,
-          curvatureMode, beamWidthMode, cervenyCoordinateSystem) {}
+          curvatureMode, beamWidthMode, cervenyCoordinateSystem,
+          sourceGeometry) {}
 
-SimulationCase::SimulationCase(Environment environment,
-                               std::vector<Source> sources,
-                               ReceiverGrid receivers,
-                               FrequencyGrid frequencies, LaunchFan launchFan,
-                               IntegratorSettings integrator,
-                               SourceBeamPattern sourceBeamPattern,
-                               SimulationRunMode runMode, BeamFamily beamFamily,
-                               FieldComponent fieldComponent,
-                               BoundaryCurvatureMode curvatureMode,
-                               BeamWidthMode beamWidthMode,
-                               CervenyCoordinateSystem cervenyCoordinateSystem)
+SimulationCase::SimulationCase(
+    Environment environment, std::vector<Source> sources,
+    ReceiverGrid receivers, FrequencyGrid frequencies, LaunchFan launchFan,
+    IntegratorSettings integrator, SourceBeamPattern sourceBeamPattern,
+    SimulationRunMode runMode, BeamFamily beamFamily,
+    FieldComponent fieldComponent, BoundaryCurvatureMode curvatureMode,
+    BeamWidthMode beamWidthMode,
+    CervenyCoordinateSystem cervenyCoordinateSystem,
+    SourceGeometry sourceGeometry)
     : environment_(std::move(environment)),
       sources_(std::move(sources)),
       receivers_(std::move(receivers)),
@@ -358,12 +365,14 @@ SimulationCase::SimulationCase(Environment environment,
       runMode_(runMode),
       beamFamily_(beamFamily),
       fieldComponent_(fieldComponent),
+      sourceGeometry_(sourceGeometry),
       curvatureMode_(curvatureMode),
       beamWidthMode_(beamWidthMode),
       cervenyCoordinateSystem_(cervenyCoordinateSystem) {
   validateRunMode(runMode_);
   validateBeamFamily(beamFamily_);
   validateFieldComponent(fieldComponent_);
+  validateSourceGeometry(sourceGeometry_);
   validateCurvatureMode(curvatureMode_);
   validateBeamWidthMode(beamWidthMode_);
   validateCervenyCoordinateSystem(cervenyCoordinateSystem_);
@@ -396,7 +405,8 @@ SimulationCase::SimulationCase(Environment environment,
     throw ValidationError("only Cerveny TL supports non-pressure components");
   }
   if (beamFamily_ == BeamFamily::SimpleGaussian &&
-      (runMode_ != SimulationRunMode::Coherent || receivers_.isIrregular())) {
+      (runMode_ != SimulationRunMode::Coherent || receivers_.isIrregular() ||
+       sourceGeometry_ != SourceGeometry::Point)) {
     throw ValidationError(
         "simple Gaussian beams require coherent point-source TL on a "
         "rectilinear receiver grid");
@@ -561,6 +571,10 @@ BeamFamily SimulationCase::beamFamily() const noexcept { return beamFamily_; }
 
 FieldComponent SimulationCase::fieldComponent() const noexcept {
   return fieldComponent_;
+}
+
+SourceGeometry SimulationCase::sourceGeometry() const noexcept {
+  return sourceGeometry_;
 }
 
 BoundaryCurvatureMode SimulationCase::curvatureMode() const noexcept {

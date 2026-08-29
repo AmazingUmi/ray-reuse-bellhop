@@ -95,8 +95,10 @@ EigenraySourceHits collectHits(const SimulationCase& simulation,
   const Source& source = simulation.sources().at(sourceIndex);
   const FrequencyProjector projector(simulation.environment());
   GeometricHatInfluence hat(simulation.receivers(),
-                            simulation.cervenyCoordinateSystem());
-  GeometricGaussianInfluence gaussian(simulation.receivers());
+                            simulation.cervenyCoordinateSystem(),
+                            simulation.sourceGeometry());
+  GeometricGaussianInfluence gaussian(simulation.receivers(),
+                                      simulation.sourceGeometry());
   for (std::size_t li = 0U; li < cache.size(); ++li) {
     const RayPath& path = cache.at(li);
     const double sourceAmplitude =
@@ -184,8 +186,10 @@ EigenraySolverStatistics EigenraySolver::solve(
     const double frequency = simulation.frequencies().values()[fi];
     const FrequencyProjector projector(simulation.environment());
     GeometricHatInfluence hat(simulation.receivers(),
-                              simulation.cervenyCoordinateSystem());
-    GeometricGaussianInfluence gaussian(simulation.receivers());
+                              simulation.cervenyCoordinateSystem(),
+                              simulation.sourceGeometry());
+    GeometricGaussianInfluence gaussian(simulation.receivers(),
+                                        simulation.sourceGeometry());
     std::vector<EigenraySourceHits> sourceHits;
     sourceHits.reserve(caches.size());
     for (std::size_t sourceIndex = 0U; sourceIndex < caches.size();

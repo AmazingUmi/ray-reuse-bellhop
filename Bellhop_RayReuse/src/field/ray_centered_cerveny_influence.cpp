@@ -209,13 +209,15 @@ void validateAccumulateInput(
 RayCenteredCervenyInfluence::RayCenteredCervenyInfluence(
     Environment environment, ReceiverGrid receivers,
     CartesianCervenySettings settings, BeamWidthMode widthMode,
-    SimulationRunMode runMode, FieldComponent fieldComponent)
+    SimulationRunMode runMode, FieldComponent fieldComponent,
+    SourceGeometry sourceGeometry)
     : environment_(std::move(environment)),
       receivers_(std::move(receivers)),
       settings_(settings),
       widthMode_(widthMode),
       runMode_(runMode),
       fieldComponent_(fieldComponent),
+      sourceGeometry_(sourceGeometry),
       receiverRangeDelta_(
           receivers_.rangeCount() >= 2U
               ? receivers_.ranges()[1U] - receivers_.ranges()[0U]
@@ -312,7 +314,9 @@ RayCenteredCervenyInfluence::accumulateImpl(
   const double beamWindowSquared =
       static_cast<double>(settings_.beamWindow) *
       static_cast<double>(settings_.beamWindow);
-  const double ratio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double ratio = sourceGeometry_ == SourceGeometry::Line
+                           ? 1.0
+                           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   // Origin initializes rnV once on entry. Its legacy whole-array flips then
   // persist not only across images, but also across receiver depths.
   std::vector<Vec2> imageNormals = ray.normal;

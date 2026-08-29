@@ -447,7 +447,11 @@ void writeConfigurationSummary(std::ostream& stream,
            << "Number of source beam pattern points = "
            << simulation.sourceBeamPattern().size() << '\n';
   }
-  stream << "Point source (cylindrical coordinates)\n";
+  if (simulation.sourceGeometry() == rayreuse::SourceGeometry::Line) {
+    stream << "Line source (Cartesian coordinates)\n";
+  } else {
+    stream << "Point source (cylindrical coordinates)\n";
+  }
   if (simulation.receivers().isIrregular()) {
     stream << "Irregular grid: paired receiver ranges and depths\n";
   } else {

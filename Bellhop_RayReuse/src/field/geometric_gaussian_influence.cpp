@@ -153,8 +153,10 @@ void validateField(
 }
 }  // namespace
 
-GeometricGaussianInfluence::GeometricGaussianInfluence(ReceiverGrid receivers)
-    : receivers_(std::move(receivers)) {}
+GeometricGaussianInfluence::GeometricGaussianInfluence(
+    ReceiverGrid receivers, SourceGeometry sourceGeometry)
+    : receivers_(std::move(receivers)),
+      sourceGeometry_(sourceGeometry) {}
 
 std::optional<GeometricGaussianDiagnostic>
 GeometricGaussianInfluence::accumulate(
@@ -201,8 +203,10 @@ GeometricGaussianInfluence::accumulateField(
       2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
   const double sourceRatio =
-      std::sqrt(std::abs(std::cos(path.launchAngle))) /
-      std::sqrt(2.0 * std::numbers::pi);
+      sourceGeometry_ == SourceGeometry::Point
+          ? std::sqrt(std::abs(std::cos(path.launchAngle))) /
+                std::sqrt(2.0 * std::numbers::pi)
+          : 1.0 / std::sqrt(2.0 * std::numbers::pi);
   requireFinite(q0, "geometric Gaussian q0");
   requireFinite(sourceRatio, "geometric Gaussian source ratio");
 
@@ -435,8 +439,11 @@ void GeometricGaussianInfluence::accumulateArrivals(
   validate(receivers_, path, state, launchSpacing);
   const std::size_t pointCount = activeCount(state);
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = std::sqrt(std::abs(std::cos(path.launchAngle))) /
-                             std::sqrt(2.0 * std::numbers::pi);
+  const double sourceRatio =
+      sourceGeometry_ == SourceGeometry::Point
+          ? std::sqrt(std::abs(std::cos(path.launchAngle))) /
+                std::sqrt(2.0 * std::numbers::pi)
+          : 1.0 / std::sqrt(2.0 * std::numbers::pi);
   if (!std::isfinite(q0) || q0 == 0.0 || !std::isfinite(sourceRatio))
     throw ValidationError("geometric Gaussian source constants are invalid");
   std::vector<std::int32_t> top(pointCount, 0), bottom(pointCount, 0);

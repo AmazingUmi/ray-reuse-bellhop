@@ -186,10 +186,14 @@ void forEachRayCenteredEvaluation(const ReceiverGrid& receivers,
                                   double receiverRangeDelta,
                                   const RayPath& path,
                                   const RayFrequencyState& state,
-                                  double launchSpacing, Consumer&& consumer) {
+                                  double launchSpacing,
+                                  SourceGeometry sourceGeometry,
+                                  Consumer&& consumer) {
   const std::size_t pointCount = activeCount(state);
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double sourceRatio = sourceGeometry == SourceGeometry::Line
+                                 ? 1.0
+                                 : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
 
@@ -364,9 +368,11 @@ PrefixBounceCounts prefixBounceCounts(const RayPath& path,
 }  // namespace
 
 GeometricHatInfluence::GeometricHatInfluence(
-    ReceiverGrid receivers, CervenyCoordinateSystem coordinates)
+    ReceiverGrid receivers, CervenyCoordinateSystem coordinates,
+    SourceGeometry sourceGeometry)
     : receivers_(std::move(receivers)),
       coordinates_(coordinates),
+      sourceGeometry_(sourceGeometry),
       receiverRangeDelta_(receivers_.rangeCount() >= 2U
                               ? receivers_.ranges()[1U] -
                                     receivers_.ranges()[0U]
@@ -421,7 +427,9 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateField(
   const std::size_t pointCount = activeCount(state);
   const double angularFrequency = 2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double sourceRatio = sourceGeometry_ == SourceGeometry::Line
+                                 ? 1.0
+                                 : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
 
@@ -604,7 +612,9 @@ GeometricHatInfluence::accumulateRayCenteredField(
   const std::size_t pointCount = activeCount(state);
   const double angularFrequency = 2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double sourceRatio = sourceGeometry_ == SourceGeometry::Line
+                                 ? 1.0
+                                 : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
 
@@ -781,7 +791,9 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
   const std::size_t pointCount = activeCount(state);
   const double omega = 2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double ratio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double ratio = sourceGeometry_ == SourceGeometry::Line
+                           ? 1.0
+                           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   if (!std::isfinite(q0) || q0 == 0.0 || !std::isfinite(ratio))
     throw ValidationError("geometric hat source constants are invalid");
 
@@ -789,6 +801,7 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
   if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
     forEachRayCenteredEvaluation(
         receivers_, receiverRangeDelta_, path, state, launchSpacing,
+        sourceGeometry_,
         [&](const RayCenteredEvaluation& evaluation) {
           requireFinite(evaluation.q, "geometric hat interpolated q");
           requireFinite(evaluation.hatWeight, "geometric hat weight");
@@ -910,6 +923,7 @@ void GeometricHatInfluence::collectEigenrayHits(const EigenrayHitSink& sink,
   if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
     forEachRayCenteredEvaluation(
         receivers_, receiverRangeDelta_, path, state, launchSpacing,
+        sourceGeometry_,
         [&](const RayCenteredEvaluation& evaluation) {
           if (!state.points[evaluation.rightIndex].active) {
             return;

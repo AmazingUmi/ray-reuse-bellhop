@@ -47,9 +47,12 @@ void checkWorkspaces(const SimulationCase& simulation,
     }
   }
 }
-float pointSourceScale(double range) {
+float sourceScale(SourceGeometry geometry, double range) {
   if (!std::isfinite(range) || range < 0.0)
     throw ValidationError("ARR receiver range must be finite and non-negative");
+  if (geometry == SourceGeometry::Line) {
+    return static_cast<float>(4.0 * std::sqrt(std::numbers::pi));
+  }
   return range == 0.0 ? 1.0e5F : static_cast<float>(1.0 / std::sqrt(range));
 }
 void writeAsciiSourceBlock(std::ofstream& output,
@@ -64,7 +67,8 @@ void writeAsciiSourceBlock(std::ofstream& output,
   for (std::size_t d = 0U; d < workspace.depthCount(); ++d)
     for (std::size_t r = 0U; r < workspace.rangeCount(); ++r) {
       const auto arrivals = workspace.arrivalsAt(d, r);
-      const float scale = pointSourceScale(simulation.receivers().ranges()[r]);
+      const float scale =
+          sourceScale(simulation.sourceGeometry(), simulation.receivers().ranges()[r]);
       output << arrivals.size() << '\n';
       for (const Arrival& a : arrivals)
         output << scale * a.amplitude << ' '
@@ -132,7 +136,8 @@ void writeBinarySourceBlock(std::ofstream& output,
       std::vector<std::byte> cell(4U);
       store32(cell, 0U, static_cast<std::uint32_t>(arrivals.size()));
       record(output, cell);
-      const float scale = pointSourceScale(simulation.receivers().ranges()[r]);
+      const float scale =
+          sourceScale(simulation.sourceGeometry(), simulation.receivers().ranges()[r]);
       for (const Arrival& a : arrivals) {
         std::vector<std::byte> payload(32U);
         auto put = [&](std::size_t o, float v) {

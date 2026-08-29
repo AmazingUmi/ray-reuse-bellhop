@@ -52,7 +52,9 @@ class GeometricGaussianInfluence {
  public:
   using EigenrayHitSink = std::function<void(const EigenrayHit&)>;
 
-  explicit GeometricGaussianInfluence(ReceiverGrid receivers);
+  explicit GeometricGaussianInfluence(
+      ReceiverGrid receivers,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
@@ -87,6 +89,7 @@ class GeometricGaussianInfluence {
           diagnosticRequest) const;
 
   ReceiverGrid receivers_;
+  SourceGeometry sourceGeometry_{SourceGeometry::Point};
 };
 
 }  // namespace rayreuse

@@ -17,10 +17,15 @@ namespace {
 using rayreuse::FrequencyWorkspace;
 using rayreuse::IntensityWorkspace;
 using rayreuse::ReceiverGrid;
+using rayreuse::scaleCartesianIntensityToPressure;
 using rayreuse::scaleCartesianPointIntensityToPressure;
 using rayreuse::scaleCoherentCartesianPointPressure;
+using rayreuse::scaleCoherentCartesianPressure;
 using rayreuse::scaleCoherentGeometricPointPressure;
+using rayreuse::scaleCoherentGeometricPressure;
+using rayreuse::scaleGeometricIntensityToPressure;
 using rayreuse::scaleGeometricPointIntensityToPressure;
+using rayreuse::SourceGeometry;
 using rayreuse::ValidationError;
 using rayreuse::test::Context;
 
@@ -171,6 +176,73 @@ void testGeometricPointScaling(Context& context) {
                    "geometric intensity applies geometric normalization");
 }
 
+void testLineSourceScaling(Context& context) {
+  const ReceiverGrid receivers({10.0, 20.0}, {0.0, 1000.0, 4000.0});
+  FrequencyWorkspace workspace(100.0, receivers);
+  workspace.at(0U, 0U) = {1.0, 2.0};
+  workspace.at(0U, 1U) = {3.0, 4.0};
+  workspace.at(0U, 2U) = {5.0, 6.0};
+  workspace.at(1U, 0U) = {-1.0, 0.5};
+  workspace.at(1U, 1U) = {-3.0, -4.0};
+  workspace.at(1U, 2U) = {2.0, 1.0};
+
+  scaleCoherentCartesianPressure(
+      workspace, receivers, 0.001, 1500.0, SourceGeometry::Line);
+
+  constexpr float legacyPi = 3.14159265F;
+  const float linePrefix = -4.0F * std::sqrt(legacyPi);
+  const double beamScale = (-0.001 * std::sqrt(100.0)) / 1500.0;
+  const double lineFactor = static_cast<double>(linePrefix) * beamScale;
+
+  context.check(std::bit_cast<std::uint32_t>(legacyPi) == 0x40490fdbU,
+                "line-source legacy pi bits");
+  context.check(std::bit_cast<std::uint32_t>(linePrefix) == 0xc0e2dfc5U,
+                "line-source legacy prefix bits");
+  context.checkNear(lineFactor, 4.7265437444051105e-5, 1.0e-20,
+                    "line-source mixed-precision scale anchor");
+
+  checkComplexNear(context, workspace.at(0U, 0U),
+                   {1.0 * lineFactor, 2.0 * lineFactor}, 1.0e-20,
+                   "line source retains the zero-range field");
+  checkComplexNear(context, workspace.at(0U, 1U),
+                   {3.0 * lineFactor, 4.0 * lineFactor}, 1.0e-20,
+                   "line-source scaling is range independent");
+  checkComplexNear(context, workspace.at(1U, 2U),
+                   {2.0 * lineFactor, 1.0 * lineFactor}, 1.0e-20,
+                   "line-source scaling uses the same factor at all ranges");
+
+  IntensityWorkspace intensity(100.0, receivers);
+  intensity.add(0U, 0U, 4.0);
+  intensity.add(0U, 1U, 9.0);
+  intensity.add(0U, 2U, 25.0);
+
+  const FrequencyWorkspace lineIntensity = scaleCartesianIntensityToPressure(
+      intensity, receivers, 0.001, 1500.0, SourceGeometry::Line);
+  checkComplexNear(context, lineIntensity.at(0U, 0U),
+                   {2.0 * lineFactor, 0.0}, 1.0e-20,
+                   "line intensity retains zero range");
+  checkComplexNear(context, lineIntensity.at(0U, 1U),
+                   {3.0 * lineFactor, 0.0}, 1.0e-20,
+                   "line intensity preserves mixed-precision factor");
+  checkComplexNear(context, lineIntensity.at(0U, 2U),
+                   {5.0 * lineFactor, 0.0}, 1.0e-20,
+                   "line intensity is range independent");
+
+  // Geometric normalization line source test
+  FrequencyWorkspace geomLine(100.0, receivers);
+  geomLine.at(0U, 0U) = {2.0, -3.0};
+  geomLine.at(0U, 1U) = {4.0, 5.0};
+  scaleCoherentGeometricPressure(
+      geomLine, receivers, 0.001, 1500.0, SourceGeometry::Line);
+  const double geomLineFactor = static_cast<double>(linePrefix) * (-1.0);
+  checkComplexNear(context, geomLine.at(0U, 0U),
+                   {2.0 * geomLineFactor, -3.0 * geomLineFactor}, 1.0e-15,
+                   "geometric line normalization retains zero range");
+  checkComplexNear(context, geomLine.at(0U, 1U),
+                   {4.0 * geomLineFactor, 5.0 * geomLineFactor}, 1.0e-15,
+                   "geometric line normalization uses -4*sqrt(pi)*(-1)");
+}
+
 void testValidation(Context& context) {
   const ReceiverGrid receivers({10.0}, {0.0, 1000.0});
 
@@ -237,6 +309,7 @@ int main() {
   testO1ContributionAnchors(context);
   testIntensityToPressureScaling(context);
   testGeometricPointScaling(context);
+  testLineSourceScaling(context);
   testValidation(context);
 
   if (context.failureCount() != 0) {

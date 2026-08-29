@@ -118,8 +118,6 @@ class CaseModelTests(unittest.TestCase):
             "cerveny_width_wkb",
             "cerveny_curvature_double",
             "cerveny_curvature_zero",
-            "source_geometry_point_explicit",
-            "source_geometry_line",
         ):
             with self.subTest(case=case_id):
                 self.assertEqual(
@@ -127,6 +125,8 @@ class CaseModelTests(unittest.TestCase):
                     ("origin", "f2cpp"),
                 )
         for case_id in (
+            "source_geometry_point_explicit",
+            "source_geometry_line",
             "volume_attenuation_francois_garrison",
             "volume_attenuation_biological",
         ):

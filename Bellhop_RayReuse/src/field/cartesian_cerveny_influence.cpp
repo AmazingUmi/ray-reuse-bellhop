@@ -555,11 +555,13 @@ void accumulateCartesianCervenyStatistics(
 
 CartesianCervenyInfluence::CartesianCervenyInfluence(
     Environment environment, ReceiverGrid receivers,
-    CartesianCervenySettings settings, BeamWidthMode widthMode)
+    CartesianCervenySettings settings, BeamWidthMode widthMode,
+    SourceGeometry sourceGeometry)
     : environment_(std::move(environment)),
       receivers_(std::move(receivers)),
       settings_(settings),
       widthMode_(widthMode),
+      sourceGeometry_(sourceGeometry),
       soundSpeedProfile_(environment_.soundSpeedProfile()),
       receiverRangeDelta_(receivers_.rangeCount() >= 2U
                               ? receivers_.ranges()[1U] -
@@ -648,7 +650,9 @@ CartesianCervenyInfluence::accumulateImpl(
       30.0 * path.points.front().soundSpeed / frequencyState.frequency;
   const double beamWindowSquared = static_cast<double>(settings_.beamWindow) *
                                    static_cast<double>(settings_.beamWindow);
-  const double ratio = std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double ratio = sourceGeometry_ == SourceGeometry::Line
+                           ? 1.0
+                           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   const std::vector<double>& receiverRanges = receivers_.ranges();
   const std::vector<double>& receiverDepths = receivers_.depths();
   const std::size_t receiversPerRange = receivers_.receiversPerRange();

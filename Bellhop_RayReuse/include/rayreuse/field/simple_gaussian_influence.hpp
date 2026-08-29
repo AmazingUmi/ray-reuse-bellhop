@@ -41,8 +41,9 @@ struct SimpleGaussianDiagnostic {
 
 class SimpleGaussianInfluence {
  public:
-  SimpleGaussianInfluence(ReceiverGrid receivers,
-                          double configuredStepLengthMeters);
+  SimpleGaussianInfluence(
+      ReceiverGrid receivers, double configuredStepLengthMeters,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] std::optional<SimpleGaussianDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,

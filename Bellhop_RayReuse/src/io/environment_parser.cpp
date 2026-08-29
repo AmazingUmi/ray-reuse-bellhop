@@ -671,6 +671,7 @@ struct ParsedBoundaryFile {
 struct ParsedRunType {
   SimulationRunMode runMode{};
   ReceiverGridLayout receiverLayout{ReceiverGridLayout::Rectilinear};
+  SourceGeometry sourceGeometry{SourceGeometry::Point};
   CervenyCoordinateSystem cervenyCoordinateSystem{};
   BeamFamily beamFamily{};
   bool usesSourceBeamPattern{};
@@ -720,10 +721,6 @@ struct ParsedRunType {
          "'AG/aG/AB/aB/EG/EB', or ray-centered geometric-hat "
          "'Ag/ag/Eg' run types are supported");
   }
-  if (runType[3U] == 'X') {
-    fail(sourceName, record.lineNumber,
-         "line-source run types are not supported by RayReuse");
-  }
   if (arrivals || eigenray) {
     if (runType[1U] != 'G' && runType[1U] != 'g' &&
         runType[1U] != 'B') {
@@ -735,6 +732,8 @@ struct ParsedRunType {
   // eigenray run types; the grammar above already restricts ray trace 'R'
   // to a blank or 'R' fifth letter, matching the F2CPP parser matrix.
   const bool irregularReceivers = runType[4U] == 'I';
+  const SourceGeometry sourceGeometry =
+      runType[3U] == 'X' ? SourceGeometry::Line : SourceGeometry::Point;
   runType[3U] = 'R';
   runType[4U] = 'R';
   runType[5U] = '2';
@@ -785,6 +784,7 @@ struct ParsedRunType {
                            irregularReceivers
                                ? ReceiverGridLayout::Irregular
                                : ReceiverGridLayout::Rectilinear,
+                       .sourceGeometry = sourceGeometry,
                        .cervenyCoordinateSystem = coordinateSystem,
                        .beamFamily = beamFamily,
                        .usesSourceBeamPattern = runType[2U] == '*'};
@@ -1354,7 +1354,7 @@ struct ParsedRunType {
                          .maximumRayPoints = kMaximumRayPoints},
       std::move(sourceBeamPattern), runType.runMode, runType.beamFamily,
       fieldComponent, curvatureMode, beamWidthMode,
-      runType.cervenyCoordinateSystem);
+      runType.cervenyCoordinateSystem, runType.sourceGeometry);
 
   return ParsedEnvironment{
       .title = std::move(title),

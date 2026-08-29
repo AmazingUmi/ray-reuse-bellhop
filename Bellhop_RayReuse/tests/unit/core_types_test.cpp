@@ -52,6 +52,7 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
 using rayreuse::SourceBeamPatternSample;
+using rayreuse::SourceGeometry;
 using rayreuse::StepQuadrature;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
@@ -497,7 +498,8 @@ void testSimulationProductMetadata(Context& context) {
           BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
           BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
           CervenyCoordinateSystem coordinateSystem =
-              CervenyCoordinateSystem::Cartesian) {
+              CervenyCoordinateSystem::Cartesian,
+          SourceGeometry sourceGeometry = SourceGeometry::Point) {
         return SimulationCase(
             makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
             ReceiverGrid(
@@ -514,7 +516,7 @@ void testSimulationProductMetadata(Context& context) {
                                .depthLimit = 1100.0,
                                .maximumRayPoints = 10000U},
             pattern, runMode, beamFamily, fieldComponent, curvatureMode,
-            beamWidthMode, coordinateSystem);
+            beamWidthMode, coordinateSystem, sourceGeometry);
       };
   const SimulationCase arrivals = makeMetadataCase(
       SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
@@ -560,6 +562,48 @@ void testSimulationProductMetadata(Context& context) {
             rayCentered.beamWidthMode() == BeamWidthMode::SpaceFilling,
         "SimulationCase preserves ray-centered Cerveny TL metadata");
   }
+  for (const SourceGeometry geometry :
+       {SourceGeometry::Point, SourceGeometry::Line}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+        BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+        geometry);
+    context.check(cartesianCerveny.sourceGeometry() == geometry,
+                  "SimulationCase preserves Cartesian Cerveny source geometry");
+    const SimulationCase hatCase = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+        BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+        geometry);
+    context.check(hatCase.sourceGeometry() == geometry,
+                  "SimulationCase preserves Geometric Hat source geometry");
+    const SimulationCase gaussianCase = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::GeometricGaussian,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+        BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+        geometry);
+    context.check(gaussianCase.sourceGeometry() == geometry,
+                  "SimulationCase preserves Geometric Gaussian source geometry");
+  }
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::SimpleGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+            SourceGeometry::Line));
+      },
+      "simple Gaussian rejects line sources");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+            static_cast<SourceGeometry>(999)));
+      },
+      "SimulationCase rejects invalid source geometry enum values");
   for (const BoundaryCurvatureMode curvatureMode :
        {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
         BoundaryCurvatureMode::Zero}) {

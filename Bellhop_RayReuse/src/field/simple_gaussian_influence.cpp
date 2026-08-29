@@ -112,13 +112,17 @@ void validateInput(
 }  // namespace
 
 SimpleGaussianInfluence::SimpleGaussianInfluence(
-    ReceiverGrid receivers, double configuredStepLengthMeters)
+    ReceiverGrid receivers, double configuredStepLengthMeters,
+    SourceGeometry sourceGeometry)
     : receivers_(std::move(receivers)),
       configuredStepLengthMeters_(configuredStepLengthMeters) {
   if (!std::isfinite(configuredStepLengthMeters_) ||
       configuredStepLengthMeters_ <= 0.0) {
     throw ValidationError(
         "simple Gaussian configured step length must be positive and finite");
+  }
+  if (sourceGeometry != SourceGeometry::Point) {
+    throw ValidationError("simple Gaussian influence requires a point source");
   }
 }
 

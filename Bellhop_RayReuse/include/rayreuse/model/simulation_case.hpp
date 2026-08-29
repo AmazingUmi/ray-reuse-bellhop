@@ -58,6 +58,11 @@ struct Source {
   double amplitude{1.0};
 };
 
+enum class SourceGeometry {
+  Point,
+  Line,
+};
+
 enum class SimulationRunMode {
   Coherent,
   Incoherent,
@@ -151,7 +156,8 @@ class SimulationCase {
       BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
       BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
       CervenyCoordinateSystem cervenyCoordinateSystem =
-          CervenyCoordinateSystem::Cartesian);
+          CervenyCoordinateSystem::Cartesian,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
   SimulationCase(
       Environment environment, std::vector<Source> sources,
       ReceiverGrid receivers, FrequencyGrid frequencies,
@@ -164,7 +170,8 @@ class SimulationCase {
       BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
       BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
       CervenyCoordinateSystem cervenyCoordinateSystem =
-          CervenyCoordinateSystem::Cartesian);
+          CervenyCoordinateSystem::Cartesian,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] const Environment& environment() const noexcept;
   [[nodiscard]] const Source& source() const noexcept;
@@ -178,6 +185,7 @@ class SimulationCase {
   [[nodiscard]] SimulationRunMode runMode() const noexcept;
   [[nodiscard]] BeamFamily beamFamily() const noexcept;
   [[nodiscard]] FieldComponent fieldComponent() const noexcept;
+  [[nodiscard]] SourceGeometry sourceGeometry() const noexcept;
   [[nodiscard]] BoundaryCurvatureMode curvatureMode() const noexcept;
   [[nodiscard]] BeamWidthMode beamWidthMode() const noexcept;
   [[nodiscard]] CervenyCoordinateSystem cervenyCoordinateSystem() const
@@ -194,6 +202,7 @@ class SimulationCase {
   SimulationRunMode runMode_;
   BeamFamily beamFamily_;
   FieldComponent fieldComponent_;
+  SourceGeometry sourceGeometry_{SourceGeometry::Point};
   BoundaryCurvatureMode curvatureMode_;
   BeamWidthMode beamWidthMode_;
   CervenyCoordinateSystem cervenyCoordinateSystem_;

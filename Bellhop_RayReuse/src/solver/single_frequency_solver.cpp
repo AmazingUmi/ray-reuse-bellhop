@@ -245,12 +245,15 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
   std::optional<SimpleGaussianInfluence> simpleGaussianInfluence;
   if (simulation.beamFamily() == BeamFamily::GeometricHat) {
     geometricHatInfluence.emplace(simulation.receivers(),
-                                  simulation.cervenyCoordinateSystem());
+                                  simulation.cervenyCoordinateSystem(),
+                                  simulation.sourceGeometry());
   } else if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
-    geometricGaussianInfluence.emplace(simulation.receivers());
+    geometricGaussianInfluence.emplace(simulation.receivers(),
+                                        simulation.sourceGeometry());
   } else if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
     simpleGaussianInfluence.emplace(simulation.receivers(),
-                                    simulation.integrator().stepLength);
+                                    simulation.integrator().stepLength,
+                                    simulation.sourceGeometry());
   } else {
     switch (simulation.cervenyCoordinateSystem()) {
       case CervenyCoordinateSystem::Cartesian:
@@ -259,13 +262,13 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
         // not read it.
         cartesianCervenyInfluence.emplace(
             simulation.environment(), simulation.receivers(), influenceSettings,
-            simulation.beamWidthMode());
+            simulation.beamWidthMode(), simulation.sourceGeometry());
         break;
       case CervenyCoordinateSystem::RayCentered:
         rayCenteredCervenyInfluence.emplace(
             simulation.environment(), simulation.receivers(), influenceSettings,
             simulation.beamWidthMode(), simulation.runMode(),
-            simulation.fieldComponent());
+            simulation.fieldComponent(), simulation.sourceGeometry());
         break;
     }
   }
@@ -355,21 +358,25 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
   FrequencyWorkspace workspace =
       coherentWorkspace.has_value() ? std::move(*coherentWorkspace)
       : geometricNormalization
-          ? scaleGeometricPointIntensityToPressure(
+          ? scaleGeometricIntensityToPressure(
                 *intensityWorkspace, simulation.receivers(),
-                launchFan.launchAngleStep, sourceSoundSpeed)
-          : scaleCartesianPointIntensityToPressure(
+                launchFan.launchAngleStep, sourceSoundSpeed,
+                simulation.sourceGeometry())
+          : scaleCartesianIntensityToPressure(
                 *intensityWorkspace, simulation.receivers(),
-                launchFan.launchAngleStep, sourceSoundSpeed);
+                launchFan.launchAngleStep, sourceSoundSpeed,
+                simulation.sourceGeometry());
   if (coherentWorkspace.has_value()) {
     if (geometricNormalization) {
-      scaleCoherentGeometricPointPressure(workspace, simulation.receivers(),
-                                          launchFan.launchAngleStep,
-                                          sourceSoundSpeed);
+      scaleCoherentGeometricPressure(workspace, simulation.receivers(),
+                                     launchFan.launchAngleStep,
+                                     sourceSoundSpeed,
+                                     simulation.sourceGeometry());
     } else {
-      scaleCoherentCartesianPointPressure(workspace, simulation.receivers(),
-                                          launchFan.launchAngleStep,
-                                          sourceSoundSpeed);
+      scaleCoherentCartesianPressure(workspace, simulation.receivers(),
+                                     launchFan.launchAngleStep,
+                                     sourceSoundSpeed,
+                                     simulation.sourceGeometry());
     }
   }
   const Clock::time_point scaleEnd = Clock::now();
