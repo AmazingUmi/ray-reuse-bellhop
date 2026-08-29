@@ -16,6 +16,14 @@
 
 ## Fully supported
 
+> **组合范围说明：** 下表按功能轴汇总支持面，不表示所有列出的声源、接收网格、
+> SSP、beam family 与产品都做了 Cartesian-product 组合验收。尤其
+> quadrilateral `Q` / `.ssp` 的 accepted FP-2E slice 仅为二维、single point
+> source、single source depth、rectilinear receivers；TL Cartesian Cerveny
+> `CC`、单频 R，以及 Cartesian GeoHat `G` 的 A/a/E。`Q` 与 line source、
+> multisource、irregular receiver、ray-centered family 或其他 beam/product
+> 的机制可达组合未建立独立 oracle，本矩阵不声明这些组合为已验证 parity。
+
 | 能力 | 当前范围 |
 |---|---|
 | TL | point 与 line source、single/multisource source depth、rectilinear 与 Cartesian paired-irregular 接收网格、C-linear、PCHIP、N²-linear、cubic-spline 或 quadrilateral SSP 下的 Cartesian Cerveny `CC/IC/SC + {F,M,W}{D,S,Z} + P/V/H`、ray-centered Cerveny `CR/IR/SR + {F,M,W}{D,S,Z} + P/V/H`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）、ray-centered GeoHat `Cg/Ig/Sg`、Cartesian GeoGaussian `CB/IB/SB` 与 coherent Cartesian Simple Gaussian `CS`；两个 ray-centered family 都要求至少两个等间距 receiver ranges。Cartesian Cerveny 的 P/V/H 是数值相同的 legacy selector；ray-centered Cerveny V/H 按 Origin 的 normal/along derivative 公式计算，并保留 persistent image-normal flip、逐 image I/S power、receiver-level KMAH 与 Hermite-once 语义。ray-centered GeoHat 则沿实际反射轨迹按 `c*slowness` normal 做 depth projection/range crossing，没有 image loop、persistent flip、epsilon、gamma、KMAH 或 Hermite window；`q` 与 complex delay 线性插值，sound speed/amplitude 取右端点、reflection phase 取左端点，q crossing 增加 `π/2`。D/S/Z 在 frequency-independent reflection 时对完整 dynamic-ray `RN` jump 分别倍增、保留、清零；F/M/W epsilon 按每个目标频率、每条 ray 及 F2CPP/Origin evaluation order 计算，W 使用 real epsilon 与 real-q KMAH crossing，F/M 使用 positive-imaginary epsilon 与 complex-q branch crossing；非 Cerveny family 只允许 P 与 standard curvature，且不能接收 Cerveny width/curvature tail；C 使用 complex-pressure workspace，Cerveny/G/B 的 I/S 使用逐频 intensity workspace，`IS/SS` 明确拒绝；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B/S 均使用 geometric point normalization；GeoGaussian width/membership 与 Simple Gaussian contribution 均逐频精确计算；directional `.sbp` 与适用的 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；线声源（RunType 4th `'X'`）使用 ratio=1.0 及 `-4.0*sqrt(pi)*beamScale` 全距离柱面扩散因子；单频 SHD，以及多频 `nonreuse/reuse/parallel` SHD |

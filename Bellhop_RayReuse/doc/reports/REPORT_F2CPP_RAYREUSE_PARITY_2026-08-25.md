@@ -62,6 +62,13 @@ RayReuse 目前**已完全达到** F2CPP 二维 production feature surface 的�
 
 ## 2. 判定方法与状态语义
 
+> **组合范围说明：** 本报告按 feature axis 判定 production parity，不把分别
+> 支持的 source、receiver、SSP、beam 与 product 自动展开为全部已验证组合。
+> Quadrilateral `Q` / `.ssp` 只声明 FP-2E accepted slice：二维、single point
+> source、single source depth、rectilinear receivers；TL Cartesian Cerveny
+> `CC`、单频 R，以及 Cartesian GeoHat `G` 的 A/a/E。其他 Q cross-product
+> 组合即使机制可达，也未建立独立 oracle，不在本报告中声明为已验证 parity。
+
 每个 `PARITY` 必须同时具备：
 
 ```text
