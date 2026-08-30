@@ -5,7 +5,7 @@ companion_files = ["origin.ssp"]
 source_references = ["Bellhop_origin/Bellhop/sspMod.f90 Quad", "Bellhop_origin/Bellhop/Step.f90 ReduceStep2D"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0

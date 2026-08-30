@@ -70,16 +70,18 @@ void validateRawAttenuation(const RawAttenuation& attenuation,
 }
 
 [[nodiscard]] std::complex<double> halfSpaceCoefficient(
-    const AcousticMaterial& material, double frequency, double waterDensity,
-    double tangentSlowness, double outwardNormalSlowness) {
+    const AcousticMaterial& material,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double attenuationDepth, double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
   if (material.shearSoundSpeed == 0.0 &&
       material.shearAttenuation.value != 0.0) {
     throw ValidationError("zero shear speed requires zero shear attenuation");
   }
 
-  const AttenuationConversion compressionalAttenuation =
-      convertAttenuation(material.compressionalAttenuation, frequency,
-                         material.compressionalSoundSpeed);
+  const AttenuationConversion compressionalAttenuation = convertAttenuation(
+      material.compressionalAttenuation, volumeAttenuation, frequency,
+      material.compressionalSoundSpeed, attenuationDepth);
   const std::complex<double> compressionalSoundSpeed{
       material.compressionalSoundSpeed,
       compressionalAttenuation.imaginarySoundSpeed};
@@ -95,7 +97,8 @@ void validateRawAttenuation(const RawAttenuation& attenuation,
   std::complex<double> g;
   if (material.shearSoundSpeed > 0.0) {
     const AttenuationConversion shearAttenuation = convertAttenuation(
-        material.shearAttenuation, frequency, material.shearSoundSpeed);
+        material.shearAttenuation, volumeAttenuation, frequency,
+        material.shearSoundSpeed, attenuationDepth);
     const std::complex<double> shearSoundSpeed{
         material.shearSoundSpeed, shearAttenuation.imaginarySoundSpeed};
     const std::complex<double> shearWavenumber =
@@ -182,19 +185,37 @@ BoundaryAcousticsResult classifyBoundaryCoefficient(
 BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
     const AcousticMaterial& material, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness) {
+  return evaluateFluidHalfSpaceAcoustics(
+      material, 0.0, VolumeAttenuation{}, frequency, waterDensity,
+      tangentSlowness, outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
+    const AcousticMaterial& material, double attenuationEvaluationDepth,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness) {
   if (material.shearSoundSpeed != 0.0 ||
       material.shearAttenuation.value != 0.0) {
     throw ValidationError(
         "fluid half-space acoustics requires zero shear properties");
   }
-  return evaluateAcousticHalfSpaceAcoustics(material, frequency, waterDensity,
-                                            tangentSlowness,
-                                            outwardNormalSlowness);
+  return evaluateAcousticHalfSpaceAcoustics(
+      material, attenuationEvaluationDepth, volumeAttenuation, frequency,
+      waterDensity, tangentSlowness, outwardNormalSlowness);
 }
 
 BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
     const AcousticMaterial& material, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness) {
+  return evaluateAcousticHalfSpaceAcoustics(
+      material, 0.0, VolumeAttenuation{}, frequency, waterDensity,
+      tangentSlowness, outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
+    const AcousticMaterial& material, double attenuationEvaluationDepth,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness) {
   requireFinitePositive(frequency, "frequency");
   requireFinitePositive(waterDensity, "waterDensity");
   requireFinitePositive(material.compressionalSoundSpeed,
@@ -208,6 +229,7 @@ BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
                          "material.compressionalAttenuation");
   validateRawAttenuation(material.shearAttenuation,
                          "material.shearAttenuation");
+  requireFinite(attenuationEvaluationDepth, "attenuationEvaluationDepth");
   requireFinite(tangentSlowness, "tangentSlowness");
   requireFinite(outwardNormalSlowness, "outwardNormalSlowness");
   if (outwardNormalSlowness <= 0.0) {
@@ -215,8 +237,9 @@ BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
         "outwardNormalSlowness must be positive at a reflection");
   }
   return classifyBoundaryCoefficient(
-      halfSpaceCoefficient(material, frequency, waterDensity, tangentSlowness,
-                           outwardNormalSlowness),
+      halfSpaceCoefficient(material, volumeAttenuation, frequency,
+                           attenuationEvaluationDepth, waterDensity,
+                           tangentSlowness, outwardNormalSlowness),
       true);
 }
 
@@ -248,9 +271,9 @@ BoundaryAcousticsResult evaluateGrainSizeHalfSpaceAcoustics(
       .compressionalAttenuation = {.value = lossParameter,
                                    .unit = AttenuationUnit::LossParameter},
       .shearAttenuation = {}};
-  return evaluateFluidHalfSpaceAcoustics(effectiveMaterial, frequency,
-                                         waterDensity, tangentSlowness,
-                                         outwardNormalSlowness);
+  return evaluateFluidHalfSpaceAcoustics(
+      effectiveMaterial, 0.0, VolumeAttenuation{}, frequency, waterDensity,
+      tangentSlowness, outwardNormalSlowness);
 }
 
 BoundaryAcousticsResult evaluateTabulatedReflectionAcoustics(
@@ -329,14 +352,33 @@ BoundaryAcousticsResult evaluateTabulatedReflectionAcoustics(
 BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, double frequency, double waterDensity,
     double tangentSlowness, double outwardNormalSlowness) {
-  return evaluateBoundaryAcoustics(boundary, 0U, frequency, waterDensity,
-                                   tangentSlowness, outwardNormalSlowness);
+  return evaluateBoundaryAcoustics(boundary, 0U, VolumeAttenuation{}, frequency,
+                                   waterDensity, tangentSlowness,
+                                   outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary, const VolumeAttenuation& volumeAttenuation,
+    double frequency, double waterDensity, double tangentSlowness,
+    double outwardNormalSlowness) {
+  return evaluateBoundaryAcoustics(boundary, 0U, volumeAttenuation, frequency,
+                                   waterDensity, tangentSlowness,
+                                   outwardNormalSlowness);
 }
 
 BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
     double frequency, double waterDensity, double tangentSlowness,
     double outwardNormalSlowness) {
+  return evaluateBoundaryAcoustics(boundary, boundarySegmentIndex,
+                                   VolumeAttenuation{}, frequency, waterDensity,
+                                   tangentSlowness, outwardNormalSlowness);
+}
+
+BoundaryAcousticsResult evaluateBoundaryAcoustics(
+    const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
+    const VolumeAttenuation& volumeAttenuation, double frequency,
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness) {
   requireFinitePositive(frequency, "frequency");
   requireFinitePositive(waterDensity, "waterDensity");
   requireFinite(tangentSlowness, "tangentSlowness");
@@ -357,8 +399,10 @@ BoundaryAcousticsResult evaluateBoundaryAcoustics(
             "acoustic half-space is missing material properties");
       }
       return evaluateAcousticHalfSpaceAcoustics(
-          boundary.materialAtSegment(boundarySegmentIndex), frequency,
-          waterDensity, tangentSlowness, outwardNormalSlowness);
+          boundary.materialAtSegment(boundarySegmentIndex),
+          boundary.materialAttenuationDepthAtSegment(boundarySegmentIndex),
+          volumeAttenuation, frequency, waterDensity, tangentSlowness,
+          outwardNormalSlowness);
     case BoundaryKind::GrainSizeHalfSpace:
       throw ValidationError(
           "grain-size acoustics requires the local water sound speed");

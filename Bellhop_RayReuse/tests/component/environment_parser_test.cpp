@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -11,6 +12,8 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "rayreuse/cache/ray_path_cache.hpp"
@@ -23,16 +26,22 @@ namespace {
 
 using rayreuse::AttenuationUnit;
 using rayreuse::BeamFamily;
+using rayreuse::BeamWidthMode;
 using rayreuse::BellhopError;
+using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryKind;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::EnvironmentParser;
+using rayreuse::FieldComponent;
 using rayreuse::FrequencyProjector;
 using rayreuse::GeometryTracer;
 using rayreuse::ParsedEnvironment;
 using rayreuse::RayPath;
 using rayreuse::RayPathCache;
 using rayreuse::SimulationRunMode;
+using rayreuse::SourceGeometry;
 using rayreuse::ValidationError;
+using rayreuse::Vec2;
 using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
@@ -132,6 +141,22 @@ ParsedEnvironment parseText(const std::string& contents,
   return EnvironmentParser::parse(input, name);
 }
 
+std::string renderVolumeAttenuationCase(const std::string& options,
+                                        const std::string& parameterRecords) {
+  std::string contents = renderCase("constant_speed_direct", 1000.0, 20U);
+  replaceFirst(contents, "'CVW'", "'" + options + "'");
+  const std::size_t optionsPosition = contents.find("'" + options + "'");
+  if (optionsPosition == std::string::npos) {
+    throw std::runtime_error("unable to locate volume attenuation options");
+  }
+  const std::size_t lineEnd = contents.find('\n', optionsPosition);
+  if (lineEnd == std::string::npos) {
+    throw std::runtime_error("volume attenuation options line is truncated");
+  }
+  contents.insert(lineEnd + 1U, parameterRecords);
+  return contents;
+}
+
 void testDirectCase(Context& context) {
   const ParsedEnvironment parsed =
       parseText(renderCase("constant_speed_direct", 50.0, 300U),
@@ -226,6 +251,124 @@ void testEnvironmentFrequencyList(Context& context) {
         static_cast<void>(parseText(duplicate, "duplicate_frequencies.env"));
       },
       "a duplicate ENV frequency is rejected");
+}
+
+void testCartesianCervenyComponents(Context& context) {
+  const std::string pressureFixture =
+      renderCase("cartesian_component_pressure", 1000.0, 300U);
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CC", SimulationRunMode::Coherent},
+           {"IC", SimulationRunMode::Incoherent},
+           {"SC", SimulationRunMode::SemiCoherent}}) {
+    for (const auto& [widthToken, expectedWidth] :
+         std::vector<std::pair<std::string, BeamWidthMode>>{
+             {"F", BeamWidthMode::SpaceFilling},
+             {"M", BeamWidthMode::MinimumWidth},
+             {"W", BeamWidthMode::Wkb}}) {
+      for (const auto& [curvatureToken, expectedCurvature] :
+           std::vector<std::pair<std::string, BoundaryCurvatureMode>>{
+               {"D", BoundaryCurvatureMode::Double},
+               {"S", BoundaryCurvatureMode::Standard},
+               {"Z", BoundaryCurvatureMode::Zero}}) {
+        for (const auto& [componentToken, expectedComponent] :
+             std::vector<std::pair<std::string, FieldComponent>>{
+                 {"P", FieldComponent::Pressure},
+                 {"V", FieldComponent::Vertical},
+                 {"H", FieldComponent::Horizontal}}) {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'CC'", "'" + runType + "'");
+          replaceFirst(contents, "'MS'",
+                       "'" + widthToken + curvatureToken + "'");
+          replaceFirst(contents, "1  5  'P'", "1  5  '" + componentToken + "'");
+          const ParsedEnvironment parsed =
+              parseText(contents, "cartesian_" + runType + curvatureToken +
+                                      componentToken + ".env");
+          context.check(
+              parsed.simulationCase.runMode() == expectedMode &&
+                  parsed.simulationCase.beamFamily() ==
+                      BeamFamily::CervenyGaussian &&
+                  parsed.simulationCase.fieldComponent() == expectedComponent &&
+                  parsed.simulationCase.curvatureMode() == expectedCurvature &&
+                  parsed.simulationCase.beamWidthMode() == expectedWidth &&
+                  parsed.simulationCase.cervenyCoordinateSystem() ==
+                      CervenyCoordinateSystem::Cartesian,
+              "Cartesian Cerveny parser preserves C/I/S x F/M/W x D/S/Z x "
+              "P/V/H");
+        }
+      }
+    }
+  }
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CR", SimulationRunMode::Coherent},
+           {"IR", SimulationRunMode::Incoherent},
+           {"SR", SimulationRunMode::SemiCoherent}}) {
+    for (const auto& [widthToken, expectedWidth] :
+         std::vector<std::pair<std::string, BeamWidthMode>>{
+             {"F", BeamWidthMode::SpaceFilling},
+             {"M", BeamWidthMode::MinimumWidth},
+             {"W", BeamWidthMode::Wkb}}) {
+      for (const auto& [curvatureToken, expectedCurvature] :
+           std::vector<std::pair<std::string, BoundaryCurvatureMode>>{
+               {"D", BoundaryCurvatureMode::Double},
+               {"S", BoundaryCurvatureMode::Standard},
+               {"Z", BoundaryCurvatureMode::Zero}}) {
+        for (const auto& [componentToken, expectedComponent] :
+             std::vector<std::pair<std::string, FieldComponent>>{
+                 {"P", FieldComponent::Pressure},
+                 {"V", FieldComponent::Vertical},
+                 {"H", FieldComponent::Horizontal}}) {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'CC'", "'" + runType + "'");
+          replaceFirst(contents, "'MS'",
+                       "'" + widthToken + curvatureToken + "'");
+          replaceFirst(contents, "1  5  'P'", "1  5  '" + componentToken + "'");
+          const ParsedEnvironment parsed =
+              parseText(contents, "ray_centered_" + runType + widthToken +
+                                      curvatureToken + componentToken + ".env");
+          context.check(
+              parsed.simulationCase.runMode() == expectedMode &&
+                  parsed.simulationCase.beamFamily() ==
+                      BeamFamily::CervenyGaussian &&
+                  parsed.simulationCase.fieldComponent() == expectedComponent &&
+                  parsed.simulationCase.curvatureMode() == expectedCurvature &&
+                  parsed.simulationCase.beamWidthMode() == expectedWidth &&
+                  parsed.simulationCase.cervenyCoordinateSystem() ==
+                      CervenyCoordinateSystem::RayCentered,
+              "ray-centered Cerveny parser preserves C/I/S x F/M/W x "
+              "D/S/Z x P/V/H");
+        }
+      }
+    }
+  }
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = pressureFixture;
+        replaceFirst(contents, "1  5  'P'", "1  5  'X'");
+        static_cast<void>(parseText(contents, "cartesian_component_x.env"));
+      },
+      "Cartesian Cerveny rejects an unknown field component");
+  for (const std::string beamType : {"XS", "MX", "M", "MSS"}) {
+    context.expectThrows<ValidationError>(
+        [&, beamType] {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'MS'", "'" + beamType + "'");
+          static_cast<void>(parseText(contents, "beam_" + beamType + ".env"));
+        },
+        "unknown width and invalid curvature tokens remain rejected");
+  }
+  for (const std::string& runType : {"CG", "CB", "CS"}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          std::string contents = pressureFixture;
+          replaceFirst(contents, "'CC'", "'" + runType + "'");
+          replaceFirst(contents, "1  5  'P'", "1  5  'V'");
+          static_cast<void>(
+              parseText(contents, "non_cerveny_" + runType + "V.env"));
+        },
+        "non-Cerveny TL families reject a component option tail");
+  }
 }
 
 void testBoundaryCases(Context& context) {
@@ -373,6 +516,362 @@ void testRrB1BoundarySidecarsAndFrozenEvents(Context& context) {
                 "flat top G is accepted");
 }
 
+class TemporaryAtiHeaderCase {
+ public:
+  explicit TemporaryAtiHeaderCase(const std::string& atiFormat)
+      : directory_(std::filesystem::temp_directory_path() /
+                   "rayreuse_ati_header_matrix"),
+        environmentPath_(directory_ / "case.env") {
+    std::error_code cleanupError;
+    std::filesystem::remove_all(directory_, cleanupError);
+    std::filesystem::create_directories(directory_);
+    std::ofstream environment(environmentPath_);
+    if (!environment.is_open()) {
+      throw std::runtime_error("unable to stage ati header fixture");
+    }
+    environment << renderCase("i3_piecewise_boundaries", 100.0, 400U);
+    environment.close();
+
+    const std::filesystem::path source = kCasesRoot / "i3_piecewise_boundaries";
+    for (const std::string extension : {".ati", ".bty"}) {
+      std::ifstream input(source / ("origin" + extension));
+      if (!input.is_open()) {
+        throw std::runtime_error("unable to open boundary fixture");
+      }
+      std::ostringstream buffer;
+      buffer << input.rdbuf();
+      std::string contents = buffer.str();
+      if (extension == ".ati") {
+        replaceFirst(contents, "LS", atiFormat);
+      }
+      std::ofstream output(directory_ / ("case" + extension));
+      output << contents;
+    }
+  }
+
+  TemporaryAtiHeaderCase(const TemporaryAtiHeaderCase&) = delete;
+  TemporaryAtiHeaderCase& operator=(const TemporaryAtiHeaderCase&) = delete;
+
+  ~TemporaryAtiHeaderCase() {
+    std::error_code cleanupError;
+    std::filesystem::remove_all(directory_, cleanupError);
+  }
+
+  [[nodiscard]] const std::filesystem::path& environmentPath() const noexcept {
+    return environmentPath_;
+  }
+
+ private:
+  std::filesystem::path directory_;
+  std::filesystem::path environmentPath_;
+};
+
+void expectValidationErrorWithMessage(Context& context,
+                                      const std::filesystem::path& path,
+                                      const std::string& fragment,
+                                      std::string_view message) {
+  try {
+    static_cast<void>(EnvironmentParser::parseFile(path));
+  } catch (const ValidationError& error) {
+    const std::string text = error.what();
+    context.check(text.find(fragment) != std::string::npos, message);
+    return;
+  }
+  context.check(false, std::string(message) + " (no exception)");
+}
+
+void testCurvilinearBoundaryHeaders(Context& context) {
+  const TemporaryStandardCase curvilinear("i3_curvilinear_oracle", 100.0, 459U);
+  const ParsedEnvironment parsedCurvilinear =
+      EnvironmentParser::parseFile(curvilinear.environmentPath());
+  const auto& curvilinearEnvironment =
+      parsedCurvilinear.simulationCase.environment();
+  context.check(
+      curvilinearEnvironment.seaSurface().geometry().interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::Curvilinear &&
+          curvilinearEnvironment.seabed().geometry().interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::Curvilinear,
+      "canonical 'C' .ati/.bty headers create curvilinear geometry");
+  context.check(
+      curvilinearEnvironment.seaSurface().geometry().nodes().size() == 5U &&
+          curvilinearEnvironment.seabed().geometry().nodes().size() == 5U,
+      "curvilinear short format reads every boundary node");
+  context.checkNear(
+      curvilinearEnvironment.seabed().geometry().nodes()[1U].range, 550.0, 0.0,
+      "curvilinear node ranges convert km to SI meters");
+  context.check(
+      curvilinearEnvironment.seaSurface().kind() == BoundaryKind::Vacuum &&
+          curvilinearEnvironment.seabed().kind() == BoundaryKind::Rigid,
+      "curvilinear oracle keeps vacuum top and rigid bottom");
+
+  const rayreuse::BoundaryGeometry& seabed =
+      curvilinearEnvironment.seabed().geometry();
+  const rayreuse::BoundaryGeometrySample interior =
+      seabed.reflectionSampleAtSegment(Vec2{.range = 800.0, .depth = 100.0},
+                                       2U);
+  context.check(interior.curvature != 0.0,
+                "curvilinear interior reflection frame carries non-zero "
+                "curvature");
+  context.check(std::abs(rayreuse::norm(interior.tangent) - 1.0) > 1.0e-9,
+                "curvilinear interior reflection frame is interpolated and "
+                "not unit length");
+  context.check(seabed.evaluateAtSegment(800.0, 2U).curvature == 0.0,
+                "curvilinear collision chord sample keeps zero curvature");
+  const rayreuse::BoundaryGeometrySample extension =
+      seabed.reflectionSampleAtSegment(Vec2{.range = -100.0, .depth = 111.0},
+                                       0U);
+  context.check(extension.curvature == 0.0 &&
+                    extension.tangent == Vec2{.range = 1.0, .depth = 0.0},
+                "curvilinear extension segment falls back to the flat chord");
+
+  // Header accept/reject matrix, isomorphic to F2CPP readBoundaryFile.
+  const TemporaryAtiHeaderCase canonical("C");
+  const ParsedEnvironment parsedCanonical =
+      EnvironmentParser::parseFile(canonical.environmentPath());
+  context.check(
+      parsedCanonical.simulationCase.environment()
+                  .seaSurface()
+                  .geometry()
+                  .interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::Curvilinear &&
+          parsedCanonical.simulationCase.environment()
+                  .seabed()
+                  .geometry()
+                  .interpolationKind() ==
+              rayreuse::BoundaryInterpolationKind::PiecewiseLinear,
+      "'C' top with 'LS' bottom mixes interpolation kinds per boundary");
+
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("CS").environmentPath(),
+      "curvilinear short boundary format must use canonical 'C', not 'CS'",
+      "'CS' header is rejected with the canonical 'C' hint");
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("CL").environmentPath(),
+      "curvilinear short boundary format must use canonical 'C', not 'CL'",
+      "'CL' header is rejected with the canonical 'C' hint");
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("LC").environmentPath(),
+      "only piecewise-linear 'LS'/'LL' and canonical curvilinear short "
+      "format 'C' are supported",
+      "unknown two-character header is rejected");
+  expectValidationErrorWithMessage(
+      context, TemporaryAtiHeaderCase("S").environmentPath(),
+      "only piecewise-linear 'LS'/'LL' and canonical curvilinear short "
+      "format 'C' are supported",
+      "bare 'S' header is rejected");
+}
+
+void testVolumeAttenuationParsing(Context& context) {
+  for (const std::string& options :
+       {std::string("CVW"), std::string("CVW "), std::string("CVW  "),
+        std::string("CVW   ")}) {
+    const ParsedEnvironment parsed = parseText(
+        renderVolumeAttenuationCase(options, ""), "option_padding.env");
+    context.check(
+        parsed.simulationCase.environment().volumeAttenuation().model ==
+            VolumeAttenuationModel::None,
+        "three-to-six-character top options pad to no volume model");
+  }
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parseText(renderVolumeAttenuationCase("CVW  X", ""),
+                                    "occupied_sixth_option.env"));
+      },
+      "a non-blank sixth top option is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parseText(renderVolumeAttenuationCase("CVW    ", ""),
+                                    "seven_character_option.env"));
+      },
+      "top options longer than six characters are rejected");
+
+  const ParsedEnvironment fg =
+      parseText(renderVolumeAttenuationCase("CVWF", "12.5 34.0 8.1 750.0 /\n"),
+                "francois_garrison.env");
+  const auto& fgEnvironment = fg.simulationCase.environment();
+  const auto& fgParameters = std::get<rayreuse::FrancoisGarrisonParameters>(
+      fgEnvironment.volumeAttenuation().parameters);
+  context.check(
+      fgEnvironment.volumeAttenuation().model ==
+              VolumeAttenuationModel::FrancoisGarrison &&
+          fgParameters.temperatureCelsius == 12.5 &&
+          fgParameters.salinityPsu == 34.0 && fgParameters.pH == 8.1 &&
+          fgParameters.meanDepthMeters == 750.0,
+      "Francois-Garrison parameters parse into Environment ownership");
+  context.check(
+      fgEnvironment.soundSpeedProfile()
+                  .points()
+                  .front()
+                  .attenuation.volumeModel ==
+              VolumeAttenuationModel::FrancoisGarrison &&
+          fgEnvironment.seabed()
+                  .material()
+                  ->compressionalAttenuation.volumeModel ==
+              VolumeAttenuationModel::FrancoisGarrison &&
+          fgEnvironment.seabed().material()->shearAttenuation.volumeModel ==
+              VolumeAttenuationModel::FrancoisGarrison,
+      "Francois-Garrison stamps matching SSP and half-space legacy tags");
+  const ParsedEnvironment sharedFg =
+      parseText(renderCase("volume_attenuation_francois_garrison", 1000.0, 40U),
+                "shared_francois_garrison.env");
+  context.check(
+      sharedFg.simulationCase.environment().volumeAttenuation().model ==
+          VolumeAttenuationModel::FrancoisGarrison,
+      "shared Francois-Garrison origin.env.in parses");
+
+  for (const auto& [parameters, label] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"", "missing Francois-Garrison parameter record"},
+           {"12 34 8 /\n", "missing Francois-Garrison token"},
+           {"-273 34 8 100 /\n", "temperature at absolute-zero guard"},
+           {"-274 34 8 100 /\n", "temperature below absolute-zero guard"},
+           {"12 -1 8 100 /\n", "negative salinity"},
+           {"12 34 8 -1 /\n", "negative mean depth"},
+           {"nan 34 8 100 /\n", "non-finite temperature"},
+           {"12 inf 8 100 /\n", "non-finite salinity"},
+           {"12 34 nan 100 /\n", "non-finite pH"},
+           {"12 34 8 inf /\n", "non-finite mean depth"}}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          static_cast<void>(
+              parseText(renderVolumeAttenuationCase("CVWF", parameters),
+                        "bad_francois_garrison.env"));
+        },
+        label);
+  }
+
+  const ParsedEnvironment noBiologicalLayers =
+      parseText(renderVolumeAttenuationCase("CVWB", "0 /\n"), "zero_bio.env");
+  const auto& emptyLayers =
+      *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          noBiologicalLayers.simulationCase.environment()
+              .volumeAttenuation()
+              .parameters);
+  context.check(emptyLayers.empty(), "zero biological layers are accepted");
+
+  const ParsedEnvironment overlapping =
+      parseText(renderVolumeAttenuationCase(
+                    "CVWB", "2 /\n10 30 1000 2 0.5 /\n20 40 2000 3 1.5 /\n"),
+                "overlapping_bio.env");
+  const auto& overlappingLayers =
+      *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          overlapping.simulationCase.environment()
+              .volumeAttenuation()
+              .parameters);
+  context.check(overlappingLayers.size() == 2U &&
+                    overlappingLayers[0U].maximumDepth >
+                        overlappingLayers[1U].minimumDepth &&
+                    overlapping.simulationCase.environment()
+                            .soundSpeedProfile()
+                            .points()
+                            .front()
+                            .attenuation.volumeModel ==
+                        VolumeAttenuationModel::Biological &&
+                    overlapping.simulationCase.environment()
+                            .seabed()
+                            .material()
+                            ->compressionalAttenuation.volumeModel ==
+                        VolumeAttenuationModel::Biological &&
+                    overlapping.simulationCase.environment()
+                            .seabed()
+                            .material()
+                            ->shearAttenuation.volumeModel ==
+                        VolumeAttenuationModel::Biological,
+                "overlapping biological layers parse and stamp legacy tags");
+  const ParsedEnvironment sharedBiological =
+      parseText(renderCase("volume_attenuation_biological", 1000.0, 40U),
+                "shared_biological.env");
+  context.check(std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+                    sharedBiological.simulationCase.environment()
+                        .volumeAttenuation()
+                        .parameters)
+                        ->size() == 2U,
+                "shared biological origin.env.in parses");
+
+  std::ostringstream twoHundredRecords;
+  twoHundredRecords << "200 /\n";
+  for (std::size_t index = 0U; index < 200U; ++index) {
+    twoHundredRecords << index << ' ' << (index + 1U) << " 1000 2 0.5 /\n";
+  }
+  const ParsedEnvironment maximumLayers =
+      parseText(renderVolumeAttenuationCase("CVWB", twoHundredRecords.str()),
+                "maximum_bio.env");
+  context.check(std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+                    maximumLayers.simulationCase.environment()
+                        .volumeAttenuation()
+                        .parameters)
+                        ->size() == 200U,
+                "the biological layer limit of 200 is accepted");
+
+  for (const auto& [records, label] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"", "missing biological layer count record"},
+           {"201 /\n", "more than 200 biological layers"},
+           {"-1 /\n", "negative biological layer count"},
+           {"1 /\n", "missing biological layer record"},
+           {"1 /\n0 1 1000 2 /\n", "missing biological layer token"},
+           {"1 /\n2 1 1000 2 0.5 /\n", "reversed biological depths"},
+           {"1 /\n0 1 0 2 0.5 /\n", "zero biological resonance frequency"},
+           {"1 /\n0 1 -1 2 0.5 /\n", "negative biological resonance frequency"},
+           {"1 /\n0 1 1000 0 0.5 /\n", "zero biological quality factor"},
+           {"1 /\n0 1 1000 -1 0.5 /\n", "negative biological quality factor"},
+           {"1 /\n0 1 1000 2 -0.5 /\n",
+            "negative biological attenuation coefficient"},
+           {"1 /\n0 nan 1000 2 0.5 /\n", "non-finite biological layer"}}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          static_cast<void>(
+              parseText(renderVolumeAttenuationCase("CVWB", records),
+                        "bad_biological.env"));
+        },
+        label);
+  }
+}
+
+void testPrtVolumeAttenuationMarkers(Context& context) {
+  const std::filesystem::path executable =
+      std::filesystem::current_path() / "bellhop_rayreuse";
+  context.check(std::filesystem::exists(executable),
+                "PRT marker test locates the bellhop_rayreuse executable");
+  if (!std::filesystem::exists(executable)) {
+    return;
+  }
+
+  const auto checkMarkers = [&](const std::string& name,
+                                const std::string& options,
+                                const std::string& parameterRecords,
+                                const std::vector<std::string>& markers) {
+    const std::filesystem::path directory =
+        std::filesystem::temp_directory_path() / ("rayreuse_h02_" + name);
+    std::error_code error;
+    std::filesystem::remove_all(directory, error);
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path root = directory / "case";
+    {
+      std::ofstream environment(root.string() + ".env");
+      environment << renderVolumeAttenuationCase(options, parameterRecords);
+    }
+    const std::string command = "\"" + executable.string() + "\" \"" +
+                                root.string() + "\" >/dev/null 2>&1";
+    static_cast<void>(std::system(command.c_str()));
+    std::ifstream printLog(root.string() + ".prt");
+    std::ostringstream contents;
+    contents << printLog.rdbuf();
+    for (const std::string& marker : markers) {
+      context.check(contents.str().find(marker) != std::string::npos,
+                    name + " PRT contains marker: " + marker);
+    }
+    std::filesystem::remove_all(directory, error);
+  };
+
+  checkMarkers("thorp", "CVWT", "", {"THORP volume attenuation added\n"});
+  checkMarkers("francois_garrison", "CVWF", "12 34 8 500 /\n",
+               {"Francois-Garrison volume attenuation added\n"});
+  checkMarkers("biological", "CVWB",
+               "2 /\n10 30 1000 2 0.5 /\n20 40 2000 3 1.5 /\n",
+               {"Biological attenaution\n", "Number of Bio Layers = 2\n"});
+}
+
 void testAttenuationCases(Context& context) {
   const ParsedEnvironment lossless = parseText(
       renderCase("constant_speed_no_attenuation_5khz", 5000.0, 10000U),
@@ -388,12 +887,14 @@ void testAttenuationCases(Context& context) {
               .attenuation.volumeModel == VolumeAttenuationModel::None,
       "lossless case keeps volume attenuation disabled");
   context.check(
-      thorp.simulationCase.environment()
-              .soundSpeedProfile()
-              .points()
-              .front()
-              .attenuation.volumeModel == VolumeAttenuationModel::Thorp,
-      "Thorp case enables volume attenuation at every SSP node");
+      thorp.simulationCase.environment().volumeAttenuation().model ==
+              VolumeAttenuationModel::Thorp &&
+          thorp.simulationCase.environment()
+                  .soundSpeedProfile()
+                  .points()
+                  .front()
+                  .attenuation.volumeModel == VolumeAttenuationModel::Thorp,
+      "Thorp case owns its model and enables it at every SSP node");
   context.check(thorp.simulationCase.environment()
                         .seabed()
                         .material()
@@ -457,14 +958,26 @@ void testRrB4ProductRunTypes(Context& context) {
                         BeamFamily::GeometricGaussian,
                 "EB parser selects eigenray and Cartesian geometric Gaussian");
 
-  context.expectThrows<ValidationError>(
-      [&] {
-        std::string contents =
-            renderCase("arrival_geometric_hat_ascii", 1000.0, 80U);
-        replaceFirst(contents, "'AG RR'", "'Ag RR'");
-        static_cast<void>(parseText(contents, "ray_centered_arrival.env"));
-      },
-      "ray-centered geometric arrivals are explicitly rejected");
+  for (const auto& [caseId, originalRunType, rayCenteredRunType, expectedMode] :
+       std::vector<std::tuple<std::string, std::string, std::string,
+                              SimulationRunMode>>{
+           {"arrival_geometric_hat_ray_centered", "'Ag RR'", "'Ag RR'",
+            SimulationRunMode::AsciiArrivals},
+           {"arrival_geometric_hat_ray_centered", "'Ag RR'", "'ag RR'",
+            SimulationRunMode::BinaryArrivals},
+           {"eigenray_geometric_hat_ray_centered", "'Eg RR'", "'Eg RR'",
+            SimulationRunMode::Eigenray}}) {
+    std::string contents = renderCase(caseId, 1000.0, 80U);
+    replaceFirst(contents, originalRunType, rayCenteredRunType);
+    const ParsedEnvironment parsed =
+        parseText(contents, "ray_centered_product.env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat &&
+            parsed.simulationCase.cervenyCoordinateSystem() ==
+                CervenyCoordinateSystem::RayCentered,
+        "Ag/ag/Eg select ray-centered geometric-hat product paths");
+  }
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents =
@@ -481,6 +994,228 @@ void testRrB4ProductRunTypes(Context& context) {
         static_cast<void>(parseText(contents, "irregular_arrival.env"));
       },
       "irregular receiver arrivals are explicitly rejected");
+}
+
+std::string renderIrregularHatCase(const std::string& runType,
+                                   const std::string& rangeCount,
+                                   const std::string& rangeList) {
+  std::string contents =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+  replaceFirst(contents, "\n1\n50.0 /\n7\n20.0  80.0 /\n21\n0.02  0.25 /",
+               "\n1\n50.0 /\n3\n20.0  50.0  80.0 /\n" + rangeCount + "\n" +
+                   rangeList + " /");
+  replaceFirst(contents, "'CG'", "'" + runType + "'");
+  return contents;
+}
+
+void testMultiSourceDepths(Context& context) {
+  const std::string direct = renderCase("constant_speed_direct", 50.0, 300U);
+
+  std::string explicitDepths = direct;
+  replaceFirst(explicitDepths, "\n1                       ! NSD",
+               "\n3                       ! NSD");
+  replaceFirst(explicitDepths, "\n500.0 /", "\n300.0  700.0  500.0 /");
+  const ParsedEnvironment parsedExplicit =
+      parseText(explicitDepths, "multi_source_explicit.env");
+  const auto& explicitSources = parsedExplicit.simulationCase.sources();
+  context.check(parsedExplicit.simulationCase.sourceCount() == 3U &&
+                    explicitSources.size() == 3U &&
+                    parsedExplicit.simulationCase.source().depth == 300.0 &&
+                    explicitSources[1U].depth == 500.0 &&
+                    explicitSources[2U].depth == 700.0,
+                "three explicit source depths parse and sort ascending");
+  context.check(explicitSources[0U].amplitude == 1.0 &&
+                    explicitSources[1U].amplitude == 1.0 &&
+                    explicitSources[2U].amplitude == 1.0,
+                "parsed sources use the F2CPP unit amplitude convention");
+
+  std::string subtabDepths = direct;
+  replaceFirst(subtabDepths, "\n1                       ! NSD",
+               "\n3                       ! NSD");
+  replaceFirst(subtabDepths, "\n500.0 /", "\n300.0  700.0 /");
+  const ParsedEnvironment parsedSubtab =
+      parseText(subtabDepths, "multi_source_subtab.env");
+  context.check(
+      parsedSubtab.simulationCase.sourceCount() == 3U &&
+          parsedSubtab.simulationCase.source().depth == 300.0 &&
+          parsedSubtab.simulationCase.sources()[1U].depth == 500.0 &&
+          parsedSubtab.simulationCase.sources()[2U].depth == 700.0,
+      "source-depth subtabulation endpoints expand to the depth vector");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "\n1                       ! NSD",
+                     "\n0                       ! NSD");
+        static_cast<void>(parseText(contents, "zero_sources.env"));
+      },
+      "a zero source-depth count is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "\n1                       ! NSD",
+                     "\n2                       ! NSD");
+        static_cast<void>(parseText(contents, "source_count_mismatch.env"));
+      },
+      "a source-depth vector shorter than the declared count is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = direct;
+        replaceFirst(contents, "\n1                       ! NSD",
+                     "\n2                       ! NSD");
+        replaceFirst(contents, "\n500.0 /", "\n500.0  1500.0 /");
+        static_cast<void>(parseText(contents, "source_below_bottom.env"));
+      },
+      "a source depth outside the water column is rejected");
+
+  std::string rayDepths =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 80U);
+  replaceFirst(rayDepths, "\n1\n50.0 /", "\n2\n30.0  70.0 /");
+  replaceFirst(rayDepths, "'CG'", "'R'");
+  const ParsedEnvironment parsedRay =
+      parseText(rayDepths, "multi_source_ray.env");
+  context.check(
+      parsedRay.simulationCase.runMode() == SimulationRunMode::RayTrace &&
+          parsedRay.simulationCase.sourceCount() == 2U &&
+          parsedRay.simulationCase.source().depth == 30.0 &&
+          parsedRay.simulationCase.sources()[1U].depth == 70.0,
+      "ray-trace run types accept a sorted two-source depth vector");
+}
+
+void testIrregularReceiverLayouts(Context& context) {
+  const ParsedEnvironment plain = parseText(
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U),
+      "rectilinear_control.env");
+  context.check(plain.simulationCase.receivers().layout() ==
+                        rayreuse::ReceiverGridLayout::Rectilinear &&
+                    !plain.simulationCase.receivers().isIrregular() &&
+                    plain.simulationCase.receivers().receiversPerRange() == 7U,
+                "an unqualified run type keeps the rectilinear layout");
+
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CG  I  ", SimulationRunMode::Coherent},
+           {"IG  I  ", SimulationRunMode::Incoherent},
+           {"SG  I  ", SimulationRunMode::SemiCoherent},
+           {"CB  I  ", SimulationRunMode::Coherent},
+           {"AG  I  ", SimulationRunMode::AsciiArrivals},
+           {"aG  I  ", SimulationRunMode::BinaryArrivals},
+           {"EB  I  ", SimulationRunMode::Eigenray}}) {
+    const ParsedEnvironment parsed =
+        parseText(renderIrregularHatCase(runType, "3", "0.02  0.10  0.25"),
+                  "irregular_" + runType + ".env");
+    const auto& receivers = parsed.simulationCase.receivers();
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            receivers.layout() == rayreuse::ReceiverGridLayout::Irregular &&
+            receivers.isIrregular() && receivers.depthCount() == 3U &&
+            receivers.rangeCount() == 3U &&
+            receivers.receiversPerRange() == 1U &&
+            receivers.depthAt(0U, 0U) == 20.0 &&
+            receivers.depthAt(0U, 1U) == 50.0 &&
+            receivers.depthAt(0U, 2U) == 80.0,
+        "paired irregular receivers parse for TL, arrival, and eigenray run "
+        "types");
+  }
+
+  std::string cervenyIrregular =
+      renderCase("constant_speed_direct", 50.0, 300U);
+  replaceFirst(cervenyIrregular,
+               "\n21                      ! NRD\n400.0  600.0 /",
+               "\n3                       ! NRD\n400.0  500.0  600.0 /");
+  replaceFirst(cervenyIrregular, "\n51                      ! NR\n0.1  5.0 /",
+               "\n3                       ! NR\n1.0  2.0  3.0 /");
+  replaceFirst(cervenyIrregular, "'CC'", "'CC  I  '");
+  const ParsedEnvironment parsedCerveny =
+      parseText(cervenyIrregular, "irregular_cerveny.env");
+  context.check(
+      parsedCerveny.simulationCase.receivers().isIrregular() &&
+          parsedCerveny.simulationCase.receivers().receiversPerRange() == 1U &&
+          parsedCerveny.simulationCase.receivers().ranges()[1U] == 2000.0,
+      "Cartesian Cerveny accepts an irregular grid with uniform paired ranges");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(parseText(
+            renderIrregularHatCase("CG  I  ", "4", "0.02  0.10  0.20  0.25"),
+            "irregular_count_mismatch.env"));
+      },
+      "an irregular layout with unequal depth and range counts is rejected");
+  for (const std::string& runType : {"CR  I  ", "Cg  I  ", "Ag  I  "}) {
+    context.expectThrows<ValidationError>(
+        [&, runType] {
+          static_cast<void>(parseText(
+              renderIrregularHatCase(runType, "3", "0.02  0.06  0.10"),
+              "irregular_ray_centered.env"));
+        },
+        "ray-centered beam families reject the irregular layout");
+  }
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(parseText(
+            renderIrregularHatCase("CS  I  ", "3", "0.02  0.10  0.25"),
+            "irregular_simple_gaussian.env"));
+      },
+      "Simple Gaussian beams reject the irregular layout");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents =
+            renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+        replaceFirst(contents, "'CG'", "'R   I  '");
+        static_cast<void>(parseText(contents, "irregular_ray_trace.env"));
+      },
+      "ray-trace run types keep the blank/R-only fifth run-type letter");
+}
+
+void testSourceGeometry(Context& context) {
+  const std::string point = renderCase("constant_speed_direct", 50.0, 300U);
+  std::string line = point;
+  replaceFirst(line, "'CC'", "'CC X'");
+  const ParsedEnvironment parsed = parseText(line, "line_source.env");
+  context.check(parsed.simulationCase.sourceGeometry() == SourceGeometry::Line,
+                "run-type fourth character X selects a line source");
+
+  std::string explicitPoint = point;
+  replaceFirst(explicitPoint, "'CC'", "'CC R'");
+  context.check(
+      parseText(explicitPoint, "point_source.env")
+              .simulationCase.sourceGeometry() == SourceGeometry::Point,
+      "run-type fourth character R selects a point source");
+
+  context.expectThrows<ValidationError>(
+      [&point] {
+        std::string invalid = point;
+        replaceFirst(invalid, "'CC'", "'CC Y'");
+        static_cast<void>(parseText(invalid, "invalid_source_geometry.env"));
+      },
+      "parser rejects an unknown source-geometry character");
+
+  std::string semiLine = point;
+  replaceFirst(semiLine, "'CC'", "'SC X'");
+  const ParsedEnvironment semiParsed = parseText(semiLine, "semi_line.env");
+  context.check(
+      semiParsed.simulationCase.sourceGeometry() == SourceGeometry::Line &&
+          semiParsed.simulationCase.runMode() ==
+              SimulationRunMode::SemiCoherent,
+      "semi-coherent mode composes with explicit line-source character");
+
+  std::string hatLine =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+  replaceFirst(hatLine, "'CG'", "'CG X'");
+  const ParsedEnvironment hatParsed = parseText(hatLine, "hat_line.env");
+  context.check(
+      hatParsed.simulationCase.sourceGeometry() == SourceGeometry::Line &&
+          hatParsed.simulationCase.beamFamily() == BeamFamily::GeometricHat,
+      "geometric hat family preserves line-source character");
+
+  context.expectThrows<ValidationError>(
+      [&point] {
+        std::string simpleGaussianLine = point;
+        replaceFirst(simpleGaussianLine, "'CC'", "'CS X'");
+        static_cast<void>(
+            parseText(simpleGaussianLine, "simple_gaussian_line.env"));
+      },
+      "simple Gaussian rejects line sources");
 }
 
 void testMunkCase(Context& context) {
@@ -527,27 +1262,134 @@ void testUnsupportedAndMalformedInput(Context& context) {
         static_cast<void>(parseText(contents, "two_media.env"));
       },
       "multiple media are explicitly rejected");
+  std::string n2Contents = direct;
+  replaceFirst(n2Contents, "'CVW'", "'NVW'");
+  const ParsedEnvironment n2Parsed = parseText(n2Contents, "n2_ssp.env");
+  context.check(
+      n2Parsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::N2Linear,
+      "N2-linear SSP interpolation is preserved by the real parser");
+  std::string incoherentContents = direct;
+  replaceFirst(incoherentContents, "'CC'", "'IC'");
+  const ParsedEnvironment incoherent =
+      parseText(incoherentContents, "incoherent.env");
+  std::string semiCoherentContents = direct;
+  replaceFirst(semiCoherentContents, "'CC'", "'SC'");
+  const ParsedEnvironment semiCoherent =
+      parseText(semiCoherentContents, "semi_coherent.env");
+  context.check(
+      incoherent.simulationCase.runMode() == SimulationRunMode::Incoherent &&
+          semiCoherent.simulationCase.runMode() ==
+              SimulationRunMode::SemiCoherent &&
+          incoherent.simulationCase.beamFamily() ==
+              BeamFamily::CervenyGaussian &&
+          semiCoherent.simulationCase.beamFamily() ==
+              BeamFamily::CervenyGaussian,
+      "IC/SC select Cartesian Cerveny intensity accumulation modes");
+  const std::string hat =
+      renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CG", SimulationRunMode::Coherent},
+           {"IG", SimulationRunMode::Incoherent},
+           {"SG", SimulationRunMode::SemiCoherent},
+           {"C^", SimulationRunMode::Coherent},
+           {"C", SimulationRunMode::Coherent}}) {
+    std::string contents = hat;
+    replaceFirst(contents, "'CG'", "'" + runType + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, "cartesian_hat_" + runType + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat,
+        "G/caret/blank aliases select the Cartesian GeoHat C/I/S path");
+  }
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"Cg", SimulationRunMode::Coherent},
+           {"Ig", SimulationRunMode::Incoherent},
+           {"Sg", SimulationRunMode::SemiCoherent}}) {
+    std::string contents = hat;
+    replaceFirst(contents, "'CG'", "'" + runType + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, "ray_centered_hat_" + runType + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricHat &&
+            parsed.simulationCase.cervenyCoordinateSystem() ==
+                CervenyCoordinateSystem::RayCentered,
+        "Cg/Ig/Sg select the ray-centered GeoHat C/I/S path");
+  }
+  std::string nonuniformHat = hat;
+  replaceFirst(nonuniformHat, "\n21\n0.02  0.25 /", "\n3\n0.02  0.08  0.25 /");
+  const ParsedEnvironment parsedNonuniformHat =
+      parseText(nonuniformHat, "nonuniform_cartesian_hat.env");
+  context.check(
+      parsedNonuniformHat.simulationCase.receivers().rangeCount() == 3U,
+      "Cartesian GeoHat accepts nonuniform rectilinear receiver ranges");
   context.expectThrows<ValidationError>(
       [&] {
-        std::string contents = direct;
-        replaceFirst(contents, "'CVW'", "'NVW'");
-        static_cast<void>(parseText(contents, "n2_ssp.env"));
+        std::string contents = nonuniformHat;
+        replaceFirst(contents, "'CG'", "'Cg'");
+        static_cast<void>(
+            parseText(contents, "nonuniform_ray_centered_hat.env"));
       },
-      "unsupported SSP interpolation is explicitly rejected");
+      "ray-centered GeoHat rejects nonuniform receiver ranges");
+  for (const auto& [runType, expectedMode] :
+       std::vector<std::pair<std::string, SimulationRunMode>>{
+           {"CB", SimulationRunMode::Coherent},
+           {"IB", SimulationRunMode::Incoherent},
+           {"SB", SimulationRunMode::SemiCoherent}}) {
+    std::string contents = hat;
+    replaceFirst(contents, "'CG'", "'" + runType + "'");
+    const ParsedEnvironment parsed =
+        parseText(contents, "cartesian_gaussian_" + runType + ".env");
+    context.check(
+        parsed.simulationCase.runMode() == expectedMode &&
+            parsed.simulationCase.beamFamily() == BeamFamily::GeometricGaussian,
+        "CB/IB/SB select the Cartesian GeoGaussian C/I/S path");
+  }
+  std::string simple = hat;
+  replaceFirst(simple, "'CG'", "'CS'");
+  const ParsedEnvironment parsedSimple =
+      parseText(simple, "simple_gaussian.env");
+  context.check(
+      parsedSimple.simulationCase.runMode() == SimulationRunMode::Coherent &&
+          parsedSimple.simulationCase.beamFamily() ==
+              BeamFamily::SimpleGaussian,
+      "CS selects the coherent Cartesian Simple Gaussian path");
+  for (const std::string& unsupported : {"IS", "SS"}) {
+    context.expectThrows<ValidationError>(
+        [&] {
+          std::string contents = hat;
+          replaceFirst(contents, "'CG'", "'" + unsupported + "'");
+          static_cast<void>(
+              parseText(contents, "simple_gaussian_" + unsupported + ".env"));
+        },
+        "Simple Gaussian intensity run modes remain explicitly rejected");
+  }
   context.expectThrows<ValidationError>(
       [&] {
-        std::string contents = direct;
-        replaceFirst(contents, "'CC'", "'IC'");
-        static_cast<void>(parseText(contents, "incoherent.env"));
+        std::string contents = simple;
+        contents += "'MS' 1.0 2.5\n";
+        static_cast<void>(parseText(contents, "simple_gaussian_with_tail.env"));
       },
-      "unsupported run type is explicitly rejected");
+      "Cartesian Simple Gaussian rejects a Cerveny-only option tail");
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = hat;
+        contents += "'MS' 1.0 2.5\n";
+        static_cast<void>(parseText(contents, "hat_with_cerveny_tail.env"));
+      },
+      "Cartesian GeoHat rejects a Cerveny-only option tail");
   context.expectThrows<ValidationError>(
       [&] {
         std::string contents = direct;
-        replaceFirst(contents, "'MS' 1.0  2.5", "'FS' 1.0  2.5");
+        replaceFirst(contents, "'MS' 1.0  2.5", "'XS' 1.0  2.5");
         static_cast<void>(parseText(contents, "filling_beam.env"));
       },
-      "unsupported beam-width mode is explicitly rejected");
+      "unknown beam-width mode is explicitly rejected");
   std::string elasticContents = direct;
   replaceFirst(elasticContents, "1000.0  1600.0  0.0  1.8",
                "1000.0  1600.0  100.0  1.8");
@@ -596,15 +1438,88 @@ void testUnsupportedAndMalformedInput(Context& context) {
 
 }  // namespace
 
+void testSspInterpolationKinds(Context& context) {
+  const std::string munkContents = renderCase("munk_pchip", 50.0, 300U);
+  const ParsedEnvironment pchipParsed =
+      parseText(munkContents, "munk_pchip.env");
+  context.check(
+      pchipParsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::Pchip,
+      "top option 'P' parses as PCHIP SSP interpolation");
+
+  std::string cLinearContents = munkContents;
+  replaceFirst(cLinearContents, "'PVW'", "'CVW'");
+  const ParsedEnvironment cParsed =
+      parseText(cLinearContents, "munk_clinear.env");
+  context.check(
+      cParsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::CLinear,
+      "top option 'C' parses as C-linear SSP interpolation");
+
+  std::string n2Contents = munkContents;
+  replaceFirst(n2Contents, "'PVW'", "'NVW'");
+  const ParsedEnvironment nParsed = parseText(n2Contents, "munk_n2.env");
+  context.check(
+      nParsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::N2Linear,
+      "top option 'N' parses as N2-linear SSP interpolation");
+
+  std::string splineContents = munkContents;
+  replaceFirst(splineContents, "'PVW'", "'SVW'");
+  const ParsedEnvironment splineParsed =
+      parseText(splineContents, "munk_spline.env");
+  context.check(splineParsed.simulationCase.environment()
+                        .soundSpeedProfile()
+                        .interpolationKind() ==
+                    rayreuse::SspInterpolationKind::CubicSpline,
+                "top option 'S' parses as cubic-spline SSP interpolation");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = munkContents;
+        replaceFirst(contents, "'PVW'", "'QVW'");
+        static_cast<void>(parseText(contents, "unsupported_ssp.env"));
+      },
+      "unsupported SSP interpolation option 'QVW' is rejected");
+
+  context.expectThrows<ValidationError>(
+      [&] {
+        std::string contents = munkContents;
+        replaceFirst(contents, "'PVW'", "'XVW'");
+        static_cast<void>(parseText(contents, "unknown_ssp.env"));
+      },
+      "unknown SSP interpolation option is rejected");
+
+  const rayreuse::SoundSpeedProfile programmatic(
+      {rayreuse::SoundSpeedPoint{
+           .depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+       rayreuse::SoundSpeedPoint{
+           .depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}});
+  context.check(programmatic.interpolationKind() ==
+                    rayreuse::SspInterpolationKind::CLinear,
+                "programmatic construction defaults to C-linear");
+}
+
 int main() {
   Context context;
   testDirectCase(context);
+  testSourceGeometry(context);
+  testSspInterpolationKinds(context);
   testFrequencyOverride(context);
   testEnvironmentFrequencyList(context);
+  testCartesianCervenyComponents(context);
   testBoundaryCases(context);
   testRrB1BoundarySidecarsAndFrozenEvents(context);
+  testCurvilinearBoundaryHeaders(context);
+  testVolumeAttenuationParsing(context);
+  testPrtVolumeAttenuationMarkers(context);
   testAttenuationCases(context);
   testRrB4ProductRunTypes(context);
+  testMultiSourceDepths(context);
+  testIrregularReceiverLayouts(context);
   testMunkCase(context);
   testFortranNumericSpelling(context);
   testUnsupportedAndMalformedInput(context);

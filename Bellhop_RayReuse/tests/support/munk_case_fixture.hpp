@@ -8,7 +8,8 @@ namespace rayreuse::test {
 inline constexpr double kMunkOracleLaunchAngle = -3.54656494649486695e-4;
 inline constexpr double kMunkExtremeLaunchAngle = 3.54301838154848892e-1;
 
-inline Environment makeMunkEnvironment() {
+inline Environment makeMunkEnvironment(
+    SspInterpolationKind kind = SspInterpolationKind::CLinear) {
   return Environment(
       SoundSpeedProfile(
           {{.depth = 0.0, .soundSpeed = 1548.52, .density = 1000.0},
@@ -37,7 +38,8 @@ inline Environment makeMunkEnvironment() {
            {.depth = 4400.0, .soundSpeed = 1541.76, .density = 1000.0},
            {.depth = 4600.0, .soundSpeed = 1545.14, .density = 1000.0},
            {.depth = 4800.0, .soundSpeed = 1548.52, .density = 1000.0},
-           {.depth = 5000.0, .soundSpeed = 1551.91, .density = 1000.0}}),
+           {.depth = 5000.0, .soundSpeed = 1551.91, .density = 1000.0}},
+          kind),
       BoundaryModel::vacuum(0.0),
       BoundaryModel::acousticHalfSpace(
           5000.0, AcousticMaterial{

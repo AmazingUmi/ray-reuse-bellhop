@@ -1,0 +1,43 @@
+id = "geometric_hat_semicoherent"
+description = "Semi-coherent Cartesian geometric-hat field with Lloyd source weighting"
+origin_template = "origin.env.in"
+source_references = [
+  "Bellhop_origin/Bellhop/ReadEnvironmentBell.f90 C/I/S and Cartesian geometric-hat grammar",
+  "Bellhop_origin/Bellhop/bellhop.f90 semi-coherent Lloyd source weighting",
+  "Bellhop_F2CPP/src/field/geometric_hat_influence.cpp production contribution order",
+]
+
+[compatibility]
+versions = ["origin", "f2cpp", "rayreuse"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 250.0
+minimum_angle_deg = -60.0
+maximum_angle_deg = 60.0
+policy = "shared_fmax"
+
+[validation]
+shd_dimensions = [1, 1, 1, 1, 1, 7, 21]
+prt_markers = [
+  "Semi-coherent TL calculation",
+  "Geometric hat beams in Cartesian coordinates",
+  "Geometric hat beams",
+  "Point source (cylindrical coordinates)",
+  "VACUUM",
+  "Perfectly RIGID",
+]
+prt_forbidden_markers = [
+  "Incoherent TL calculation",
+  "Cartesian beams",
+  "Ray centered beams",
+  "Geometric gaussian beams in Cartesian coordinates",
+  "Simple gaussian beams",
+]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]

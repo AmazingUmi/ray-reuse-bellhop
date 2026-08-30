@@ -66,13 +66,20 @@ class ArrivalParityTests(unittest.TestCase):
             "arrival_geometric_hat_ascii": base,
             "arrival_geometric_hat_binary": base,
             "arrival_geometric_hat_ray_centered": base,
+            "arrival_geometric_hat_ray_centered_binary": base,
             "arrival_geometric_gaussian_irregular": irregular,
             "arrival_line_directional_multisource": multi_source,
+            "arrival_multi_source": multi_source,
+            "arrival_multi_source_binary": multi_source,
             "arrival_zero": zero,
         }
         _effects(products)
         products["arrival_zero"] = base
         with self.assertRaisesRegex(ValueError, "zero-arrival"):
+            _effects(products)
+        products["arrival_zero"] = zero
+        products["arrival_multi_source"] = ArrivalsProduct(base.header, (base.sources[0],))
+        with self.assertRaisesRegex(ValueError, "point-source multi-source"):
             _effects(products)
 
     def test_freshness_and_manifest_identity_rejections(self) -> None:

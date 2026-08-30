@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/model/quadrilateral_ssp.hpp"
 
 namespace rayreuse {
 namespace {
@@ -140,10 +142,125 @@ void validateReflectionTable(const SharedTabulatedReflectionTable& table) {
   }
 }
 
+void validateVolumeAttenuation(const VolumeAttenuation& attenuation) {
+  switch (attenuation.model) {
+    case VolumeAttenuationModel::None:
+    case VolumeAttenuationModel::Thorp:
+      if (!std::holds_alternative<std::monostate>(attenuation.parameters)) {
+        throw ValidationError(
+            "None and Thorp volume attenuation require empty parameters");
+      }
+      return;
+    case VolumeAttenuationModel::FrancoisGarrison: {
+      const auto* parameters =
+          std::get_if<FrancoisGarrisonParameters>(&attenuation.parameters);
+      if (parameters == nullptr) {
+        throw ValidationError(
+            "Francois-Garrison volume attenuation requires its parameters");
+      }
+      requireFinite(parameters->temperatureCelsius,
+                    "volumeAttenuation.temperatureCelsius");
+      requireFinite(parameters->salinityPsu, "volumeAttenuation.salinityPsu");
+      requireFinite(parameters->pH, "volumeAttenuation.pH");
+      requireFinite(parameters->meanDepthMeters,
+                    "volumeAttenuation.meanDepthMeters");
+      if (parameters->temperatureCelsius <= -273.0) {
+        throw ValidationError(
+            "volumeAttenuation.temperatureCelsius must exceed -273 C");
+      }
+      if (parameters->salinityPsu < 0.0) {
+        throw ValidationError(
+            "volumeAttenuation.salinityPsu must be non-negative");
+      }
+      if (parameters->meanDepthMeters < 0.0) {
+        throw ValidationError(
+            "volumeAttenuation.meanDepthMeters must be non-negative");
+      }
+      return;
+    }
+    case VolumeAttenuationModel::Biological: {
+      const auto* layers = std::get_if<SharedBiologicalAttenuationLayers>(
+          &attenuation.parameters);
+      if (layers == nullptr || !*layers) {
+        throw ValidationError(
+            "biological volume attenuation requires immutable layers");
+      }
+      if ((*layers)->size() > 200U) {
+        throw ValidationError(
+            "biological volume attenuation supports at most 200 layers");
+      }
+      for (const BiologicalAttenuationLayer& layer : **layers) {
+        requireFinite(layer.minimumDepth,
+                      "volumeAttenuation.layer.minimumDepth");
+        requireFinite(layer.maximumDepth,
+                      "volumeAttenuation.layer.maximumDepth");
+        requireFinite(layer.resonanceFrequency,
+                      "volumeAttenuation.layer.resonanceFrequency");
+        requireFinite(layer.qualityFactor,
+                      "volumeAttenuation.layer.qualityFactor");
+        requireFinite(layer.attenuationCoefficientDecibelsPerKilometer,
+                      "volumeAttenuation.layer."
+                      "attenuationCoefficientDecibelsPerKilometer");
+        if (layer.minimumDepth > layer.maximumDepth) {
+          throw ValidationError(
+              "biological layer minimum depth must not exceed maximum depth");
+        }
+        if (layer.resonanceFrequency <= 0.0) {
+          throw ValidationError(
+              "biological layer resonance frequency must be positive");
+        }
+        if (layer.qualityFactor <= 0.0) {
+          throw ValidationError(
+              "biological layer quality factor must be positive");
+        }
+        if (layer.attenuationCoefficientDecibelsPerKilometer < 0.0) {
+          throw ValidationError(
+              "biological layer attenuation coefficient must be non-negative");
+        }
+      }
+      return;
+    }
+  }
+  throw ValidationError("unknown volume attenuation model");
+}
+
+void validateQuadrilateralGrid(const SharedQuadrilateralSspGrid& grid,
+                               std::size_t depthCount) {
+  if (!grid || grid->depthCount != depthCount || grid->depthCount < 2U ||
+      grid->rangeCount < 2U || grid->rangesMeters.size() != grid->rangeCount) {
+    throw ValidationError("quadrilateral SSP grid dimensions are invalid");
+  }
+  if (grid->rangeCount >
+      std::numeric_limits<std::size_t>::max() / grid->depthCount) {
+    throw ValidationError("quadrilateral SSP grid dimensions overflow");
+  }
+  if (grid->speedsDepthMajor.size() != grid->depthCount * grid->rangeCount) {
+    throw ValidationError("quadrilateral SSP grid sample count is invalid");
+  }
+  for (std::size_t index = 0U; index < grid->rangeCount; ++index) {
+    requireFinite(grid->rangesMeters[index], "quadrilateral SSP range");
+    if (index > 0U &&
+        grid->rangesMeters[index - 1U] >= grid->rangesMeters[index]) {
+      throw ValidationError(
+          "quadrilateral SSP ranges must be strictly increasing");
+    }
+  }
+  for (double speed : grid->speedsDepthMajor) {
+    requireFinite(speed, "quadrilateral SSP sound speed");
+    if (speed <= 0.0) {
+      throw ValidationError("quadrilateral SSP sound speeds must be positive");
+    }
+  }
+}
+
 }  // namespace
 
-SoundSpeedProfile::SoundSpeedProfile(std::vector<SoundSpeedPoint> points)
-    : points_(std::move(points)) {
+SoundSpeedProfile::SoundSpeedProfile(
+    std::vector<SoundSpeedPoint> points, SspInterpolationKind interpolationKind,
+    SharedQuadrilateralSspGrid quadrilateralGrid)
+    : points_(std::move(points)),
+      interpolationKind_(interpolationKind),
+      quadrilateralGrid_(std::move(quadrilateralGrid)) {
   if (points_.size() < 2U) {
     throw ValidationError("sound-speed profile requires at least two points");
   }
@@ -165,6 +282,12 @@ SoundSpeedProfile::SoundSpeedProfile(std::vector<SoundSpeedPoint> points)
           "sound-speed profile depths must be strictly increasing");
     }
   }
+  if (interpolationKind_ == SspInterpolationKind::Quadrilateral) {
+    validateQuadrilateralGrid(quadrilateralGrid_, points_.size());
+  } else if (quadrilateralGrid_) {
+    throw ValidationError(
+        "only quadrilateral SSP profiles can carry a quadrilateral grid");
+  }
 }
 
 const std::vector<SoundSpeedPoint>& SoundSpeedProfile::points() const noexcept {
@@ -177,6 +300,33 @@ double SoundSpeedProfile::minimumDepth() const noexcept {
 
 double SoundSpeedProfile::maximumDepth() const noexcept {
   return points_.back().depth;
+}
+
+SspInterpolationKind SoundSpeedProfile::interpolationKind() const noexcept {
+  return interpolationKind_;
+}
+
+const SharedQuadrilateralSspGrid& SoundSpeedProfile::quadrilateralGrid()
+    const noexcept {
+  return quadrilateralGrid_;
+}
+
+double SoundSpeedProfile::quadrilateralRealSoundSpeedAt(Vec2 position) const {
+  if (interpolationKind_ != SspInterpolationKind::Quadrilateral ||
+      !quadrilateralGrid_) {
+    throw ValidationError("quadrilateral SSP grid is not available");
+  }
+  requireFinite(position.range, "quadrilateral SSP query range");
+  requireFinite(position.depth, "quadrilateral SSP query depth");
+  if (position.range < quadrilateralGrid_->rangesMeters.front() ||
+      position.range > quadrilateralGrid_->rangesMeters.back() ||
+      position.depth < points_.front().depth ||
+      position.depth > points_.back().depth) {
+    throw ValidationError("quadrilateral SSP query is outside its grid");
+  }
+  // Launch planning must use the same depth-first arithmetic and cell
+  // selection as ray geometry, rather than a separately rounded interpolation.
+  return QuadrilateralSsp(*this).evaluate(position, 0U, 0U).soundSpeed;
 }
 
 BoundaryModel BoundaryModel::vacuum(double depth) {
@@ -345,10 +495,13 @@ double BoundaryModel::materialAttenuationDepthAtSegment(
 }
 
 Environment::Environment(SoundSpeedProfile soundSpeedProfile,
-                         BoundaryModel seaSurface, BoundaryModel seabed)
+                         BoundaryModel seaSurface, BoundaryModel seabed,
+                         VolumeAttenuation volumeAttenuation)
     : soundSpeedProfile_(std::move(soundSpeedProfile)),
       seaSurface_(std::move(seaSurface)),
-      seabed_(std::move(seabed)) {
+      seabed_(std::move(seabed)),
+      volumeAttenuation_(std::move(volumeAttenuation)) {
+  validateVolumeAttenuation(volumeAttenuation_);
   if (seaSurface_.geometry().orientation() != BoundaryOrientation::Upper) {
     throw ValidationError("sea-surface geometry must be upper");
   }
@@ -395,6 +548,10 @@ const BoundaryModel& Environment::seaSurface() const noexcept {
 }
 
 const BoundaryModel& Environment::seabed() const noexcept { return seabed_; }
+
+const VolumeAttenuation& Environment::volumeAttenuation() const noexcept {
+  return volumeAttenuation_;
+}
 
 double Environment::waterDepth() const noexcept {
   return seabed_.depth() - seaSurface_.depth();

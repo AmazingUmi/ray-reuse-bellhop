@@ -23,6 +23,7 @@
 namespace {
 
 using rayreuse::AcousticMaterial;
+using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryModel;
 using rayreuse::CartesianCervenyDiagnostic;
 using rayreuse::CartesianCervenyDiagnosticRequest;
@@ -36,6 +37,7 @@ using rayreuse::FrequencyProjector;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometryTracer;
 using rayreuse::IntegratorSettings;
+using rayreuse::IntensityWorkspace;
 using rayreuse::pickMinimumWidthEpsilon;
 using rayreuse::RayFrequencyPoint;
 using rayreuse::RayFrequencyState;
@@ -336,6 +338,34 @@ void testRigidReflectionOracle(Context& context) {
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "rigid reflection oracle receiver is evaluated");
   const CartesianCervenyDiagnostic& value = diagnostic.value();
+  IntensityWorkspace intensityWorkspace(250.0, receivers);
+  const auto intensityDiagnostic =
+      CartesianCervenyInfluence(environment, receivers)
+          .accumulateIntensity(
+              intensityWorkspace, path, frequencyState, epsilon.value,
+              CartesianCervenyDiagnosticRequest{.receiverRangeIndex = 110U,
+                                                .receiverDepthIndex = 48U});
+  context.check(
+      intensityDiagnostic.has_value() && intensityDiagnostic->evaluated,
+      "rigid reflection intensity receiver is evaluated");
+  const double coherentMagnitude = std::abs(value.finalContribution);
+  const double coherentImageSumIntensity =
+      coherentMagnitude * coherentMagnitude;
+  context.checkNear(
+      intensityDiagnostic->intensityIncrement, coherentImageSumIntensity,
+      2.0e-10, "rigid images sum coherently before beam intensity is formed");
+  context.checkNear(
+      intensityWorkspace.at(48U, 110U), coherentImageSumIntensity, 2.0e-10,
+      "intensity workspace adds the per-beam ABS squared increment");
+  double separateImageIntensity = 0.0;
+  for (const auto& image : value.images) {
+    const double imageMagnitude =
+        std::abs(value.constantCorrected * image.contribution);
+    separateImageIntensity += imageMagnitude * imageMagnitude;
+  }
+  context.check(
+      std::abs(separateImageIntensity - coherentImageSumIntensity) > 1.0,
+      "fixture distinguishes coherent image sum from per-image power");
   context.check(value.evaluationCount == 1U && value.leftPointIndex == 429U &&
                     value.rightPointIndex == 430U,
                 "rigid reflection receiver is owned by the oracle segment");
@@ -553,9 +583,21 @@ void testBranchCutAndHermitePrimitives(Context& context) {
       updateCervenyKmah({6.7944202263062631e4, -3.7722193856823377e7},
                         {-6.7817106255825528e5, -3.8184300925539017e7}, 1) == 1,
       "real-q sign change without imaginary crossing does not flip");
+  context.check(
+      updateCervenyKmah({1.0, -7.0}, {-1.0, -7.0}, 1, BeamWidthMode::Wkb) == -1,
+      "WKB real-q zero crossing flips KMAH");
+  context.check(
+      updateCervenyKmah({1.0, -7.0}, {2.0, 7.0}, 1, BeamWidthMode::Wkb) == 1,
+      "WKB ignores an imaginary-q crossing without a real crossing");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(updateCervenyKmah({1.0, -1.0}, {-1.0, 1.0}, 2)); },
       "KMAH contract accepts only the two legacy signs");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(updateCervenyKmah({1.0, -1.0}, {-1.0, 1.0}, 1,
+                                            static_cast<BeamWidthMode>(999)));
+      },
+      "KMAH rejects an unknown beam-width mode");
   context.checkNear(cervenyHermiteTaper(1.0, 1.0, 2.0), 1.0, 0.0,
                     "Hermite inner boundary is inclusive");
   context.checkNear(cervenyHermiteTaper(2.0, 1.0, 2.0), 0.0, 0.0,
@@ -595,6 +637,13 @@ void testValidationContracts(Context& context) {
   context.expectThrows<ValidationError>(
       [&] {
         static_cast<void>(CartesianCervenyInfluence(
+            environment, ReceiverGrid({50.0}, {0.0, 10.0}),
+            CartesianCervenySettings{}, static_cast<BeamWidthMode>(999)));
+      },
+      "unknown beam-width mode is rejected");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(CartesianCervenyInfluence(
             environment, ReceiverGrid({50.0}, {10.0})));
       },
       "single receiver range is rejected");
@@ -609,6 +658,10 @@ void testValidationContracts(Context& context) {
   const CartesianCervenyInfluence influence(
       environment, receivers,
       CartesianCervenySettings{.imageCount = 1U, .beamWindow = 5});
+  const CartesianCervenyInfluence wkbInfluence(
+      environment, receivers,
+      CartesianCervenySettings{.imageCount = 1U, .beamWindow = 5},
+      BeamWidthMode::Wkb);
   RayPath path;
   path.launchAngle = 0.0;
   path.points = {makeSyntheticState(0.0), makeSyntheticState(5.0),
@@ -629,6 +682,18 @@ void testValidationContracts(Context& context) {
                                      .reflectionPhase = 0.0,
                                      .active = true}}};
   };
+  {
+    FrequencyWorkspace workspace(50.0, receivers);
+    static_cast<void>(
+        wkbInfluence.accumulate(workspace, path, makeState(), {100.0, 0.0}));
+  }
+  context.expectThrows<ValidationError>(
+      [&] {
+        FrequencyWorkspace workspace(50.0, receivers);
+        static_cast<void>(wkbInfluence.accumulate(workspace, path, makeState(),
+                                                  {0.0, 100.0}));
+      },
+      "WKB influence rejects an imaginary epsilon");
 
   context.expectThrows<ValidationError>(
       [&] {

@@ -24,11 +24,14 @@ run type 决定：
 
 | run type | 单频输出 | 多频输出 |
 |---|---|---|
-| `CC` | `<root>.shd` | 一个多频 `<root>.shd` |
+| `CC/IC/SC` | `<root>.shd` | 一个多频 `<root>.shd` |
+| `CR/IR/SR` | `<root>.shd` | 一个多频 `<root>.shd` |
+| `CG/IG/SG`、`Cg/Ig/Sg` | `<root>.shd` | 一个多频 `<root>.shd` |
+| `CB/IB/SB`、`CS` | `<root>.shd` | 一个多频 `<root>.shd` |
 | `R/RG/RGO` | `<root>.ray` | 明确拒绝 |
-| `A` | `<root>.arr` | `<root>_fNNN_<freq>Hz.arr` |
-| `a` | `<root>.arr` | `<root>_fNNN_<freq>Hz.arr` |
-| `E` | `<root>.ray` | `<root>_fNNN_<freq>Hz.ray` |
+| `AG/Ag/AB` | `<root>.arr` | `<root>_fNNN_<freq>Hz.arr` |
+| `aG/ag/aB` | `<root>.arr` | `<root>_fNNN_<freq>Hz.arr` |
+| `EG/Eg/EB` | `<root>.ray` | `<root>_fNNN_<freq>Hz.ray` |
 
 ## 多频与执行模式
 
@@ -67,7 +70,11 @@ worker 不直接写文件；主 consumer 按 frequency index 稳定发布。
 - 多频运行中任一频失败会清理本次已发布的逐频产品；
 - 环境解析或组合校验在新生命周期开始前失败时，旧有效产品保持不变；
 - 未支持组合返回非零状态，并在可用时写入 PRT `FATAL ERROR`；
-- 多频 R、line source、irregular receiver、ray-centered family 等不会静默退化。
+- ray-centered Cerveny 与 ray-centered GeoHat TL/A/a/E 都要求
+  规则网格且 receiver ranges 至少两个并等间距；其中
+  TL GeoHat 使用 `Cg/Ig/Sg`，产品使用 `Ag/ag/Eg`。未支持组合
+  （如 Simple Gaussian 搭配 line source、ray-centered 搭配 irregular、
+  3D/N×2D 等）返回非零状态，不会静默退化。
 
 ## 共享标准案例
 
@@ -86,7 +93,7 @@ uv run python test/standard_cases/codes/standard_cases.py test \
 ```bash
 uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
-  --case eigenray_geometric_gaussian \
+  --case eigenray_geometric_hat_ray_centered \
   --profile broadband_smoke \
   --rayreuse-execution-mode parallel \
   --executable Bellhop_RayReuse/build/release/bellhop_rayreuse

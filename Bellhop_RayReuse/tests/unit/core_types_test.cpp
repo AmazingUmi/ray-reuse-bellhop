@@ -2,7 +2,9 @@
 #include <complex>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <numbers>
+#include <numeric>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -18,11 +20,23 @@
 namespace {
 
 using rayreuse::BeamFamily;
+using rayreuse::BeamWidthMode;
+using rayreuse::BiologicalAttenuationLayer;
+using rayreuse::BiologicalAttenuationLayers;
+using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
+using rayreuse::FieldComponent;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
+using rayreuse::kMaximumReceiverGridValues;
+using rayreuse::kMaximumRunRayCount;
 using rayreuse::LaunchFan;
+using rayreuse::LaunchFanPlan;
+using rayreuse::LaunchFanPlanner;
+using rayreuse::LaunchFanPlanningInput;
 using rayreuse::RayFrequencyPoint;
 using rayreuse::RayFrequencyState;
 using rayreuse::RayPath;
@@ -30,6 +44,7 @@ using rayreuse::RayPathCache;
 using rayreuse::RayState;
 using rayreuse::RayTerminationReason;
 using rayreuse::ReceiverGrid;
+using rayreuse::ReceiverGridLayout;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SoundSpeedPoint;
@@ -37,18 +52,209 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
 using rayreuse::SourceBeamPatternSample;
+using rayreuse::SourceGeometry;
 using rayreuse::StepQuadrature;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
-Environment makeEnvironment() {
+Environment makeEnvironment(VolumeAttenuation volumeAttenuation = {}) {
   std::vector<SoundSpeedPoint> points{
       {.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
       {.depth = 1000.0, .soundSpeed = 1500.0, .density = 1000.0},
   };
   return Environment(SoundSpeedProfile(std::move(points)),
-                     BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+                     BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0),
+                     std::move(volumeAttenuation));
+}
+
+void testVolumeAttenuationOwnership(Context& context) {
+  const VolumeAttenuation defaultAttenuation;
+  context.check(
+      defaultAttenuation.model == VolumeAttenuationModel::None &&
+          std::holds_alternative<std::monostate>(defaultAttenuation.parameters),
+      "volume attenuation defaults to None with empty parameters");
+
+  const Environment defaultEnvironment = makeEnvironment();
+  context.check(
+      defaultEnvironment.volumeAttenuation().model ==
+              VolumeAttenuationModel::None &&
+          std::holds_alternative<std::monostate>(
+              defaultEnvironment.volumeAttenuation().parameters),
+      "existing Environment construction defaults to lossless volume model");
+  const Environment explicitNone = makeEnvironment(
+      {.model = VolumeAttenuationModel::None, .parameters = std::monostate{}});
+  const Environment thorp = makeEnvironment(
+      {.model = VolumeAttenuationModel::Thorp, .parameters = std::monostate{}});
+  context.check(
+      explicitNone.volumeAttenuation().model == VolumeAttenuationModel::None &&
+          thorp.volumeAttenuation().model == VolumeAttenuationModel::Thorp,
+      "None and Thorp accept explicit empty parameters");
+
+  const FrancoisGarrisonParameters validFrancoisGarrison{
+      .temperatureCelsius = 12.5,
+      .salinityPsu = 34.0,
+      .pH = 7.8,
+      .meanDepthMeters = 750.0};
+  const VolumeAttenuation explicitFrancoisGarrison{
+      .model = VolumeAttenuationModel::FrancoisGarrison,
+      .parameters = validFrancoisGarrison};
+  const Environment francoisGarrison =
+      makeEnvironment(explicitFrancoisGarrison);
+  const auto* storedFrancoisGarrison = std::get_if<FrancoisGarrisonParameters>(
+      &francoisGarrison.volumeAttenuation().parameters);
+  context.check(storedFrancoisGarrison != nullptr &&
+                    storedFrancoisGarrison->temperatureCelsius == 12.5 &&
+                    storedFrancoisGarrison->meanDepthMeters == 750.0,
+                "Francois-Garrison parameters are value-owned by Environment");
+
+  const auto emptyLayers =
+      std::make_shared<const BiologicalAttenuationLayers>();
+  const Environment emptyBiological = makeEnvironment(
+      {.model = VolumeAttenuationModel::Biological, .parameters = emptyLayers});
+  context.check(std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+                    emptyBiological.volumeAttenuation().parameters)
+                    ->empty(),
+                "biological attenuation accepts zero immutable layers");
+
+  BiologicalAttenuationLayers overlapping{
+      {.minimumDepth = 100.0,
+       .maximumDepth = 300.0,
+       .resonanceFrequency = 1000.0,
+       .qualityFactor = 2.0,
+       .attenuationCoefficientDecibelsPerKilometer = 0.5},
+      {.minimumDepth = 200.0,
+       .maximumDepth = 400.0,
+       .resonanceFrequency = 2000.0,
+       .qualityFactor = 3.0,
+       .attenuationCoefficientDecibelsPerKilometer = 0.25}};
+  const auto sharedLayers =
+      std::make_shared<const BiologicalAttenuationLayers>(overlapping);
+  const Environment biological =
+      makeEnvironment({.model = VolumeAttenuationModel::Biological,
+                       .parameters = sharedLayers});
+  const long ownersBeforeCopy = sharedLayers.use_count();
+  const Environment biologicalCopy = biological;
+  const auto& storedLayers =
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          biological.volumeAttenuation().parameters);
+  const auto& copiedLayers =
+      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          biologicalCopy.volumeAttenuation().parameters);
+  context.check(storedLayers->size() == 2U,
+                "biological attenuation accepts overlapping layers");
+  context.check(storedLayers.get() == copiedLayers.get() &&
+                    sharedLayers.use_count() == ownersBeforeCopy + 1,
+                "copied environments share biological layers immutably");
+
+  BiologicalAttenuationLayers maximumLayers(200U, overlapping.front());
+  const Environment maximumBiological = makeEnvironment(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+           std::move(maximumLayers))});
+  context.check(std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+                    maximumBiological.volumeAttenuation().parameters)
+                        ->size() == 200U,
+                "biological attenuation accepts exactly 200 layers");
+
+  const auto expectInvalid = [&context](VolumeAttenuation attenuation,
+                                        const std::string& message) {
+    context.expectThrows<ValidationError>(
+        [attenuation = std::move(attenuation)]() mutable {
+          static_cast<void>(makeEnvironment(std::move(attenuation)));
+        },
+        message);
+  };
+  expectInvalid({.model = VolumeAttenuationModel::None,
+                 .parameters = validFrancoisGarrison},
+                "None rejects Francois-Garrison parameters");
+  expectInvalid({.model = VolumeAttenuationModel::Thorp,
+                 .parameters = validFrancoisGarrison},
+                "Thorp rejects Francois-Garrison parameters");
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = std::monostate{}},
+                "Francois-Garrison rejects empty parameters");
+  expectInvalid({.model = VolumeAttenuationModel::Biological,
+                 .parameters = std::monostate{}},
+                "biological attenuation rejects a mismatched variant");
+  expectInvalid(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = rayreuse::SharedBiologicalAttenuationLayers{}},
+      "biological attenuation rejects a null immutable layer pointer");
+  expectInvalid(
+      {.model = VolumeAttenuationModel::Biological,
+       .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+           201U, overlapping.front())},
+      "biological attenuation rejects more than 200 layers");
+
+  FrancoisGarrisonParameters invalidFrancoisGarrison = validFrancoisGarrison;
+  invalidFrancoisGarrison.salinityPsu = -1.0;
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = invalidFrancoisGarrison},
+                "Francois-Garrison rejects negative salinity");
+  invalidFrancoisGarrison = validFrancoisGarrison;
+  invalidFrancoisGarrison.temperatureCelsius = -273.0;
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = invalidFrancoisGarrison},
+                "Francois-Garrison rejects temperatures at absolute zero");
+  invalidFrancoisGarrison = validFrancoisGarrison;
+  invalidFrancoisGarrison.meanDepthMeters = -1.0;
+  expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                 .parameters = invalidFrancoisGarrison},
+                "Francois-Garrison rejects negative mean depth");
+  for (std::size_t field = 0U; field < 4U; ++field) {
+    invalidFrancoisGarrison = validFrancoisGarrison;
+    double* values[] = {&invalidFrancoisGarrison.temperatureCelsius,
+                        &invalidFrancoisGarrison.salinityPsu,
+                        &invalidFrancoisGarrison.pH,
+                        &invalidFrancoisGarrison.meanDepthMeters};
+    *values[field] = std::numeric_limits<double>::infinity();
+    expectInvalid({.model = VolumeAttenuationModel::FrancoisGarrison,
+                   .parameters = invalidFrancoisGarrison},
+                  "Francois-Garrison rejects every non-finite field");
+  }
+
+  const auto expectInvalidLayer = [&expectInvalid](
+                                      BiologicalAttenuationLayer layer,
+                                      const std::string& message) {
+    expectInvalid(
+        {.model = VolumeAttenuationModel::Biological,
+         .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+             BiologicalAttenuationLayers{layer})},
+        message);
+  };
+  BiologicalAttenuationLayer invalidLayer = overlapping.front();
+  invalidLayer.minimumDepth = 301.0;
+  expectInvalidLayer(invalidLayer,
+                     "biological layer rejects reversed depth bounds");
+  for (double resonance : {-1.0, 0.0}) {
+    invalidLayer = overlapping.front();
+    invalidLayer.resonanceFrequency = resonance;
+    expectInvalidLayer(invalidLayer,
+                       "biological layer requires positive resonance");
+  }
+  for (double qualityFactor : {-1.0, 0.0}) {
+    invalidLayer = overlapping.front();
+    invalidLayer.qualityFactor = qualityFactor;
+    expectInvalidLayer(invalidLayer,
+                       "biological layer requires positive quality factor");
+  }
+  invalidLayer = overlapping.front();
+  invalidLayer.attenuationCoefficientDecibelsPerKilometer = -1.0;
+  expectInvalidLayer(invalidLayer,
+                     "biological layer rejects negative attenuation");
+  for (std::size_t field = 0U; field < 5U; ++field) {
+    invalidLayer = overlapping.front();
+    double* values[] = {
+        &invalidLayer.minimumDepth, &invalidLayer.maximumDepth,
+        &invalidLayer.resonanceFrequency, &invalidLayer.qualityFactor,
+        &invalidLayer.attenuationCoefficientDecibelsPerKilometer};
+    *values[field] = std::numeric_limits<double>::quiet_NaN();
+    expectInvalidLayer(invalidLayer,
+                       "biological layer rejects every non-finite field");
+  }
 }
 
 SimulationCase makeSimulationCase(std::vector<double> frequencies) {
@@ -178,6 +384,10 @@ void testSimulationCase(Context& context) {
   context.check(simulation.launchFanPlan().launchAngles.size() ==
                     simulation.launchFanPlan().launchAngleCount,
                 "SimulationCase stores the complete derived launch fan");
+  context.check(simulation.sourceCount() == 1U &&
+                    simulation.sources().front().depth == 500.0 &&
+                    simulation.source().depth == 500.0,
+                "single-source cases expose exactly one sorted source");
 
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(makeSimulationCase({})); },
@@ -273,27 +483,191 @@ void testSimulationProductMetadata(Context& context) {
       },
       "source beam pattern rejects amplitude-conversion overflow");
 
-  const auto makeMetadataCase = [&](SimulationRunMode runMode,
-                                    BeamFamily beamFamily) {
-    return SimulationCase(
-        makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
-        ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
-        FrequencyGrid({50.0}),
-        LaunchFan{.minimumAngle = -0.1,
-                  .maximumAngle = 0.1,
-                  .explicitLaunchAngleCount = 301U},
-        IntegratorSettings{.stepLength = 10.0,
-                           .rangeLimit = 5100.0,
-                           .depthLimit = 1100.0,
-                           .maximumRayPoints = 10000U},
-        pattern, runMode, beamFamily);
-  };
+  const auto makeMetadataCase =
+      [&](SimulationRunMode runMode, BeamFamily beamFamily,
+          FieldComponent fieldComponent = FieldComponent::Pressure,
+          BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
+          BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+          CervenyCoordinateSystem coordinateSystem =
+              CervenyCoordinateSystem::Cartesian,
+          SourceGeometry sourceGeometry = SourceGeometry::Point) {
+        return SimulationCase(
+            makeEnvironment(), Source{.depth = 500.0, .amplitude = 1.0},
+            ReceiverGrid(
+                {400.0, 500.0, 600.0},
+                coordinateSystem == CervenyCoordinateSystem::RayCentered
+                    ? std::vector<double>{100.0, 1000.0, 1900.0}
+                    : std::vector<double>{100.0, 1000.0, 5000.0}),
+            FrequencyGrid({50.0}),
+            LaunchFan{.minimumAngle = -0.1,
+                      .maximumAngle = 0.1,
+                      .explicitLaunchAngleCount = 301U},
+            IntegratorSettings{.stepLength = 10.0,
+                               .rangeLimit = 5100.0,
+                               .depthLimit = 1100.0,
+                               .maximumRayPoints = 10000U},
+            pattern, runMode, beamFamily, fieldComponent, curvatureMode,
+            beamWidthMode, coordinateSystem, sourceGeometry);
+      };
   const SimulationCase arrivals = makeMetadataCase(
       SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
   context.check(arrivals.runMode() == SimulationRunMode::AsciiArrivals &&
                     arrivals.beamFamily() == BeamFamily::GeometricHat &&
                     arrivals.sourceBeamPattern().isDirectional(),
                 "SimulationCase preserves product metadata and beam pattern");
+  const SimulationCase incoherent = makeMetadataCase(
+      SimulationRunMode::Incoherent, BeamFamily::CervenyGaussian);
+  const SimulationCase semiCoherent = makeMetadataCase(
+      SimulationRunMode::SemiCoherent, BeamFamily::CervenyGaussian);
+  context.check(incoherent.runMode() == SimulationRunMode::Incoherent &&
+                    semiCoherent.runMode() == SimulationRunMode::SemiCoherent &&
+                    rayreuse::isTransmissionLossMode(incoherent.runMode()) &&
+                    rayreuse::isTransmissionLossMode(semiCoherent.runMode()) &&
+                    rayreuse::fieldAccumulationKind(incoherent.runMode()) ==
+                        rayreuse::FieldAccumulationKind::Intensity &&
+                    rayreuse::fieldAccumulationKind(semiCoherent.runMode()) ==
+                        rayreuse::FieldAccumulationKind::Intensity &&
+                    !rayreuse::usesLloydMirror(incoherent.runMode()) &&
+                    rayreuse::usesLloydMirror(semiCoherent.runMode()),
+                "SimulationCase preserves I/S mode and accumulation metadata");
+  for (const FieldComponent component :
+       {FieldComponent::Pressure, FieldComponent::Vertical,
+        FieldComponent::Horizontal}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian, component);
+    context.check(cartesianCerveny.fieldComponent() == component,
+                  "SimulationCase preserves Cartesian Cerveny component");
+  }
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SimulationCase rayCentered = makeMetadataCase(
+        mode, BeamFamily::CervenyGaussian, FieldComponent::Vertical,
+        BoundaryCurvatureMode::Double, BeamWidthMode::SpaceFilling,
+        CervenyCoordinateSystem::RayCentered);
+    context.check(
+        rayCentered.cervenyCoordinateSystem() ==
+                CervenyCoordinateSystem::RayCentered &&
+            rayCentered.fieldComponent() == FieldComponent::Vertical &&
+            rayCentered.curvatureMode() == BoundaryCurvatureMode::Double &&
+            rayCentered.beamWidthMode() == BeamWidthMode::SpaceFilling,
+        "SimulationCase preserves ray-centered Cerveny TL metadata");
+  }
+  for (const SourceGeometry geometry :
+       {SourceGeometry::Point, SourceGeometry::Line}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+        BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+        geometry);
+    context.check(cartesianCerveny.sourceGeometry() == geometry,
+                  "SimulationCase preserves Cartesian Cerveny source geometry");
+    const SimulationCase hatCase = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+        BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+        geometry);
+    context.check(hatCase.sourceGeometry() == geometry,
+                  "SimulationCase preserves Geometric Hat source geometry");
+    const SimulationCase gaussianCase = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::GeometricGaussian,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+        BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+        geometry);
+    context.check(
+        gaussianCase.sourceGeometry() == geometry,
+        "SimulationCase preserves Geometric Gaussian source geometry");
+  }
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::SimpleGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+            SourceGeometry::Line));
+      },
+      "simple Gaussian rejects line sources");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::Cartesian,
+            static_cast<SourceGeometry>(999)));
+      },
+      "SimulationCase rejects invalid source geometry enum values");
+  for (const BoundaryCurvatureMode curvatureMode :
+       {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
+        BoundaryCurvatureMode::Zero}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        FieldComponent::Pressure, curvatureMode);
+    context.check(cartesianCerveny.curvatureMode() == curvatureMode,
+                  "SimulationCase preserves Cartesian Cerveny curvature");
+  }
+  for (const BeamWidthMode widthMode :
+       {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
+        BeamWidthMode::Wkb}) {
+    const SimulationCase cartesianCerveny = makeMetadataCase(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        FieldComponent::Pressure, BoundaryCurvatureMode::Standard, widthMode);
+    context.check(cartesianCerveny.beamWidthMode() == widthMode,
+                  "SimulationCase preserves Cartesian Cerveny beam width");
+  }
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Coherent,
+                                           BeamFamily::GeometricHat,
+                                           FieldComponent::Vertical));
+      },
+      "non-Cerveny families reject non-pressure components");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(SimulationRunMode::RayTrace,
+                                           BeamFamily::CervenyGaussian,
+                                           FieldComponent::Horizontal));
+      },
+      "non-TL products reject non-pressure components");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::GeometricGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Double));
+      },
+      "non-Cerveny families reject non-standard curvature");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Zero));
+      },
+      "non-TL products reject non-standard curvature");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::SpaceFilling));
+      },
+      "non-Cerveny families reject non-minimum beam width");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::Wkb));
+      },
+      "non-TL products reject non-minimum beam width");
+  const SimulationCase simpleGaussian =
+      makeMetadataCase(SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
+  context.check(simpleGaussian.beamFamily() == BeamFamily::SimpleGaussian,
+                "SimulationCase accepts coherent Simple Gaussian TL");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Incoherent,
+                                           BeamFamily::SimpleGaussian));
+      },
+      "SimulationCase rejects unsupported Simple Gaussian intensity mode");
   context.expectThrows<ValidationError>(
       [&makeMetadataCase] {
         static_cast<void>(makeMetadataCase(static_cast<SimulationRunMode>(999),
@@ -306,6 +680,387 @@ void testSimulationProductMetadata(Context& context) {
                                            static_cast<BeamFamily>(999)));
       },
       "SimulationCase rejects invalid beam family enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(SimulationRunMode::Coherent,
+                                           BeamFamily::CervenyGaussian,
+                                           static_cast<FieldComponent>(999)));
+      },
+      "SimulationCase rejects invalid field component enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, static_cast<BoundaryCurvatureMode>(999)));
+      },
+      "SimulationCase rejects invalid curvature mode enum values");
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            static_cast<BeamWidthMode>(999)));
+      },
+      "SimulationCase rejects invalid beam width enum values");
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SimulationCase rayCenteredHat = makeMetadataCase(
+        mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
+        BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+        CervenyCoordinateSystem::RayCentered);
+    context.check(rayCenteredHat.cervenyCoordinateSystem() ==
+                          CervenyCoordinateSystem::RayCentered &&
+                      rayCenteredHat.beamFamily() == BeamFamily::GeometricHat,
+                  "SimulationCase accepts ray-centered GeoHat C/I/S TL");
+  }
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::AsciiArrivals, SimulationRunMode::BinaryArrivals,
+        SimulationRunMode::Eigenray}) {
+    const SimulationCase rayCenteredProduct = makeMetadataCase(
+        mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
+        BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+        CervenyCoordinateSystem::RayCentered);
+    context.check(rayCenteredProduct.cervenyCoordinateSystem() ==
+                          CervenyCoordinateSystem::RayCentered &&
+                      rayCenteredProduct.runMode() == mode,
+                  "SimulationCase accepts ray-centered GeoHat A/a/E");
+  }
+  context.expectThrows<ValidationError>(
+      [&makeMetadataCase] {
+        static_cast<void>(makeMetadataCase(
+            SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+            FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+            BeamWidthMode::MinimumWidth,
+            static_cast<CervenyCoordinateSystem>(999)));
+      },
+      "SimulationCase rejects an invalid coordinate enum");
+}
+
+SimulationCase makeSourceCase(
+    std::vector<Source> sources, ReceiverGrid receivers,
+    SimulationRunMode runMode = SimulationRunMode::Coherent,
+    BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+    CervenyCoordinateSystem coordinates = CervenyCoordinateSystem::Cartesian,
+    LaunchFan fan = LaunchFan{.minimumAngle = -0.1,
+                              .maximumAngle = 0.1,
+                              .explicitLaunchAngleCount = 301U},
+    Environment environment = makeEnvironment()) {
+  return SimulationCase(std::move(environment), std::move(sources),
+                        std::move(receivers), FrequencyGrid({50.0}), fan,
+                        IntegratorSettings{.stepLength = 10.0,
+                                           .rangeLimit = 5100.0,
+                                           .depthLimit = 1100.0,
+                                           .maximumRayPoints = 10000U},
+                        SourceBeamPattern::omnidirectional(), runMode,
+                        beamFamily, FieldComponent::Pressure,
+                        BoundaryCurvatureMode::Standard,
+                        BeamWidthMode::MinimumWidth, coordinates);
+}
+
+void testReceiverGridLayouts(Context& context) {
+  const ReceiverGrid rectilinear({10.0, 20.0, 30.0}, {100.0, 200.0, 300.0});
+  context.check(rectilinear.layout() == ReceiverGridLayout::Rectilinear &&
+                    !rectilinear.isIrregular() &&
+                    rectilinear.receiversPerRange() == 3U &&
+                    rectilinear.depthAt(0U, 2U) == 10.0 &&
+                    rectilinear.depthAt(2U, 0U) == 30.0,
+                "rectilinear receiver grids keep depth-indexed addressing");
+  context.expectThrows<std::out_of_range>(
+      [&rectilinear] { static_cast<void>(rectilinear.depthAt(3U, 0U)); },
+      "rectilinear addressing rejects an invalid depth index");
+  context.expectThrows<std::out_of_range>(
+      [&rectilinear] { static_cast<void>(rectilinear.depthAt(0U, 3U)); },
+      "receiver addressing rejects an invalid range index");
+
+  const ReceiverGrid irregular({15.0, 25.0, 35.0}, {100.0, 200.0, 300.0},
+                               ReceiverGridLayout::Irregular);
+  context.check(irregular.layout() == ReceiverGridLayout::Irregular &&
+                    irregular.isIrregular() && irregular.depthCount() == 3U &&
+                    irregular.receiversPerRange() == 1U &&
+                    irregular.depthAt(0U, 0U) == 15.0 &&
+                    irregular.depthAt(0U, 2U) == 35.0,
+                "irregular receiver pairs address one depth per range");
+  context.expectThrows<std::out_of_range>(
+      [&irregular] { static_cast<void>(irregular.depthAt(1U, 0U)); },
+      "irregular addressing rejects a second depth index");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(ReceiverGrid({10.0, 20.0}, {100.0, 200.0, 300.0},
+                                       ReceiverGridLayout::Irregular));
+      },
+      "irregular receiver grids require matching coordinate counts");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(ReceiverGrid({10.0, 20.0, 30.0},
+                                       {-100.0, 200.0, 300.0},
+                                       ReceiverGridLayout::Irregular));
+      },
+      "irregular receiver ranges stay non-negative");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(ReceiverGrid({30.0, 20.0, 10.0},
+                                       {100.0, 200.0, 300.0},
+                                       ReceiverGridLayout::Irregular));
+      },
+      "irregular receiver depths stay strictly increasing");
+  const ReceiverGrid singlePair({10.0}, {100.0}, ReceiverGridLayout::Irregular);
+  context.check(singlePair.receiversPerRange() == 1U &&
+                    singlePair.depthAt(0U, 0U) == 10.0,
+                "a single irregular receiver pair is accepted");
+}
+
+void testMultiSourceCases(Context& context) {
+  const SimulationCase unordered = makeSourceCase(
+      {{.depth = 900.0, .amplitude = 3.0},
+       {.depth = 100.0, .amplitude = 1.0},
+       {.depth = 500.0, .amplitude = 2.0}},
+      ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}));
+  context.check(unordered.sourceCount() == 3U &&
+                    unordered.sources()[0U].depth == 100.0 &&
+                    unordered.sources()[1U].depth == 500.0 &&
+                    unordered.sources()[2U].depth == 900.0 &&
+                    unordered.source().depth == 100.0,
+                "multi-source cases sort sources by ascending depth");
+
+  const SimulationCase tied = makeSourceCase(
+      {{.depth = 500.0, .amplitude = 1.0},
+       {.depth = 100.0, .amplitude = 3.0},
+       {.depth = 500.0, .amplitude = 2.0}},
+      ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}));
+  context.check(tied.sources()[0U].depth == 100.0 &&
+                    tied.sources()[0U].amplitude == 3.0 &&
+                    tied.sources()[1U].amplitude == 1.0 &&
+                    tied.sources()[2U].amplitude == 2.0,
+                "equal-depth sources keep their input order");
+
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {}, ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "multi-source cases require at least one source");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 100.0}, {.depth = 1500.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "every source must lie strictly inside the water column");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = -10.0}, {.depth = 500.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "sources above the surface are rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 0.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "sources on the surface boundary are rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0, .amplitude = -1.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0})));
+      },
+      "multi-source cases keep the non-negative amplitude rule");
+
+  const SimulationCase pairedBoundary =
+      makeSourceCase({{.depth = 500.0}},
+                     ReceiverGrid({0.0, 500.0, 999.0}, {100.0, 1000.0, 5000.0},
+                                  ReceiverGridLayout::Irregular));
+  context.check(pairedBoundary.receivers().isIrregular() &&
+                    pairedBoundary.receivers().receiversPerRange() == 1U,
+                "irregular pairs on the water boundaries are accepted");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0}},
+            ReceiverGrid({1500.0}, {100.0}, ReceiverGridLayout::Irregular)));
+      },
+      "irregular pairs below the seabed are rejected");
+}
+
+void testMultiSourceFanPlanning(Context& context) {
+  const Environment uniform1600(
+      SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1600.0, .density = 1000.0},
+           {.depth = 1000.0, .soundSpeed = 1600.0, .density = 1000.0}}),
+      BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
+  const LaunchFan fullFan{.minimumAngle = -std::numbers::pi,
+                          .maximumAngle = std::numbers::pi};
+  const ReceiverGrid receivers({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0});
+  const IntegratorSettings integrator{.stepLength = 10.0,
+                                      .rangeLimit = 5100.0,
+                                      .depthLimit = 1100.0,
+                                      .maximumRayPoints = 10000U};
+  const auto makeFanCase = [&uniform1600, &receivers, &integrator,
+                            &fullFan](std::vector<Source> sources) {
+    return SimulationCase(uniform1600, std::move(sources), receivers,
+                          FrequencyGrid({400.0}), fullFan, integrator);
+  };
+  const auto expectedCount = [](double sourceSoundSpeed) {
+    return LaunchFanPlanner::plan(
+               LaunchFanPlanningInput{.frequencies = {400.0},
+                                      .sourceSoundSpeed = sourceSoundSpeed,
+                                      .waterDepth = 1000.0,
+                                      .maximumRange = 5000.0,
+                                      .minimumLaunchAngle = -std::numbers::pi,
+                                      .maximumLaunchAngle = std::numbers::pi})
+        .launchAngleCount;
+  };
+  const std::size_t localSpeedCount = expectedCount(1600.0);
+  const std::size_t referenceSpeedCount = expectedCount(1500.0);
+  context.check(localSpeedCount != referenceSpeedCount,
+                "fan-planning speeds must produce distinguishable counts");
+
+  const SimulationCase single = makeFanCase({{.depth = 500.0}});
+  context.check(
+      single.launchFanPlan().launchAngleCount == localSpeedCount,
+      "single-source fan planning evaluates the local source sound speed");
+
+  const SimulationCase multi =
+      makeFanCase({{.depth = 300.0}, {.depth = 700.0}});
+  context.check(multi.launchFanPlan().launchAngleCount == referenceSpeedCount,
+                "multi-source fan planning uses the 1500 m/s reference speed");
+}
+
+void testSourceReceiverWorkspaceLimits(Context& context) {
+  std::vector<double> manyDepths(2000U);
+  std::iota(manyDepths.begin(), manyDepths.end(), 0.0);
+  for (double& depth : manyDepths) {
+    depth *= 0.5;
+  }
+  std::vector<double> manyRanges(1001U);
+  std::iota(manyRanges.begin(), manyRanges.end(), 0.0);
+  const ReceiverGrid oversizedGrid(std::move(manyDepths),
+                                   std::move(manyRanges));
+
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    context.expectThrows<ValidationError>(
+        [&oversizedGrid, mode] {
+          static_cast<void>(
+              makeSourceCase({{.depth = 500.0}}, oversizedGrid, mode));
+        },
+        "every TL mode rejects an oversized source/receiver workspace");
+  }
+  const SimulationCase rayOnly = makeSourceCase(
+      {{.depth = 500.0}}, oversizedGrid, SimulationRunMode::RayTrace);
+  context.check(rayOnly.receivers().depthCount() == 2000U,
+                "ray-trace products skip the pressure workspace limit");
+
+  std::vector<double> workspaceDepths(1001U);
+  std::iota(workspaceDepths.begin(), workspaceDepths.end(), 0.0);
+  std::vector<double> workspaceRanges(1000U);
+  std::iota(workspaceRanges.begin(), workspaceRanges.end(), 0.0);
+  const ReceiverGrid largeButValidGrid(std::move(workspaceDepths),
+                                       std::move(workspaceRanges));
+  const SimulationCase singleSource =
+      makeSourceCase({{.depth = 500.0}}, largeButValidGrid);
+  context.check(singleSource.receivers().rangeCount() == 1000U,
+                "a single source keeps the maximum pressure workspace");
+  context.expectThrows<ValidationError>(
+      [&largeButValidGrid] {
+        static_cast<void>(makeSourceCase({{.depth = 400.0}, {.depth = 600.0}},
+                                         largeButValidGrid));
+      },
+      "multi-source retained workspaces are rejected before receiver scans");
+
+  const std::size_t pairCount = kMaximumReceiverGridValues / 2U + 1U;
+  std::vector<double> pairedDepths(pairCount);
+  std::vector<double> pairedRanges(pairCount);
+  for (std::size_t index = 0U; index < pairCount; ++index) {
+    pairedDepths[index] = 500.0 + static_cast<double>(index) * 1.0e-6;
+    pairedRanges[index] = static_cast<double>(index);
+  }
+  const ReceiverGrid largeIrregularGrid(std::move(pairedDepths),
+                                        std::move(pairedRanges),
+                                        ReceiverGridLayout::Irregular);
+  const SimulationCase irregularCase =
+      makeSourceCase({{.depth = 500.0}}, largeIrregularGrid);
+  context.check(irregularCase.receivers().isIrregular() &&
+                    irregularCase.receivers().rangeCount() == pairCount,
+                "irregular pairs count one pressure value per range");
+}
+
+void testRunRayCountLimit(Context& context) {
+  const LaunchFan hugeFan{.minimumAngle = -0.1,
+                          .maximumAngle = 0.1,
+                          .explicitLaunchAngleCount = kMaximumRunRayCount + 1U};
+  context.expectThrows<ValidationError>(
+      [&hugeFan] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            CervenyCoordinateSystem::Cartesian, hugeFan));
+      },
+      "the per-run ray count cannot exceed the supported limit");
+  const LaunchFan limitFan{.minimumAngle = -0.1,
+                           .maximumAngle = 0.1,
+                           .explicitLaunchAngleCount = kMaximumRunRayCount};
+  const SimulationCase atLimit = makeSourceCase(
+      {{.depth = 500.0}},
+      ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+      SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+      CervenyCoordinateSystem::Cartesian, limitFan);
+  context.check(atLimit.launchFanPlan().launchAngleCount == kMaximumRunRayCount,
+                "exactly one limit of rays for one source is accepted");
+  const LaunchFan halfLimitFan{
+      .minimumAngle = -0.1,
+      .maximumAngle = 0.1,
+      .explicitLaunchAngleCount = kMaximumRunRayCount / 2U + 1U};
+  context.expectThrows<ValidationError>(
+      [&halfLimitFan] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 400.0}, {.depth = 600.0}},
+            ReceiverGrid({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0}),
+            SimulationRunMode::RayTrace, BeamFamily::CervenyGaussian,
+            CervenyCoordinateSystem::Cartesian, halfLimitFan));
+      },
+      "multi-source runs count rays across every source fan");
+}
+
+void testIrregularModelRejections(Context& context) {
+  const ReceiverGrid irregular({400.0, 500.0, 600.0}, {100.0, 1000.0, 5000.0},
+                               ReceiverGridLayout::Irregular);
+  const SimulationCase cervenyTl =
+      makeSourceCase({{.depth = 500.0}}, irregular);
+  context.check(cervenyTl.receivers().isIrregular(),
+                "Cartesian Cerveny TL accepts irregular receiver pairs");
+  const SimulationCase geometricHatArrivals = makeSourceCase(
+      {{.depth = 500.0}}, irregular, SimulationRunMode::AsciiArrivals,
+      BeamFamily::GeometricHat);
+  context.check(
+      geometricHatArrivals.runMode() == SimulationRunMode::AsciiArrivals,
+      "Cartesian geometric-hat arrivals accept irregular pairs");
+  context.expectThrows<ValidationError>(
+      [&irregular] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0}}, irregular, SimulationRunMode::Coherent,
+            BeamFamily::CervenyGaussian, CervenyCoordinateSystem::RayCentered));
+      },
+      "ray-centered Cerveny TL rejects irregular receiver grids");
+  context.expectThrows<ValidationError>(
+      [&irregular] {
+        static_cast<void>(makeSourceCase(
+            {{.depth = 500.0}}, irregular, SimulationRunMode::Coherent,
+            BeamFamily::GeometricHat, CervenyCoordinateSystem::RayCentered));
+      },
+      "ray-centered geometric hat rejects irregular receiver grids");
+  context.expectThrows<ValidationError>(
+      [&irregular] {
+        static_cast<void>(makeSourceCase({{.depth = 500.0}}, irregular,
+                                         SimulationRunMode::Coherent,
+                                         BeamFamily::SimpleGaussian));
+      },
+      "simple Gaussian beams require a rectilinear receiver grid");
 }
 
 void testRayPathCache(Context& context) {
@@ -491,6 +1246,23 @@ void testFrequencyWorkspace(Context& context) {
         static_cast<void>(rayreuse::FrequencyWorkspace(0.0, receivers));
       },
       "workspace rejects non-positive frequency");
+
+  rayreuse::IntensityWorkspace intensity(50.0, receivers);
+  intensity.add(1U, 2U, 3.0);
+  intensity.add(1U, 2U, 4.0);
+  context.check(
+      intensity.intensity().size() == 6U && intensity.at(1U, 2U) == 7.0,
+      "intensity workspace accumulates depth-major non-negative "
+      "power");
+  intensity.clear();
+  context.check(intensity.at(1U, 2U) == 0.0,
+                "intensity workspace clear resets power");
+  context.expectThrows<ValidationError>(
+      [&intensity] { intensity.add(0U, 0U, -1.0); },
+      "intensity workspace rejects negative contributions");
+  context.expectThrows<std::out_of_range>(
+      [&intensity] { static_cast<void>(intensity.at(2U, 0U)); },
+      "intensity workspace rejects an invalid depth index");
 }
 
 }  // namespace
@@ -498,8 +1270,15 @@ void testFrequencyWorkspace(Context& context) {
 int main() {
   Context context;
   testVec2(context);
+  testVolumeAttenuationOwnership(context);
   testSimulationCase(context);
   testSimulationProductMetadata(context);
+  testReceiverGridLayouts(context);
+  testMultiSourceCases(context);
+  testMultiSourceFanPlanning(context);
+  testSourceReceiverWorkspaceLimits(context);
+  testRunRayCountLimit(context);
+  testIrregularModelRejections(context);
   testRayPathCache(context);
   testFrequencyWorkspace(context);
 

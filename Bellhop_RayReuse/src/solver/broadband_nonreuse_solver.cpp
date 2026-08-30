@@ -39,7 +39,9 @@ BroadbandNonReuseResult BroadbandNonReuseSolver::solve(
                                                 epsilonMultiplier, loopRange,
                                                 influenceSettings);
 
-    ++result.statistics.tracePassCount;
+    // solveAtFrequency traces every source's fan once (Worklist FP-2F §1.5:
+    // non-reuse trace passes = Nfreq x NSz).
+    result.statistics.tracePassCount += frequencyResult.sourceCount();
     result.statistics.totalRayCount += frequencyResult.rayCount;
     result.statistics.totalRayPointCount += frequencyResult.totalRayPointCount;
     result.statistics.cumulativeRayCacheBytes += frequencyResult.rayCacheBytes;

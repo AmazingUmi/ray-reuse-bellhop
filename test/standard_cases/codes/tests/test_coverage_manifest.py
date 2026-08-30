@@ -33,7 +33,7 @@ class CoverageManifestTests(unittest.TestCase):
         selected = self.coverage.case_ids_for_sets(
             ("arrival",), self.cases
         )
-        self.assertEqual(len(selected), 6)
+        self.assertEqual(len(selected), 9)
         self.assertTrue(
             all(case_id.startswith("arrival_") for case_id in selected)
         )
@@ -43,6 +43,7 @@ class CoverageManifestTests(unittest.TestCase):
                 "eigenray_geometric_hat",
                 "eigenray_geometric_hat_ray_centered",
                 "eigenray_geometric_gaussian",
+                "eigenray_irregular_pairs",
                 "eigenray_zero",
             },
         )

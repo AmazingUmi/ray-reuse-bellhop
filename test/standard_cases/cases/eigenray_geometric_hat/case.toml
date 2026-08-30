@@ -5,7 +5,7 @@ origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/WriteRay2D", "Bellhop_origin/Bellhop/WriteRay.f90 WriteRay2D"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0
@@ -16,8 +16,12 @@ maximum_angle_deg = 60.0
 policy = "shared_fmax"
 
 [validation]
+source_depth_count = 2
 prt_markers = ["VACUUM", "Perfectly RIGID", "Eigenray trace run", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
 prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
 
 [profiles.single]
 frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [500.0, 1000.0]

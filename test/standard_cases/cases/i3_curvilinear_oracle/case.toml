@@ -5,7 +5,7 @@ companion_files = ["origin.ati", "origin.bty"]
 source_references = ["Acoustic Toolbox Bellhop 2-D boundary C short format"]
 
 [compatibility]
-versions = ["origin", "f2cpp"]
+versions = ["origin", "f2cpp", "rayreuse"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0
@@ -22,3 +22,6 @@ prt_forbidden_markers = ["THORP volume attenuation added"]
 
 [profiles.single]
 frequencies_hz = [100.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [100.0, 200.0]

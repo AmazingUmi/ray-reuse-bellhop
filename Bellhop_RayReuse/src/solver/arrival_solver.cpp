@@ -47,35 +47,73 @@ std::size_t workspaceBytes(const ArrivalWorkspace& workspace) {
   return bytes;
 }
 
-RayPathCache traceCache(const SimulationCase& simulation) {
+// Traces one source's launch fan into an independent frozen cache. The
+// diagnostic carries the source and launch indices (F2CPP arrival-solver
+// error semantics).
+RayPathCache traceSourceCache(const SimulationCase& simulation,
+                              std::size_t sourceIndex) {
   const LaunchFanPlan& fan = simulation.launchFanPlan();
+  const Source& source = simulation.sources().at(sourceIndex);
   GeometryTracer tracer(simulation);
   RayPathCache cache;
   cache.reserve(fan.launchAngleCount);
-  for (double angle : fan.launchAngles) {
-    RayPath path = tracer.trace(simulation.source(), angle);
+  for (std::size_t launchIndex = 0U; launchIndex < fan.launchAngles.size();
+       ++launchIndex) {
+    RayPath path = tracer.trace(source, fan.launchAngles[launchIndex]);
     if (path.terminationReason != RayTerminationReason::ExitedDomain)
       throw ValidationError(
-          "arrival solve encountered an abnormal ray termination");
+          "arrival solve encountered an abnormal ray termination at source " +
+          std::to_string(sourceIndex) + ", launch " +
+          std::to_string(launchIndex));
     cache.append(std::move(path));
   }
   cache.freeze();
   return cache;
 }
 
+struct ArrivalTraceBatch {
+  std::vector<RayPathCache> caches;
+  std::size_t totalRayPointCount{};
+  double traceSeconds{};
+  std::size_t peakRayCacheBytes{};
+};
+
+ArrivalTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
+  ArrivalTraceBatch batch;
+  batch.caches.reserve(simulation.sourceCount());
+  const auto traceBegin = Clock::now();
+  for (std::size_t sourceIndex = 0U; sourceIndex < simulation.sourceCount();
+       ++sourceIndex) {
+    RayPathCache cache = traceSourceCache(simulation, sourceIndex);
+    for (const RayPath& path : cache.paths()) {
+      batch.totalRayPointCount = checkedAdd(
+          batch.totalRayPointCount, path.points.size(), "arrival point count");
+    }
+    batch.peakRayCacheBytes =
+        std::max(batch.peakRayCacheBytes, cache.memoryFootprintBytes());
+    batch.caches.push_back(std::move(cache));
+  }
+  batch.traceSeconds = elapsed(traceBegin, Clock::now());
+  return batch;
+}
+
 ArrivalWorkspace projectArrivals(const SimulationCase& simulation,
                                  const RayPathCache& cache,
                                  std::size_t frequencyIndex,
-                                 BeamFamily beamFamily,
+                                 std::size_t sourceIndex, BeamFamily beamFamily,
                                  std::size_t& projectedCount) {
   const double frequency = simulation.frequencies().values().at(frequencyIndex);
+  const Source& source = simulation.sources().at(sourceIndex);
   ArrivalWorkspace workspace(frequency, simulation.receivers());
   const FrequencyProjector projector(simulation.environment());
-  GeometricHatInfluence hat(simulation.receivers());
-  GeometricGaussianInfluence gaussian(simulation.receivers());
+  GeometricHatInfluence hat(simulation.receivers(),
+                            simulation.cervenyCoordinateSystem(),
+                            simulation.sourceGeometry());
+  GeometricGaussianInfluence gaussian(simulation.receivers(),
+                                      simulation.sourceGeometry());
   for (const RayPath& path : cache.paths()) {
     const double sourceAmplitude =
-        simulation.source().amplitude *
+        source.amplitude *
         simulation.sourceBeamPattern().amplitudeForLaunchAngle(
             path.launchAngle);
     if (!std::isfinite(sourceAmplitude) || sourceAmplitude < 0.0)
@@ -96,6 +134,34 @@ ArrivalWorkspace projectArrivals(const SimulationCase& simulation,
   }
   return workspace;
 }
+
+std::vector<ArrivalWorkspace> projectAllSourceArrivals(
+    const SimulationCase& simulation, const std::vector<RayPathCache>& caches,
+    std::size_t frequencyIndex, BeamFamily beamFamily,
+    std::size_t& projectedCount) {
+  std::vector<ArrivalWorkspace> workspaces;
+  workspaces.reserve(caches.size());
+  for (std::size_t sourceIndex = 0U; sourceIndex < caches.size();
+       ++sourceIndex) {
+    workspaces.push_back(projectArrivals(simulation, caches[sourceIndex],
+                                         frequencyIndex, sourceIndex,
+                                         beamFamily, projectedCount));
+  }
+  return workspaces;
+}
+
+void verifySourceFingerprints(
+    const std::vector<RayPathCache>& caches,
+    const std::vector<std::uint64_t>& fingerprintsBefore,
+    const char* failureMessage) {
+  for (std::size_t sourceIndex = 0U; sourceIndex < caches.size();
+       ++sourceIndex) {
+    if (caches[sourceIndex].contentFingerprint() !=
+        fingerprintsBefore[sourceIndex]) {
+      throw ValidationError(failureMessage);
+    }
+  }
+}
 }  // namespace
 
 ArrivalSolverStatistics ArrivalSolver::solve(
@@ -109,72 +175,83 @@ ArrivalSolverStatistics ArrivalSolver::solve(
       beamFamily != BeamFamily::GeometricGaussian)
     throw ValidationError(
         "arrival solver supports only geometric beam families");
-  const LaunchFanPlan& fan = simulation.launchFanPlan();
-  GeometryTracer tracer(simulation);
-  RayPathCache cache;
-  cache.reserve(fan.launchAngleCount);
+  // One frozen cache per source (Worklist FP-2F §1.2), reused across every
+  // frequency; the cache vector is owned by this solver and consumed as
+  // const.
+  const ArrivalTraceBatch batch = traceAllSourceCaches(simulation);
+  const std::vector<RayPathCache>& caches = batch.caches;
   ArrivalSolverStatistics stats;
-  const auto traceBegin = Clock::now();
-  for (double angle : fan.launchAngles) {
-    RayPath path = tracer.trace(simulation.source(), angle);
-    if (path.terminationReason != RayTerminationReason::ExitedDomain)
-      throw ValidationError(
-          "arrival solve encountered an abnormal ray termination");
-    stats.totalRayPointCount = checkedAdd(
-        stats.totalRayPointCount, path.points.size(), "arrival point count");
-    cache.append(std::move(path));
-  }
-  cache.freeze();
-  stats.traceSeconds = elapsed(traceBegin, Clock::now());
-  stats.rayCount = cache.size();
-  stats.peakRayCacheBytes = cache.memoryFootprintBytes();
+  stats.traceSeconds = batch.traceSeconds;
+  std::size_t rayCount = 0U;
+  for (const RayPathCache& cache : caches) rayCount += cache.size();
+  stats.rayCount = rayCount;
+  stats.totalRayPointCount = batch.totalRayPointCount;
+  stats.peakRayCacheBytes = batch.peakRayCacheBytes;
   if (verifyCache) {
     stats.cacheFingerprintVerified = true;
-    stats.cacheFingerprintBefore = cache.contentFingerprint();
+    stats.sourceCacheFingerprintsBefore.reserve(caches.size());
+    for (const RayPathCache& cache : caches)
+      stats.sourceCacheFingerprintsBefore.push_back(cache.contentFingerprint());
+    stats.cacheFingerprintBefore = stats.sourceCacheFingerprintsBefore.front();
   }
-  const double spacing = fan.launchAngleStep;
+  const double spacing = simulation.launchFanPlan().launchAngleStep;
   for (std::size_t fi = 0U; fi < simulation.frequencies().size(); ++fi) {
     const double frequency = simulation.frequencies().values()[fi];
-    ArrivalWorkspace workspace(frequency, simulation.receivers());
     const FrequencyProjector projector(simulation.environment());
-    GeometricHatInfluence hat(simulation.receivers());
-    GeometricGaussianInfluence gaussian(simulation.receivers());
-    for (const RayPath& path : cache.paths()) {
-      const auto projectBegin = Clock::now();
-      const double sourceAmplitude =
-          simulation.source().amplitude *
-          simulation.sourceBeamPattern().amplitudeForLaunchAngle(
-              path.launchAngle);
-      if (!std::isfinite(sourceAmplitude) || sourceAmplitude < 0.0)
-        throw ValidationError(
-            "source beam pattern produced an invalid arrival amplitude");
-      const RayFrequencyState state =
-          projector.project(path, frequency, sourceAmplitude);
-      const auto projectEnd = Clock::now();
-      if (beamFamily == BeamFamily::GeometricGaussian)
-        gaussian.accumulateArrivals(workspace, path, state, spacing);
-      else
-        hat.accumulateArrivals(workspace, path, state, spacing);
-      stats.projectSeconds += elapsed(projectBegin, projectEnd);
-      stats.influenceSeconds += elapsed(projectEnd, Clock::now());
-      ++stats.projectedRayCount;
+    GeometricHatInfluence hat(simulation.receivers(),
+                              simulation.cervenyCoordinateSystem(),
+                              simulation.sourceGeometry());
+    GeometricGaussianInfluence gaussian(simulation.receivers(),
+                                        simulation.sourceGeometry());
+    std::vector<ArrivalWorkspace> workspaces;
+    workspaces.reserve(caches.size());
+    for (std::size_t sourceIndex = 0U; sourceIndex < caches.size();
+         ++sourceIndex) {
+      const Source& source = simulation.sources()[sourceIndex];
+      const RayPathCache& cache = caches[sourceIndex];
+      ArrivalWorkspace workspace(frequency, simulation.receivers());
+      for (const RayPath& path : cache.paths()) {
+        const auto projectBegin = Clock::now();
+        const double sourceAmplitude =
+            source.amplitude *
+            simulation.sourceBeamPattern().amplitudeForLaunchAngle(
+                path.launchAngle);
+        if (!std::isfinite(sourceAmplitude) || sourceAmplitude < 0.0)
+          throw ValidationError(
+              "source beam pattern produced an invalid arrival amplitude");
+        const RayFrequencyState state =
+            projector.project(path, frequency, sourceAmplitude);
+        const auto projectEnd = Clock::now();
+        if (beamFamily == BeamFamily::GeometricGaussian)
+          gaussian.accumulateArrivals(workspace, path, state, spacing);
+        else
+          hat.accumulateArrivals(workspace, path, state, spacing);
+        stats.projectSeconds += elapsed(projectBegin, projectEnd);
+        stats.influenceSeconds += elapsed(projectEnd, Clock::now());
+        ++stats.projectedRayCount;
+      }
+      stats.candidateCount =
+          checkedAdd(stats.candidateCount, workspace.candidateCount(),
+                     "arrival candidate count");
+      stats.saturatedCellCount =
+          checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
+                     "arrival saturated-cell count");
+      stats.peakArrivalWorkspaceBytes =
+          std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
+      workspaces.push_back(std::move(workspace));
     }
-    stats.candidateCount =
-        checkedAdd(stats.candidateCount, workspace.candidateCount(),
-                   "arrival candidate count");
-    stats.saturatedCellCount =
-        checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
-                   "arrival saturated-cell count");
-    stats.peakArrivalWorkspaceBytes =
-        std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
     const auto consumeBegin = Clock::now();
-    consumer(fi, cache, workspace);
+    consumer(fi, caches, workspaces);
     stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
     ++stats.frequencyCount;
   }
   if (verifyCache) {
-    stats.cacheFingerprintAfter = cache.contentFingerprint();
-    if (stats.cacheFingerprintAfter != stats.cacheFingerprintBefore)
+    stats.sourceCacheFingerprintsAfter.reserve(caches.size());
+    for (const RayPathCache& cache : caches)
+      stats.sourceCacheFingerprintsAfter.push_back(cache.contentFingerprint());
+    stats.cacheFingerprintAfter = stats.sourceCacheFingerprintsAfter.front();
+    if (stats.sourceCacheFingerprintsAfter !=
+        stats.sourceCacheFingerprintsBefore)
       throw ValidationError("arrival projection modified the frozen ray cache");
   }
   return stats;
@@ -193,46 +270,60 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
         "arrival solver supports only geometric beam families");
   ArrivalSolverStatistics stats;
   for (std::size_t fi = 0U; fi < simulation.frequencies().size(); ++fi) {
+    // Non-reuse: every frequency re-traces every source's fan
+    // (Worklist FP-2F §1.5: Nfreq x NSz trace passes).
     const auto traceBegin = Clock::now();
-    RayPathCache cache = traceCache(simulation);
-    const std::uint64_t fingerprintBefore =
-        verifyCache ? cache.contentFingerprint() : 0U;
+    const ArrivalTraceBatch batch = traceAllSourceCaches(simulation);
+    const std::vector<RayPathCache>& caches = batch.caches;
+    std::vector<std::uint64_t> fingerprintsBefore;
     if (verifyCache) {
+      fingerprintsBefore.reserve(caches.size());
+      for (const RayPathCache& cache : caches)
+        fingerprintsBefore.push_back(cache.contentFingerprint());
       if (!stats.cacheFingerprintVerified) {
         stats.cacheFingerprintVerified = true;
-        stats.cacheFingerprintBefore = fingerprintBefore;
-      } else if (fingerprintBefore != stats.cacheFingerprintBefore) {
+        stats.sourceCacheFingerprintsBefore = fingerprintsBefore;
+        stats.cacheFingerprintBefore = fingerprintsBefore.front();
+      } else if (fingerprintsBefore != stats.sourceCacheFingerprintsBefore) {
         throw ValidationError(
             "arrival non-reuse traces produced inconsistent frozen caches");
       }
     }
     stats.traceSeconds += elapsed(traceBegin, Clock::now());
-    stats.rayCount += cache.size();
-    stats.peakRayCacheBytes =
-        std::max(stats.peakRayCacheBytes, cache.memoryFootprintBytes());
+    for (const RayPathCache& cache : caches) {
+      stats.rayCount += cache.size();
+      stats.peakRayCacheBytes =
+          std::max(stats.peakRayCacheBytes, cache.memoryFootprintBytes());
+    }
+    stats.totalRayPointCount =
+        checkedAdd(stats.totalRayPointCount, batch.totalRayPointCount,
+                   "arrival point count");
     std::size_t projected = 0U;
     const auto projectBegin = Clock::now();
-    ArrivalWorkspace workspace =
-        projectArrivals(simulation, cache, fi, beamFamily, projected);
+    std::vector<ArrivalWorkspace> workspaces =
+        projectAllSourceArrivals(simulation, caches, fi, beamFamily, projected);
     const auto projectEnd = Clock::now();
     stats.projectSeconds += elapsed(projectBegin, projectEnd);
     stats.influenceSeconds += elapsed(projectBegin, projectEnd);
     stats.projectedRayCount += projected;
-    stats.candidateCount =
-        checkedAdd(stats.candidateCount, workspace.candidateCount(),
-                   "arrival candidate count");
-    stats.saturatedCellCount =
-        checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
-                   "arrival saturated-cell count");
-    stats.peakArrivalWorkspaceBytes =
-        std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
+    for (const ArrivalWorkspace& workspace : workspaces) {
+      stats.candidateCount =
+          checkedAdd(stats.candidateCount, workspace.candidateCount(),
+                     "arrival candidate count");
+      stats.saturatedCellCount =
+          checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
+                     "arrival saturated-cell count");
+      stats.peakArrivalWorkspaceBytes =
+          std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
+    }
     const auto consumeBegin = Clock::now();
-    consumer(fi, cache, workspace);
+    consumer(fi, caches, workspaces);
     if (verifyCache) {
-      stats.cacheFingerprintAfter = cache.contentFingerprint();
-      if (stats.cacheFingerprintAfter != fingerprintBefore)
-        throw ValidationError(
-            "arrival projection modified a frozen non-reuse cache");
+      verifySourceFingerprints(caches, fingerprintsBefore,
+                               "arrival projection modified a frozen "
+                               "non-reuse cache");
+      stats.sourceCacheFingerprintsAfter = fingerprintsBefore;
+      stats.cacheFingerprintAfter = fingerprintsBefore.front();
     }
     stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
     ++stats.frequencyCount;
@@ -254,12 +345,20 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
         "arrival solver supports only geometric beam families");
   if (workerCount == 0U)
     throw ValidationError("arrival worker count must be positive");
-  RayPathCache cache = traceCache(simulation);
-  const std::uint64_t fingerprintBefore =
-      verifyCache ? cache.contentFingerprint() : 0U;
+  const ArrivalTraceBatch batch = traceAllSourceCaches(simulation);
+  const std::vector<RayPathCache>& caches = batch.caches;
+  const std::vector<std::uint64_t> fingerprintsBefore = [&]() {
+    std::vector<std::uint64_t> fingerprints;
+    if (verifyCache) {
+      fingerprints.reserve(caches.size());
+      for (const RayPathCache& cache : caches)
+        fingerprints.push_back(cache.contentFingerprint());
+    }
+    return fingerprints;
+  }();
   const std::size_t count = simulation.frequencies().size();
   struct Result {
-    std::unique_ptr<ArrivalWorkspace> workspace;
+    std::vector<ArrivalWorkspace> workspaces;
     std::size_t projected{};
   };
   std::vector<Result> results(count);
@@ -275,9 +374,8 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
         while (true) {
           const std::size_t fi = next.fetch_add(1U);
           if (fi >= count) break;
-          results[fi].workspace =
-              std::make_unique<ArrivalWorkspace>(projectArrivals(
-                  simulation, cache, fi, beamFamily, results[fi].projected));
+          results[fi].workspaces = projectAllSourceArrivals(
+              simulation, caches, fi, beamFamily, results[fi].projected);
         }
       } catch (...) {
         const std::lock_guard lock(errorMutex);
@@ -289,28 +387,37 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
   if (workerError) std::rethrow_exception(workerError);
   ArrivalSolverStatistics stats;
   stats.frequencyCount = count;
-  stats.rayCount = cache.size();
-  stats.peakRayCacheBytes = cache.memoryFootprintBytes();
+  std::size_t rayCount = 0U;
+  for (const RayPathCache& cache : caches) rayCount += cache.size();
+  stats.rayCount = rayCount;
+  stats.totalRayPointCount = batch.totalRayPointCount;
+  stats.peakRayCacheBytes = batch.peakRayCacheBytes;
+  stats.traceSeconds = batch.traceSeconds;
   stats.cacheFingerprintVerified = verifyCache;
-  stats.cacheFingerprintBefore = fingerprintBefore;
+  stats.sourceCacheFingerprintsBefore = fingerprintsBefore;
+  if (verifyCache) stats.cacheFingerprintBefore = fingerprintsBefore.front();
   for (std::size_t fi = 0U; fi < count; ++fi) {
-    ArrivalWorkspace& workspace = *results[fi].workspace;
     stats.projectedRayCount += results[fi].projected;
-    stats.candidateCount =
-        checkedAdd(stats.candidateCount, workspace.candidateCount(),
-                   "arrival candidate count");
-    stats.saturatedCellCount =
-        checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
-                   "arrival saturated-cell count");
-    stats.peakArrivalWorkspaceBytes =
-        std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
-    consumer(fi, cache, workspace);
+    for (const ArrivalWorkspace& workspace : results[fi].workspaces) {
+      stats.candidateCount =
+          checkedAdd(stats.candidateCount, workspace.candidateCount(),
+                     "arrival candidate count");
+      stats.saturatedCellCount =
+          checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
+                     "arrival saturated-cell count");
+      stats.peakArrivalWorkspaceBytes =
+          std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
+    }
+    const auto consumeBegin = Clock::now();
+    consumer(fi, caches, results[fi].workspaces);
+    stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
   }
   if (verifyCache) {
-    stats.cacheFingerprintAfter = cache.contentFingerprint();
-    if (stats.cacheFingerprintAfter != stats.cacheFingerprintBefore)
-      throw ValidationError(
-          "parallel arrival projection modified the frozen ray cache");
+    verifySourceFingerprints(caches, fingerprintsBefore,
+                             "parallel arrival projection modified the frozen "
+                             "ray cache");
+    stats.sourceCacheFingerprintsAfter = fingerprintsBefore;
+    stats.cacheFingerprintAfter = fingerprintsBefore.front();
   }
   return stats;
 }

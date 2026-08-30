@@ -6,8 +6,9 @@
 #include <optional>
 
 #include "rayreuse/field/frequency_workspace.hpp"
-#include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/beam_width.hpp"
 #include "rayreuse/model/environment.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/ray/ray_path.hpp"
 
 namespace rayreuse {
@@ -92,22 +93,33 @@ struct CartesianCervenyDiagnostic {
   std::array<CartesianCervenyImageDiagnostic, 3> images{};
   std::complex<double> rawImageSum{};
   std::complex<double> finalContribution{};
+  double intensityIncrement{};
 };
 
-[[nodiscard]] int updateCervenyKmah(std::complex<double> qLeft,
-                                    std::complex<double> qRight,
-                                    int currentKmah);
+[[nodiscard]] int updateCervenyKmah(
+    std::complex<double> qLeft, std::complex<double> qRight, int currentKmah,
+    BeamWidthMode widthMode = BeamWidthMode::MinimumWidth);
 
 [[nodiscard]] double cervenyHermiteTaper(double offset, double fullValueRadius,
                                          double zeroValueRadius);
 
 class CartesianCervenyInfluence {
  public:
-  CartesianCervenyInfluence(Environment environment, ReceiverGrid receivers,
-                            CartesianCervenySettings settings = {});
+  CartesianCervenyInfluence(
+      Environment environment, ReceiverGrid receivers,
+      CartesianCervenySettings settings = {},
+      BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
+      SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
+      std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest =
+          std::nullopt,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateIntensity(
+      IntensityWorkspace& workspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest =
           std::nullopt,
@@ -122,17 +134,25 @@ class CartesianCervenyInfluence {
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
+  [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
+  accumulateIntensityPrevalidated(
+      IntensityWorkspace& workspace, const RayPath& path,
+      const RayFrequencyState& frequencyState, std::complex<double> epsilon,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
   template <bool CollectStatistics>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
   accumulateWithImageCount(
-      FrequencyWorkspace& workspace, const RayPath& path,
+      FrequencyWorkspace* pressureWorkspace,
+      IntensityWorkspace* intensityWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
       CartesianCervenyStatistics* statistics) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic> accumulateImpl(
-      FrequencyWorkspace& workspace, const RayPath& path,
+      FrequencyWorkspace* pressureWorkspace,
+      IntensityWorkspace* intensityWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<CartesianCervenyDiagnosticRequest> diagnosticRequest,
       CartesianCervenyStatistics* statistics) const;
@@ -140,7 +160,9 @@ class CartesianCervenyInfluence {
   Environment environment_;
   ReceiverGrid receivers_;
   CartesianCervenySettings settings_;
-  CLinearSsp soundSpeedProfile_;
+  BeamWidthMode widthMode_;
+  SourceGeometry sourceGeometry_{SourceGeometry::Point};
+  GeometrySspEvaluator soundSpeedProfile_;
   double receiverRangeDelta_{};
 };
 

@@ -38,34 +38,60 @@ SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
   SerialRayReuseStatistics statistics;
 
   const Clock::time_point wallBegin = Clock::now();
-  RayFanTraceResult trace = SingleFrequencySolver::traceRayFan(simulation);
+  // One frozen cache per source (Worklist FP-2F §1.2): the reuse unit is
+  // "(source, frozen fan)", reused across every frequency. The cache vector
+  // is owned by this orchestration layer and only handed out as const.
+  const std::vector<RayFanTraceResult> sourceTraces =
+      SingleFrequencySolver::traceAllSourceFans(simulation);
 
-  statistics.tracePassCount = 1U;
-  statistics.rayCount = trace.cache.size();
-  statistics.totalRayPointCount = trace.totalRayPointCount;
-  statistics.rayCacheBytes = trace.cache.memoryFootprintBytes();
-  statistics.phaseTotals.traceSeconds = trace.traceSeconds;
+  statistics.tracePassCount = sourceTraces.size();
+  for (const RayFanTraceResult& trace : sourceTraces) {
+    statistics.rayCount += trace.cache.size();
+    statistics.totalRayPointCount += trace.totalRayPointCount;
+    statistics.rayCacheBytes += trace.cache.memoryFootprintBytes();
+    statistics.phaseTotals.traceSeconds += trace.traceSeconds;
+  }
   statistics.cacheFingerprintVerified = verifyCacheFingerprint;
   if (verifyCacheFingerprint) {
-    statistics.cacheFingerprintBefore = trace.cache.contentFingerprint();
+    statistics.sourceCacheFingerprintsBefore.reserve(sourceTraces.size());
+    for (const RayFanTraceResult& trace : sourceTraces) {
+      statistics.sourceCacheFingerprintsBefore.push_back(
+          trace.cache.contentFingerprint());
+    }
+    statistics.cacheFingerprintBefore =
+        statistics.sourceCacheFingerprintsBefore.front();
   }
 
   const std::vector<double>& frequencies = simulation.frequencies().values();
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
-    SingleFrequencyResult frequencyResult =
-        SingleFrequencySolver::solveFrequencyFromCache(
-            simulation, frequencies[frequencyIndex], trace.cache,
-            epsilonMultiplier, loopRange, influenceSettings);
-    accumulateProjectionTimings(statistics.phaseTotals,
-                                frequencyResult.timings);
-    consumer(frequencyIndex, std::move(frequencyResult.workspace),
-             frequencyResult.timings);
+    std::vector<FrequencyWorkspace> sourceWorkspaces;
+    sourceWorkspaces.reserve(sourceTraces.size());
+    SingleFrequencyTimings frequencyTimings;
+    for (std::size_t sourceIndex = 0U; sourceIndex < sourceTraces.size();
+         ++sourceIndex) {
+      SingleFrequencyResult sourceResult =
+          SingleFrequencySolver::solveFrequencyFromSourceCache(
+              simulation, frequencies[frequencyIndex],
+              sourceTraces[sourceIndex].cache, sourceIndex, epsilonMultiplier,
+              loopRange, influenceSettings);
+      accumulateProjectionTimings(frequencyTimings, sourceResult.timings);
+      sourceWorkspaces.push_back(std::move(sourceResult.workspace));
+    }
+    accumulateProjectionTimings(statistics.phaseTotals, frequencyTimings);
+    consumer(frequencyIndex, std::move(sourceWorkspaces), frequencyTimings);
   }
 
   if (verifyCacheFingerprint) {
-    statistics.cacheFingerprintAfter = trace.cache.contentFingerprint();
-    if (statistics.cacheFingerprintAfter != statistics.cacheFingerprintBefore) {
+    statistics.sourceCacheFingerprintsAfter.reserve(sourceTraces.size());
+    for (const RayFanTraceResult& trace : sourceTraces) {
+      statistics.sourceCacheFingerprintsAfter.push_back(
+          trace.cache.contentFingerprint());
+    }
+    statistics.cacheFingerprintAfter =
+        statistics.sourceCacheFingerprintsAfter.front();
+    if (statistics.sourceCacheFingerprintsAfter !=
+        statistics.sourceCacheFingerprintsBefore) {
       throw ValidationError("serial ray-reuse modified the frozen ray cache");
     }
   }
@@ -82,10 +108,10 @@ SerialRayReuseResult SerialRayReuseSolver::solve(
 
   result.statistics = solveStreaming(
       simulation, epsilonMultiplier, loopRange,
-      [&result](std::size_t, FrequencyWorkspace&& workspace,
+      [&result](std::size_t, std::vector<FrequencyWorkspace>&& workspaces,
                 const SingleFrequencyTimings& timings) {
         result.frequencyResults.push_back(SerialRayReuseFrequencyResult{
-            .workspace = std::move(workspace), .timings = timings});
+            .workspaces = std::move(workspaces), .timings = timings});
       },
       influenceSettings, verifyCacheFingerprint);
   return result;

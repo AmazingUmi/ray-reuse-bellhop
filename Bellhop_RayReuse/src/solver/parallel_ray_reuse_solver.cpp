@@ -22,7 +22,9 @@ using Clock = std::chrono::steady_clock;
 
 struct CompletedFrequency {
   std::size_t index{};
-  FrequencyWorkspace workspace;
+  // Per-source workspace sequence for the frequency, indexed by
+  // SimulationCase::sources() order.
+  std::vector<FrequencyWorkspace> workspaces;
   SingleFrequencyTimings timings;
 };
 
@@ -69,10 +71,16 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
 }
 
 [[nodiscard]] std::size_t workspaceBytes(const SimulationCase& simulation) {
-  const std::size_t cellCount = checkedMultiply(
-      simulation.receivers().depthCount(), simulation.receivers().rangeCount(),
-      "frequency workspace cell count overflows size_t");
-  return checkedMultiply(cellCount, sizeof(std::complex<double>),
+  const std::size_t cellCount =
+      checkedMultiply(simulation.receivers().receiversPerRange(),
+                      simulation.receivers().rangeCount(),
+                      "frequency workspace cell count overflows size_t");
+  const std::size_t bytesPerCell =
+      fieldAccumulationKind(simulation.runMode()) ==
+              FieldAccumulationKind::Intensity
+          ? sizeof(std::complex<double>) + sizeof(double)
+          : sizeof(std::complex<double>);
+  return checkedMultiply(cellCount, bytesPerCell,
                          "frequency workspace byte count overflows size_t");
 }
 
@@ -150,34 +158,56 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
   }
 
   const Clock::time_point wallBegin = Clock::now();
-  RayFanTraceResult trace = SingleFrequencySolver::traceRayFan(simulation);
+  // One frozen cache per source (Worklist FP-2F §1.2), owned by this
+  // orchestration layer; frequency workers only read the vector as const.
+  const std::vector<RayFanTraceResult> sourceTraces =
+      SingleFrequencySolver::traceAllSourceFans(simulation);
+  const std::size_t sourceCount = sourceTraces.size();
+  std::size_t totalRayCount = 0U;
+  std::size_t totalRayPointCount = 0U;
+  std::size_t totalCacheBytes = 0U;
+  double traceSeconds = 0.0;
+  for (const RayFanTraceResult& trace : sourceTraces) {
+    totalRayCount += trace.cache.size();
+    totalRayPointCount += trace.totalRayPointCount;
+    totalCacheBytes += trace.cache.memoryFootprintBytes();
+    traceSeconds += trace.traceSeconds;
+  }
   const std::size_t frequencyCount = simulation.frequencies().size();
   const std::size_t effectiveQueueCapacity =
       std::min(settings.outputQueueCapacity, frequencyCount);
-  const std::size_t workspaceByteCount = workspaceBytes(simulation);
-  const std::size_t cacheByteCount = trace.cache.memoryFootprintBytes();
+  // One frequency product now spans every source's workspace.
+  const std::size_t frequencyWorkspaceBytes =
+      checkedMultiply(workspaceBytes(simulation), sourceCount,
+                      "parallel frequency workspace bytes overflows size_t");
   const std::size_t activeFrequencyLimit = selectActiveFrequencyLimit(
       frequencyCount, settings.workerCount, effectiveQueueCapacity,
-      cacheByteCount, workspaceByteCount, settings.memoryBudgetBytes);
+      totalCacheBytes, frequencyWorkspaceBytes, settings.memoryBudgetBytes);
 
   ParallelRayReuseStatistics statistics;
-  statistics.tracePassCount = 1U;
-  statistics.rayCount = trace.cache.size();
-  statistics.totalRayPointCount = trace.totalRayPointCount;
-  statistics.rayCacheBytes = cacheByteCount;
+  statistics.tracePassCount = sourceCount;
+  statistics.rayCount = totalRayCount;
+  statistics.totalRayPointCount = totalRayPointCount;
+  statistics.rayCacheBytes = totalCacheBytes;
   statistics.requestedWorkerCount = settings.workerCount;
   statistics.activeFrequencyLimit = activeFrequencyLimit;
   statistics.outputQueueCapacity = effectiveQueueCapacity;
-  statistics.estimatedWorkspaceBytes = workspaceByteCount;
-  statistics.estimatedPeakMemoryBytes =
-      estimatedPeakBytes(cacheByteCount, workspaceByteCount, frequencyCount,
-                         activeFrequencyLimit, effectiveQueueCapacity);
+  statistics.estimatedWorkspaceBytes = frequencyWorkspaceBytes;
+  statistics.estimatedPeakMemoryBytes = estimatedPeakBytes(
+      totalCacheBytes, frequencyWorkspaceBytes, frequencyCount,
+      activeFrequencyLimit, effectiveQueueCapacity);
   statistics.memoryBudgetBytes = settings.memoryBudgetBytes;
-  statistics.phaseTotals.traceSeconds = trace.traceSeconds;
+  statistics.phaseTotals.traceSeconds = traceSeconds;
   statistics.frequencyTimings.resize(frequencyCount);
   statistics.cacheFingerprintVerified = verifyCacheFingerprint;
   if (verifyCacheFingerprint) {
-    statistics.cacheFingerprintBefore = trace.cache.contentFingerprint();
+    statistics.sourceCacheFingerprintsBefore.reserve(sourceCount);
+    for (const RayFanTraceResult& trace : sourceTraces) {
+      statistics.sourceCacheFingerprintsBefore.push_back(
+          trace.cache.contentFingerprint());
+    }
+    statistics.cacheFingerprintBefore =
+        statistics.sourceCacheFingerprintsBefore.front();
   }
 
   WorkState state;
@@ -198,10 +228,22 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
           ++state.nextIndex;
         }
 
-        SingleFrequencyResult frequencyResult =
-            SingleFrequencySolver::solveFrequencyFromCache(
-                simulation, simulation.frequencies().values()[frequencyIndex],
-                trace.cache, epsilonMultiplier, loopRange, influenceSettings);
+        // Workers hold the shared per-source cache vector only as a const
+        // reference (Worklist FP-2F §1.3); per-source workspace state is
+        // frequency-local to this worker's result.
+        std::vector<FrequencyWorkspace> sourceWorkspaces;
+        sourceWorkspaces.reserve(sourceCount);
+        SingleFrequencyTimings frequencyTimings;
+        for (std::size_t sourceIndex = 0U; sourceIndex < sourceCount;
+             ++sourceIndex) {
+          SingleFrequencyResult sourceResult =
+              SingleFrequencySolver::solveFrequencyFromSourceCache(
+                  simulation, simulation.frequencies().values()[frequencyIndex],
+                  sourceTraces[sourceIndex].cache, sourceIndex,
+                  epsilonMultiplier, loopRange, influenceSettings);
+          accumulateProjectionTimings(frequencyTimings, sourceResult.timings);
+          sourceWorkspaces.push_back(std::move(sourceResult.workspace));
+        }
 
         {
           std::unique_lock lock(state.mutex);
@@ -212,10 +254,10 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
           if (state.stopping) {
             break;
           }
-          state.completed.push_back(CompletedFrequency{
-              .index = frequencyIndex,
-              .workspace = std::move(frequencyResult.workspace),
-              .timings = frequencyResult.timings});
+          state.completed.push_back(
+              CompletedFrequency{.index = frequencyIndex,
+                                 .workspaces = std::move(sourceWorkspaces),
+                                 .timings = frequencyTimings});
           state.peakQueuedResults =
               std::max(state.peakQueuedResults, state.completed.size());
         }
@@ -272,7 +314,7 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
     try {
       statistics.frequencyTimings[completed.index] = completed.timings;
       accumulateProjectionTimings(statistics.phaseTotals, completed.timings);
-      consumer(completed.index, std::move(completed.workspace),
+      consumer(completed.index, std::move(completed.workspaces),
                completed.timings);
       ++consumedCount;
     } catch (...) {
@@ -294,8 +336,15 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
   }
 
   if (verifyCacheFingerprint) {
-    statistics.cacheFingerprintAfter = trace.cache.contentFingerprint();
-    if (statistics.cacheFingerprintAfter != statistics.cacheFingerprintBefore) {
+    statistics.sourceCacheFingerprintsAfter.reserve(sourceCount);
+    for (const RayFanTraceResult& trace : sourceTraces) {
+      statistics.sourceCacheFingerprintsAfter.push_back(
+          trace.cache.contentFingerprint());
+    }
+    statistics.cacheFingerprintAfter =
+        statistics.sourceCacheFingerprintsAfter.front();
+    if (statistics.sourceCacheFingerprintsAfter !=
+        statistics.sourceCacheFingerprintsBefore) {
       throw ValidationError("parallel ray-reuse modified the frozen ray cache");
     }
   }

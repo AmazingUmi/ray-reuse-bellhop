@@ -8,7 +8,7 @@
 
 #include "rayreuse/acoustics/boundary_acoustics.hpp"
 #include "rayreuse/error.hpp"
-#include "rayreuse/model/c_linear_frequency_ssp.hpp"
+#include "rayreuse/model/sound_speed_evaluator.hpp"
 
 namespace rayreuse {
 namespace {
@@ -95,8 +95,7 @@ RayFrequencyState FrequencyProjector::project(const RayPath& path,
                                               double sourceAmplitude) const {
   validateProjectionInput(path, frequency, sourceAmplitude);
 
-  CLinearFrequencySsp soundSpeedProfile(environment_.soundSpeedProfile(),
-                                        frequency);
+  FrequencySspEvaluator soundSpeedProfile(environment_, frequency);
   const bool losslessProfile = soundSpeedProfile.isLossless();
   const std::optional<std::complex<double>> uniformComplexSoundSpeed =
       soundSpeedProfile.uniformComplexSoundSpeed();
@@ -141,10 +140,13 @@ RayFrequencyState FrequencyProjector::project(const RayPath& path,
                     event.tangentSlowness, event.normalSlowness)
           : useFrozenLongMaterial
               ? evaluateAcousticHalfSpaceAcoustics(
-                    event.longMaterialOverride->material, frequency,
+                    event.longMaterialOverride->material,
+                    event.longMaterialOverride->attenuationEvaluationDepth,
+                    environment_.volumeAttenuation(), frequency,
                     waterSample.density, event.tangentSlowness,
                     event.normalSlowness)
               : evaluateBoundaryAcoustics(boundary, event.boundarySegmentIndex,
+                                          environment_.volumeAttenuation(),
                                           frequency, waterSample.density,
                                           event.tangentSlowness,
                                           event.normalSlowness);

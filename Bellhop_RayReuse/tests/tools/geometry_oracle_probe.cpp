@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -66,28 +67,71 @@ void writeManifest(const std::filesystem::path& csvPath, double launchAngle,
   }
 }
 
+rayreuse::Environment makeI5QuadrilateralEnvironment() {
+  const auto grid = std::make_shared<const rayreuse::QuadrilateralSspGrid>(
+      rayreuse::QuadrilateralSspGrid{
+          .rangesMeters = {0.0, 350.0, 800.0},
+          .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 1520.0, 1540.0},
+          .depthCount = 2U,
+          .rangeCount = 3U});
+  return rayreuse::Environment(
+      rayreuse::SoundSpeedProfile(
+          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+           {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}},
+          rayreuse::SspInterpolationKind::Quadrilateral, grid),
+      rayreuse::BoundaryModel::vacuum(0.0),
+      rayreuse::BoundaryModel::rigid(100.0));
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
   if (argc != 3 && argc != 4 && argc != 7) {
     std::cerr << "usage: geometry_oracle_probe OUTPUT_CSV "
                  "LAUNCH_ANGLE_RAD "
-                 "[munk | BOTTOM_DEPTH SOURCE_DEPTH DEPTH_LIMIT "
-                 "MAX_POINTS]\n";
+                 "[munk | munk-n2 | munk-pchip | munk-spline | "
+                 "i3-curvilinear | "
+                 "i5-quadrilateral | "
+                 "BOTTOM_DEPTH SOURCE_DEPTH "
+                 "DEPTH_LIMIT MAX_POINTS]\n";
     return 2;
   }
 
-  const bool useMunkConfiguration = argc == 4 && std::string(argv[3]) == "munk";
-  if (argc == 4 && !useMunkConfiguration) {
+  const std::string namedConfiguration = argc == 4 ? argv[3] : "";
+  const bool useMunkConfiguration =
+      namedConfiguration == "munk" || namedConfiguration == "munk-n2" ||
+      namedConfiguration == "munk-pchip" || namedConfiguration == "munk-spline";
+  const bool useCurvilinear = namedConfiguration == "i3-curvilinear";
+  const bool useI5Quadrilateral = namedConfiguration == "i5-quadrilateral";
+  const bool useN2 = namedConfiguration == "munk-n2";
+  const bool usePchip = namedConfiguration == "munk-pchip";
+  const bool useSpline = namedConfiguration == "munk-spline";
+  if (argc == 4 && !useMunkConfiguration && !useCurvilinear &&
+      !useI5Quadrilateral) {
     std::cerr << "unknown probe configuration: " << argv[3] << '\n';
     return 2;
   }
   double launchAngle = 0.0;
-  double bottomDepth = useMunkConfiguration ? 5000.0 : 1000.0;
-  double sourceDepth = useMunkConfiguration ? 1000.0 : 500.0;
-  double depthLimit = useMunkConfiguration ? 5500.0 : 1100.0;
-  double stepLength = useMunkConfiguration ? 500.0 : 10.0;
-  double rangeLimit = useMunkConfiguration ? 101000.0 : 5100.0;
+  double bottomDepth =
+      useMunkConfiguration
+          ? 5000.0
+          : (useCurvilinear ? 130.0 : (useI5Quadrilateral ? 100.0 : 1000.0));
+  double sourceDepth =
+      useMunkConfiguration
+          ? 1000.0
+          : (useCurvilinear ? 48.0 : (useI5Quadrilateral ? 50.0 : 500.0));
+  double depthLimit =
+      useMunkConfiguration
+          ? 5500.0
+          : (useCurvilinear ? 131.0 : (useI5Quadrilateral ? 101.0 : 1100.0));
+  double stepLength =
+      useMunkConfiguration
+          ? 500.0
+          : (useCurvilinear ? 500.0 : (useI5Quadrilateral ? 1.0 : 10.0));
+  double rangeLimit =
+      useMunkConfiguration
+          ? 101000.0
+          : (useCurvilinear ? 2100.0 : (useI5Quadrilateral ? 710.0 : 5100.0));
   std::size_t maximumRayPoints = 10000U;
   try {
     std::size_t parsedCharacters = 0U;
@@ -112,15 +156,52 @@ int main(int argc, char* argv[]) {
 
   const rayreuse::Environment environment =
       useMunkConfiguration
-          ? rayreuse::test::makeMunkEnvironment()
-          : rayreuse::Environment(
-                rayreuse::SoundSpeedProfile(
-                    {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
-                     {.depth = bottomDepth,
-                      .soundSpeed = 1500.0,
-                      .density = 1000.0}}),
-                rayreuse::BoundaryModel::vacuum(0.0),
-                rayreuse::BoundaryModel::rigid(bottomDepth));
+          ? rayreuse::test::makeMunkEnvironment(
+                usePchip
+                    ? rayreuse::SspInterpolationKind::Pchip
+                    : (useSpline
+                           ? rayreuse::SspInterpolationKind::CubicSpline
+                           : (useN2 ? rayreuse::SspInterpolationKind::N2Linear
+                                    : rayreuse::SspInterpolationKind::CLinear)))
+          : (useI5Quadrilateral
+                 ? makeI5QuadrilateralEnvironment()
+                 : (useCurvilinear
+                        ? rayreuse::Environment(
+                              rayreuse::SoundSpeedProfile(
+                                  {{.depth = 0.0,
+                                    .soundSpeed = 1500.0,
+                                    .density = 1000.0},
+                                   {.depth = bottomDepth,
+                                    .soundSpeed = 1500.0,
+                                    .density = 1000.0}}),
+                              rayreuse::BoundaryModel::vacuum(
+                                  rayreuse::BoundaryGeometry::curvilinear(
+                                      {{.range = 0.0, .depth = 4.0},
+                                       {.range = 450.0, .depth = 15.0},
+                                       {.range = 1050.0, .depth = 2.0},
+                                       {.range = 1650.0, .depth = 19.0},
+                                       {.range = 2300.0, .depth = 7.0}},
+                                      0.0,
+                                      rayreuse::BoundaryOrientation::Upper)),
+                              rayreuse::BoundaryModel::rigid(
+                                  rayreuse::BoundaryGeometry::curvilinear(
+                                      {{.range = 0.0, .depth = 111.0},
+                                       {.range = 550.0, .depth = 93.0},
+                                       {.range = 1100.0, .depth = 121.0},
+                                       {.range = 1750.0, .depth = 98.0},
+                                       {.range = 2300.0, .depth = 114.0}},
+                                      130.0,
+                                      rayreuse::BoundaryOrientation::Lower)))
+                        : rayreuse::Environment(
+                              rayreuse::SoundSpeedProfile(
+                                  {{.depth = 0.0,
+                                    .soundSpeed = 1500.0,
+                                    .density = 1000.0},
+                                   {.depth = bottomDepth,
+                                    .soundSpeed = 1500.0,
+                                    .density = 1000.0}}),
+                              rayreuse::BoundaryModel::vacuum(0.0),
+                              rayreuse::BoundaryModel::rigid(bottomDepth))));
   const rayreuse::GeometryTracer tracer(
       environment,
       rayreuse::IntegratorSettings{.stepLength = stepLength,
@@ -187,9 +268,9 @@ int main(int argc, char* argv[]) {
   output.close();
   try {
     writeManifest(argv[1], launchAngle,
-                  useMunkConfiguration
-                      ? "munk"
-                      : (argc == 7 ? "flat-boundary-custom" : "direct"),
+                  namedConfiguration.empty()
+                      ? (argc == 7 ? "flat-boundary-custom" : "direct")
+                      : namedConfiguration,
                   path);
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

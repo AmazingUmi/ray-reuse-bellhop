@@ -12,6 +12,11 @@ enum class BoundaryOrientation {
   Lower,
 };
 
+enum class BoundaryInterpolationKind {
+  PiecewiseLinear,
+  Curvilinear,
+};
+
 struct BoundaryGeometrySample {
   Vec2 point;
   Vec2 tangent;
@@ -22,7 +27,8 @@ struct BoundaryGeometrySample {
   std::size_t segmentIndex{};
 };
 
-// Value-owned flat or piecewise-linear range/depth boundary geometry.
+// Value-owned flat, piecewise-linear, or curvilinear range/depth boundary
+// geometry.
 class BoundaryGeometry {
  public:
   [[nodiscard]] static BoundaryGeometry flat(double depth,
@@ -30,7 +36,11 @@ class BoundaryGeometry {
   [[nodiscard]] static BoundaryGeometry piecewiseLinear(
       std::vector<Vec2> nodes, double referenceDepth,
       BoundaryOrientation orientation);
+  [[nodiscard]] static BoundaryGeometry curvilinear(
+      std::vector<Vec2> nodes, double referenceDepth,
+      BoundaryOrientation orientation);
   [[nodiscard]] BoundaryOrientation orientation() const noexcept;
+  [[nodiscard]] BoundaryInterpolationKind interpolationKind() const noexcept;
   [[nodiscard]] bool isFlat() const noexcept;
   [[nodiscard]] std::size_t segmentCount() const noexcept;
   [[nodiscard]] double referenceDepth() const noexcept;
@@ -57,14 +67,20 @@ class BoundaryGeometry {
     double length{};
     Vec2 tangent;
     Vec2 outwardNormal;
+    Vec2 reflectionStartTangent;
+    Vec2 reflectionEndTangent;
+    double curvature{};
   };
 
   BoundaryGeometry(double depth, BoundaryOrientation orientation);
   BoundaryGeometry(std::vector<Vec2> nodes, double referenceDepth,
-                   BoundaryOrientation orientation);
+                   BoundaryOrientation orientation,
+                   BoundaryInterpolationKind interpolationKind);
 
   double depth_{};
   BoundaryOrientation orientation_{BoundaryOrientation::Upper};
+  BoundaryInterpolationKind interpolationKind_{
+      BoundaryInterpolationKind::PiecewiseLinear};
   std::vector<Vec2> nodes_;
   std::vector<Segment> segments_;
 };

@@ -1,39 +1,61 @@
 # Bellhop Ray-Reuse
 
-本仓库包含 Acoustic Toolbox Bellhop 的 Fortran 参考实现、已封板的 C++20
-二维单频复刻、独立宽带射线复用实现及可重复标准算例。
+本仓库维护三套相互独立、由共享标准算例连接的 Bellhop 实现：
+
+| 组件 | 当前角色 |
+|---|---|
+| `Bellhop_origin/` | 可重现的 Fortran 科学与文件行为 oracle |
+| `Bellhop_F2CPP/` | 已封板的 C++20 二维单频 production reference |
+| `Bellhop_RayReuse/` | 已完成 F2CPP production Feature Parity 的独立多频轨迹复用实现 |
+
+当前正式状态：
+
+```text
+Bellhop_F2CPP → Bellhop_RayReuse
+Production Feature Parity: COMPLETE
+Remaining F2CPP parity GAP: 0
+
+Accepted production HEAD: 0721fb3
+Final acceptance documentation commit: 88ba8b7
+```
+
+RayReuse 在已对齐的二维 production surface 上增加 `nonreuse`、`reuse` 和
+`parallel` 三种 broadband execution mode。详细结论、支持边界和运行方式见：
+
+- [Feature Parity Final Report](Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)
+- [RayReuse Feature Support Matrix](Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+- [RayReuse Usage Guide](Bellhop_RayReuse/doc/guides/GUIDE_USAGE.md)
+- [当前项目工作与候选方向](doc/plans/PLAN_CURRENT_WORK.md)
 
 ## 项目结构
 
 ```text
-Bellhop_origin/     可重现 Fortran 单频 oracle
-Bellhop_F2CPP/      独立的优化版 C++ 单频复刻
-Bellhop_RayReuse/   独立的宽带轨迹复用实现
-test/PlotRead/        独立 SHD 格式读取、绘图和自包含 fixtures
-test/standard_cases/  原版、F2CPP、RayReuse 共用的单频/宽带算例矩阵
-test/legacy/          不参与测试的迁移前历史材料
-demo/                 按 cases/codes/results/figures 分类的可靠性与多频展示
+Bellhop_origin/       Fortran 单频 oracle
+Bellhop_F2CPP/        C++20 二维单频 production reference
+Bellhop_RayReuse/     C++20 多频轨迹复用 production implementation
+test/PlotRead/        SHD 读取、绘图和自包含 fixtures
+test/standard_cases/  Origin、F2CPP、RayReuse 共用算例与 validators
+test/legacy/          不参与当前测试的迁移前历史材料
+demo/                 可靠性与多频结果展示
 ```
 
-实施顺序为先完成 `Bellhop_F2CPP`，再以其已验证代码为起点复制/派生 `Bellhop_RayReuse`，并在后者中改造成宽带轨迹复用实现。F2CPP 从一开始就必须采用 RayReuse 所需的变量和所有权设计：完整保存频率无关的 `RayPath`、`StepQuadrature`、`ReflectionEvent` 和终止原因，将逐频幅相与压力隔离到 `RayFrequencyState/FrequencyWorkspace`。因此 RayReuse 主要增加多频调度和复用策略，而不是重新设计声线状态。派生后两者保持独立 CMake 工程、独立源码副本和独立可执行程序，互不链接。
+F2CPP 与 RayReuse 拥有独立 CMake 工程、源码和可执行程序，彼此不链接。
+RayReuse 保留 frequency-independent `RayPath`/`RayPathCache` 几何，并把幅相、
+复走时、反射结果、Influence/Arrival/Eigenray workspace 与 writer state 保持为
+frequency-local。完整契约见
+[总体架构](doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)。
 
-## SHD 结果读取
+## Python 与结果读取
 
-结果读取与绘图已集中到 `test/PlotRead/bellhop_io_py/`，相关测试与 MATLAB 格式参考也统一放在 `test/PlotRead/`。运行不再依赖 MATLAB。
-
-项目使用仓库根目录的 uv 环境，Python 固定为 `.python-version` 中的版本。
-首次使用和完整 Python 回归从项目根目录运行：
+仓库使用根目录 uv 环境和 `.python-version`：
 
 ```bash
 uv sync
 uv run pytest
 ```
 
-`uv sync` 会以 editable 方式安装仓库内的 PlotRead 组件。Makefile 和脚本从
-`PATH` 发现 `python3`，通过 `uv run` 执行时会自动使用项目环境，不要求手动
-激活，也不硬编码 `.venv` 路径。
-
-生成一个标准结果后无需设置 `PYTHONPATH`：
+PlotRead 已集中到 `test/PlotRead/bellhop_io_py/`，运行不依赖 MATLAB。生成标准
+结果并读取 SHD 的示例：
 
 ```bash
 uv run make -C test/standard_cases test \
@@ -47,21 +69,17 @@ uv run bellhop-shd plot \
   -o /tmp/munk.png
 ```
 
-Python 的 `--frequency-index` 从 **0** 开始；`--frequency` 按最接近的 Hz 值选择。完整安装、CLI、API、测试和项目边界见 [PlotRead 使用说明](test/PlotRead/README.md)。
+Python 的 `--frequency-index` 从 0 开始；`--frequency` 按最接近的 Hz 值选择。
+完整说明见 [PlotRead README](test/PlotRead/README.md)。
 
-## 回归测试
+## 测试与文档入口
 
-完成一次 `uv sync` 后：
+- [共享标准算例](test/standard_cases/README.md)
+- [RayReuse 构建、运行与质量门](Bellhop_RayReuse/README.md)
+- [项目文档索引](doc/README.md)
+- [RayReuse 文档索引](Bellhop_RayReuse/doc/README.md)
+- [Demo](demo/README.md)
 
-```bash
-uv run make -C test/PlotRead test
-```
-
-兼容显式名称 `make -C test/PlotRead test-plotread`；它与 `test` 执行相同的 PlotRead 回归。
-
-标准 Bellhop 算例的运行方法见 [test/standard_cases/README.md](test/standard_cases/README.md)。
-
-三套求解器的工程演示和结果绘图见 [demo/README.md](demo/README.md)。
-
-F2CPP 复刻封板后的 supported、intentional divergence 与 deferred 范围见
-[二维单频支持矩阵](Bellhop_F2CPP/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)。
+`archive/`、dated reports 和 frozen Batch artifacts 是历史证据快照，不代表当前
+状态或自动恢复的待办；当前结论以上述 final report、support matrix 和 status
+文档为准。

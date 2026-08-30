@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include "rayreuse/model/boundary_geometry.hpp"
+#include "rayreuse/model/sound_speed_types.hpp"
 
 namespace rayreuse {
 
@@ -35,6 +37,33 @@ struct RawAttenuation {
   VolumeAttenuationModel volumeModel{VolumeAttenuationModel::None};
 };
 
+struct FrancoisGarrisonParameters {
+  double temperatureCelsius{20.0};
+  double salinityPsu{35.0};
+  double pH{8.0};
+  double meanDepthMeters{};
+};
+
+struct BiologicalAttenuationLayer {
+  double minimumDepth{};
+  double maximumDepth{};
+  double resonanceFrequency{};
+  double qualityFactor{};
+  double attenuationCoefficientDecibelsPerKilometer{};
+};
+
+using BiologicalAttenuationLayers = std::vector<BiologicalAttenuationLayer>;
+using SharedBiologicalAttenuationLayers =
+    std::shared_ptr<const BiologicalAttenuationLayers>;
+using VolumeAttenuationParameters =
+    std::variant<std::monostate, FrancoisGarrisonParameters,
+                 SharedBiologicalAttenuationLayers>;
+
+struct VolumeAttenuation {
+  VolumeAttenuationModel model{VolumeAttenuationModel::None};
+  VolumeAttenuationParameters parameters{};
+};
+
 struct SoundSpeedPoint {
   double depth{};
   double soundSpeed{};
@@ -42,16 +71,38 @@ struct SoundSpeedPoint {
   RawAttenuation attenuation{};
 };
 
+// Range-dependent real sound-speed samples for the Origin 2-D `Q` option.
+// Storage is depth-major: speedsDepthMajor[depthIndex * rangeCount +
+// rangeIndex].  The reference SoundSpeedProfile still owns depths, density,
+// and raw attenuation.
+struct QuadrilateralSspGrid {
+  std::vector<double> rangesMeters;
+  std::vector<double> speedsDepthMajor;
+  std::size_t depthCount{};
+  std::size_t rangeCount{};
+};
+
+using SharedQuadrilateralSspGrid = std::shared_ptr<const QuadrilateralSspGrid>;
+
 class SoundSpeedProfile {
  public:
-  explicit SoundSpeedProfile(std::vector<SoundSpeedPoint> points);
+  explicit SoundSpeedProfile(
+      std::vector<SoundSpeedPoint> points,
+      SspInterpolationKind interpolationKind = SspInterpolationKind::CLinear,
+      SharedQuadrilateralSspGrid quadrilateralGrid = {});
 
   [[nodiscard]] const std::vector<SoundSpeedPoint>& points() const noexcept;
   [[nodiscard]] double minimumDepth() const noexcept;
   [[nodiscard]] double maximumDepth() const noexcept;
+  [[nodiscard]] SspInterpolationKind interpolationKind() const noexcept;
+  [[nodiscard]] const SharedQuadrilateralSspGrid& quadrilateralGrid()
+      const noexcept;
+  [[nodiscard]] double quadrilateralRealSoundSpeedAt(Vec2 position) const;
 
  private:
   std::vector<SoundSpeedPoint> points_;
+  SspInterpolationKind interpolationKind_{SspInterpolationKind::CLinear};
+  SharedQuadrilateralSspGrid quadrilateralGrid_;
 };
 
 enum class BoundaryKind {
@@ -143,17 +194,19 @@ class BoundaryModel {
 class Environment {
  public:
   Environment(SoundSpeedProfile soundSpeedProfile, BoundaryModel seaSurface,
-              BoundaryModel seabed);
+              BoundaryModel seabed, VolumeAttenuation volumeAttenuation = {});
 
   [[nodiscard]] const SoundSpeedProfile& soundSpeedProfile() const noexcept;
   [[nodiscard]] const BoundaryModel& seaSurface() const noexcept;
   [[nodiscard]] const BoundaryModel& seabed() const noexcept;
+  [[nodiscard]] const VolumeAttenuation& volumeAttenuation() const noexcept;
   [[nodiscard]] double waterDepth() const noexcept;
 
  private:
   SoundSpeedProfile soundSpeedProfile_;
   BoundaryModel seaSurface_;
   BoundaryModel seabed_;
+  VolumeAttenuation volumeAttenuation_;
 };
 
 }  // namespace rayreuse

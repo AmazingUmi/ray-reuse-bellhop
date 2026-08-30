@@ -66,6 +66,13 @@ if(RAYREUSE_ENABLE_SANITIZERS)
   endif()
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
+  set_source_files_properties(
+    src/acoustics/attenuation.cpp
+    PROPERTIES COMPILE_OPTIONS "-fno-builtin-pow"
+  )
+endif()
+
 add_library(
   bellhop_rayreuse_core
   STATIC
@@ -75,9 +82,11 @@ add_library(
     src/field/cartesian_cerveny_influence.cpp
     src/field/geometric_gaussian_influence.cpp
     src/field/geometric_hat_influence.cpp
+    src/field/simple_gaussian_influence.cpp
     src/field/arrival_workspace.cpp
     src/field/frequency_projector.cpp
     src/field/pressure_scaling.cpp
+    src/field/ray_centered_cerveny_influence.cpp
     src/io/command_line.cpp
     src/io/ray_prefix_writer.cpp
     src/io/ray_writer.cpp
@@ -86,9 +95,20 @@ add_library(
     src/model/boundary_geometry.cpp
     src/model/c_linear_frequency_ssp.cpp
     src/model/c_linear_ssp.cpp
+    src/model/cubic_spline_ssp.cpp
+    src/model/cubic_spline_frequency_ssp.cpp
     src/model/environment.cpp
     src/model/launch_fan_planner.cpp
+    src/model/n2_linear_frequency_ssp.cpp
+    src/model/n2_linear_ssp.cpp
+    src/model/pchip_frequency_ssp.cpp
+    src/model/pchip_ssp.cpp
+    src/model/quadrilateral_frequency_ssp.cpp
+    src/model/quadrilateral_ssp.cpp
     src/model/simulation_case.cpp
+    src/model/sound_speed_evaluator.cpp
+    src/numerics/cubic_spline_coefficients.cpp
+    src/numerics/pchip_coefficients.cpp
     src/cache/ray_path_cache.cpp
     src/field/frequency_workspace.cpp
     src/io/arrival_writer.cpp
@@ -206,6 +226,12 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_boundary_geometry_tests
+    rayreuse.component.boundary_geometry
+    tests/component/boundary_geometry_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_environment_parser_tests
     rayreuse.component.environment_parser
     tests/component/environment_parser_test.cpp
@@ -235,6 +261,36 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_ray_centered_cerveny_influence_tests
+    rayreuse.component.ray_centered_cerveny_influence
+    tests/component/ray_centered_cerveny_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_geometric_hat_influence_tests
+    rayreuse.component.geometric_hat_influence
+    tests/component/geometric_hat_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_geometric_gaussian_influence_tests
+    rayreuse.component.geometric_gaussian_influence
+    tests/component/geometric_gaussian_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_simple_gaussian_influence_tests
+    rayreuse.component.simple_gaussian_influence
+    tests/component/simple_gaussian_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_irregular_receiver_influence_tests
+    rayreuse.component.irregular_receiver_influence
+    tests/component/irregular_receiver_influence_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_single_frequency_solver_tests
     rayreuse.component.single_frequency_solver
     tests/component/single_frequency_solver_test.cpp
@@ -259,9 +315,51 @@ if(BUILD_TESTING)
     "component;parallel;reuse"
   )
   add_rayreuse_test(
+    bellhop_rayreuse_multi_source_product_tests
+    rayreuse.component.multi_source_product
+    tests/component/multi_source_product_test.cpp
+    "component;reuse;parallel"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_multi_source_writer_tests
+    rayreuse.component.multi_source_writer
+    tests/component/multi_source_writer_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_c_linear_ssp_tests
     rayreuse.component.c_linear_ssp
     tests/component/c_linear_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_pchip_ssp_tests
+    rayreuse.component.pchip_ssp
+    tests/component/pchip_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_n2_linear_ssp_tests
+    rayreuse.component.n2_linear_ssp
+    tests/component/n2_linear_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_cubic_spline_ssp_tests
+    rayreuse.component.cubic_spline_ssp
+    tests/component/cubic_spline_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_quadrilateral_ssp_tests
+    rayreuse.component.quadrilateral_ssp
+    tests/component/quadrilateral_ssp_test.cpp
+    component
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_sound_speed_evaluator_tests
+    rayreuse.component.sound_speed_evaluator
+    tests/component/sound_speed_evaluator_test.cpp
     component
   )
   add_rayreuse_test(

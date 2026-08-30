@@ -4,6 +4,7 @@
 #include <complex>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <numbers>
 #include <optional>
 #include <stdexcept>
@@ -18,10 +19,17 @@
 
 namespace {
 
+using rayreuse::BeamFamily;
+using rayreuse::BeamWidthMode;
+using rayreuse::BiologicalAttenuationLayers;
+using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
 using rayreuse::BroadbandNonReuseResult;
 using rayreuse::BroadbandNonReuseSolver;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
+using rayreuse::FieldComponent;
+using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
@@ -32,13 +40,51 @@ using rayreuse::ReceiverGrid;
 using rayreuse::SerialRayReuseResult;
 using rayreuse::SerialRayReuseSolver;
 using rayreuse::SimulationCase;
+using rayreuse::SimulationRunMode;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
+using rayreuse::SourceBeamPattern;
 using rayreuse::ValidationError;
+using rayreuse::VolumeAttenuation;
+using rayreuse::VolumeAttenuationModel;
 using rayreuse::test::Context;
 
-SimulationCase makeSimulation(std::vector<double> frequencies) {
+VolumeAttenuation makeThorpAttenuation() {
+  return VolumeAttenuation{.model = VolumeAttenuationModel::Thorp};
+}
+
+VolumeAttenuation makeFrancoisGarrisonAttenuation(double temperature) {
+  return VolumeAttenuation{.model = VolumeAttenuationModel::FrancoisGarrison,
+                           .parameters = FrancoisGarrisonParameters{
+                               .temperatureCelsius = temperature,
+                               .salinityPsu = 35.0,
+                               .pH = 8.0,
+                               .meanDepthMeters = 50.0}};
+}
+
+VolumeAttenuation makeBiologicalAttenuation(double coefficient) {
+  return VolumeAttenuation{
+      .model = VolumeAttenuationModel::Biological,
+      .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+          BiologicalAttenuationLayers{
+              {.minimumDepth = 0.0,
+               .maximumDepth = 100.0,
+               .resonanceFrequency = 1000.0,
+               .qualityFactor = 2.0,
+               .attenuationCoefficientDecibelsPerKilometer = coefficient}})};
+}
+
+SimulationCase makeSimulation(
+    std::vector<double> frequencies,
+    SimulationRunMode runMode = SimulationRunMode::Coherent,
+    BeamFamily beamFamily = BeamFamily::CervenyGaussian,
+    FieldComponent fieldComponent = FieldComponent::Pressure,
+    BoundaryCurvatureMode curvatureMode = BoundaryCurvatureMode::Standard,
+    BeamWidthMode beamWidthMode = BeamWidthMode::MinimumWidth,
+    CervenyCoordinateSystem coordinateSystem =
+        CervenyCoordinateSystem::Cartesian,
+    VolumeAttenuation volumeAttenuation = {}) {
   return SimulationCase(
       Environment(
           SoundSpeedProfile(
@@ -46,7 +92,8 @@ SimulationCase makeSimulation(std::vector<double> frequencies) {
                    .depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
                SoundSpeedPoint{
                    .depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}}),
-          BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0)),
+          BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0),
+          std::move(volumeAttenuation)),
       Source{.depth = 50.0, .amplitude = 1.0},
       ReceiverGrid({25.0, 50.0, 75.0}, {10.0, 55.0, 100.0}),
       FrequencyGrid(std::move(frequencies)),
@@ -56,7 +103,18 @@ SimulationCase makeSimulation(std::vector<double> frequencies) {
       IntegratorSettings{.stepLength = 10.0,
                          .rangeLimit = 110.0,
                          .depthLimit = 110.0,
-                         .maximumRayPoints = 100U});
+                         .maximumRayPoints = 100U},
+      SourceBeamPattern::omnidirectional(), runMode, beamFamily, fieldComponent,
+      curvatureMode, beamWidthMode, coordinateSystem);
+}
+
+SimulationCase makeAttenuatedSimulation(std::vector<double> frequencies,
+                                        VolumeAttenuation volumeAttenuation) {
+  return makeSimulation(
+      std::move(frequencies), SimulationRunMode::Coherent,
+      BeamFamily::CervenyGaussian, FieldComponent::Pressure,
+      BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+      CervenyCoordinateSystem::Cartesian, std::move(volumeAttenuation));
 }
 
 std::vector<double> makeFrequencies(std::size_t count) {
@@ -69,7 +127,8 @@ std::vector<double> makeFrequencies(std::size_t count) {
 }
 
 struct StreamedParallelRun {
-  std::vector<std::optional<rayreuse::FrequencyWorkspace>> workspaces;
+  std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
+      workspaces;
   std::vector<std::size_t> callbackCounts;
   ParallelRayReuseStatistics statistics;
 };
@@ -78,18 +137,19 @@ StreamedParallelRun runParallel(const SimulationCase& simulation,
                                 ParallelRayReuseSettings settings,
                                 bool verifyCacheFingerprint = false) {
   StreamedParallelRun run{
-      .workspaces = std::vector<std::optional<rayreuse::FrequencyWorkspace>>(
-          simulation.frequencies().size()),
+      .workspaces =
+          std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>(
+              simulation.frequencies().size()),
       .callbackCounts =
           std::vector<std::size_t>(simulation.frequencies().size(), 0U),
       .statistics = {}};
   run.statistics = ParallelRayReuseSolver::solveStreaming(
       simulation, 1.0, 50.0,
       [&run](std::size_t frequencyIndex,
-             rayreuse::FrequencyWorkspace&& workspace,
+             std::vector<rayreuse::FrequencyWorkspace>&& sourceWorkspaces,
              const rayreuse::SingleFrequencyTimings&) {
         ++run.callbackCounts.at(frequencyIndex);
-        run.workspaces.at(frequencyIndex).emplace(std::move(workspace));
+        run.workspaces.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
       },
       settings, {}, verifyCacheFingerprint);
   return run;
@@ -163,11 +223,11 @@ void testFrequencyCounts(Context& context) {
       context.check(parallel.workspaces[index].has_value(),
                     "parallel run returns every indexed workspace");
       if (parallel.workspaces[index]) {
-        checkWorkspaceEqual(context, *parallel.workspaces[index],
-                            serial.frequencyResults[index].workspace,
+        checkWorkspaceEqual(context, parallel.workspaces[index]->front(),
+                            serial.frequencyResults[index].workspaces.front(),
                             "parallel pressure is bitwise equal to "
                             "serial reuse");
-        checkWorkspaceEqual(context, *parallel.workspaces[index],
+        checkWorkspaceEqual(context, parallel.workspaces[index]->front(),
                             nonReuse.frequencyResults[index].workspace,
                             "parallel pressure is bitwise equal to "
                             "non-reuse");
@@ -189,8 +249,359 @@ void testRepeatedRunIsDeterministic(Context& context) {
                   "repeated parallel runs return every workspace");
     if (first.workspaces[index] && second.workspaces[index]) {
       checkWorkspaceEqual(
-          context, *first.workspaces[index], *second.workspaces[index],
+          context, first.workspaces[index]->front(),
+          second.workspaces[index]->front(),
           "repeated parallel pressure is bitwise deterministic");
+    }
+  }
+}
+
+void testVolumeAttenuationExecutionInvariants(Context& context) {
+  const std::vector<VolumeAttenuation> models = {
+      makeThorpAttenuation(), makeFrancoisGarrisonAttenuation(10.0),
+      makeBiologicalAttenuation(100.0)};
+  const ParallelRayReuseSettings settings{
+      .workerCount = 3U, .outputQueueCapacity = 1U, .memoryBudgetBytes = 0U};
+
+  for (const VolumeAttenuation& model : models) {
+    const SimulationCase simulation =
+        makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, model);
+    const BroadbandNonReuseResult nonReuse =
+        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+    const SerialRayReuseResult serial =
+        SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+    const StreamedParallelRun first = runParallel(simulation, settings, true);
+    const StreamedParallelRun repeated =
+        runParallel(simulation, settings, true);
+
+    context.check(
+        serial.statistics.cacheFingerprintVerified &&
+            serial.statistics.cacheFingerprintBefore ==
+                serial.statistics.cacheFingerprintAfter &&
+            first.statistics.cacheFingerprintVerified &&
+            first.statistics.cacheFingerprintBefore ==
+                first.statistics.cacheFingerprintAfter &&
+            repeated.statistics.cacheFingerprintVerified &&
+            repeated.statistics.cacheFingerprintBefore ==
+                repeated.statistics.cacheFingerprintAfter &&
+            first.statistics.cacheFingerprintBefore ==
+                repeated.statistics.cacheFingerprintBefore,
+        "Thorp/FG/biological serial and repeated parallel projection preserve "
+        "the frozen cache fingerprint");
+
+    for (std::size_t index = 0U; index < simulation.frequencies().size();
+         ++index) {
+      context.check(first.workspaces[index].has_value() &&
+                        repeated.workspaces[index].has_value(),
+                    "attenuated parallel runs publish every frequency");
+      if (!first.workspaces[index] || !repeated.workspaces[index]) continue;
+      checkWorkspaceEqual(
+          context, serial.frequencyResults[index].workspaces.front(),
+          nonReuse.frequencyResults[index].workspace,
+          "attenuated serial reuse pressure equals non-reuse bitwise");
+      checkWorkspaceEqual(
+          context, first.workspaces[index]->front(),
+          nonReuse.frequencyResults[index].workspace,
+          "attenuated parallel reuse pressure equals non-reuse bitwise");
+      checkWorkspaceEqual(
+          context, repeated.workspaces[index]->front(),
+          first.workspaces[index]->front(),
+          "repeated attenuated parallel pressure is bitwise deterministic");
+    }
+  }
+
+  for (const auto& parameterPair :
+       {std::pair{makeFrancoisGarrisonAttenuation(10.0),
+                  makeFrancoisGarrisonAttenuation(18.0)},
+        std::pair{makeBiologicalAttenuation(100.0),
+                  makeBiologicalAttenuation(250.0)}}) {
+    const SimulationCase firstSimulation =
+        makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, parameterPair.first);
+    const SimulationCase changedSimulation =
+        makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, parameterPair.second);
+    const SerialRayReuseResult first =
+        SerialRayReuseSolver::solve(firstSimulation, 1.0, 50.0, {}, true);
+    const SerialRayReuseResult changed =
+        SerialRayReuseSolver::solve(changedSimulation, 1.0, 50.0, {}, true);
+    context.check(
+        first.statistics.cacheFingerprintBefore ==
+                changed.statistics.cacheFingerprintBefore &&
+            first.statistics.cacheFingerprintBefore ==
+                first.statistics.cacheFingerprintAfter &&
+            changed.statistics.cacheFingerprintBefore ==
+                changed.statistics.cacheFingerprintAfter,
+        "changing FG/biological payload preserves identical frozen geometry");
+
+    bool pressureDiffers = false;
+    for (std::size_t index = 0U; index < first.frequencyResults.size();
+         ++index) {
+      pressureDiffers =
+          pressureDiffers ||
+          !std::equal(
+              first.frequencyResults[index]
+                  .workspaces.front()
+                  .pressure()
+                  .begin(),
+              first.frequencyResults[index].workspaces.front().pressure().end(),
+              changed.frequencyResults[index]
+                  .workspaces.front()
+                  .pressure()
+                  .begin());
+    }
+    context.check(pressureDiffers,
+                  "changing FG/biological payload changes projected pressure");
+  }
+}
+
+void testCoherenceModesMatchAcrossExecution(Context& context) {
+  for (const BeamFamily beamFamily :
+       {BeamFamily::CervenyGaussian, BeamFamily::GeometricHat,
+        BeamFamily::GeometricGaussian}) {
+    for (const SimulationRunMode mode :
+         {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+          SimulationRunMode::SemiCoherent}) {
+      const SimulationCase simulation =
+          makeSimulation({50.0, 100.0}, mode, beamFamily);
+      const BroadbandNonReuseResult nonReuse =
+          BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+      const SerialRayReuseResult reuse =
+          SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+      const StreamedParallelRun parallel =
+          runParallel(simulation,
+                      ParallelRayReuseSettings{.workerCount = 2U,
+                                               .outputQueueCapacity = 1U,
+                                               .memoryBudgetBytes = 0U},
+                      true);
+      context.check(
+          reuse.statistics.cacheFingerprintVerified &&
+              reuse.statistics.cacheFingerprintBefore ==
+                  reuse.statistics.cacheFingerprintAfter &&
+              parallel.statistics.cacheFingerprintVerified &&
+              parallel.statistics.cacheFingerprintBefore ==
+                  parallel.statistics.cacheFingerprintAfter,
+          "C/I/S Cerveny, GeoHat, and GeoGaussian reuse paths preserve the "
+          "frozen cache "
+          "fingerprint");
+      for (std::size_t index = 0U; index < 2U; ++index) {
+        context.check(parallel.workspaces[index].has_value(),
+                      "parallel C/I/S returns every frequency workspace");
+        if (!parallel.workspaces[index].has_value()) {
+          continue;
+        }
+        checkWorkspaceEqual(context,
+                            reuse.frequencyResults[index].workspaces.front(),
+                            nonReuse.frequencyResults[index].workspace,
+                            "serial reuse C/I/S is bitwise equal to non-reuse");
+        checkWorkspaceEqual(
+            context, parallel.workspaces[index]->front(),
+            nonReuse.frequencyResults[index].workspace,
+            "parallel reuse C/I/S is bitwise equal to non-reuse");
+      }
+    }
+  }
+}
+
+void testSimpleGaussianMatchesAcrossExecution(Context& context) {
+  const SimulationCase simulation = makeSimulation(
+      {50.0, 100.0}, SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
+  const BroadbandNonReuseResult nonReuse =
+      BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+  const SerialRayReuseResult reuse =
+      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+  const StreamedParallelRun parallel =
+      runParallel(simulation,
+                  ParallelRayReuseSettings{.workerCount = 2U,
+                                           .outputQueueCapacity = 1U,
+                                           .memoryBudgetBytes = 0U},
+                  true);
+  context.check(
+      reuse.statistics.cacheFingerprintVerified &&
+          reuse.statistics.cacheFingerprintBefore ==
+              reuse.statistics.cacheFingerprintAfter &&
+          parallel.statistics.cacheFingerprintVerified &&
+          parallel.statistics.cacheFingerprintBefore ==
+              parallel.statistics.cacheFingerprintAfter,
+      "Simple Gaussian reuse paths preserve the frozen cache fingerprint");
+  for (std::size_t index = 0U; index < 2U; ++index) {
+    context.check(parallel.workspaces[index].has_value(),
+                  "parallel Simple Gaussian returns every frequency");
+    if (!parallel.workspaces[index].has_value()) {
+      continue;
+    }
+    checkWorkspaceEqual(
+        context, reuse.frequencyResults[index].workspaces.front(),
+        nonReuse.frequencyResults[index].workspace,
+        "serial reuse Simple Gaussian is bitwise equal to non-reuse");
+    checkWorkspaceEqual(
+        context, parallel.workspaces[index]->front(),
+        nonReuse.frequencyResults[index].workspace,
+        "parallel reuse Simple Gaussian is bitwise equal to non-reuse");
+  }
+}
+
+void testCartesianComponentsMatchAcrossExecution(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    for (const BoundaryCurvatureMode curvatureMode :
+         {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
+          BoundaryCurvatureMode::Zero}) {
+      for (const BeamWidthMode widthMode :
+           {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
+            BeamWidthMode::Wkb}) {
+        std::optional<SerialRayReuseResult> pressure;
+        for (const FieldComponent component :
+             {FieldComponent::Pressure, FieldComponent::Vertical,
+              FieldComponent::Horizontal}) {
+          const SimulationCase simulation =
+              makeSimulation({50.0, 100.0}, mode, BeamFamily::CervenyGaussian,
+                             component, curvatureMode, widthMode);
+          const BroadbandNonReuseResult nonReuse =
+              BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+          const SerialRayReuseResult reuse =
+              SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+          const StreamedParallelRun parallel =
+              runParallel(simulation,
+                          ParallelRayReuseSettings{.workerCount = 2U,
+                                                   .outputQueueCapacity = 1U,
+                                                   .memoryBudgetBytes = 0U},
+                          true);
+          context.check(
+              reuse.statistics.cacheFingerprintVerified &&
+                  reuse.statistics.cacheFingerprintBefore ==
+                      reuse.statistics.cacheFingerprintAfter &&
+                  parallel.statistics.cacheFingerprintVerified &&
+                  parallel.statistics.cacheFingerprintBefore ==
+                      parallel.statistics.cacheFingerprintAfter,
+              "Cartesian Cerveny C/I/S x F/M/W x D/S/Z x P/V/H preserves "
+              "frozen cache");
+          for (std::size_t index = 0U; index < 2U; ++index) {
+            context.check(
+                parallel.workspaces[index].has_value(),
+                "parallel Cartesian width/curvature returns every frequency");
+            if (!parallel.workspaces[index].has_value()) {
+              continue;
+            }
+            checkWorkspaceEqual(
+                context, reuse.frequencyResults[index].workspaces.front(),
+                nonReuse.frequencyResults[index].workspace,
+                "Cartesian width/curvature serial reuse equals non-reuse "
+                "bitwise");
+            checkWorkspaceEqual(
+                context, parallel.workspaces[index]->front(),
+                nonReuse.frequencyResults[index].workspace,
+                "Cartesian width/curvature parallel reuse equals non-reuse "
+                "bitwise");
+            if (pressure.has_value()) {
+              checkWorkspaceEqual(
+                  context, reuse.frequencyResults[index].workspaces.front(),
+                  pressure->frequencyResults[index].workspaces.front(),
+                  "Cartesian P/V/H legacy selectors are bitwise identical");
+            }
+          }
+          if (!pressure.has_value()) {
+            pressure.emplace(reuse);
+          }
+        }
+      }
+    }
+  }
+}
+
+void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    for (const BoundaryCurvatureMode curvatureMode :
+         {BoundaryCurvatureMode::Double, BoundaryCurvatureMode::Standard,
+          BoundaryCurvatureMode::Zero}) {
+      for (const BeamWidthMode widthMode :
+           {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
+            BeamWidthMode::Wkb}) {
+        for (const FieldComponent component :
+             {FieldComponent::Pressure, FieldComponent::Vertical,
+              FieldComponent::Horizontal}) {
+          const SimulationCase simulation = makeSimulation(
+              {50.0, 100.0}, mode, BeamFamily::CervenyGaussian, component,
+              curvatureMode, widthMode, CervenyCoordinateSystem::RayCentered);
+          const BroadbandNonReuseResult nonReuse =
+              BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+          const SerialRayReuseResult reuse =
+              SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+          const StreamedParallelRun parallel =
+              runParallel(simulation,
+                          ParallelRayReuseSettings{.workerCount = 2U,
+                                                   .outputQueueCapacity = 1U,
+                                                   .memoryBudgetBytes = 0U},
+                          true);
+          context.check(reuse.statistics.cacheFingerprintVerified &&
+                            reuse.statistics.cacheFingerprintBefore ==
+                                reuse.statistics.cacheFingerprintAfter &&
+                            parallel.statistics.cacheFingerprintVerified &&
+                            parallel.statistics.cacheFingerprintBefore ==
+                                parallel.statistics.cacheFingerprintAfter,
+                        "ray-centered C/I/S x F/M/W x D/S/Z x P/V/H preserves "
+                        "the frozen cache");
+          for (std::size_t index = 0U; index < 2U; ++index) {
+            context.check(
+                parallel.workspaces[index].has_value(),
+                "parallel ray-centered matrix returns every frequency");
+            if (!parallel.workspaces[index].has_value()) {
+              continue;
+            }
+            checkWorkspaceEqual(
+                context, reuse.frequencyResults[index].workspaces.front(),
+                nonReuse.frequencyResults[index].workspace,
+                "ray-centered serial reuse equals non-reuse bitwise");
+            checkWorkspaceEqual(
+                context, parallel.workspaces[index]->front(),
+                nonReuse.frequencyResults[index].workspace,
+                "ray-centered parallel reuse equals non-reuse bitwise");
+          }
+        }
+      }
+    }
+  }
+}
+
+void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
+  for (const SimulationRunMode mode :
+       {SimulationRunMode::Coherent, SimulationRunMode::Incoherent,
+        SimulationRunMode::SemiCoherent}) {
+    const SimulationCase simulation = makeSimulation(
+        {50.0, 100.0}, mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
+        BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
+        CervenyCoordinateSystem::RayCentered);
+    const BroadbandNonReuseResult nonReuse =
+        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+    const SerialRayReuseResult reuse =
+        SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+    const StreamedParallelRun parallel =
+        runParallel(simulation,
+                    ParallelRayReuseSettings{.workerCount = 2U,
+                                             .outputQueueCapacity = 1U,
+                                             .memoryBudgetBytes = 0U},
+                    true);
+    context.check(
+        reuse.statistics.cacheFingerprintVerified &&
+            reuse.statistics.cacheFingerprintBefore ==
+                reuse.statistics.cacheFingerprintAfter &&
+            parallel.statistics.cacheFingerprintVerified &&
+            parallel.statistics.cacheFingerprintBefore ==
+                parallel.statistics.cacheFingerprintAfter,
+        "ray-centered GeoHat C/I/S preserves the frozen cache fingerprint");
+    for (std::size_t index = 0U; index < 2U; ++index) {
+      context.check(parallel.workspaces[index].has_value(),
+                    "parallel ray-centered GeoHat returns every frequency");
+      if (!parallel.workspaces[index].has_value()) continue;
+      checkWorkspaceEqual(context,
+                          reuse.frequencyResults[index].workspaces.front(),
+                          nonReuse.frequencyResults[index].workspace,
+                          "ray-centered GeoHat reuse equals non-reuse bitwise");
+      checkWorkspaceEqual(
+          context, parallel.workspaces[index]->front(),
+          nonReuse.frequencyResults[index].workspace,
+          "ray-centered GeoHat parallel equals non-reuse bitwise");
     }
   }
 }
@@ -236,7 +647,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
             ParallelRayReuseSettings{.workerCount = 0U,
                                      .outputQueueCapacity = 1U,
@@ -247,7 +658,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
             ParallelRayReuseSettings{.workerCount = 1U,
                                      .outputQueueCapacity = 0U,
@@ -258,7 +669,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
             ParallelRayReuseSettings{.workerCount = 1U,
                                      .outputQueueCapacity = 3U,
@@ -269,7 +680,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
       [&]() {
         static_cast<void>(ParallelRayReuseSolver::solveStreaming(
             simulation, 1.0, 50.0,
-            [](std::size_t, rayreuse::FrequencyWorkspace&&,
+            [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {
               throw std::runtime_error("consumer failure");
             },
@@ -287,6 +698,12 @@ int main() {
   Context context;
   testFrequencyCounts(context);
   testRepeatedRunIsDeterministic(context);
+  testVolumeAttenuationExecutionInvariants(context);
+  testCoherenceModesMatchAcrossExecution(context);
+  testSimpleGaussianMatchesAcrossExecution(context);
+  testCartesianComponentsMatchAcrossExecution(context);
+  testRayCenteredMatrixMatchesAcrossExecution(context);
+  testRayCenteredGeometricHatMatchesAcrossExecution(context);
   testMemoryBudget(context);
   testInvalidSettingsAndConsumerFailure(context);
 

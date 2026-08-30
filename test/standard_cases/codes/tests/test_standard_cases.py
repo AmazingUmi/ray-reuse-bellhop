@@ -107,6 +107,30 @@ class StandardCasesAdapterTests(unittest.TestCase):
                     print_path.write_text(contents, encoding="utf-8")
                     validate_print_output(definition, print_path)
 
+    def test_print_validation_applies_version_scoped_markers(self) -> None:
+        definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
+        definition = definitions["multi_source_depths"]
+        base_contents = "\n".join(
+            (
+                "Coherent TL calculation",
+                "Cartesian beams",
+                "Rectilinear receiver grid",
+                *definition.prt_markers,
+            )
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            print_path = Path(temporary_directory) / "case.prt"
+            print_path.write_text(base_contents, encoding="utf-8")
+            validate_print_output(definition, print_path, "origin")
+            with self.assertRaisesRegex(RuntimeError, "source depths = 3"):
+                validate_print_output(definition, print_path, "rayreuse")
+            print_path.write_text(
+                base_contents + "\nsource depths = 3\n",
+                encoding="utf-8",
+            )
+            validate_print_output(definition, print_path, "f2cpp")
+            validate_print_output(definition, print_path, "rayreuse")
+
     def test_runner_execution_mode_defaults_and_accepts_both_modes(self) -> None:
         parser = build_parser()
         default_args = parser.parse_args(
@@ -536,6 +560,85 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         print_path,
                         shade_path,
                     )
+
+    def test_broadband_validation_applies_multi_source_trace_statistics(
+        self,
+    ) -> None:
+        """Frozen FP-2F statistics: non-reuse = Nfreq x NSz, reuse = NSz."""
+        frequencies = (500.0, 1000.0)
+        definition = replace(
+            self.definition,
+            expected_dimensions=(1, 1, 1, 1, 1, 2, 3),
+            source_depth_count=2,
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_root = Path(temporary_directory)
+            print_path = output_root / "fixture.prt"
+            shade_path = output_root / "fixture.shd"
+            common_lines = (
+                "Coherent TL calculation",
+                "Cartesian beams",
+                "Rectilinear receiver grid",
+                *definition.prt_markers,
+            )
+            write_little_endian_rectilinear_file(shade_path, frequencies)
+            for execution_mode, mode_marker, trace_passes in (
+                ("nonreuse", "execution mode = broadband non-reuse", 4),
+                ("reuse", "execution mode = broadband reuse", 2),
+                ("parallel", "execution mode = broadband parallel reuse", 2),
+            ):
+                with self.subTest(execution_mode=execution_mode):
+                    print_path.write_text(
+                        "\n".join(
+                            (
+                                *common_lines,
+                                mode_marker,
+                                f"Trace passes = {trace_passes}",
+                            )
+                        ),
+                        encoding="utf-8",
+                    )
+                    validate_broadband_output(
+                        definition,
+                        frequencies,
+                        execution_mode,
+                        print_path,
+                        shade_path,
+                    )
+            # Single-source statistics must now be rejected for NSz = 2.
+            for execution_mode, mode_marker, wrong_trace_passes in (
+                (
+                    "nonreuse",
+                    "execution mode = broadband non-reuse",
+                    "2",
+                ),
+                ("reuse", "execution mode = broadband reuse", "1"),
+            ):
+                with self.subTest(
+                    execution_mode=execution_mode,
+                    wrong_trace_passes=wrong_trace_passes,
+                ):
+                    print_path.write_text(
+                        "\n".join(
+                            (
+                                *common_lines,
+                                mode_marker,
+                                f"Trace passes = {wrong_trace_passes}",
+                            )
+                        ),
+                        encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        "PRT marker missing",
+                    ):
+                        validate_broadband_output(
+                            definition,
+                            frequencies,
+                            execution_mode,
+                            print_path,
+                            shade_path,
+                        )
 
     def test_broadband_validation_rejects_wrong_mode_statistics(self) -> None:
         frequencies = (50.0, 250.0)

@@ -11,7 +11,11 @@ import sys
 
 import numpy as np
 
-from compare_fields import STANDARD_CASES_ROOT, compare_files
+from compare_fields import (
+    STANDARD_CASES_ROOT,
+    compare_files,
+    decoded_complex64_payload,
+)
 
 
 PLOTREAD_ROOT = STANDARD_CASES_ROOT.parent / "PlotRead"
@@ -82,8 +86,15 @@ def load_profile(
     return output
 
 
-def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
+def validate(
+    root: Path,
+    origin: Path,
+    f2cpp: Path,
+    rayreuse_executable: Path | None = None,
+) -> dict[str, object]:
     executables = {"origin": origin.resolve(), "f2cpp": f2cpp.resolve()}
+    if rayreuse_executable is not None:
+        executables["rayreuse"] = rayreuse_executable.resolve()
     if executables["origin"] == executables["f2cpp"]:
         raise ValueError("executable paths must differ")
     if not all(path.is_file() for path in executables.values()):
@@ -91,6 +102,13 @@ def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
     executable_hashes = {key: sha256(path) for key, path in executables.items()}
     if executable_hashes["origin"] == executable_hashes["f2cpp"]:
         raise ValueError("executable hashes must differ")
+    if "rayreuse" in executables and (
+        len(set(executables.values())) != len(executables)
+        or len(set(executable_hashes.values())) != len(executable_hashes)
+    ):
+        raise ValueError(
+            "Origin, F2CPP, and RayReuse executables must be distinct"
+        )
 
     loaded: dict[str, dict[str, list[tuple[Path, Path]]]] = {
         "origin": {}, "f2cpp": {}
@@ -110,7 +128,24 @@ def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
     if input_hashes["origin"] != input_hashes["f2cpp"]:
         raise ValueError("Origin and F2CPP rendered ENV inputs differ")
 
+    # Optional RayReuse leg. RayReuse broadband runs share one SHD across the
+    # frequency slices, so candidate fields are always read at the run's
+    # frequency index instead of slice 0.
+    loaded_rayreuse: dict[str, list[tuple[Path, Path]]] = {}
+    if "rayreuse" in executables:
+        for profile, frequencies in PROFILES.items():
+            loaded_rayreuse[profile] = load_profile(
+                root, "rayreuse", profile, frequencies,
+                executables["rayreuse"],
+            )
+        field_paths["rayreuse"] = [
+            shade for runs in loaded_rayreuse.values()
+            for _, shade in runs
+        ]
+
     comparisons: dict[str, dict[str, float | bool]] = {}
+    rayreuse_comparisons: dict[str, dict[str, float | bool]] = {}
+    payload_exact: dict[str, dict[str, object]] = {}
     layout_guards: dict[str, dict[str, float | bool]] = {}
     tolerances = STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
     for profile, frequencies in PROFILES.items():
@@ -129,8 +164,45 @@ def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
             comparisons[f"{profile}/{frequency:g}Hz"] = {
                 "passed": True, **metrics
             }
-            for version, shade in shades.items():
-                field = ShdReader(shade).read()
+            if loaded_rayreuse:
+                rayreuse_shade = loaded_rayreuse[profile][index][1]
+                passed, metrics = compare_files(
+                    shades["origin"], rayreuse_shade, 0, index, tolerances
+                )
+                if not passed:
+                    raise ValueError(
+                        f"rayreuse/{profile}/{frequency:g}Hz mismatch: "
+                        f"{metrics}"
+                    )
+                rayreuse_comparisons[f"{profile}/{frequency:g}Hz"] = {
+                    "passed": True, **metrics
+                }
+                f2cpp_payload = decoded_complex64_payload(
+                    shades["f2cpp"], 0
+                )
+                rayreuse_payload = decoded_complex64_payload(
+                    rayreuse_shade, index
+                )
+                payload_exact[f"{profile}/{frequency:g}Hz"] = {
+                    "passed": f2cpp_payload == rayreuse_payload,
+                    "f2cpp_bytes": len(f2cpp_payload),
+                    "rayreuse_bytes": len(rayreuse_payload),
+                }
+                if f2cpp_payload != rayreuse_payload:
+                    raise ValueError(
+                        f"rayreuse/{profile}/{frequency:g}Hz F2CPP payload "
+                        "difference (expected zero difference)"
+                    )
+            for version, shade, slice_index in (
+                ("origin", shades["origin"], 0),
+                ("f2cpp", shades["f2cpp"], 0),
+                *(
+                    (("rayreuse", loaded_rayreuse[profile][index][1], index),)
+                    if loaded_rayreuse
+                    else ()
+                ),
+            ):
+                field = ShdReader(shade).read(frequency_index=slice_index)
                 if (
                     field.header.plot_type != "irregular"
                     or not np.array_equal(
@@ -162,15 +234,44 @@ def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
         ).read().pressure
         if not np.array_equal(single, repeat):
             raise ValueError(f"{version}: repeated 1000Hz slice differs")
+    if loaded_rayreuse:
+        single = ShdReader(loaded_rayreuse["single"][0][1]).read().pressure
+        repeat = ShdReader(
+            loaded_rayreuse["broadband_smoke"][0][1]
+        ).read(frequency_index=0).pressure
+        if not np.array_equal(single, repeat):
+            raise ValueError("rayreuse: repeated 1000Hz slice differs")
 
+    executables_for_commands = {
+        "origin": "Bellhop_origin/bin/bellhop",
+        "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
+    }
+    command_versions = ("origin", "f2cpp")
+    if rayreuse_executable is not None:
+        executables_for_commands["rayreuse"] = (
+            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+        )
+        command_versions = ("origin", "f2cpp", "rayreuse")
     commands = [
         "python3 test/standard_cases/codes/standard_cases.py test "
         f"--version {version} --case {CASE_ID} --profile {profile} "
-        f"--executable {'Bellhop_origin/bin/bellhop' if version == 'origin' else 'Bellhop_F2CPP/build/release/bellhop_f2cpp'} "
+        f"--executable {executables_for_commands[version]} "
         "--results-root <results-root>"
-        for version in ("origin", "f2cpp") for profile in PROFILES
+        for version in command_versions for profile in PROFILES
     ]
-    return {
+    validator_command = (
+        "python3 test/standard_cases/codes/"
+        "validate_i6_irregular_receivers.py "
+        "--results-root <results-root> "
+        "--origin-executable Bellhop_origin/bin/bellhop "
+        "--f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
+    )
+    if rayreuse_executable is not None:
+        validator_command += (
+            " --rayreuse-executable "
+            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+        )
+    result: dict[str, object] = {
         "schema": "bellhop.f2cpp.i6_irregular_receiver_validation",
         "schema_version": 1,
         "status": "passed",
@@ -204,24 +305,28 @@ def validate(root: Path, origin: Path, f2cpp: Path) -> dict[str, object]:
         },
         "generation": {
             "case_commands": commands,
-            "validator_command": (
-                "python3 test/standard_cases/codes/"
-                "validate_i6_irregular_receivers.py "
-                "--results-root <results-root> "
-                "--origin-executable Bellhop_origin/bin/bellhop "
-                "--f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp "
-                "--output Bellhop_F2CPP/doc/reports/validation/"
-                "i6_irregular_receivers_report.json"
-            ),
+            "validator_command": validator_command,
         },
         "sha256": {
-            "origin_executable": executable_hashes["origin"],
-            "f2cpp_executable": executable_hashes["f2cpp"],
-            "rendered_env_aggregates": input_hashes["origin"],
-            "origin_field_aggregate": aggregate_sha256(field_paths["origin"]),
-            "f2cpp_field_aggregate": aggregate_sha256(field_paths["f2cpp"]),
+            version: executable_hashes[version]
+            for version in executable_hashes
         },
     }
+    result["sha256"]["rendered_env_aggregates"] = input_hashes["origin"]
+    for version in ("origin", "f2cpp"):
+        result["sha256"][f"{version}_field_aggregate"] = aggregate_sha256(
+            field_paths[version]
+        )
+    if loaded_rayreuse:
+        result["origin_rayreuse_field_comparisons"] = rayreuse_comparisons
+        result["f2cpp_rayreuse_payload_exact"] = payload_exact
+        result["sha256"]["rayreuse_field_aggregate"] = aggregate_sha256(
+            field_paths["rayreuse"]
+        )
+        result["provenance_guards"]["f2cpp_rayreuse_payload_zero_difference"] = (
+            all(entry["passed"] for entry in payload_exact.values())
+        )
+    return result
 
 
 def main() -> None:
@@ -229,10 +334,14 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
+    parser.add_argument("--rayreuse-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
-        args.results_root, args.origin_executable, args.f2cpp_executable
+        args.results_root,
+        args.origin_executable,
+        args.f2cpp_executable,
+        args.rayreuse_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

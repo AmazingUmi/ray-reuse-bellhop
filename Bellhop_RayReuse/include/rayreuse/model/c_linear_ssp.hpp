@@ -4,29 +4,10 @@
 #include <vector>
 
 #include "rayreuse/model/environment.hpp"
+#include "rayreuse/model/sound_speed_types.hpp"
 #include "rayreuse/numerics/vec2.hpp"
 
 namespace rayreuse {
-
-struct SoundSpeedHessian {
-  double rangeRange{};
-  double rangeDepth{};
-  double depthDepth{};
-
-  friend constexpr bool operator==(const SoundSpeedHessian&,
-                                   const SoundSpeedHessian&) = default;
-};
-
-struct SoundSpeedSample {
-  double soundSpeed{};
-  // Reserved for the frequency projection implemented in M2. Geometry-only
-  // C-linear evaluation returns zero.
-  double imaginarySoundSpeed{};
-  Vec2 soundSpeedGradient{};
-  SoundSpeedHessian soundSpeedHessian{};
-  double density{};
-  std::size_t segmentIndex{};
-};
 
 // C-linear interpolation of a range-independent, two-dimensional SSP.
 //
@@ -39,6 +20,11 @@ struct SoundSpeedSample {
 class CLinearSsp {
  public:
   explicit CLinearSsp(const SoundSpeedProfile& profile);
+
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
+    return sspGradientContinuity(SspInterpolationKind::CLinear);
+  }
 
   [[nodiscard]] std::size_t segmentCount() const noexcept;
 

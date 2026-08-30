@@ -32,6 +32,10 @@
 
 ## 从这里开始
 
+- Feature Parity 最终整体验收：
+  [`../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md`](../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)
+- RayReuse 当前支持边界：
+  [`../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
 - 当前工作与待决事项：[`plans/PLAN_CURRENT_WORK.md`](./plans/PLAN_CURRENT_WORK.md)
 - 总体设计：
   [`architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md`](./architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)
@@ -48,7 +52,7 @@
 |---|---|---|
 | Origin | [`Bellhop_origin/doc/README.md`](../Bellhop_origin/doc/README.md) | Fortran 单频行为 oracle |
 | F2CPP | [`Bellhop_F2CPP/doc/README.md`](../Bellhop_F2CPP/doc/README.md) | 独立 C++20 二维单频实现，功能已封板 |
-| RayReuse | [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md) | 独立多频轨迹复用实现，等待下一研究目标 |
+| RayReuse | [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md) | 已完成 F2CPP production Feature Parity 的独立多频轨迹复用实现；无 active FP Batch |
 | PlotRead | [`test/PlotRead/README.md`](../test/PlotRead/README.md) | SHD 读取、绘图和导出 |
 | 标准算例 | [`test/standard_cases/README.md`](../test/standard_cases/README.md) | 三模型共用运行与比较框架 |
 | 展示 | [`demo/README.md`](../demo/README.md) | 可靠性与多频展示 |
@@ -65,3 +69,5 @@
 6. 新文档必须从本索引或所属组件索引可达，并使用相对链接。
 7. `guides/` 和 `status/` 中的工具版本、测试数量与“下一步”必须标明核对日期
    或快照日期；会随测试新增变化的总数不写成永久“当前基线”。
+8. `archive/`、dated reports 与 frozen Batch artifacts 保留当时事实；当前状态以
+   final report、support matrix 和 progress status 为准，不混用两类语义。

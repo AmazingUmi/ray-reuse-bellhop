@@ -129,22 +129,29 @@ def load_profile(
     return output
 
 
-def generation_commands() -> list[str]:
+def generation_commands(
+    rayreuse_executable: Path | None = None,
+) -> list[str]:
     commands: list[str] = []
+    versions = (("origin", "f2cpp"),)
     executable_for = {
         "origin": "Bellhop_origin/bin/bellhop",
         "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
     }
-    for version in ("origin", "f2cpp"):
-        for case_id in CASES:
-            for profile in PROFILES:
-                commands.append(
-                    "python3 test/standard_cases/codes/standard_cases.py "
-                    f"test --version {version} --case {case_id} "
-                    f"--profile {profile} "
-                    f"--executable {executable_for[version]} "
-                    "--results-root <results-root>"
-                )
+    if rayreuse_executable is not None:
+        versions = versions + (("rayreuse",),)
+        executable_for["rayreuse"] = "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+    for version_group in versions:
+        for version in version_group:
+            for case_id in CASES:
+                for profile in PROFILES:
+                    commands.append(
+                        "python3 test/standard_cases/codes/standard_cases.py "
+                        f"test --version {version} --case {case_id} "
+                        f"--profile {profile} "
+                        f"--executable {executable_for[version]} "
+                        "--results-root <results-root>"
+                    )
     return commands
 
 
@@ -152,11 +159,14 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
+    rayreuse_executable: Path | None = None,
 ) -> dict[str, object]:
     executables = {
         "origin": origin_executable.resolve(),
         "f2cpp": f2cpp_executable.resolve(),
     }
+    if rayreuse_executable is not None:
+        executables["rayreuse"] = rayreuse_executable.resolve()
     if executables["origin"] == executables["f2cpp"]:
         raise ValueError("Origin and F2CPP executables must be distinct")
     if not all(path.is_file() for path in executables.values()):
@@ -167,6 +177,12 @@ def validate(
     if executable_hashes["origin"] == executable_hashes["f2cpp"]:
         raise ValueError(
             "Origin and F2CPP executables have identical hashes"
+        )
+    if len(set(executables.values())) != len(executables) or len(
+        set(executable_hashes.values())
+    ) != len(executable_hashes):
+        raise ValueError(
+            "Origin, F2CPP, and RayReuse executables must be distinct"
         )
 
     canonical_sidecar_hashes = {
@@ -225,7 +241,28 @@ def validate(
     if sidecar_hashes["origin"] != sidecar_hashes["f2cpp"]:
         raise ValueError("Origin and F2CPP staged SSP sidecars differ")
 
+    # Optional RayReuse leg. RayReuse broadband runs share one SHD across the
+    # frequency slices, so comparisons below always read the candidate slice
+    # at the frequency index instead of slice 0. Provenance for RayReuse rests
+    # on the same manifest identity/freshness and canonical sidecar checks
+    # performed by load_profile; per-frequency rendered-env aggregates are not
+    # comparable because the broadband invocation stages a single environment.
+    loaded_rayreuse: dict[str, dict[str, list[tuple[Path, Path, Path]]]] = {}
+    if "rayreuse" in executables:
+        for case_id in CASES:
+            loaded_rayreuse[case_id] = {}
+            for profile, frequencies in PROFILES.items():
+                loaded_rayreuse[case_id][profile] = load_profile(
+                    results_root,
+                    "rayreuse",
+                    case_id,
+                    profile,
+                    frequencies,
+                    executables["rayreuse"],
+                )
+
     comparisons: dict[str, dict[str, float | bool]] = {}
+    rayreuse_comparisons: dict[str, dict[str, float | bool]] = {}
     effect_guards: dict[str, dict[str, float | bool]] = {}
     default_tolerance_path = (
         STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
@@ -260,6 +297,29 @@ def validate(
                     **metrics,
                 }
 
+                if loaded_rayreuse:
+                    rayreuse_shade = loaded_rayreuse[case_id][profile][
+                        index
+                    ][1]
+                    passed, metrics = compare_files(
+                        origin_shade,
+                        rayreuse_shade,
+                        0,
+                        index,
+                        tolerance_path,
+                    )
+                    if not passed:
+                        raise ValueError(
+                            f"rayreuse/{case_id}/{profile}/"
+                            f"{frequency:g}Hz field mismatch: {metrics}"
+                        )
+                    rayreuse_comparisons[
+                        f"{case_id}/{profile}/{frequency:g}Hz"
+                    ] = {
+                        "passed": True,
+                        **metrics,
+                    }
+
             for version in ("origin", "f2cpp"):
                 dependent_pressure = ShdReader(
                     loaded[version][RANGE_DEPENDENT_CASE][profile][index][1]
@@ -289,7 +349,36 @@ def validate(
                     "max_pressure_absolute_vs_q_control": maximum_difference,
                 }
 
-    return {
+            if loaded_rayreuse:
+                dependent_pressure = ShdReader(
+                    loaded_rayreuse[RANGE_DEPENDENT_CASE][profile][index][1]
+                ).read(frequency_index=index).pressure
+                control_pressure = ShdReader(
+                    loaded_rayreuse[CONTROL_CASE][profile][index][1]
+                ).read(frequency_index=index).pressure
+                if dependent_pressure.shape != control_pressure.shape:
+                    raise ValueError(
+                        f"rayreuse/{profile}/{frequency:g}Hz control shape "
+                        "mismatch"
+                    )
+                maximum_difference = float(
+                    np.max(np.abs(dependent_pressure - control_pressure))
+                )
+                if (
+                    not np.isfinite(maximum_difference)
+                    or maximum_difference <= MINIMUM_RANGE_DEPENDENT_EFFECT
+                ):
+                    raise ValueError(
+                        f"rayreuse/{profile}/{frequency:g}Hz "
+                        "range-dependent SSP appears inactive "
+                        f"({maximum_difference})"
+                    )
+                effect_guards[f"rayreuse/{profile}/{frequency:g}Hz"] = {
+                    "passed": True,
+                    "max_pressure_absolute_vs_q_control": maximum_difference,
+                }
+
+    result = {
         "schema": "bellhop.f2cpp.i5_quadrilateral_ssp_validation",
         "schema_version": 1,
         "status": "passed",
@@ -361,6 +450,34 @@ def validate(
             ),
         },
     }
+    if loaded_rayreuse:
+        rayreuse_field_paths = [
+            loaded_rayreuse[case_id][profile][index][1]
+            for case_id in CASES
+            for profile, frequencies in PROFILES.items()
+            for index in range(len(frequencies))
+        ]
+        result["origin_rayreuse_field_comparisons"] = rayreuse_comparisons
+        result["sha256"]["rayreuse_executable"] = executable_hashes[
+            "rayreuse"
+        ]
+        result["sha256"]["rayreuse_field_aggregate"] = aggregate_sha256(
+            rayreuse_field_paths
+        )
+        result["generation"]["rayreuse_case_commands"] = (
+            generation_commands(executables["rayreuse"])
+        )
+        result["generation"]["rayreuse_validator_command"] = (
+            "python3 "
+            "test/standard_cases/codes/validate_i5_quadrilateral_ssp.py "
+            "--results-root <results-root> "
+            "--origin-executable Bellhop_origin/bin/bellhop "
+            "--f2cpp-executable "
+            "Bellhop_F2CPP/build/release/bellhop_f2cpp "
+            "--rayreuse-executable "
+            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+        )
+    return result
 
 
 def main() -> None:
@@ -368,12 +485,23 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
+    parser.add_argument(
+        "--rayreuse-executable",
+        type=Path,
+        default=None,
+        help=(
+            "optional Bellhop RayReuse executable; when given, RayReuse "
+            "results in the results root are compared against Origin with "
+            "the same tolerances"
+        ),
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
         args.results_root,
         args.origin_executable,
         args.f2cpp_executable,
+        args.rayreuse_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

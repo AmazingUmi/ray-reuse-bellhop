@@ -11,6 +11,8 @@
 namespace {
 
 using rayreuse::BeamEpsilon;
+using rayreuse::BeamWidthMode;
+using rayreuse::pickBeamEpsilon;
 using rayreuse::pickMinimumWidthEpsilon;
 using rayreuse::ValidationError;
 using rayreuse::test::Context;
@@ -47,6 +49,34 @@ void testMultiplierAndFrequencySemantics(Context& context) {
   context.checkNear(
       high.value.imag(), 7.50000000000000093e6, 0.0,
       "5 kHz standard-case epsilon preserves binary64 operation order");
+}
+
+void testSpaceFillingAndWkbSemantics(Context& context) {
+  const BeamEpsilon filling = pickBeamEpsilon(
+      BeamWidthMode::SpaceFilling, 250.0, 1500.0, 0.0, 0.25, 0.01, 0.0, 1.0);
+  context.checkNear(filling.halfWidthMeters, 190.9859317102744, 3.0e-13,
+                    "space-filling half width uses angular spacing");
+  context.checkNear(filling.value.real(), 0.0, 0.0,
+                    "space-filling epsilon is imaginary");
+  context.checkNear(filling.value.imag(), 2.8647889756541163e7, 5.0e-8,
+                    "space-filling epsilon preserves PickEpsilon order");
+
+  const BeamEpsilon constantWkb = pickBeamEpsilon(
+      BeamWidthMode::Wkb, 250.0, 1500.0, 0.0, 0.25, 0.01, 0.0, 2.0);
+  context.check(
+      constantWkb.halfWidthMeters == std::numeric_limits<double>::max(),
+      "WKB reports the legacy HUGE half width");
+  context.checkNear(constantWkb.value.real(), 2.0e10, 0.0,
+                    "zero-gradient WKB epsilon is the legacy real constant");
+  context.checkNear(constantWkb.value.imag(), 0.0, 0.0,
+                    "WKB epsilon remains real");
+
+  const BeamEpsilon gradientWkb = pickBeamEpsilon(
+      BeamWidthMode::Wkb, 250.0, 1500.0, 0.75, 0.3, 0.01, 0.0, 1.0);
+  context.checkNear(gradientWkb.value.real(), -8.9016334871922247e5, 2.0e-9,
+                    "WKB preserves the legacy cos(alpha squared) formula");
+  context.checkNear(gradientWkb.value.imag(), 0.0, 0.0,
+                    "gradient WKB epsilon remains real");
 }
 
 void testInvalidInputs(Context& context) {
@@ -97,6 +127,7 @@ int main() {
   Context context;
   testInfluenceOracleAnchors(context);
   testMultiplierAndFrequencySemantics(context);
+  testSpaceFillingAndWkbSemantics(context);
   testInvalidInputs(context);
 
   if (context.failureCount() != 0) {

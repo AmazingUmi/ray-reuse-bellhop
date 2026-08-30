@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rayreuse/model/c_linear_ssp.hpp"
+#include "rayreuse/model/sound_speed_types.hpp"
 #include "rayreuse/numerics/vec2.hpp"
 
 namespace rayreuse {

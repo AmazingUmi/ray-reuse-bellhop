@@ -1,265 +1,681 @@
 # AGENTS.md
 
-## 适用范围
+## 1. 项目原则
 
-本文件是仓库根级约束，适用于 `Bellhop_origin/`、`Bellhop_F2CPP/`、
-`Bellhop_RayReuse/`、`test/`、`demo/` 和项目文档。若子目录存在更具体的
-`AGENTS.md`，则在该子目录内以更具体的规则为补充；不得违背本文件确定的
-项目目标和版本职责。
+本仓库用于 Bellhop 功能复刻、数值一致性验证、性能优化和 RayReuse 宽带射线复用研究。
 
-## 项目目标
+优先级：
 
-本项目面向水声传播计算研究，目标依次是：
+1. 用户明确目标；
+2. Origin/F2CPP 科学语义与文件兼容；
+3. RayReuse 正确性与 frozen-cache 契约；
+4. 性能、内存与并发；
+5. 最小充分测试与文档。
 
-1. 复刻研究所需的 Bellhop Origin 功能；
-2. 保持具有科学可信度的数值与文件兼容性；
-3. 改善运行时间、内存、可扩展性和可修改性；
-4. 支持宽带射线复用及后续研究方法；
-5. 提供足以支撑快速研发的回归、标准算例和直观展示。
+默认采用 **最小充分工程**：
 
-正确性不可牺牲，但测试、CI、抽象、文档和工程基础设施是服务于功能、性能
-与研究的手段，不是独立目标。默认采用“最小充分工程”，不把本项目扩张为
-通用生产级软件平台。
+* 不主动扩大 scope；
+* 不做无关重构；
+* 不建设无收益的测试、抽象或基础设施；
+* 先检查真实代码、测试、算例和 Git 状态，再下结论。
 
-## 目录与版本职责
+---
 
-| 路径 | 职责 |
-|---|---|
-| `Bellhop_origin/` | 可重现的 Fortran 单频参考实现和首要行为 oracle |
-| `Bellhop_F2CPP/` | 独立的 C++20 二维单频复刻与优化实现 |
-| `Bellhop_RayReuse/` | 独立的 C++20 多频轨迹复用实现 |
-| `test/standard_cases/` | Origin、F2CPP、RayReuse 共用的标准输入、运行和比较框架 |
-| `test/PlotRead/` | 独立 SHD 读取、绘图、导出和自包含测试 |
-| `demo/` | 直接可用、可靠性横向对比和 RayReuse 多频效果展示 |
-| `test/legacy/` | 迁移前历史材料，不参与当前测试 |
+## 2. 目录边界
 
-具体约束：
+| 路径                     | 职责                            |
+| ---------------------- | ----------------------------- |
+| `Bellhop_origin/`      | Fortran 首要科学 oracle           |
+| `Bellhop_F2CPP/`       | C++20 单频 production reference |
+| `Bellhop_RayReuse/`    | 多频轨迹复用 production             |
+| `test/standard_cases/` | 三实现共享算例与 oracle               |
+| `test/PlotRead/`       | SHD 读取/绘图                     |
+| `demo/`                | 展示与横向比较                       |
+| `test/legacy/`         | 历史材料                          |
 
-- Origin 是复刻阶段的主要行为基准。除非任务明确要求，不改变其数值语义；
-  可以构建、运行或增加不影响正常可执行程序的窄 oracle。
-- F2CPP 每次运行只处理一个频率，优先完成 Bellhop 二维功能复刻、数值一致性
-  和单频性能。
-- RayReuse 面向一个环境中的多个频率，重点验证一次几何追踪、多频投影、
-  非复用/复用/并行复用一致性及实际性能收益。
-- F2CPP 与 RayReuse 保持独立源码、独立 CMake 工程和独立可执行文件，互不
-  链接。除非用户明确要求，不因修改一方而自动同步另一方。
-- PlotRead 保持独立，不依赖 MATLAB，也不依赖标准算例目录中的临时结果。
-- `test/legacy/` 仅供追溯；不要恢复其测试职责或向其中添加新工作。
+默认约束：
 
-## 决策优先级
+* Feature Parity 施工只修改 `Bellhop_RayReuse/` 与必要的共享测试/文档；
+* `Bellhop_origin/`、`Bellhop_F2CPP/` 默认只读；
+* 不触碰无关用户配置；
+* 不执行破坏性 Git 操作；
+* 未获授权不 push。
 
-开展工作时使用以下顺序：
+---
 
-1. 用户明确要求的可见功能和研究目标；
-2. 相对 Bellhop Origin 的科学正确性；
-3. 运行时间、峰值内存和可扩展性；
-4. 宽带射线复用等研究路线所需架构；
-5. 防止重要回归的最小充分测试；
-6. 易用性、展示、必要文档和工程清理。
+# 3. Feature Batch 状态机
 
-不要让新增测试、CI、抽象、重构、格式化或文档压过尚缺失的功能和重要性能
-工作，除非它们是安全继续的必要条件。不要主动把一个功能任务扩大为 CI
-重构、通用框架或大规模测试矩阵建设。
+Feature Parity 必须 **一个 Batch 一个 Batch 串行执行**。
 
-## 沟通与协作偏好
+标准状态机：
 
-- 面向用户的说明、评估、操作指南和项目级文档默认使用中文；代码标识符、
-  命令行选项、文件格式字段和既有英文技术文档保持原有语言风格。
-- 先给结论，再给关键证据和操作方法。区分已验证事实、推断和可选建议。
-- 遇到可以从代码、文档、算例或日志确认的问题，先检查再回答。
-- 可以作不改变任务方向的合理假设；涉及科学语义、兼容范围、显著性能取舍、
-  对外接口或大幅扩展范围时，明确说明并请求决定。
-- 保留用户已有修改，避免触碰无关文件。不要使用破坏性 Git 或文件操作。
-- 除非用户明确要求，不提交、不推送、不创建 PR。用户要求“纳入版本控制”时，
-  可以只暂存明确指定的文件，并报告暂存范围。
+```text
+DESIGN
+→ FREEZE
+→ CONSTRUCT
+→ CHECKPOINT
+→ BATCH ACCEPTANCE
+→ FINAL REVIEW
+     │
+     ├─ ACCEPTED
+     │    → 当前 Batch CLOSED
+     │    → 自动进入下一已批准 Batch
+     │
+     └─ CHANGES_REQUIRED
+          → REMEDIATION
+          → RE-VALIDATION
+          → FINAL REVIEW
+          → 循环直到 ACCEPTED
+```
 
-## 功能开发原则
+硬规则：
 
-每轮首先确认正在复刻或研究的真实 Bellhop 功能，优先贯通端到端路径，而不是
-打磨尚未形成可用结果的局部子系统。
+```text
+当前 Batch 未 ACCEPTED
+→ 禁止进入下一 Batch
 
-典型功能满足以下条件即可完成：
+当前 Batch ACCEPTED
+→ 若后续 Batch 已由用户整体批准
+→ 自动进入下一 Batch DESIGN
+```
 
-1. 目标功能可从真实输入端到端运行；
-2. 代表性输出与 Bellhop Origin 在声明的语义和容差内一致；
-3. 相关既有回归继续通过；
-4. 没有已知严重正确性问题或明显性能退化；
-5. 重要限制和设计决策已被简洁记录。
+禁止：
 
-优先匹配 Origin 的可观察行为和文件兼容性，不必保留不影响结果的低效 Fortran
-内部结构。若精确兼容与显著性能/架构收益冲突，并可能影响科学结果或文件
-互操作性，必须记录取舍并由用户决定。
+* 并行设计多个 Feature Batch；
+* 当前 Batch 尚未验收就提前施工下一 Batch；
+* 用后一 Batch 修复前一 Batch 的问题；
+* 将多个 Batch 合并成一个 Worklist 或一次验收。
 
-F2CPP 和 RayReuse 均应保持以下研究契约：
+---
 
-- 完整保存频率无关的冻结射线路径和反射事件；
-- 将幅度、相位、复走时、反射系数和压力留在逐频临时状态；
-- 避免全局“当前频率”和不可控的共享可变状态；
-- 使几何追踪、逐频投影、Influence 和输出阶段可独立验证与计时。
+# 4. Agent 职责
 
-## 测试与数值验证
+## coordinator
 
-测试原则是：证明正确性并防止有意义的回归，而不是追求穷尽覆盖率。
+主 Agent，负责：
 
-现有 CTest、Python 工具测试、标准算例、Origin oracle 和冻结验证报告已经较为
-充分。新增测试前，先判断既有案例或验证器是否已经能捕获目标失败。
+* 当前 Batch 状态；
+* 风险分类；
+* 调度子 Agent；
+* Worklist 更新；
+* checkpoint；
+* Batch Acceptance；
+* findings 路由；
+* 复验调度；
+* Batch 状态转换；
+* Git scope。
 
-普通新功能默认只需要：
+coordinator 不应自己承担复杂设计、复杂施工或最终自验。
 
-- 一个最小可运行案例；
-- 一个有代表性的 Origin 对比；
-- 必要时增加一个重要边界或复杂案例。
+---
 
-一个高信息量案例可以同时承担多个目标。不要自动为 source 数、receiver
-布局、SSP、边界、频率、beam、输出格式和环境模型的所有组合分别建例。
+## scout
 
-优先在以下情况下增加回归：
+低成本只读搜索。
 
-- 已发现真实缺陷；
-- 存在脆弱的数值边界或容易误实现的 Origin 语义；
-- 某组件将被频繁优化；
-- 现有测试确实无法检测重要失败；
-- 新产品格式或研究路径需要一个独立端到端证据。
+仅用于：
 
-Arrival、Eigenray、传播损失、复压力、相位、走时、反射和二进制文件布局可在
-必要时采用严格验证。一条数值路径已经由组件测试、真实 oracle 和代表性
-端到端案例充分闭环后，不再并行创建重复验证框架。
+* 文件定位；
+* symbol/call chain；
+* F2CPP/Origin reference；
+* 已有 tests/oracle；
+* 历史实现定位。
 
-标准算例职责：
+输出只保留事实。
 
-- 基础环境只定义一次，并优先参考 Origin 官方算例和项目已冻结输入；
-- Origin 结果作为 baseline/oracle；
-- F2CPP 主要使用单频 profile；
-- RayReuse 使用同一基础环境的多频 profile，并区分 `nonreuse`、`reuse`、
-  `parallel`；
-- 单个版本、单个环节、单个案例应可独立运行，同时保留整体批量入口；
-- 校验不仅检查“文件存在”，还应在必要时检查 PRT 语义、维度、有限性、
-  产品类型、数值误差和陈旧输出。
+禁止设计、施工和验收。
 
-除明确冻结的参考快照、验证报告和说明文件外，生成的 `.prt/.shd/.ray/.arr`、
-图片、清单和临时结果不进入版本控制。
+---
 
-## 性能原则
+## architect
 
-功能正确后，性能是一等要求。重点关注：
+每个非平凡 Batch 在 DESIGN 阶段默认调用一次。
 
-- 射线追踪或 Influence 热循环中的分配与重复计算；
-- 缓存局部性、数据布局、无谓复制和精度转换；
-- ray × receiver × frequency 的伸缩性；
-- receiver 查找、插值、反射和文件 I/O 成本；
-- 并行任务粒度、同步、队列、峰值 RSS 和确定性。
+负责：
 
-不凭代码观感进行大范围微优化。先使用计时、profile 或 benchmark 确认瓶颈，
-再集中复杂度优化热路径，并在优化后同时检查：
+* scope；
+* architecture；
+* scientific/numerical semantics；
+* ownership/lifetime；
+* migration strategy；
+* Worklist；
+* acceptance gates。
 
-- 代表性数值输出；
-- 运行时间；
-- 相关时的峰值内存和并行扩展性。
+默认不修改 production。
 
-## 目录分类与易用性
+只有以下情况重新调用：
 
-标准算例和展示遵循清晰分类：
+* 原设计假设失效；
+* scope 显著变化；
+* 出现 architecture blocker。
 
-- `cases/`：可复用基础环境和输入元数据；
-- `codes/`：生成、运行、比较、绘图和相应代码测试；
-- `results/`：可重新生成的数值结果和清单；
-- `figures/`：可重新生成的展示图片（适用时）。
+---
 
-不要把业务脚本、输入和结果重新混放在目录根部。代码测试放在对应
-`codes/tests/` 中；基础环境保持稳定，运行时复制到隔离的结果目录，不回写
-`cases/`。
+## worker
 
-提高易用性时优先满足：
+负责 `[SIMPLE]` / `[STANDARD]`：
 
-- `.env` 能被对应正式可执行程序直接使用；
-- 可以单独运行某个版本、某个案例或生成/运行/校验/绘图环节；
-- 可以使用一个明确命令整体批量运行；
-- 结果路径、可执行文件、频率、执行模式和状态进入清单；
-- 展示同时说明“直接可用”和“横向对比”，而不是依赖隐藏步骤。
+* parser；
+* CLI；
+* writer；
+* manifest/case；
+* 普通 model wiring；
+* 明确机械迁移；
+* 普通 tests；
+* docs。
 
-Python 默认使用仓库根目录的 uv 环境。首次使用和日常测试采用：
+遇到以下问题必须升级：
+
+```text
+scientific semantics
+numerical algorithm
+ownership/lifetime
+cache consistency
+concurrency
+complex regression
+```
+
+---
+
+## advanced-worker
+
+负责 `[ADVANCED]`，也是 **验收 finding 的默认修复 Agent**。
+
+适用：
+
+* 数值算法；
+* complex geometry；
+* source/receiver schema；
+* ownership/lifetime；
+* cache；
+* concurrency；
+* multi-frequency state；
+* writer/product ownership；
+* 难以定位的 regression；
+* final-reviewer/reviewer 发现的非平凡问题。
+
+必须给出：
+
+```text
+tests / oracle / benchmark
+```
+
+作为修复证据。
+
+---
+
+## reviewer
+
+独立窄范围只读审查。
+
+检查：
+
+1. 当前 task acceptance；
+2. 当前 task diff；
+3. 对应 F2CPP/Origin reference；
+4. targeted tests/oracle。
+
+规则：
+
+```text
+SIMPLE    → 默认不用
+STANDARD  → 按需
+ADVANCED  → 必须
+```
+
+输出：
+
+```text
+PASS
+```
+
+或 actionable findings。
+
+如果 reviewer 发现问题：
+
+```text
+finding
+→ remediation
+→ reviewer 再验
+```
+
+直到 `PASS`。
+
+---
+
+## final-reviewer
+
+每个 Batch 最终独立验收。
+
+检查：
+
+* frozen Worklist；
+* 最终 scope；
+* 高风险 production diff；
+* checkpoint findings；
+* Batch Acceptance；
+* tests/oracle；
+* cache/ownership；
+* Git hygiene；
+* 文档声明是否超过证据。
+
+结论只能：
+
+```text
+ACCEPTED
+CHANGES_REQUIRED
+```
+
+若 `CHANGES_REQUIRED`，修复后必须再次调用 final-reviewer。
+
+**不得由 coordinator、worker 或 advanced-worker 自行关闭 Final Review finding。**
+
+---
+
+# 5. 风险等级
+
+## `[SIMPLE]`
+
+例如：
+
+* 文档；
+* manifest；
+* 明确配置；
+* 很小的机械修改。
+
+流程：
+
+```text
+worker/coordinator
+→ targeted validation
+```
+
+---
+
+## `[STANDARD]`
+
+例如：
+
+* parser/model wiring；
+* CLI；
+* writer；
+* standard case；
+* 普通 runtime path。
+
+流程：
+
+```text
+worker
+→ targeted tests
+→ reviewer（按需）
+```
+
+---
+
+## `[ADVANCED]`
+
+例如：
+
+* 数值算法；
+* source/receiver schema；
+* ownership/lifetime；
+* frozen cache；
+* concurrency；
+* dynamic ray；
+* complex regression；
+* 高风险性能路径。
+
+流程：
+
+```text
+advanced-worker
+→ targeted tests/oracle
+→ reviewer
+```
+
+---
+
+# 6. Worklist
+
+每个非平凡 Batch 建立独立：
+
+```text
+Bellhop_RayReuse/doc/worklists/<BATCH>_WORKLIST.md
+```
+
+Worklist 是当前 Batch 的执行期权威状态源。
+
+格式保持简洁：
+
+```md
+### A01 [ADVANCED]
+Status: TODO | ACTIVE | DONE
+Reviewer: N/A | PASS
+
+Acceptance:
+- ...
+
+Evidence:
+- ...
+```
+
+仅记录：
+
+* scope；
+* frozen decisions；
+* dependencies；
+* acceptance；
+* evidence；
+* blockers/findings。
+
+不要复制大量聊天历史。
+
+---
+
+# 7. 上下文与 Token 预算
+
+默认读取顺序：
+
+```text
+AGENTS.md
+→ 当前 Batch Worklist
+→ git status
+→ 当前 task diff
+→ 必要源码/tests
+```
+
+禁止默认：
+
+* 重读整个 repository；
+* 重述项目完整历史；
+* 每个 task 都跑 full regression；
+* 输出完整 diff/log。
+
+Agent 输出预算：
+
+```text
+scout          → facts
+worker         → changes + tests + blocker
+advanced-worker→ changes + evidence + blocker
+reviewer       → PASS/findings
+final-reviewer → verdict + critical findings
+```
+
+---
+
+# 8. 测试策略
+
+## Task / Checkpoint
+
+只运行当前任务需要的：
+
+```text
+component tests
+targeted standard case
+targeted oracle
+targeted regression
+```
+
+不要每个 task 都机械执行：
+
+```text
+full CTest
+full pytest
+full standard-case matrix
+```
+
+---
+
+## Batch Acceptance
+
+完整验证集中执行一次。
+
+通常：
 
 ```bash
-uv sync
+uv run ctest --test-dir Bellhop_RayReuse/build/<batch-clean> --output-on-failure
 uv run pytest
+uv run make -C test/standard_cases test-unit
 ```
 
-Makefile 和脚本通过 `python3`/`PYTHON` 从 `PATH` 发现解释器；在 uv 环境中
-运行时使用 `uv run ...`，不要硬编码 `.venv` 或 Conda 路径，也不要重新引入
-MATLAB 运行依赖。
+再加当前 Batch 必需的：
 
-## 架构、重构与范围控制
+```text
+Origin oracle
+F2CPP parity
+execution parity
+cache fingerprint
+representative frozen regression
+```
 
-架构主要服务于功能、性能和研究路线。选择设计时优先支持：
+coordinator 必须亲自抽验关键 gate，不能只引用 worker 报告。
 
-- 轨迹复用和宽带计算；
-- 几何与频率相关声学量分离；
-- 中间状态和贡献的可检查性；
-- 并行执行、性能测量和后续算法实验。
+---
 
-仅在以下情况下重构：
+# 9. RayReuse 核心契约
 
-- 它是目标功能的必要条件；
-- 能带来可测性能提升；
-- 消除具体正确性风险；
-- 明显简化紧接着要做的研究工作。
+默认保持：
 
-优先局部、渐进式修改，避免宽泛 API 重写、无证据的通用抽象、无关格式化、
-重复工具和推测性未来功能。较大的相邻改进应记录为后续事项，而不是顺手实施。
+```text
+RayPath / RayPathCache
+→ frequency-independent frozen geometry
 
-## 文档原则
+amplitude
+phase
+complex travel time
+reflection result
+Arrival/Eigenray state
+→ frequency-local
+```
 
-文档重点记录以后仍有价值的信息：
+未经 architect 明确批准，不得：
 
-- Origin 兼容语义和来源；
-- 数值假设、容差和验证证据；
-- 架构与所有权决策；
-- 性能测量方法和结果；
-- 已完成范围、已知限制和下一步入口；
-- 可复现的构建、运行和展示命令。
+* 把 frequency-local state 写回 frozen cache；
+* 引入 global current frequency；
+* 引入不可控 shared mutable state；
+* 随意改变 cache ownership；
+* 将 F2CPP transient 单频状态直接永久化到 RayReuse cache。
 
-保持简洁、可操作，避免为自明实现写长篇说明。进度文档必须与实际代码和测试
-状态一致；冻结报告应记录输入、可执行文件和关键来源的身份或哈希。
+---
 
-## 验证工作流
+# 10. Finding / Remediation 规则
 
-验证强度与修改风险相称，优先运行最相关的窄测试，再决定是否需要全量回归。
+这是强制闭环。
 
-常用入口：
+任何：
+
+```text
+reviewer finding
+final-reviewer CHANGES_REQUIRED
+Batch Acceptance failure
+```
+
+都必须进入 remediation。
+
+## 默认修复分配
+
+**优先使用 `advanced-worker`。**
+
+以下情况必须使用 advanced-worker：
+
+* production code；
+* scientific/numerical semantics；
+* architecture/schema；
+* ownership/lifetime；
+* cache；
+* concurrency；
+* writer/product dimension；
+* parser/runtime 行为存在歧义；
+* regression 原因不明确；
+* 跨模块问题。
+
+只有问题明显属于：
+
+```text
+typo
+简单文档修正
+manifest/allow-list
+明确的机械小修改
+Git hygiene
+```
+
+才可使用：
+
+```text
+worker
+```
+
+禁止因为节省额度而将实际 ADVANCED remediation 降级给 worker。
+
+---
+
+## 修复后必须复验
+
+修复完成后：
+
+```text
+remediation
+→ targeted tests/oracle
+→ 原验收角色再次检查
+```
+
+如果是：
+
+```text
+reviewer finding
+```
+
+则：
+
+```text
+reviewer 再验
+```
+
+如果是：
+
+```text
+final-reviewer CHANGES_REQUIRED
+```
+
+则：
+
+```text
+final-reviewer 再验
+```
+
+如果再次发现问题：
+
+```text
+advanced-worker/worker 修复
+→ 再验
+```
+
+循环直到：
+
+```text
+PASS / ACCEPTED
+```
+
+**不得通过“已修复”报告直接跳过重新验收。**
+
+---
+
+# 11. Batch Acceptance 与进入下一 Batch
+
+当前 Batch 只有在以下条件全部满足后才能：
+
+```text
+ACCEPTED
+```
+
+条件：
+
+* Worklist 完成；
+* Batch Acceptance PASS；
+* 所有 checkpoint reviewer PASS；
+* final-reviewer ACCEPTED；
+* 所有 remediation 已复验；
+* 无未关闭 HIGH/BLOCKER；
+* 文档 scope 与 oracle evidence 一致；
+* Git scope 干净。
+
+达到：
+
+```text
+ACCEPTED
+```
+
+后：
+
+```text
+当前 Batch CLOSED
+```
+
+若用户已批准连续处理下一 Batch：
+
+```text
+自动进入下一 Batch DESIGN
+```
+
+**不需要再次等待用户批准。**
+
+---
+
+# 12. Git 规则
+
+每个 Batch diff 必须独立可识别。
+
+检查：
+
+```text
+git diff --check
+reference implementation untouched
+no unrelated user files
+no generated products
+```
+
+推荐每个 ACCEPTED Batch 形成独立 commit，但：
+
+```text
+下一 Batch 启动条件 = ACCEPTED
+不是 COMMITTED
+```
+
+如果未提交就进入下一 Batch，coordinator 必须保证两个 Batch diff 和 Worklist 可明确区分。
+
+禁止默认：
 
 ```bash
-# F2CPP / RayReuse C++ 回归
-uv run ctest --test-dir Bellhop_F2CPP/build/release --output-on-failure
-uv run ctest --test-dir Bellhop_RayReuse/build/release --output-on-failure
-
-# 标准算例工具和共享算例
-uv run make -C test/standard_cases test-unit
-uv run make -C test/standard_cases test VERSION=f2cpp CASE=<case> PROFILE=single
-uv run make -C test/standard_cases batch
-
-# SHD 读取绘图与工程展示
-uv run make -C test/PlotRead test
-uv run make -C demo test
-uv run make -C demo all
-uv run make -C demo rayreuse-multifrequency
+git add .
+git add -A
 ```
 
-不要机械地为局部改动运行所有昂贵组合；涉及公共解析、核心数值、输出布局、
-跨版本适配或广泛重构时，才扩大到相关完整矩阵。性能修改必须在代表性基准上
-复测，而不能用单元测试通过替代性能证据。
+未获授权不得 push。
 
-## 完成定义
+---
 
-除非具体任务另有要求，以下条件满足即可完成：
+# 13. 完成定义
 
-- 用户要求的功能已真正可用；
-- 代表性 Origin 对比通过；
-- 相关既有回归通过；
-- 没有已知严重正确性问题或明显性能退化；
-- 结果和操作方式足够清楚；
-- 重要设计决定和限制已简洁记录；
-- 未引入无关重构、测试矩阵或基础设施。
+一个 Feature Batch 完成需要：
 
-穷尽测试覆盖不是默认完成条件。无法确定是否应增加测试、抽象、重构或基础
-设施时，问：它是否会实质提升功能完整性、科学可信度、性能或研究路线实施
-能力？如果不会，则推迟。
+* feature 在声明范围端到端可运行；
+* F2CPP/Origin evidence 通过；
+* 相关 regression 通过；
+* frozen-cache/ownership 契约满足；
+* 文档不 overclaim；
+* Batch Acceptance PASS；
+* final-reviewer ACCEPTED；
+* findings 全部修复并重新验收；
+* 无未关闭 HIGH/BLOCKER。
+
+完成状态：
+
+```text
+<BATCH> ACCEPTED
+```
+
+若已有后续批准 Batch：
+
+```text
+自动进入下一 Batch DESIGN
+```

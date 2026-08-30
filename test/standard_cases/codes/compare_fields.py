@@ -21,6 +21,8 @@ def compare_files(
     reference_frequency_index: int,
     candidate_frequency_index: int,
     tolerances_path: Path,
+    *,
+    transmission_loss_absolute_db: float | None = None,
 ) -> tuple[bool, dict[str, float]]:
     with tolerances_path.open("rb") as stream:
         tolerances = tomllib.load(stream)
@@ -97,14 +99,31 @@ def compare_files(
     else:
         max_tl_db = 0.0
 
-    passed = pressure_passed and max_tl_db <= float(
-        tl_rules["absolute_db"]
+    tl_absolute_db = (
+        float(tl_rules["absolute_db"])
+        if transmission_loss_absolute_db is None
+        else float(transmission_loss_absolute_db)
     )
+    if not np.isfinite(tl_absolute_db) or tl_absolute_db < 0.0:
+        raise ValueError(
+            "transmission_loss_absolute_db must be finite and non-negative"
+        )
+
+    passed = pressure_passed and max_tl_db <= tl_absolute_db
     return passed, {
         "max_pressure_absolute": max_absolute,
         "max_pressure_relative": max_relative,
         "max_tl_difference_db": max_tl_db,
+        "transmission_loss_absolute_db": tl_absolute_db,
     }
+
+
+def decoded_complex64_payload(
+    shade_path: Path, frequency_index: int
+) -> bytes:
+    """Return canonical bytes for one decoded SHD complex64 pressure slice."""
+    field = ShdReader(shade_path).read(frequency_index=frequency_index)
+    return np.asarray(field.pressure, dtype="<c8").tobytes(order="C")
 
 
 def main(argv: list[str] | None = None) -> int:

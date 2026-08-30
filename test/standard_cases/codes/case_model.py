@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import math
 from pathlib import Path
 import re
@@ -15,6 +15,7 @@ OUTPUT_KINDS = {
     "arrivals_binary",
     "eigenray",
 }
+KNOWN_VERSIONS = ("origin", "f2cpp", "rayreuse")
 
 
 @dataclass(frozen=True)
@@ -34,12 +35,16 @@ class CaseDefinition:
     explicit_launch_angle_count: int | None
     expected_dimensions: tuple[int, ...] | None
     arrival_receiver_cell_count: int | None
+    source_depth_count: int
     prt_markers: tuple[str, ...]
     prt_forbidden_markers: tuple[str, ...]
     profiles: dict[str, dict[str, object]]
     supported_versions: tuple[str, ...]
     coverage_tags: tuple[str, ...] = ()
     test_sets: tuple[str, ...] = ()
+    version_prt_markers: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
 
     def frequencies(self, profile_name: str) -> tuple[float, ...]:
         try:
@@ -190,19 +195,46 @@ def load_case(case_directory: Path) -> CaseDefinition:
             )
     else:
         arrival_receiver_cell_count = None
+    # Multi-source cases declare their source-depth count so broadband
+    # validation can apply the frozen trace-pass statistics
+    # (non-reuse = Nfreq x NSz, reuse/parallel = NSz). Defaults to the
+    # single-source semantics of every pre-FP-2F case.
+    source_depth_count = int(validation.get("source_depth_count", 1))
+    if source_depth_count <= 0:
+        raise ValueError(
+            f"{manifest_path}: validation.source_depth_count must be positive"
+        )
     supported_versions = tuple(
         raw.get("compatibility", {}).get(
             "versions", ("origin", "f2cpp", "rayreuse")
         )
     )
-    known_versions = {"origin", "f2cpp", "rayreuse"}
     if not supported_versions or len(set(supported_versions)) != len(
         supported_versions
-    ) or any(version not in known_versions for version in supported_versions):
+    ) or any(version not in KNOWN_VERSIONS for version in supported_versions):
         raise ValueError(
             f"{manifest_path}: compatibility.versions must contain unique "
             "known versions"
         )
+    raw_version_markers = validation.get("version_prt_markers", {})
+    if not isinstance(raw_version_markers, dict):
+        raise ValueError(
+            f"{manifest_path}: validation.version_prt_markers must be a "
+            "table keyed by version"
+        )
+    version_prt_markers: dict[str, tuple[str, ...]] = {}
+    for version, markers in raw_version_markers.items():
+        if version not in KNOWN_VERSIONS:
+            raise ValueError(
+                f"{manifest_path}: version_prt_markers keys must be known "
+                f"versions, got {version!r}"
+            )
+        if version not in supported_versions:
+            raise ValueError(
+                f"{manifest_path}: version_prt_markers names version "
+                f"{version!r} outside compatibility.versions"
+            )
+        version_prt_markers[version] = tuple(str(marker) for marker in markers)
     return CaseDefinition(
         case_id=str(raw["id"]),
         directory=case_directory,
@@ -224,12 +256,14 @@ def load_case(case_directory: Path) -> CaseDefinition:
         explicit_launch_angle_count=explicit_launch_angle_count,
         expected_dimensions=dimensions,
         arrival_receiver_cell_count=arrival_receiver_cell_count,
+        source_depth_count=source_depth_count,
         prt_markers=tuple(validation.get("prt_markers", [])),
         prt_forbidden_markers=tuple(
             validation.get("prt_forbidden_markers", [])
         ),
         profiles=dict(raw["profiles"]),
         supported_versions=supported_versions,
+        version_prt_markers=version_prt_markers,
     )
 
 

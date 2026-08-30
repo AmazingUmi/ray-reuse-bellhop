@@ -4,6 +4,8 @@
 
 | 报告 | 日期/基线 | 作用 |
 |---|---|---|
+| [`REPORT_FEATURE_PARITY_FINAL.md`](./REPORT_FEATURE_PARITY_FINAL.md) | 2026-08-30；production `0721fb3`；final acceptance docs `88ba8b7` | F2CPP → RayReuse 最终功能盘点、HEAD 健康门、性能快照与正式 verdict |
+| [`REPORT_F2CPP_RAYREUSE_PARITY_2026-08-25.md`](./REPORT_F2CPP_RAYREUSE_PARITY_2026-08-25.md) | 2026-08-25～29，FP-1A～FP-2I | production feature-axis parity 审计与逐项证据索引 |
 | [`REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md`](./REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md) | 2026-08-25，`8300c89` | 当前 Influence 数据流、热点、IG-0/FI-0 候选路线审计 |
 | [`REPORT_CROSS_COMPILER_H4_2026-08-07.md`](./REPORT_CROSS_COMPILER_H4_2026-08-07.md) | 2026-08-07 | AppleClang/GCC 构建、数值和资源矩阵 |
 | [`REPORT_MODEL_MATRIX_06E390F_2026-08-01.md`](./REPORT_MODEL_MATRIX_06E390F_2026-08-01.md) | 2026-08-01，`06e390f` | 三模型 single/broadband 数值矩阵 |

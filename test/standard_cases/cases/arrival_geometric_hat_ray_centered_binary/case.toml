@@ -1,0 +1,26 @@
+id = "arrival_geometric_hat_ray_centered_binary"
+description = "Binary arrivals: ray-centered geometric-hat path and encoding parity"
+output_kind = "arrivals_binary"
+origin_template = "origin.env.in"
+source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatRayCen ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ArrMod.f90 AddArr"]
+
+[compatibility]
+versions = ["origin", "f2cpp", "rayreuse"]
+
+[launch]
+sound_speed_at_source_mps = 1500.0
+water_depth_m = 100.0
+maximum_range_m = 600.0
+minimum_angle_deg = -70.0
+maximum_angle_deg = 70.0
+policy = "shared_fmax"
+
+[validation]
+prt_markers = ["VACUUM", "Perfectly RIGID", "Arrivals calculation, binary file output", "Geometric hat beams in ray-centered coordinates", "Geometric hat beams"]
+prt_forbidden_markers = ["THORP volume attenuation added", "Cartesian beams"]
+
+[profiles.single]
+frequencies_hz = [1000.0]
+
+[profiles.broadband_smoke]
+frequencies_hz = [1000.0, 2000.0]
