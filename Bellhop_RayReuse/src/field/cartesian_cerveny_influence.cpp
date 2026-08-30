@@ -781,11 +781,10 @@ CartesianCervenyInfluence::accumulateImpl(
                     ? CervenyImageKind::True
                     : (imageIndex == 1U ? CervenyImageKind::Surface
                                         : CervenyImageKind::Bottom);
-            images[imageIndex] =
-                evaluateImage(kind, receiverDepth, position.depth,
-                              seaSurfaceDepth, seabedDepth, angularFrequency,
-                              beamWindowSquared, radiusMax, slowness, tau,
-                              gamma, rightAmplitude, rightReflectionPhase);
+            images[imageIndex] = evaluateImage(
+                kind, receiverDepth, position.depth, seaSurfaceDepth,
+                seabedDepth, angularFrequency, beamWindowSquared, radiusMax,
+                slowness, tau, gamma, rightAmplitude, rightReflectionPhase);
             if constexpr (CollectStatistics) {
               if (!images[imageIndex].windowPassed) {
                 ++statistics->windowRejections;
@@ -800,10 +799,9 @@ CartesianCervenyInfluence::accumulateImpl(
           }
         } else {
           imageSum = evaluateImageContributions<ImageCount, CollectStatistics>(
-              receiverDepth, position.depth, seaSurfaceDepth,
-              seabedDepth, angularFrequency, beamWindowSquared, radiusMax,
-              slowness, tau, gamma, rightAmplitude, rightReflectionPhase,
-              statistics);
+              receiverDepth, position.depth, seaSurfaceDepth, seabedDepth,
+              angularFrequency, beamWindowSquared, radiusMax, slowness, tau,
+              gamma, rightAmplitude, rightReflectionPhase, statistics);
         }
         const std::complex<double> contribution = corrected * imageSum;
 #ifndef NDEBUG

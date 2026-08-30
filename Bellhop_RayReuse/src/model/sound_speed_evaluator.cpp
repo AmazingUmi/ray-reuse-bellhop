@@ -59,15 +59,16 @@ SspInterpolationKind GeometrySspEvaluator::interpolationKind() const noexcept {
   return interpolationKind_;
 }
 
-SspGradientContinuity GeometrySspEvaluator::gradientContinuity() const noexcept {
+SspGradientContinuity GeometrySspEvaluator::gradientContinuity()
+    const noexcept {
   return std::visit(
       [](const auto& backend) { return backend.gradientContinuity(); },
       backend_);
 }
 
 std::size_t GeometrySspEvaluator::segmentCount() const noexcept {
-  return std::visit(
-      [](const auto& backend) { return backend.segmentCount(); }, backend_);
+  return std::visit([](const auto& backend) { return backend.segmentCount(); },
+                    backend_);
 }
 
 std::size_t GeometrySspEvaluator::rangeSegmentCount() const noexcept {
@@ -135,8 +136,8 @@ SoundSpeedSample GeometrySspEvaluator::evaluateAtSegments(
     Vec2 position, std::size_t segmentIndex,
     std::size_t rangeSegmentIndex) const {
   if (const auto* quadrilateral = std::get_if<QuadrilateralSsp>(&backend_)) {
-    return quadrilateral->evaluateAtSegments(
-        position, segmentIndex, rangeSegmentIndex);
+    return quadrilateral->evaluateAtSegments(position, segmentIndex,
+                                             rangeSegmentIndex);
   }
   if (rangeSegmentIndex != 0U) {
     throw ValidationError("SSP range segment index is out of range");
@@ -157,8 +158,8 @@ SoundSpeedSample GeometrySspEvaluator::evaluate(
     Vec2 position, std::size_t previousSegment,
     std::size_t previousRangeSegment) const {
   if (const auto* quadrilateral = std::get_if<QuadrilateralSsp>(&backend_)) {
-    return quadrilateral->evaluate(
-        position, previousSegment, previousRangeSegment);
+    return quadrilateral->evaluate(position, previousSegment,
+                                   previousRangeSegment);
   }
   if (previousRangeSegment != 0U) {
     throw ValidationError("SSP previous range segment index is out of range");
@@ -166,8 +167,8 @@ SoundSpeedSample GeometrySspEvaluator::evaluate(
   return evaluate(position, previousSegment);
 }
 
-FrequencySspEvaluator::FrequencySspEvaluator(
-    const SoundSpeedProfile& profile, double frequency)
+FrequencySspEvaluator::FrequencySspEvaluator(const SoundSpeedProfile& profile,
+                                             double frequency)
     : FrequencySspEvaluator(profile, frequency, VolumeAttenuation{}) {}
 
 FrequencySspEvaluator::FrequencySspEvaluator(
@@ -176,8 +177,8 @@ FrequencySspEvaluator::FrequencySspEvaluator(
     : interpolationKind_(profile.interpolationKind()),
       backend_(makeFrequencyBackend(profile, frequency, volumeAttenuation)) {}
 
-FrequencySspEvaluator::FrequencySspEvaluator(
-    const Environment& environment, double frequency)
+FrequencySspEvaluator::FrequencySspEvaluator(const Environment& environment,
+                                             double frequency)
     : FrequencySspEvaluator(environment.soundSpeedProfile(), frequency,
                             environment.volumeAttenuation()) {}
 
@@ -185,20 +186,21 @@ SspInterpolationKind FrequencySspEvaluator::interpolationKind() const noexcept {
   return interpolationKind_;
 }
 
-SspGradientContinuity FrequencySspEvaluator::gradientContinuity() const noexcept {
+SspGradientContinuity FrequencySspEvaluator::gradientContinuity()
+    const noexcept {
   return std::visit(
       [](const auto& backend) { return backend.gradientContinuity(); },
       backend_);
 }
 
 double FrequencySspEvaluator::frequency() const noexcept {
-  return std::visit(
-      [](const auto& backend) { return backend.frequency(); }, backend_);
+  return std::visit([](const auto& backend) { return backend.frequency(); },
+                    backend_);
 }
 
 std::size_t FrequencySspEvaluator::segmentCount() const noexcept {
-  return std::visit(
-      [](const auto& backend) { return backend.segmentCount(); }, backend_);
+  return std::visit([](const auto& backend) { return backend.segmentCount(); },
+                    backend_);
 }
 
 std::size_t FrequencySspEvaluator::rangeSegmentCount() const noexcept {
@@ -249,8 +251,8 @@ double FrequencySspEvaluator::maximumRangeForSegment(
 }
 
 bool FrequencySspEvaluator::isLossless() const noexcept {
-  return std::visit(
-      [](const auto& backend) { return backend.isLossless(); }, backend_);
+  return std::visit([](const auto& backend) { return backend.isLossless(); },
+                    backend_);
 }
 
 std::optional<std::complex<double>>
@@ -274,8 +276,8 @@ SoundSpeedSample FrequencySspEvaluator::evaluateAtSegments(
     std::size_t rangeSegmentIndex) const {
   if (const auto* quadrilateral =
           std::get_if<QuadrilateralFrequencySsp>(&backend_)) {
-    return quadrilateral->evaluateAtSegments(
-        position, segmentIndex, rangeSegmentIndex);
+    return quadrilateral->evaluateAtSegments(position, segmentIndex,
+                                             rangeSegmentIndex);
   }
   if (rangeSegmentIndex != 0U) {
     throw ValidationError("SSP range segment index is out of range");
@@ -297,8 +299,8 @@ SoundSpeedSample FrequencySspEvaluator::evaluate(
     std::size_t previousRangeSegment) const {
   if (const auto* quadrilateral =
           std::get_if<QuadrilateralFrequencySsp>(&backend_)) {
-    return quadrilateral->evaluate(
-        position, previousSegment, previousRangeSegment);
+    return quadrilateral->evaluate(position, previousSegment,
+                                   previousRangeSegment);
   }
   if (previousRangeSegment != 0U) {
     throw ValidationError("SSP previous range segment index is out of range");

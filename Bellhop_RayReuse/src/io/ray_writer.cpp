@@ -203,9 +203,7 @@ void RayWriter::appendSource(std::size_t sourceIndex,
   ++nextSourceIndex_;
 }
 
-void RayWriter::append(const RayPathCache& cache) {
-  appendSource(0U, cache);
-}
+void RayWriter::append(const RayPathCache& cache) { appendSource(0U, cache); }
 
 void RayWriter::finalize() {
   if (finalized_ || nextSourceIndex_ != simulation_.sourceCount()) {

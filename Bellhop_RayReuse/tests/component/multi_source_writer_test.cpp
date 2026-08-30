@@ -36,12 +36,13 @@ namespace {
 
 using rayreuse::ArrivalEncoding;
 using rayreuse::ArrivalWorkspace;
+using rayreuse::ArrivalWriter;
 using rayreuse::BeamFamily;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
-using rayreuse::Environment;
 using rayreuse::EigenrayHit;
 using rayreuse::EigenrayWriter;
+using rayreuse::Environment;
 using rayreuse::FrequencyGrid;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::IntegratorSettings;
@@ -58,10 +59,9 @@ using rayreuse::SingleFrequencySolver;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
-using rayreuse::ArrivalWriter;
-using rayreuse::ValidationError;
 using rayreuse::traceRayProduct;
 using rayreuse::traceRayProducts;
+using rayreuse::ValidationError;
 using rayreuse::test::Context;
 
 constexpr double kFrequency = 50.0;
@@ -163,7 +163,8 @@ std::vector<Source> dualSources() {
           Source{.depth = 30.0, .amplitude = 1.0}};
 }
 
-SimulationCase makeCase(std::vector<Source> sources, const ReceiverGrid& receivers,
+SimulationCase makeCase(std::vector<Source> sources,
+                        const ReceiverGrid& receivers,
                         std::vector<double> frequencies,
                         SimulationRunMode runMode,
                         BeamFamily beamFamily = BeamFamily::CervenyGaussian) {
@@ -171,15 +172,13 @@ SimulationCase makeCase(std::vector<Source> sources, const ReceiverGrid& receive
       makeEnvironment(), std::move(sources), receivers,
       FrequencyGrid(std::move(frequencies)), makeFan(), makeIntegrator(),
       rayreuse::SourceBeamPattern::omnidirectional(), runMode, beamFamily,
-      rayreuse::FieldComponent::Pressure,
-      BoundaryCurvatureMode::Standard);
+      rayreuse::FieldComponent::Pressure, BoundaryCurvatureMode::Standard);
 }
 
-SimulationCase makeSingleSourceCase(const ReceiverGrid& receivers,
-                                    std::vector<double> frequencies,
-                                    SimulationRunMode runMode,
-                                    BeamFamily beamFamily =
-                                        BeamFamily::CervenyGaussian) {
+SimulationCase makeSingleSourceCase(
+    const ReceiverGrid& receivers, std::vector<double> frequencies,
+    SimulationRunMode runMode,
+    BeamFamily beamFamily = BeamFamily::CervenyGaussian) {
   return makeCase({Source{.depth = 30.0, .amplitude = 1.0}}, receivers,
                   std::move(frequencies), runMode, beamFamily);
 }
@@ -227,10 +226,12 @@ void testShdMultiSourceHeaderAndRecordLayout(Context& context) {
                                   workspaces.front(),
                                   std::span(workspaces).subspan(1U));
 
-  constexpr std::size_t kRecordBytes = 164U;  // 41 words: max(41, NSz, NRz, 2*NRr, ...)
+  constexpr std::size_t kRecordBytes =
+      164U;  // 41 words: max(41, NSz, NRz, 2*NRr, ...)
   const std::vector<std::byte> bytes = readBytes(path);
-  context.check(bytes.size() == 14U * kRecordBytes,
-                "dual-source SHD holds ten header and NSz*NRz pressure records");
+  context.check(
+      bytes.size() == 14U * kRecordBytes,
+      "dual-source SHD holds ten header and NSz*NRz pressure records");
 
   const std::size_t dimensions = 2U * kRecordBytes;
   context.check(loadInt32(bytes, dimensions + 16U) == 2 &&
@@ -243,21 +244,19 @@ void testShdMultiSourceHeaderAndRecordLayout(Context& context) {
 
   // Origin addressing: IRec = 10 + sourceIndex*NRz_per_range + depthIndex.
   const std::size_t pressure = 10U * kRecordBytes;
-  context.check(loadFloat32(bytes, pressure) == 0.5F &&
-                    loadFloat32(bytes, pressure + kRecordBytes) == 10.5F &&
-                    loadFloat32(bytes, pressure + 2U * kRecordBytes) ==
-                        100.5F &&
-                    loadFloat32(bytes, pressure + 3U * kRecordBytes) ==
-                        110.5F,
-                "dual-source pressure records are source-major");
+  context.check(
+      loadFloat32(bytes, pressure) == 0.5F &&
+          loadFloat32(bytes, pressure + kRecordBytes) == 10.5F &&
+          loadFloat32(bytes, pressure + 2U * kRecordBytes) == 100.5F &&
+          loadFloat32(bytes, pressure + 3U * kRecordBytes) == 110.5F,
+      "dual-source pressure records are source-major");
 }
 
 void testShdMultiFrequencyMultiSourceLayout(Context& context) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers({20.0, 30.0}, {1000.0, 2000.0});
-  const SimulationCase simulation =
-      makeCase(dualSources(), receivers, {50.0, 100.0},
-               SimulationRunMode::Coherent);
+  const SimulationCase simulation = makeCase(
+      dualSources(), receivers, {50.0, 100.0}, SimulationRunMode::Coherent);
   std::vector<std::vector<FrequencyWorkspace>> perFrequency;
   perFrequency.push_back(makeSourceWorkspaces(2U, receivers, 0U, 50.0));
   perFrequency.push_back(makeSourceWorkspaces(2U, receivers, 1U, 100.0));
@@ -274,21 +273,18 @@ void testShdMultiFrequencyMultiSourceLayout(Context& context) {
   // Frequency block f starts at record 10 + f*NSz*NRz; within a block records
   // are source-major, then depth.
   const std::size_t secondFrequency = 14U * kRecordBytes;
-  context.check(loadFloat32(bytes, secondFrequency) == 1000.5F &&
-                    loadFloat32(bytes, secondFrequency + kRecordBytes) ==
-                        1010.5F &&
-                    loadFloat32(bytes, secondFrequency + 2U * kRecordBytes) ==
-                        1100.5F &&
-                    loadFloat32(bytes, secondFrequency + 3U * kRecordBytes) ==
-                        1110.5F,
-                "frequency blocks stack frequency-major over source blocks");
+  context.check(
+      loadFloat32(bytes, secondFrequency) == 1000.5F &&
+          loadFloat32(bytes, secondFrequency + kRecordBytes) == 1010.5F &&
+          loadFloat32(bytes, secondFrequency + 2U * kRecordBytes) == 1100.5F &&
+          loadFloat32(bytes, secondFrequency + 3U * kRecordBytes) == 1110.5F,
+      "frequency blocks stack frequency-major over source blocks");
 }
 
 void testShdIrregularLayout(Context& context) {
   TemporaryDirectory directory;
-  const ReceiverGrid irregular(
-      {20.0, 30.0, 40.0}, {1000.0, 2000.0, 3000.0},
-      ReceiverGridLayout::Irregular);
+  const ReceiverGrid irregular({20.0, 30.0, 40.0}, {1000.0, 2000.0, 3000.0},
+                               ReceiverGridLayout::Irregular);
   const SimulationCase simulation = makeCase(
       dualSources(), irregular, {kFrequency}, SimulationRunMode::Coherent);
   const std::vector<FrequencyWorkspace> workspaces =
@@ -382,12 +378,10 @@ void testArrivalMultiSourceLayout(Context& context) {
       dualSources(), receivers, {kFrequency}, SimulationRunMode::AsciiArrivals);
   const std::vector<ArrivalWorkspace> workspaces = [] {
     std::vector<ArrivalWorkspace> workspaces;
-    workspaces.emplace_back(kFrequency,
-                            ReceiverGrid({25.0, 50.0, 75.0},
-                                         {10.0, 55.0, 100.0}));
-    workspaces.emplace_back(kFrequency,
-                            ReceiverGrid({25.0, 50.0, 75.0},
-                                         {10.0, 55.0, 100.0}));
+    workspaces.emplace_back(
+        kFrequency, ReceiverGrid({25.0, 50.0, 75.0}, {10.0, 55.0, 100.0}));
+    workspaces.emplace_back(
+        kFrequency, ReceiverGrid({25.0, 50.0, 75.0}, {10.0, 55.0, 100.0}));
     return workspaces;
   }();
   const std::filesystem::path asciiPath = directory.path() / "dual.arr";
@@ -411,8 +405,9 @@ void testArrivalMultiSourceLayout(Context& context) {
                   "each ARR source block holds the maximum and nine cells");
   }
 
-  const SimulationCase binarySimulation = makeCase(
-      dualSources(), receivers, {kFrequency}, SimulationRunMode::BinaryArrivals);
+  const SimulationCase binarySimulation =
+      makeCase(dualSources(), receivers, {kFrequency},
+               SimulationRunMode::BinaryArrivals);
   ArrivalWriter::write(binaryPath, "Dual ARR fixture", binarySimulation,
                        workspaces, ArrivalEncoding::Binary);
   const std::vector<std::byte> bytes = readBytes(binaryPath);
@@ -425,8 +420,7 @@ void testArrivalMultiSourceLayout(Context& context) {
                 "dual-source ARR binary size matches the record layout");
   // Source-depth record starts at byte 24: marker(4) then NSz + two float32
   // depths in the payload.
-  context.check(loadInt32(bytes, 24U) == 12 &&
-                    loadInt32(bytes, 28U) == 2 &&
+  context.check(loadInt32(bytes, 24U) == 12 && loadInt32(bytes, 28U) == 2 &&
                     loadFloat32(bytes, 32U) == 30.0F &&
                     loadFloat32(bytes, 36U) == 70.0F,
                 "ARR binary source record stores NSz and both depths");
@@ -450,8 +444,7 @@ void testArrivalSingleSourceByteIdentity(Context& context) {
   ArrivalWriter::write(legacyAscii, "Byte identity", asciiSimulation,
                        asciiWorkspace, ArrivalEncoding::Ascii);
   ArrivalWriter::write(spanAscii, "Byte identity", asciiSimulation,
-                       std::span(&asciiWorkspace, 1U),
-                       ArrivalEncoding::Ascii);
+                       std::span(&asciiWorkspace, 1U), ArrivalEncoding::Ascii);
   ArrivalWriter::write(legacyBinary, "Byte identity", binarySimulation,
                        binaryWorkspace, ArrivalEncoding::Binary);
   ArrivalWriter::write(spanBinary, "Byte identity", binarySimulation,
@@ -463,9 +456,9 @@ void testArrivalSingleSourceByteIdentity(Context& context) {
 
   context.expectThrows<ValidationError>(
       [&] {
-        const SimulationCase dual = makeCase(
-            dualSources(), receivers, {kFrequency},
-            SimulationRunMode::AsciiArrivals);
+        const SimulationCase dual =
+            makeCase(dualSources(), receivers, {kFrequency},
+                     SimulationRunMode::AsciiArrivals);
         ArrivalWriter::write(spanAscii, "wrong source count", dual,
                              std::span(&asciiWorkspace, 1U),
                              ArrivalEncoding::Ascii);
@@ -483,8 +476,8 @@ void writeDualSourceRayTrace(Context& context,
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0});
   const SimulationCase dual =
       makeCase(dualSources(), receivers, {100.0}, SimulationRunMode::RayTrace);
-  const SimulationCase single = makeSingleSourceCase(
-      receivers, {100.0}, SimulationRunMode::RayTrace);
+  const SimulationCase single =
+      makeSingleSourceCase(receivers, {100.0}, SimulationRunMode::RayTrace);
   const std::vector<RayPathCache> caches = traceRayProducts(dual);
   const RayPathCache singleCache = traceRayProduct(single);
   context.check(caches.size() == 2U, "R dual-source trace yields two fans");
@@ -505,10 +498,8 @@ void writeDualSourceRayTrace(Context& context,
 
 void testRayWriterMultiSourceLayout(Context& context) {
   TemporaryDirectory directory;
-  const std::filesystem::path dualPath =
-      directory.path() / "dual.ray";
-  const std::filesystem::path singlePath =
-      directory.path() / "single.ray";
+  const std::filesystem::path dualPath = directory.path() / "dual.ray";
+  const std::filesystem::path singlePath = directory.path() / "single.ray";
   writeDualSourceRayTrace(context, dualPath, singlePath);
 
   const std::vector<std::string> dualLines = readLines(dualPath);
@@ -521,8 +512,8 @@ void testRayWriterMultiSourceLayout(Context& context) {
   // model sorts the dual fixture to the same shallowest source).
   const std::size_t headerLines = 7U;
   bool prefixMatches = dualLines.size() > singleLines.size();
-  for (std::size_t index = headerLines; prefixMatches && index < singleLines.size();
-       ++index) {
+  for (std::size_t index = headerLines;
+       prefixMatches && index < singleLines.size(); ++index) {
     prefixMatches = dualLines[index] == singleLines[index];
   }
   context.check(prefixMatches,
@@ -559,8 +550,8 @@ void testRayWriterPerSourceValidation(Context& context) {
 void testRayWriterSingleSourceByteIdentity(Context& context) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0});
-  const SimulationCase single = makeSingleSourceCase(
-      receivers, {100.0}, SimulationRunMode::RayTrace);
+  const SimulationCase single =
+      makeSingleSourceCase(receivers, {100.0}, SimulationRunMode::RayTrace);
   const RayPathCache cache = traceRayProduct(single);
   const std::filesystem::path appendPath = directory.path() / "append.ray";
   const std::filesystem::path appendSourcePath =
@@ -582,9 +573,9 @@ void testRayWriterSingleSourceByteIdentity(Context& context) {
 void testEigenrayMultiSourceLayout(Context& context) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0});
-  const SimulationCase dual = makeCase(
-      dualSources(), receivers, {100.0}, SimulationRunMode::Eigenray,
-      BeamFamily::GeometricGaussian);
+  const SimulationCase dual =
+      makeCase(dualSources(), receivers, {100.0}, SimulationRunMode::Eigenray,
+               BeamFamily::GeometricGaussian);
   const std::vector<rayreuse::RayFanTraceResult> fans =
       SingleFrequencySolver::traceAllSourceFans(dual);
   std::vector<RayPathCache> caches;
@@ -617,10 +608,10 @@ void testEigenrayMultiSourceLayout(Context& context) {
 
   context.expectThrows<ValidationError>(
       [&] {
-        EigenrayWriter::write(path, "wrong source count", dual, 100.0,
-                              std::span<const RayPathCache>(&caches.front(),
-                                                            1U),
-                              std::span(sourceHits).subspan(0U, 1U));
+        EigenrayWriter::write(
+            path, "wrong source count", dual, 100.0,
+            std::span<const RayPathCache>(&caches.front(), 1U),
+            std::span(sourceHits).subspan(0U, 1U));
       },
       "E writer rejects a cache count below the simulation source count");
 }
@@ -628,9 +619,9 @@ void testEigenrayMultiSourceLayout(Context& context) {
 void testEigenraySingleSourceByteIdentity(Context& context) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0});
-  const SimulationCase single = makeSingleSourceCase(
-      receivers, {100.0}, SimulationRunMode::Eigenray,
-      BeamFamily::GeometricGaussian);
+  const SimulationCase single =
+      makeSingleSourceCase(receivers, {100.0}, SimulationRunMode::Eigenray,
+                           BeamFamily::GeometricGaussian);
   const std::vector<rayreuse::RayFanTraceResult> fans =
       SingleFrequencySolver::traceAllSourceFans(single);
   const RayPathCache& cache = fans.front().cache;

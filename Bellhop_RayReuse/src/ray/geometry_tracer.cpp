@@ -406,9 +406,9 @@ RayPath GeometryTracer::trace(const Source& source, double launchAngle) const {
                .soundSpeed = sourceSample.soundSpeed,
                .realTravelTime = 0.0});
 
-  const GeometryStepLimiter geometryLimiter(
-      integrator_, profileDepths_, soundSpeedProfile_, seaSurfaceGeometry,
-      seabedGeometry);
+  const GeometryStepLimiter geometryLimiter(integrator_, profileDepths_,
+                                            soundSpeedProfile_,
+                                            seaSurfaceGeometry, seabedGeometry);
   const StepLimiter stepLimiter =
       [&geometryLimiter, &topSegmentIndex,
        &bottomSegmentIndex](const StepLimitRequest& request) {

@@ -75,8 +75,7 @@ void scaleCoherentPressureImpl(FrequencyWorkspace& workspace,
     const double factor =
         sourceGeometry == SourceGeometry::Line
             ? static_cast<double>(linePrefix) * beamScale
-            : (range == 0.0 ? 0.0
-                            : beamScale / std::sqrt(std::abs(range)));
+            : (range == 0.0 ? 0.0 : beamScale / std::sqrt(std::abs(range)));
     requireFinite(factor, "Cartesian source range factor");
     if ((sourceGeometry == SourceGeometry::Line || range != 0.0) &&
         factor == 0.0) {
@@ -110,8 +109,7 @@ void scaleCoherentPressureImpl(FrequencyWorkspace& workspace,
 FrequencyWorkspace scaleIntensityToPressureImpl(
     const IntensityWorkspace& workspace, const ReceiverGrid& receivers,
     double launchAngleSpacingRadians, double sourceSoundSpeed,
-    SourceGeometry sourceGeometry,
-    bool geometricNormalization) {
+    SourceGeometry sourceGeometry, bool geometricNormalization) {
   if (workspace.depthCount() != receivers.receiversPerRange() ||
       workspace.rangeCount() != receivers.rangeCount()) {
     throw ValidationError(
@@ -185,16 +183,18 @@ void scaleCoherentCartesianPointPressure(FrequencyWorkspace& workspace,
                                          const ReceiverGrid& receivers,
                                          double launchAngleSpacingRadians,
                                          double sourceSoundSpeed) {
-  scaleCoherentCartesianPressure(workspace, receivers, launchAngleSpacingRadians,
-                                 sourceSoundSpeed, SourceGeometry::Point);
+  scaleCoherentCartesianPressure(workspace, receivers,
+                                 launchAngleSpacingRadians, sourceSoundSpeed,
+                                 SourceGeometry::Point);
 }
 
 void scaleCoherentGeometricPointPressure(FrequencyWorkspace& workspace,
                                          const ReceiverGrid& receivers,
                                          double launchAngleSpacingRadians,
                                          double sourceSoundSpeed) {
-  scaleCoherentGeometricPressure(workspace, receivers, launchAngleSpacingRadians,
-                                 sourceSoundSpeed, SourceGeometry::Point);
+  scaleCoherentGeometricPressure(workspace, receivers,
+                                 launchAngleSpacingRadians, sourceSoundSpeed,
+                                 SourceGeometry::Point);
 }
 
 FrequencyWorkspace scaleCartesianPointIntensityToPressure(

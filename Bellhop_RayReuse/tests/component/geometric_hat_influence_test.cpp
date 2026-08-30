@@ -13,8 +13,8 @@
 
 namespace {
 
-using rayreuse::CervenyCoordinateSystem;
 using rayreuse::ArrivalWorkspace;
+using rayreuse::CervenyCoordinateSystem;
 using rayreuse::EigenrayHit;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometricHatDiagnosticRequest;
@@ -283,8 +283,8 @@ void testRayCenteredArrivalAndEigenrayProducts(Context& context) {
   const RayPath path =
       makeHorizontalPath(ranges, {0.0, 100.0, 200.0, 300.0}, 0.25);
   RayFrequencyState state = makeFrequencyState(ranges, 50.0);
-  const GeometricHatInfluence influence(
-      receivers, CervenyCoordinateSystem::RayCentered);
+  const GeometricHatInfluence influence(receivers,
+                                        CervenyCoordinateSystem::RayCentered);
 
   ArrivalWorkspace arrivals(50.0, receivers);
   influence.accumulateArrivals(arrivals, path, state, kDalpha);
@@ -295,8 +295,7 @@ void testRayCenteredArrivalAndEigenrayProducts(Context& context) {
                 "range order");
   const auto first = arrivals.arrivalsAt(0U, 1U).front();
   context.checkNear(first.sourceDeclinationDegrees,
-                    static_cast<float>(0.25 * 180.0 / std::numbers::pi),
-                    2.0e-6,
+                    static_cast<float>(0.25 * 180.0 / std::numbers::pi), 2.0e-6,
                     "Ag/ag store the launch angle in degrees");
   context.checkNear(first.receiverDeclinationDegrees, 0.0, 0.0,
                     "Ag/ag use the right-endpoint slowness direction");
@@ -309,10 +308,8 @@ void testRayCenteredArrivalAndEigenrayProducts(Context& context) {
       kDalpha);
   context.check(
       hits.size() == 2U && hits[0].receiverRangeIndex == 1U &&
-          hits[0].receiverDepthIndex == 0U &&
-          hits[0].prefixPointCount == 3U &&
-          hits[1].receiverRangeIndex == 2U &&
-          hits[1].prefixPointCount == 4U,
+          hits[0].receiverDepthIndex == 0U && hits[0].prefixPointCount == 3U &&
+          hits[1].receiverRangeIndex == 2U && hits[1].prefixPointCount == 4U,
       "Eg preserves ray-centered traversal order and exclusive prefixes");
 
   state.points.back().active = false;

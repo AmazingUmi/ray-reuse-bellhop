@@ -179,9 +179,8 @@ void validateVolumeAttenuation(const VolumeAttenuation& attenuation) {
       return;
     }
     case VolumeAttenuationModel::Biological: {
-      const auto* layers =
-          std::get_if<SharedBiologicalAttenuationLayers>(
-              &attenuation.parameters);
+      const auto* layers = std::get_if<SharedBiologicalAttenuationLayers>(
+          &attenuation.parameters);
       if (layers == nullptr || !*layers) {
         throw ValidationError(
             "biological volume attenuation requires immutable layers");
@@ -199,9 +198,9 @@ void validateVolumeAttenuation(const VolumeAttenuation& attenuation) {
                       "volumeAttenuation.layer.resonanceFrequency");
         requireFinite(layer.qualityFactor,
                       "volumeAttenuation.layer.qualityFactor");
-        requireFinite(
-            layer.attenuationCoefficientDecibelsPerKilometer,
-            "volumeAttenuation.layer.attenuationCoefficientDecibelsPerKilometer");
+        requireFinite(layer.attenuationCoefficientDecibelsPerKilometer,
+                      "volumeAttenuation.layer."
+                      "attenuationCoefficientDecibelsPerKilometer");
         if (layer.minimumDepth > layer.maximumDepth) {
           throw ValidationError(
               "biological layer minimum depth must not exceed maximum depth");
@@ -228,8 +227,7 @@ void validateVolumeAttenuation(const VolumeAttenuation& attenuation) {
 void validateQuadrilateralGrid(const SharedQuadrilateralSspGrid& grid,
                                std::size_t depthCount) {
   if (!grid || grid->depthCount != depthCount || grid->depthCount < 2U ||
-      grid->rangeCount < 2U ||
-      grid->rangesMeters.size() != grid->rangeCount) {
+      grid->rangeCount < 2U || grid->rangesMeters.size() != grid->rangeCount) {
     throw ValidationError("quadrilateral SSP grid dimensions are invalid");
   }
   if (grid->rangeCount >
@@ -250,8 +248,7 @@ void validateQuadrilateralGrid(const SharedQuadrilateralSspGrid& grid,
   for (double speed : grid->speedsDepthMajor) {
     requireFinite(speed, "quadrilateral SSP sound speed");
     if (speed <= 0.0) {
-      throw ValidationError(
-          "quadrilateral SSP sound speeds must be positive");
+      throw ValidationError("quadrilateral SSP sound speeds must be positive");
     }
   }
 }
@@ -259,8 +256,7 @@ void validateQuadrilateralGrid(const SharedQuadrilateralSspGrid& grid,
 }  // namespace
 
 SoundSpeedProfile::SoundSpeedProfile(
-    std::vector<SoundSpeedPoint> points,
-    SspInterpolationKind interpolationKind,
+    std::vector<SoundSpeedPoint> points, SspInterpolationKind interpolationKind,
     SharedQuadrilateralSspGrid quadrilateralGrid)
     : points_(std::move(points)),
       interpolationKind_(interpolationKind),

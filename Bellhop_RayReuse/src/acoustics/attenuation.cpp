@@ -97,8 +97,8 @@ double baseAttenuationNpPerMeter(const RawAttenuation& attenuation,
   throw ValidationError("unsupported attenuation unit");
 }
 
-double volumeAttenuationNpPerMeter(
-    const VolumeAttenuation& attenuation, double depth, double frequency) {
+double volumeAttenuationNpPerMeter(const VolumeAttenuation& attenuation,
+                                   double depth, double frequency) {
   switch (attenuation.model) {
     case VolumeAttenuationModel::None:
       if (!std::holds_alternative<std::monostate>(attenuation.parameters)) {
@@ -167,8 +167,7 @@ double francoisGarrisonAttenuationNpPerMeter(
                 "francoisGarrison.temperatureCelsius");
   requireFinite(parameters.salinityPsu, "francoisGarrison.salinityPsu");
   requireFinite(parameters.pH, "francoisGarrison.pH");
-  requireFinite(parameters.meanDepthMeters,
-                "francoisGarrison.meanDepthMeters");
+  requireFinite(parameters.meanDepthMeters, "francoisGarrison.meanDepthMeters");
   if (parameters.temperatureCelsius <= -273.0) {
     throw ValidationError(
         "francoisGarrison.temperatureCelsius must exceed -273 C");
@@ -184,10 +183,9 @@ double francoisGarrisonAttenuationNpPerMeter(
   const double frequencyKilohertz = frequency / 1000.0;
   const double frequencySquared = frequencyKilohertz * frequencyKilohertz;
   const double absoluteTemperature = temperature + 273.0;
-  const double soundSpeed =
-      1412.0 + static_cast<double>(3.21F) * temperature +
-      static_cast<double>(1.19F) * salinity +
-      static_cast<double>(0.0167F) * meanDepth;
+  const double soundSpeed = 1412.0 + static_cast<double>(3.21F) * temperature +
+                            static_cast<double>(1.19F) * salinity +
+                            static_cast<double>(0.0167F) * meanDepth;
 
   const double boricCoefficient =
       static_cast<double>(8.86F) / soundSpeed *
@@ -200,15 +198,13 @@ double francoisGarrisonAttenuationNpPerMeter(
       (1.0 + static_cast<double>(0.025F) * temperature);
   const double meanDepthSquared = meanDepth * meanDepth;
   const double magnesiumPressure =
-      std::fma(6.2e-9, meanDepthSquared,
-               std::fma(-1.37e-4, meanDepth, 1.0));
+      std::fma(6.2e-9, meanDepthSquared, std::fma(-1.37e-4, meanDepth, 1.0));
   const double magnesiumRelaxation =
       static_cast<double>(8.17F) *
       std::pow(10.0, 8.0 - 1990.0 / absoluteTemperature) /
       (1.0 + static_cast<double>(0.0018F) * (salinity - 35.0));
   const double viscosityPressure =
-      std::fma(4.9e-10, meanDepthSquared,
-               std::fma(-3.83e-5, meanDepth, 1.0));
+      std::fma(4.9e-10, meanDepthSquared, std::fma(-3.83e-5, meanDepth, 1.0));
   const double temperatureSquared = temperature * temperature;
   const double temperatureCubed = temperature * temperatureSquared;
   const double viscosityCoefficient =
@@ -237,13 +233,11 @@ double francoisGarrisonAttenuationNpPerMeter(
 }
 
 double biologicalAttenuationNpPerMeter(
-    const BiologicalAttenuationLayers& layers, double depth,
-    double frequency) {
+    const BiologicalAttenuationLayers& layers, double depth, double frequency) {
   requireFinite(depth, "depth");
   requireFinitePositive(frequency, "frequency");
   if (layers.size() > kMaximumBiologicalLayers) {
-    throw ValidationError(
-        "biological attenuation supports at most 200 layers");
+    throw ValidationError("biological attenuation supports at most 200 layers");
   }
 
   double nepersPerMeter = 0.0;
@@ -252,8 +246,7 @@ double biologicalAttenuationNpPerMeter(
     requireFinite(layer.maximumDepth, "biologicalLayer.maximumDepth");
     requireFinitePositive(layer.resonanceFrequency,
                           "biologicalLayer.resonanceFrequency");
-    requireFinitePositive(layer.qualityFactor,
-                          "biologicalLayer.qualityFactor");
+    requireFinitePositive(layer.qualityFactor, "biologicalLayer.qualityFactor");
     requireFinite(layer.attenuationCoefficientDecibelsPerKilometer,
                   "biologicalLayer.attenuationCoefficientDecibelsPerKilometer");
     if (layer.minimumDepth > layer.maximumDepth) {
@@ -358,8 +351,8 @@ AttenuationConversion convertAttenuation(
     const RawAttenuation& attenuation,
     const VolumeAttenuation& volumeAttenuation, double frequency,
     double soundSpeed, double depth) {
-  const double converted = attenuationNpPerMeter(
-      attenuation, volumeAttenuation, frequency, soundSpeed, depth);
+  const double converted = attenuationNpPerMeter(attenuation, volumeAttenuation,
+                                                 frequency, soundSpeed, depth);
   return AttenuationConversion{
       .attenuationNpPerMeter = converted,
       .imaginarySoundSpeed =

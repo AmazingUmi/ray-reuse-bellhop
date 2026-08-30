@@ -20,14 +20,12 @@ namespace rayreuse {
 // explicit environment volume attenuation model and node depth.
 class QuadrilateralFrequencySsp {
  public:
-  QuadrilateralFrequencySsp(const SoundSpeedProfile& profile,
-                            double frequency);
-  QuadrilateralFrequencySsp(
-      const SoundSpeedProfile& profile, double frequency,
-      const VolumeAttenuation& volumeAttenuation);
+  QuadrilateralFrequencySsp(const SoundSpeedProfile& profile, double frequency);
+  QuadrilateralFrequencySsp(const SoundSpeedProfile& profile, double frequency,
+                            const VolumeAttenuation& volumeAttenuation);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::Quadrilateral);
   }
 
@@ -35,11 +33,11 @@ class QuadrilateralFrequencySsp {
   [[nodiscard]] std::size_t segmentCount() const noexcept;
   [[nodiscard]] std::size_t rangeSegmentCount() const noexcept;
   [[nodiscard]] bool isLossless() const noexcept;
-  [[nodiscard]] std::optional<std::complex<double>>
-  uniformComplexSoundSpeed() const noexcept;
+  [[nodiscard]] std::optional<std::complex<double>> uniformComplexSoundSpeed()
+      const noexcept;
 
-  [[nodiscard]] std::size_t locateSegment(
-      double depth, std::size_t previousSegment) const;
+  [[nodiscard]] std::size_t locateSegment(double depth,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] std::size_t locateRangeSegment(
       double range, std::size_t previousRangeSegment) const;
   [[nodiscard]] double minimumRangeForSegment(
@@ -52,15 +50,15 @@ class QuadrilateralFrequencySsp {
   [[nodiscard]] SoundSpeedSample evaluateAtSegments(
       Vec2 position, std::size_t segmentIndex,
       std::size_t rangeSegmentIndex) const;
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] SoundSpeedSample evaluate(
       Vec2 position, std::size_t previousSegment,
       std::size_t previousRangeSegment) const;
 
  private:
-  [[nodiscard]] SoundSpeedSample addImaginarySoundSpeed(
-      SoundSpeedSample sample, double depth) const;
+  [[nodiscard]] SoundSpeedSample addImaginarySoundSpeed(SoundSpeedSample sample,
+                                                        double depth) const;
 
   double frequency_;
   QuadrilateralSsp realProfile_;

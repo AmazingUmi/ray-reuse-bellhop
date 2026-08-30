@@ -21,20 +21,17 @@ void requireFinite(double value, std::string_view name) {
   }
 }
 
-void requireFiniteComplex(std::complex<double> value,
-                          std::string_view name) {
+void requireFiniteComplex(std::complex<double> value, std::string_view name) {
   if (!std::isfinite(value.real()) || !std::isfinite(value.imag())) {
     throw ValidationError(std::string(name) + " must be finite");
   }
 }
 
 double floatingSpacing(double value) {
-  return std::nextafter(value, std::numeric_limits<double>::infinity()) -
-         value;
+  return std::nextafter(value, std::numeric_limits<double>::infinity()) - value;
 }
 
-bool crossesSimpleGaussianCaustic(double previousQ,
-                                  double currentQ) noexcept {
+bool crossesSimpleGaussianCaustic(double previousQ, double currentQ) noexcept {
   return (currentQ < 0.0 && previousQ >= 0.0) ||
          (currentQ > 0.0 && previousQ <= 0.0);
 }
@@ -75,18 +72,15 @@ void validateInput(
   bool inactiveSeen = false;
   for (const RayFrequencyPoint& point : frequencyState.points) {
     if (inactiveSeen && point.active) {
-      throw ValidationError(
-          "simple Gaussian active prefix must be contiguous");
+      throw ValidationError("simple Gaussian active prefix must be contiguous");
     }
     inactiveSeen = inactiveSeen || !point.active;
     requireFiniteComplex(point.complexTravelTime,
                          "simple Gaussian complex travel time");
     requireFinite(point.amplitude, "simple Gaussian amplitude");
-    requireFinite(point.reflectionPhase,
-                  "simple Gaussian reflection phase");
+    requireFinite(point.reflectionPhase, "simple Gaussian reflection phase");
     if (point.amplitude < 0.0) {
-      throw ValidationError(
-          "simple Gaussian amplitude must be non-negative");
+      throw ValidationError("simple Gaussian amplitude must be non-negative");
     }
   }
   for (const RayState& point : path.points) {
@@ -128,8 +122,7 @@ SimpleGaussianInfluence::SimpleGaussianInfluence(
 
 std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
     FrequencyWorkspace& workspace, const RayPath& path,
-    const RayFrequencyState& frequencyState,
-    double launchAngleSpacingRadians,
+    const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
     std::optional<SimpleGaussianDiagnosticRequest> diagnosticRequest) const {
   validateInput(workspace, path, frequencyState, receivers_,
                 launchAngleSpacingRadians, diagnosticRequest);
@@ -154,8 +147,7 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
       -4.0 * std::log(beta) /
       (launchAngleSpacingRadians * launchAngleSpacingRadians);
   const double normalization =
-      launchAngleSpacingRadians *
-      std::sqrt(gaussianA / std::numbers::pi);
+      launchAngleSpacingRadians * std::sqrt(gaussianA / std::numbers::pi);
   const double angularFrequency =
       2.0 * std::numbers::pi * frequencyState.frequency;
   requireFinite(sourceRatio, "simple Gaussian source ratio");
@@ -183,8 +175,7 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
                1000.0 * floatingSpacing(leftRange) &&
            rightRange > receiverRanges[rangeIndex]) {
       const double weight =
-          (receiverRanges[rangeIndex] - leftRange) /
-          (rightRange - leftRange);
+          (receiverRanges[rangeIndex] - leftRange) / (rightRange - leftRange);
       const Vec2 interpolatedPosition =
           path.points[leftIndex].position +
           weight * (path.points[rightIndex].position -
@@ -194,13 +185,11 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
           weight * (path.points[rightIndex].slowness -
                     path.points[leftIndex].slowness);
       const double q =
-          leftQ + weight *
-                      (path.points[rightIndex].dynamicQ[0U] - leftQ);
+          leftQ + weight * (path.points[rightIndex].dynamicQ[0U] - leftQ);
       const std::complex<double> tau =
           frequencyState.points[leftIndex].complexTravelTime +
-          weight *
-              (frequencyState.points[rightIndex].complexTravelTime -
-               frequencyState.points[leftIndex].complexTravelTime);
+          weight * (frequencyState.points[rightIndex].complexTravelTime -
+                    frequencyState.points[leftIndex].complexTravelTime);
       const double legacyArcLength =
           (static_cast<double>(rightIndex) + weight) *
           configuredStepLengthMeters_;
@@ -209,26 +198,23 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
       }
 
       const double segmentRange = rightRange - leftRange;
-      const double segmentDepth =
-          path.points[rightIndex].position.depth -
-          path.points[leftIndex].position.depth;
+      const double segmentDepth = path.points[rightIndex].position.depth -
+                                  path.points[leftIndex].position.depth;
       const double segmentLength =
-          std::sqrt(segmentRange * segmentRange +
-                    segmentDepth * segmentDepth);
+          std::sqrt(segmentRange * segmentRange + segmentDepth * segmentDepth);
       if (!std::isfinite(segmentLength) || segmentLength <= 0.0) {
         throw ValidationError(
             "simple Gaussian ray segment length must be positive and finite");
       }
-      const double rightAmplitude =
-          frequencyState.points[rightIndex].amplitude;
+      const double rightAmplitude = frequencyState.points[rightIndex].amplitude;
       const double rightReflectionPhase =
           frequencyState.points[rightIndex].reflectionPhase;
       requireFinite(weight, "simple Gaussian interpolation weight");
       requireFinite(q, "simple Gaussian interpolated q");
       requireFinite(legacyArcLength, "simple Gaussian legacy arc length");
       requireFinite(causticPhase, "simple Gaussian caustic phase");
-      for (std::size_t depthIndex = 0U;
-           depthIndex < receivers_.depthCount(); ++depthIndex) {
+      for (std::size_t depthIndex = 0U; depthIndex < receivers_.depthCount();
+           ++depthIndex) {
         const double deltaDepth =
             receivers_.depths()[depthIndex] - interpolatedPosition.depth;
         const double closestPointDistance =
@@ -237,8 +223,7 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
             deltaDepth * deltaDepth -
             closestPointDistance * closestPointDistance;
         if (!std::isfinite(offRayRadicand) || offRayRadicand < 0.0) {
-          throw ValidationError(
-              "simple Gaussian off-ray distance is invalid");
+          throw ValidationError("simple Gaussian off-ray distance is invalid");
         }
         const double offRayDistance = std::sqrt(offRayRadicand);
         const double effectiveDistance = legacyArcLength + offRayDistance;
@@ -267,8 +252,7 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
                              "simple Gaussian pressure increment");
         const std::complex<double> updated =
             workspace.at(depthIndex, rangeIndex) + contribution;
-        requireFiniteComplex(updated,
-                             "simple Gaussian accumulated pressure");
+        requireFiniteComplex(updated, "simple Gaussian accumulated pressure");
         workspace.at(depthIndex, rangeIndex) = updated;
 
         if (diagnosticRequest.has_value() &&

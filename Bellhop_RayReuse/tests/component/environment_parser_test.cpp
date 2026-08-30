@@ -532,8 +532,7 @@ class TemporaryAtiHeaderCase {
     environment << renderCase("i3_piecewise_boundaries", 100.0, 400U);
     environment.close();
 
-    const std::filesystem::path source =
-        kCasesRoot / "i3_piecewise_boundaries";
+    const std::filesystem::path source = kCasesRoot / "i3_piecewise_boundaries";
     for (const std::string extension : {".ati", ".bty"}) {
       std::ifstream input(source / ("origin" + extension));
       if (!input.is_open()) {
@@ -595,14 +594,14 @@ void testCurvilinearBoundaryHeaders(Context& context) {
       "canonical 'C' .ati/.bty headers create curvilinear geometry");
   context.check(
       curvilinearEnvironment.seaSurface().geometry().nodes().size() == 5U &&
-              curvilinearEnvironment.seabed().geometry().nodes().size() == 5U,
+          curvilinearEnvironment.seabed().geometry().nodes().size() == 5U,
       "curvilinear short format reads every boundary node");
   context.checkNear(
       curvilinearEnvironment.seabed().geometry().nodes()[1U].range, 550.0, 0.0,
       "curvilinear node ranges convert km to SI meters");
   context.check(
       curvilinearEnvironment.seaSurface().kind() == BoundaryKind::Vacuum &&
-              curvilinearEnvironment.seabed().kind() == BoundaryKind::Rigid,
+          curvilinearEnvironment.seabed().kind() == BoundaryKind::Rigid,
       "curvilinear oracle keeps vacuum top and rigid bottom");
 
   const rayreuse::BoundaryGeometry& seabed =
@@ -622,8 +621,7 @@ void testCurvilinearBoundaryHeaders(Context& context) {
       seabed.reflectionSampleAtSegment(Vec2{.range = -100.0, .depth = 111.0},
                                        0U);
   context.check(extension.curvature == 0.0 &&
-                    extension.tangent ==
-                        Vec2{.range = 1.0, .depth = 0.0},
+                    extension.tangent == Vec2{.range = 1.0, .depth = 0.0},
                 "curvilinear extension segment falls back to the flat chord");
 
   // Header accept/reject matrix, isomorphic to F2CPP readBoundaryFile.
@@ -632,14 +630,14 @@ void testCurvilinearBoundaryHeaders(Context& context) {
       EnvironmentParser::parseFile(canonical.environmentPath());
   context.check(
       parsedCanonical.simulationCase.environment()
-              .seaSurface()
-              .geometry()
-              .interpolationKind() ==
+                  .seaSurface()
+                  .geometry()
+                  .interpolationKind() ==
               rayreuse::BoundaryInterpolationKind::Curvilinear &&
           parsedCanonical.simulationCase.environment()
-              .seabed()
-              .geometry()
-              .interpolationKind() ==
+                  .seabed()
+                  .geometry()
+                  .interpolationKind() ==
               rayreuse::BoundaryInterpolationKind::PiecewiseLinear,
       "'C' top with 'LS' bottom mixes interpolation kinds per boundary");
 
@@ -669,28 +667,27 @@ void testVolumeAttenuationParsing(Context& context) {
         std::string("CVW   ")}) {
     const ParsedEnvironment parsed = parseText(
         renderVolumeAttenuationCase(options, ""), "option_padding.env");
-    context.check(parsed.simulationCase.environment().volumeAttenuation().model ==
-                      VolumeAttenuationModel::None,
-                  "three-to-six-character top options pad to no volume model");
+    context.check(
+        parsed.simulationCase.environment().volumeAttenuation().model ==
+            VolumeAttenuationModel::None,
+        "three-to-six-character top options pad to no volume model");
   }
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parseText(
-            renderVolumeAttenuationCase("CVW  X", ""),
-            "occupied_sixth_option.env"));
+        static_cast<void>(parseText(renderVolumeAttenuationCase("CVW  X", ""),
+                                    "occupied_sixth_option.env"));
       },
       "a non-blank sixth top option is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parseText(
-            renderVolumeAttenuationCase("CVW    ", ""),
-            "seven_character_option.env"));
+        static_cast<void>(parseText(renderVolumeAttenuationCase("CVW    ", ""),
+                                    "seven_character_option.env"));
       },
       "top options longer than six characters are rejected");
 
-  const ParsedEnvironment fg = parseText(
-      renderVolumeAttenuationCase("CVWF", "12.5 34.0 8.1 750.0 /\n"),
-      "francois_garrison.env");
+  const ParsedEnvironment fg =
+      parseText(renderVolumeAttenuationCase("CVWF", "12.5 34.0 8.1 750.0 /\n"),
+                "francois_garrison.env");
   const auto& fgEnvironment = fg.simulationCase.environment();
   const auto& fgParameters = std::get<rayreuse::FrancoisGarrisonParameters>(
       fgEnvironment.volumeAttenuation().parameters);
@@ -711,18 +708,16 @@ void testVolumeAttenuationParsing(Context& context) {
                   .material()
                   ->compressionalAttenuation.volumeModel ==
               VolumeAttenuationModel::FrancoisGarrison &&
-          fgEnvironment.seabed()
-                  .material()
-                  ->shearAttenuation.volumeModel ==
+          fgEnvironment.seabed().material()->shearAttenuation.volumeModel ==
               VolumeAttenuationModel::FrancoisGarrison,
       "Francois-Garrison stamps matching SSP and half-space legacy tags");
-  const ParsedEnvironment sharedFg = parseText(
-      renderCase("volume_attenuation_francois_garrison", 1000.0, 40U),
-      "shared_francois_garrison.env");
-  context.check(sharedFg.simulationCase.environment()
-                        .volumeAttenuation()
-                        .model == VolumeAttenuationModel::FrancoisGarrison,
-                "shared Francois-Garrison origin.env.in parses");
+  const ParsedEnvironment sharedFg =
+      parseText(renderCase("volume_attenuation_francois_garrison", 1000.0, 40U),
+                "shared_francois_garrison.env");
+  context.check(
+      sharedFg.simulationCase.environment().volumeAttenuation().model ==
+          VolumeAttenuationModel::FrancoisGarrison,
+      "shared Francois-Garrison origin.env.in parses");
 
   for (const auto& [parameters, label] :
        std::vector<std::pair<std::string, std::string>>{
@@ -738,77 +733,75 @@ void testVolumeAttenuationParsing(Context& context) {
            {"12 34 8 inf /\n", "non-finite mean depth"}}) {
     context.expectThrows<ValidationError>(
         [&] {
-          static_cast<void>(parseText(
-              renderVolumeAttenuationCase("CVWF", parameters),
-              "bad_francois_garrison.env"));
+          static_cast<void>(
+              parseText(renderVolumeAttenuationCase("CVWF", parameters),
+                        "bad_francois_garrison.env"));
         },
         label);
   }
 
-  const ParsedEnvironment noBiologicalLayers = parseText(
-      renderVolumeAttenuationCase("CVWB", "0 /\n"), "zero_bio.env");
-  const auto& emptyLayers = *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
-      noBiologicalLayers.simulationCase.environment()
-          .volumeAttenuation()
-          .parameters);
+  const ParsedEnvironment noBiologicalLayers =
+      parseText(renderVolumeAttenuationCase("CVWB", "0 /\n"), "zero_bio.env");
+  const auto& emptyLayers =
+      *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+          noBiologicalLayers.simulationCase.environment()
+              .volumeAttenuation()
+              .parameters);
   context.check(emptyLayers.empty(), "zero biological layers are accepted");
 
-  const ParsedEnvironment overlapping = parseText(
-      renderVolumeAttenuationCase(
-          "CVWB", "2 /\n10 30 1000 2 0.5 /\n20 40 2000 3 1.5 /\n"),
-      "overlapping_bio.env");
+  const ParsedEnvironment overlapping =
+      parseText(renderVolumeAttenuationCase(
+                    "CVWB", "2 /\n10 30 1000 2 0.5 /\n20 40 2000 3 1.5 /\n"),
+                "overlapping_bio.env");
   const auto& overlappingLayers =
       *std::get<rayreuse::SharedBiologicalAttenuationLayers>(
           overlapping.simulationCase.environment()
               .volumeAttenuation()
               .parameters);
-  context.check(
-      overlappingLayers.size() == 2U &&
-          overlappingLayers[0U].maximumDepth >
-              overlappingLayers[1U].minimumDepth &&
-          overlapping.simulationCase.environment()
-                  .soundSpeedProfile()
-                  .points()
-                  .front()
-                  .attenuation.volumeModel ==
-              VolumeAttenuationModel::Biological &&
-          overlapping.simulationCase.environment()
-                  .seabed()
-                  .material()
-                  ->compressionalAttenuation.volumeModel ==
-              VolumeAttenuationModel::Biological &&
-          overlapping.simulationCase.environment()
-                  .seabed()
-                  .material()
-                  ->shearAttenuation.volumeModel ==
-              VolumeAttenuationModel::Biological,
-      "overlapping biological layers parse and stamp legacy tags");
-  const ParsedEnvironment sharedBiological = parseText(
-      renderCase("volume_attenuation_biological", 1000.0, 40U),
-      "shared_biological.env");
-  context.check(
-      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
-          sharedBiological.simulationCase.environment()
-              .volumeAttenuation()
-              .parameters)
-              ->size() == 2U,
-      "shared biological origin.env.in parses");
+  context.check(overlappingLayers.size() == 2U &&
+                    overlappingLayers[0U].maximumDepth >
+                        overlappingLayers[1U].minimumDepth &&
+                    overlapping.simulationCase.environment()
+                            .soundSpeedProfile()
+                            .points()
+                            .front()
+                            .attenuation.volumeModel ==
+                        VolumeAttenuationModel::Biological &&
+                    overlapping.simulationCase.environment()
+                            .seabed()
+                            .material()
+                            ->compressionalAttenuation.volumeModel ==
+                        VolumeAttenuationModel::Biological &&
+                    overlapping.simulationCase.environment()
+                            .seabed()
+                            .material()
+                            ->shearAttenuation.volumeModel ==
+                        VolumeAttenuationModel::Biological,
+                "overlapping biological layers parse and stamp legacy tags");
+  const ParsedEnvironment sharedBiological =
+      parseText(renderCase("volume_attenuation_biological", 1000.0, 40U),
+                "shared_biological.env");
+  context.check(std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+                    sharedBiological.simulationCase.environment()
+                        .volumeAttenuation()
+                        .parameters)
+                        ->size() == 2U,
+                "shared biological origin.env.in parses");
 
   std::ostringstream twoHundredRecords;
   twoHundredRecords << "200 /\n";
   for (std::size_t index = 0U; index < 200U; ++index) {
     twoHundredRecords << index << ' ' << (index + 1U) << " 1000 2 0.5 /\n";
   }
-  const ParsedEnvironment maximumLayers = parseText(
-      renderVolumeAttenuationCase("CVWB", twoHundredRecords.str()),
-      "maximum_bio.env");
-  context.check(
-      std::get<rayreuse::SharedBiologicalAttenuationLayers>(
-          maximumLayers.simulationCase.environment()
-              .volumeAttenuation()
-              .parameters)
-              ->size() == 200U,
-      "the biological layer limit of 200 is accepted");
+  const ParsedEnvironment maximumLayers =
+      parseText(renderVolumeAttenuationCase("CVWB", twoHundredRecords.str()),
+                "maximum_bio.env");
+  context.check(std::get<rayreuse::SharedBiologicalAttenuationLayers>(
+                    maximumLayers.simulationCase.environment()
+                        .volumeAttenuation()
+                        .parameters)
+                        ->size() == 200U,
+                "the biological layer limit of 200 is accepted");
 
   for (const auto& [records, label] :
        std::vector<std::pair<std::string, std::string>>{
@@ -827,9 +820,9 @@ void testVolumeAttenuationParsing(Context& context) {
            {"1 /\n0 nan 1000 2 0.5 /\n", "non-finite biological layer"}}) {
     context.expectThrows<ValidationError>(
         [&] {
-          static_cast<void>(parseText(
-              renderVolumeAttenuationCase("CVWB", records),
-              "bad_biological.env"));
+          static_cast<void>(
+              parseText(renderVolumeAttenuationCase("CVWB", records),
+                        "bad_biological.env"));
         },
         label);
   }
@@ -871,8 +864,7 @@ void testPrtVolumeAttenuationMarkers(Context& context) {
     std::filesystem::remove_all(directory, error);
   };
 
-  checkMarkers("thorp", "CVWT", "",
-               {"THORP volume attenuation added\n"});
+  checkMarkers("thorp", "CVWT", "", {"THORP volume attenuation added\n"});
   checkMarkers("francois_garrison", "CVWF", "12 34 8 500 /\n",
                {"Francois-Garrison volume attenuation added\n"});
   checkMarkers("biological", "CVWB",
@@ -895,9 +887,8 @@ void testAttenuationCases(Context& context) {
               .attenuation.volumeModel == VolumeAttenuationModel::None,
       "lossless case keeps volume attenuation disabled");
   context.check(
-      thorp.simulationCase.environment()
-                  .volumeAttenuation()
-                  .model == VolumeAttenuationModel::Thorp &&
+      thorp.simulationCase.environment().volumeAttenuation().model ==
+              VolumeAttenuationModel::Thorp &&
           thorp.simulationCase.environment()
                   .soundSpeedProfile()
                   .points()
@@ -1006,8 +997,8 @@ void testRrB4ProductRunTypes(Context& context) {
 }
 
 std::string renderIrregularHatCase(const std::string& runType,
-                                  const std::string& rangeCount,
-                                  const std::string& rangeList) {
+                                   const std::string& rangeCount,
+                                   const std::string& rangeList) {
   std::string contents =
       renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U);
   replaceFirst(contents, "\n1\n50.0 /\n7\n20.0  80.0 /\n21\n0.02  0.25 /",
@@ -1023,23 +1014,20 @@ void testMultiSourceDepths(Context& context) {
   std::string explicitDepths = direct;
   replaceFirst(explicitDepths, "\n1                       ! NSD",
                "\n3                       ! NSD");
-  replaceFirst(explicitDepths, "\n500.0 /",
-                   "\n300.0  700.0  500.0 /");
+  replaceFirst(explicitDepths, "\n500.0 /", "\n300.0  700.0  500.0 /");
   const ParsedEnvironment parsedExplicit =
       parseText(explicitDepths, "multi_source_explicit.env");
   const auto& explicitSources = parsedExplicit.simulationCase.sources();
-  context.check(
-      parsedExplicit.simulationCase.sourceCount() == 3U &&
-              explicitSources.size() == 3U &&
-              parsedExplicit.simulationCase.source().depth == 300.0 &&
-              explicitSources[1U].depth == 500.0 &&
-              explicitSources[2U].depth == 700.0,
-      "three explicit source depths parse and sort ascending");
-  context.check(
-      explicitSources[0U].amplitude == 1.0 &&
-              explicitSources[1U].amplitude == 1.0 &&
-              explicitSources[2U].amplitude == 1.0,
-      "parsed sources use the F2CPP unit amplitude convention");
+  context.check(parsedExplicit.simulationCase.sourceCount() == 3U &&
+                    explicitSources.size() == 3U &&
+                    parsedExplicit.simulationCase.source().depth == 300.0 &&
+                    explicitSources[1U].depth == 500.0 &&
+                    explicitSources[2U].depth == 700.0,
+                "three explicit source depths parse and sort ascending");
+  context.check(explicitSources[0U].amplitude == 1.0 &&
+                    explicitSources[1U].amplitude == 1.0 &&
+                    explicitSources[2U].amplitude == 1.0,
+                "parsed sources use the F2CPP unit amplitude convention");
 
   std::string subtabDepths = direct;
   replaceFirst(subtabDepths, "\n1                       ! NSD",
@@ -1049,9 +1037,9 @@ void testMultiSourceDepths(Context& context) {
       parseText(subtabDepths, "multi_source_subtab.env");
   context.check(
       parsedSubtab.simulationCase.sourceCount() == 3U &&
-              parsedSubtab.simulationCase.source().depth == 300.0 &&
-              parsedSubtab.simulationCase.sources()[1U].depth == 500.0 &&
-              parsedSubtab.simulationCase.sources()[2U].depth == 700.0,
+          parsedSubtab.simulationCase.source().depth == 300.0 &&
+          parsedSubtab.simulationCase.sources()[1U].depth == 500.0 &&
+          parsedSubtab.simulationCase.sources()[2U].depth == 700.0,
       "source-depth subtabulation endpoints expand to the depth vector");
 
   context.expectThrows<ValidationError>(
@@ -1088,9 +1076,9 @@ void testMultiSourceDepths(Context& context) {
       parseText(rayDepths, "multi_source_ray.env");
   context.check(
       parsedRay.simulationCase.runMode() == SimulationRunMode::RayTrace &&
-              parsedRay.simulationCase.sourceCount() == 2U &&
-              parsedRay.simulationCase.source().depth == 30.0 &&
-              parsedRay.simulationCase.sources()[1U].depth == 70.0,
+          parsedRay.simulationCase.sourceCount() == 2U &&
+          parsedRay.simulationCase.source().depth == 30.0 &&
+          parsedRay.simulationCase.sources()[1U].depth == 70.0,
       "ray-trace run types accept a sorted two-source depth vector");
 }
 
@@ -1098,12 +1086,11 @@ void testIrregularReceiverLayouts(Context& context) {
   const ParsedEnvironment plain = parseText(
       renderCase("geometric_hat_cartesian_safe_control", 1000.0, 300U),
       "rectilinear_control.env");
-  context.check(
-      plain.simulationCase.receivers().layout() ==
-              rayreuse::ReceiverGridLayout::Rectilinear &&
-          !plain.simulationCase.receivers().isIrregular() &&
-          plain.simulationCase.receivers().receiversPerRange() == 7U,
-      "an unqualified run type keeps the rectilinear layout");
+  context.check(plain.simulationCase.receivers().layout() ==
+                        rayreuse::ReceiverGridLayout::Rectilinear &&
+                    !plain.simulationCase.receivers().isIrregular() &&
+                    plain.simulationCase.receivers().receiversPerRange() == 7U,
+                "an unqualified run type keeps the rectilinear layout");
 
   for (const auto& [runType, expectedMode] :
        std::vector<std::pair<std::string, SimulationRunMode>>{
@@ -1114,19 +1101,19 @@ void testIrregularReceiverLayouts(Context& context) {
            {"AG  I  ", SimulationRunMode::AsciiArrivals},
            {"aG  I  ", SimulationRunMode::BinaryArrivals},
            {"EB  I  ", SimulationRunMode::Eigenray}}) {
-    const ParsedEnvironment parsed = parseText(
-        renderIrregularHatCase(runType, "3", "0.02  0.10  0.25"),
-        "irregular_" + runType + ".env");
+    const ParsedEnvironment parsed =
+        parseText(renderIrregularHatCase(runType, "3", "0.02  0.10  0.25"),
+                  "irregular_" + runType + ".env");
     const auto& receivers = parsed.simulationCase.receivers();
     context.check(
         parsed.simulationCase.runMode() == expectedMode &&
-                receivers.layout() == rayreuse::ReceiverGridLayout::Irregular &&
-                receivers.isIrregular() && receivers.depthCount() == 3U &&
-                receivers.rangeCount() == 3U &&
-                receivers.receiversPerRange() == 1U &&
-                receivers.depthAt(0U, 0U) == 20.0 &&
-                receivers.depthAt(0U, 1U) == 50.0 &&
-                receivers.depthAt(0U, 2U) == 80.0,
+            receivers.layout() == rayreuse::ReceiverGridLayout::Irregular &&
+            receivers.isIrregular() && receivers.depthCount() == 3U &&
+            receivers.rangeCount() == 3U &&
+            receivers.receiversPerRange() == 1U &&
+            receivers.depthAt(0U, 0U) == 20.0 &&
+            receivers.depthAt(0U, 1U) == 50.0 &&
+            receivers.depthAt(0U, 2U) == 80.0,
         "paired irregular receivers parse for TL, arrival, and eigenray run "
         "types");
   }
@@ -1136,17 +1123,15 @@ void testIrregularReceiverLayouts(Context& context) {
   replaceFirst(cervenyIrregular,
                "\n21                      ! NRD\n400.0  600.0 /",
                "\n3                       ! NRD\n400.0  500.0  600.0 /");
-  replaceFirst(cervenyIrregular,
-               "\n51                      ! NR\n0.1  5.0 /",
+  replaceFirst(cervenyIrregular, "\n51                      ! NR\n0.1  5.0 /",
                "\n3                       ! NR\n1.0  2.0  3.0 /");
   replaceFirst(cervenyIrregular, "'CC'", "'CC  I  '");
   const ParsedEnvironment parsedCerveny =
       parseText(cervenyIrregular, "irregular_cerveny.env");
   context.check(
       parsedCerveny.simulationCase.receivers().isIrregular() &&
-              parsedCerveny.simulationCase.receivers().receiversPerRange() ==
-                  1U &&
-              parsedCerveny.simulationCase.receivers().ranges()[1U] == 2000.0,
+          parsedCerveny.simulationCase.receivers().receiversPerRange() == 1U &&
+          parsedCerveny.simulationCase.receivers().ranges()[1U] == 2000.0,
       "Cartesian Cerveny accepts an irregular grid with uniform paired ranges");
 
   context.expectThrows<ValidationError>(
@@ -1156,8 +1141,7 @@ void testIrregularReceiverLayouts(Context& context) {
             "irregular_count_mismatch.env"));
       },
       "an irregular layout with unequal depth and range counts is rejected");
-  for (const std::string& runType :
-       {"CR  I  ", "Cg  I  ", "Ag  I  "}) {
+  for (const std::string& runType : {"CR  I  ", "Cg  I  ", "Ag  I  "}) {
     context.expectThrows<ValidationError>(
         [&, runType] {
           static_cast<void>(parseText(
@@ -1168,9 +1152,9 @@ void testIrregularReceiverLayouts(Context& context) {
   }
   context.expectThrows<ValidationError>(
       [&] {
-        static_cast<void>(parseText(renderIrregularHatCase("CS  I  ", "3",
-                                                           "0.02  0.10  0.25"),
-                                    "irregular_simple_gaussian.env"));
+        static_cast<void>(parseText(
+            renderIrregularHatCase("CS  I  ", "3", "0.02  0.10  0.25"),
+            "irregular_simple_gaussian.env"));
       },
       "Simple Gaussian beams reject the irregular layout");
   context.expectThrows<ValidationError>(
@@ -1188,9 +1172,8 @@ void testSourceGeometry(Context& context) {
   std::string line = point;
   replaceFirst(line, "'CC'", "'CC X'");
   const ParsedEnvironment parsed = parseText(line, "line_source.env");
-  context.check(
-      parsed.simulationCase.sourceGeometry() == SourceGeometry::Line,
-      "run-type fourth character X selects a line source");
+  context.check(parsed.simulationCase.sourceGeometry() == SourceGeometry::Line,
+                "run-type fourth character X selects a line source");
 
   std::string explicitPoint = point;
   replaceFirst(explicitPoint, "'CC'", "'CC R'");
@@ -1212,7 +1195,8 @@ void testSourceGeometry(Context& context) {
   const ParsedEnvironment semiParsed = parseText(semiLine, "semi_line.env");
   context.check(
       semiParsed.simulationCase.sourceGeometry() == SourceGeometry::Line &&
-          semiParsed.simulationCase.runMode() == SimulationRunMode::SemiCoherent,
+          semiParsed.simulationCase.runMode() ==
+              SimulationRunMode::SemiCoherent,
       "semi-coherent mode composes with explicit line-source character");
 
   std::string hatLine =
@@ -1228,7 +1212,8 @@ void testSourceGeometry(Context& context) {
       [&point] {
         std::string simpleGaussianLine = point;
         replaceFirst(simpleGaussianLine, "'CC'", "'CS X'");
-        static_cast<void>(parseText(simpleGaussianLine, "simple_gaussian_line.env"));
+        static_cast<void>(
+            parseText(simpleGaussianLine, "simple_gaussian_line.env"));
       },
       "simple Gaussian rejects line sources");
 }
@@ -1281,8 +1266,9 @@ void testUnsupportedAndMalformedInput(Context& context) {
   replaceFirst(n2Contents, "'CVW'", "'NVW'");
   const ParsedEnvironment n2Parsed = parseText(n2Contents, "n2_ssp.env");
   context.check(
-      n2Parsed.simulationCase.environment().soundSpeedProfile()
-          .interpolationKind() == rayreuse::SspInterpolationKind::N2Linear,
+      n2Parsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::N2Linear,
       "N2-linear SSP interpolation is preserved by the real parser");
   std::string incoherentContents = direct;
   replaceFirst(incoherentContents, "'CC'", "'IC'");
@@ -1457,8 +1443,9 @@ void testSspInterpolationKinds(Context& context) {
   const ParsedEnvironment pchipParsed =
       parseText(munkContents, "munk_pchip.env");
   context.check(
-      pchipParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
-          rayreuse::SspInterpolationKind::Pchip,
+      pchipParsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::Pchip,
       "top option 'P' parses as PCHIP SSP interpolation");
 
   std::string cLinearContents = munkContents;
@@ -1466,26 +1453,29 @@ void testSspInterpolationKinds(Context& context) {
   const ParsedEnvironment cParsed =
       parseText(cLinearContents, "munk_clinear.env");
   context.check(
-      cParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
-          rayreuse::SspInterpolationKind::CLinear,
+      cParsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::CLinear,
       "top option 'C' parses as C-linear SSP interpolation");
 
   std::string n2Contents = munkContents;
   replaceFirst(n2Contents, "'PVW'", "'NVW'");
   const ParsedEnvironment nParsed = parseText(n2Contents, "munk_n2.env");
   context.check(
-      nParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
-          rayreuse::SspInterpolationKind::N2Linear,
+      nParsed.simulationCase.environment()
+              .soundSpeedProfile()
+              .interpolationKind() == rayreuse::SspInterpolationKind::N2Linear,
       "top option 'N' parses as N2-linear SSP interpolation");
 
   std::string splineContents = munkContents;
   replaceFirst(splineContents, "'PVW'", "'SVW'");
   const ParsedEnvironment splineParsed =
       parseText(splineContents, "munk_spline.env");
-  context.check(
-      splineParsed.simulationCase.environment().soundSpeedProfile().interpolationKind() ==
-          rayreuse::SspInterpolationKind::CubicSpline,
-      "top option 'S' parses as cubic-spline SSP interpolation");
+  context.check(splineParsed.simulationCase.environment()
+                        .soundSpeedProfile()
+                        .interpolationKind() ==
+                    rayreuse::SspInterpolationKind::CubicSpline,
+                "top option 'S' parses as cubic-spline SSP interpolation");
 
   context.expectThrows<ValidationError>(
       [&] {
@@ -1504,11 +1494,13 @@ void testSspInterpolationKinds(Context& context) {
       "unknown SSP interpolation option is rejected");
 
   const rayreuse::SoundSpeedProfile programmatic(
-      {rayreuse::SoundSpeedPoint{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
-       rayreuse::SoundSpeedPoint{.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}});
-  context.check(
-      programmatic.interpolationKind() == rayreuse::SspInterpolationKind::CLinear,
-      "programmatic construction defaults to C-linear");
+      {rayreuse::SoundSpeedPoint{
+           .depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+       rayreuse::SoundSpeedPoint{
+           .depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}});
+  context.check(programmatic.interpolationKind() ==
+                    rayreuse::SspInterpolationKind::CLinear,
+                "programmatic construction defaults to C-linear");
 }
 
 int main() {

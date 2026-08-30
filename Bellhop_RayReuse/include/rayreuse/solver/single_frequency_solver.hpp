@@ -10,9 +10,10 @@
 
 namespace rayreuse {
 
-[[nodiscard]] double semiCoherentLloydMirrorFactor(
-    double frequency, double sourceSoundSpeed, double sourceDepth,
-    double launchAngleRadians);
+[[nodiscard]] double semiCoherentLloydMirrorFactor(double frequency,
+                                                   double sourceSoundSpeed,
+                                                   double sourceDepth,
+                                                   double launchAngleRadians);
 
 [[nodiscard]] double semiCoherentProjectedSourceAmplitude(
     double baseAmplitude, double frequency, double sourceSoundSpeed,

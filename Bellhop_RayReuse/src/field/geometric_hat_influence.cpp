@@ -182,18 +182,16 @@ struct RayCenteredEvaluation {
 };
 
 template <typename Consumer>
-void forEachRayCenteredEvaluation(const ReceiverGrid& receivers,
-                                  double receiverRangeDelta,
-                                  const RayPath& path,
-                                  const RayFrequencyState& state,
-                                  double launchSpacing,
-                                  SourceGeometry sourceGeometry,
-                                  Consumer&& consumer) {
+void forEachRayCenteredEvaluation(
+    const ReceiverGrid& receivers, double receiverRangeDelta,
+    const RayPath& path, const RayFrequencyState& state, double launchSpacing,
+    SourceGeometry sourceGeometry, Consumer&& consumer) {
   const std::size_t pointCount = activeCount(state);
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = sourceGeometry == SourceGeometry::Line
-                                 ? 1.0
-                                 : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double sourceRatio =
+      sourceGeometry == SourceGeometry::Line
+          ? 1.0
+          : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
 
@@ -266,8 +264,8 @@ void forEachRayCenteredEvaluation(const ReceiverGrid& receivers,
             (receivers.ranges()[rangeIndex] - previousProjectedRange) /
             (projectedRange - previousProjectedRange);
         const double interpolatedNormal = std::abs(
-            previousNormalOffset + interpolationWeight *
-                                       (normalOffset - previousNormalOffset));
+            previousNormalOffset +
+            interpolationWeight * (normalOffset - previousNormalOffset));
         const double q =
             leftQ + interpolationWeight *
                         (path.points[rightIndex].dynamicQ[0U] - leftQ);
@@ -283,8 +281,7 @@ void forEachRayCenteredEvaluation(const ReceiverGrid& receivers,
                  state.points[rightIndex - 1U].complexTravelTime);
         const double amplitudeConstant =
             scaledAmplitudes[rightIndex] / std::sqrt(std::abs(q));
-        const double hatWeight =
-            (beamRadius - interpolatedNormal) / beamRadius;
+        const double hatWeight = (beamRadius - interpolatedNormal) / beamRadius;
         double phaseAtReceiver =
             state.points[rightIndex - 1U].reflectionPhase + phase;
         if (crosses(previousQ, q)) {
@@ -338,8 +335,7 @@ struct PrefixBounceCounts {
 PrefixBounceCounts prefixBounceCounts(const RayPath& path,
                                       std::size_t pointCount) {
   PrefixBounceCounts result{.top = std::vector<std::int32_t>(pointCount, 0),
-                            .bottom =
-                                std::vector<std::int32_t>(pointCount, 0)};
+                            .bottom = std::vector<std::int32_t>(pointCount, 0)};
   for (const auto& event : path.events) {
     const std::size_t reflected = event.reflectedRayPointIndex;
     if (reflected != event.rayPointIndex + 1U ||
@@ -427,9 +423,10 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateField(
   const std::size_t pointCount = activeCount(state);
   const double angularFrequency = 2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = sourceGeometry_ == SourceGeometry::Line
-                                 ? 1.0
-                                 : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double sourceRatio =
+      sourceGeometry_ == SourceGeometry::Line
+          ? 1.0
+          : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
 
@@ -479,9 +476,9 @@ std::optional<GeometricHatDiagnostic> GeometricHatInfluence::accumulateField(
         // with Pos%Rz(ir); rectilinear grids keep the shared depth rows.
         for (std::size_t depthIndex = 0U;
              depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
-          const Vec2 receiver{.range = receiverRange,
-                              .depth = receivers_.depthAt(depthIndex,
-                                                          receiverIndex)};
+          const Vec2 receiver{
+              .range = receiverRange,
+              .depth = receivers_.depthAt(depthIndex, receiverIndex)};
           const Vec2 offset = receiver - path.points[leftIndex].position;
           const double interpolationWeight =
               fortranDotProduct2D(offset, tangent) / segmentLength;
@@ -612,9 +609,10 @@ GeometricHatInfluence::accumulateRayCenteredField(
   const std::size_t pointCount = activeCount(state);
   const double angularFrequency = 2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
-  const double sourceRatio = sourceGeometry_ == SourceGeometry::Line
-                                 ? 1.0
-                                 : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const double sourceRatio =
+      sourceGeometry_ == SourceGeometry::Line
+          ? 1.0
+          : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
 
@@ -801,8 +799,7 @@ void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,
   if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
     forEachRayCenteredEvaluation(
         receivers_, receiverRangeDelta_, path, state, launchSpacing,
-        sourceGeometry_,
-        [&](const RayCenteredEvaluation& evaluation) {
+        sourceGeometry_, [&](const RayCenteredEvaluation& evaluation) {
           requireFinite(evaluation.q, "geometric hat interpolated q");
           requireFinite(evaluation.hatWeight, "geometric hat weight");
           requireFinite(evaluation.amplitudeConstant,
@@ -923,8 +920,7 @@ void GeometricHatInfluence::collectEigenrayHits(const EigenrayHitSink& sink,
   if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
     forEachRayCenteredEvaluation(
         receivers_, receiverRangeDelta_, path, state, launchSpacing,
-        sourceGeometry_,
-        [&](const RayCenteredEvaluation& evaluation) {
+        sourceGeometry_, [&](const RayCenteredEvaluation& evaluation) {
           if (!state.points[evaluation.rightIndex].active) {
             return;
           }

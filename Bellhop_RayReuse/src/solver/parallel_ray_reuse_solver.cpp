@@ -71,10 +71,10 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
 }
 
 [[nodiscard]] std::size_t workspaceBytes(const SimulationCase& simulation) {
-  const std::size_t cellCount = checkedMultiply(
-      simulation.receivers().receiversPerRange(),
-      simulation.receivers().rangeCount(),
-      "frequency workspace cell count overflows size_t");
+  const std::size_t cellCount =
+      checkedMultiply(simulation.receivers().receiversPerRange(),
+                      simulation.receivers().rangeCount(),
+                      "frequency workspace cell count overflows size_t");
   const std::size_t bytesPerCell =
       fieldAccumulationKind(simulation.runMode()) ==
               FieldAccumulationKind::Intensity
@@ -193,10 +193,9 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
   statistics.activeFrequencyLimit = activeFrequencyLimit;
   statistics.outputQueueCapacity = effectiveQueueCapacity;
   statistics.estimatedWorkspaceBytes = frequencyWorkspaceBytes;
-  statistics.estimatedPeakMemoryBytes =
-      estimatedPeakBytes(totalCacheBytes, frequencyWorkspaceBytes,
-                         frequencyCount, activeFrequencyLimit,
-                         effectiveQueueCapacity);
+  statistics.estimatedPeakMemoryBytes = estimatedPeakBytes(
+      totalCacheBytes, frequencyWorkspaceBytes, frequencyCount,
+      activeFrequencyLimit, effectiveQueueCapacity);
   statistics.memoryBudgetBytes = settings.memoryBudgetBytes;
   statistics.phaseTotals.traceSeconds = traceSeconds;
   statistics.frequencyTimings.resize(frequencyCount);
@@ -239,8 +238,7 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
              ++sourceIndex) {
           SingleFrequencyResult sourceResult =
               SingleFrequencySolver::solveFrequencyFromSourceCache(
-                  simulation,
-                  simulation.frequencies().values()[frequencyIndex],
+                  simulation, simulation.frequencies().values()[frequencyIndex],
                   sourceTraces[sourceIndex].cache, sourceIndex,
                   epsilonMultiplier, loopRange, influenceSettings);
           accumulateProjectionTimings(frequencyTimings, sourceResult.timings);
@@ -256,10 +254,10 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
           if (state.stopping) {
             break;
           }
-          state.completed.push_back(CompletedFrequency{
-              .index = frequencyIndex,
-              .workspaces = std::move(sourceWorkspaces),
-              .timings = frequencyTimings});
+          state.completed.push_back(
+              CompletedFrequency{.index = frequencyIndex,
+                                 .workspaces = std::move(sourceWorkspaces),
+                                 .timings = frequencyTimings});
           state.peakQueuedResults =
               std::max(state.peakQueuedResults, state.completed.size());
         }

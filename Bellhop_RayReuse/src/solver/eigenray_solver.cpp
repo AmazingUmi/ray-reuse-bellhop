@@ -74,9 +74,8 @@ EigenrayTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
        ++sourceIndex) {
     RayPathCache cache = traceSourceCache(simulation, sourceIndex);
     for (const RayPath& path : cache.paths()) {
-      batch.totalRayPointCount =
-          checkedAdd(batch.totalRayPointCount, path.points.size(),
-                     "eigenray point count");
+      batch.totalRayPointCount = checkedAdd(
+          batch.totalRayPointCount, path.points.size(), "eigenray point count");
     }
     batch.peakRayCacheBytes =
         std::max(batch.peakRayCacheBytes, cache.memoryFootprintBytes());
@@ -89,8 +88,7 @@ EigenrayTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
 EigenraySourceHits collectHits(const SimulationCase& simulation,
                                const RayPathCache& cache,
                                std::size_t frequencyIndex,
-                               std::size_t sourceIndex,
-                               BeamFamily beamFamily) {
+                               std::size_t sourceIndex, BeamFamily beamFamily) {
   EigenraySourceHits hits;
   const Source& source = simulation.sources().at(sourceIndex);
   const FrequencyProjector projector(simulation.environment());
@@ -287,9 +285,9 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
       stats.peakRayCacheBytes =
           std::max(stats.peakRayCacheBytes, cache.memoryFootprintBytes());
     }
-    stats.totalRayPointCount = checkedAdd(
-        stats.totalRayPointCount, batch.totalRayPointCount,
-        "eigenray point count");
+    stats.totalRayPointCount =
+        checkedAdd(stats.totalRayPointCount, batch.totalRayPointCount,
+                   "eigenray point count");
     stats.traceSeconds += batch.traceSeconds;
     const std::vector<EigenraySourceHits> sourceHits =
         collectAllSourceHits(simulation, caches, fi, beamFamily);
@@ -361,7 +359,8 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
         while (true) {
           const std::size_t fi = next.fetch_add(1U);
           if (fi >= count) break;
-          results[fi] = collectAllSourceHits(simulation, caches, fi, beamFamily);
+          results[fi] =
+              collectAllSourceHits(simulation, caches, fi, beamFamily);
         }
       } catch (...) {
         const std::lock_guard lock(errorMutex);

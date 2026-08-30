@@ -47,8 +47,7 @@ class SimpleGaussianInfluence {
 
   [[nodiscard]] std::optional<SimpleGaussianDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
       std::optional<SimpleGaussianDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 

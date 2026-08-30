@@ -42,19 +42,16 @@ struct RayStepResult {
 // and the returned quadrature weights describe the resulting blended update.
 //
 // This layer contains no reflection, absorption, or complex-time behavior.
-[[nodiscard]] RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
-                                    const RayState& initialState,
-                                    std::size_t initialSegmentIndex,
-                                    std::size_t initialRangeSegmentIndex,
-                                    double nominalStepLength,
-                                    const StepLimiter& limiter = {});
+[[nodiscard]] RayStepResult stepRay(
+    const GeometrySspEvaluator& soundSpeedProfile, const RayState& initialState,
+    std::size_t initialSegmentIndex, std::size_t initialRangeSegmentIndex,
+    double nominalStepLength, const StepLimiter& limiter = {});
 
 // Range-independent compatibility overload. Its range hint is always zero.
-[[nodiscard]] RayStepResult stepRay(const GeometrySspEvaluator& soundSpeedProfile,
-                                    const RayState& initialState,
-                                    std::size_t initialSegmentIndex,
-                                    double nominalStepLength,
-                                    const StepLimiter& limiter = {});
+[[nodiscard]] RayStepResult stepRay(
+    const GeometrySspEvaluator& soundSpeedProfile, const RayState& initialState,
+    std::size_t initialSegmentIndex, double nominalStepLength,
+    const StepLimiter& limiter = {});
 
 [[nodiscard]] RayStepResult stepRay(const CLinearSsp& soundSpeedProfile,
                                     const RayState& initialState,

@@ -24,16 +24,16 @@
 namespace {
 
 using rayreuse::AcousticMaterial;
-using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::AttenuationUnit;
+using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::BoundaryKind;
 using rayreuse::BoundaryModel;
 using rayreuse::CLinearFrequencySsp;
-using rayreuse::CubicSplineFrequencySsp;
 using rayreuse::convertAttenuation;
+using rayreuse::CubicSplineFrequencySsp;
 using rayreuse::Environment;
-using rayreuse::FrequencyProjector;
 using rayreuse::FrancoisGarrisonParameters;
+using rayreuse::FrequencyProjector;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::GeometryTracer;
 using rayreuse::IntegratorSettings;
@@ -493,12 +493,12 @@ void testProjectionDoesNotMutateGeometry(Context& context) {
 
 void testEnvironmentVolumeAttenuationProjection(Context& context) {
   const auto layers = std::make_shared<const BiologicalAttenuationLayers>(
-      BiologicalAttenuationLayers{{
-          .minimumDepth = 0.0,
-          .maximumDepth = 100.0,
-          .resonanceFrequency = 1000.0,
-          .qualityFactor = 2.0,
-          .attenuationCoefficientDecibelsPerKilometer = 100.0}});
+      BiologicalAttenuationLayers{
+          {.minimumDepth = 0.0,
+           .maximumDepth = 100.0,
+           .resonanceFrequency = 1000.0,
+           .qualityFactor = 2.0,
+           .attenuationCoefficientDecibelsPerKilometer = 100.0}});
   const VolumeAttenuation biological{
       .model = VolumeAttenuationModel::Biological, .parameters = layers};
   const VolumeAttenuation fg{
@@ -516,8 +516,8 @@ void testEnvironmentVolumeAttenuationProjection(Context& context) {
   const BoundaryModel bottom = BoundaryModel::acousticHalfSpace(100.0, fluid);
   const Environment losslessEnvironment(profile, BoundaryModel::vacuum(0.0),
                                         bottom);
-  const Environment biologicalEnvironment(
-      profile, BoundaryModel::vacuum(0.0), bottom, biological);
+  const Environment biologicalEnvironment(profile, BoundaryModel::vacuum(0.0),
+                                          bottom, biological);
   const Environment fgEnvironment(profile, BoundaryModel::vacuum(0.0), bottom,
                                   fg);
 
@@ -528,11 +528,10 @@ void testEnvironmentVolumeAttenuationProjection(Context& context) {
   const ReflectionEvent event = makeReflectionEvent(
       1U, ReflectionBoundary::Seabed, reflection, tangent, normal);
   RayPath path;
-  path.points = {makeRayState(start, {.range = 1.0 / kSoundSpeed, .depth = 0.0}),
-                 makeRayState(reflection, event.incidentSlowness,
-                              100.0 / kSoundSpeed),
-                 makeRayState(reflection, event.reflectedSlowness,
-                              100.0 / kSoundSpeed)};
+  path.points = {
+      makeRayState(start, {.range = 1.0 / kSoundSpeed, .depth = 0.0}),
+      makeRayState(reflection, event.incidentSlowness, 100.0 / kSoundSpeed),
+      makeRayState(reflection, event.reflectedSlowness, 100.0 / kSoundSpeed)};
   path.steps = {StepQuadrature{.stepLength = 100.0,
                                .startWeight = 0.0,
                                .midpointWeight = 100.0,
@@ -545,13 +544,14 @@ void testEnvironmentVolumeAttenuationProjection(Context& context) {
   const auto biologicalLow = biologicalProjector.project(path, 500.0, 1.0);
   const auto biologicalHigh = biologicalProjector.project(path, 2000.0, 1.0);
   const auto biologicalRepeated = biologicalProjector.project(path, 500.0, 1.0);
-  const auto fgState = FrequencyProjector(fgEnvironment).project(path, 500.0, 1.0);
+  const auto fgState =
+      FrequencyProjector(fgEnvironment).project(path, 500.0, 1.0);
   context.check(biologicalLow.points.back().complexTravelTime.imag() < 0.0 &&
                     fgState.points.back().complexTravelTime.imag() < 0.0,
                 "projector applies biological and FG water-column loss");
-  context.check(biologicalLow.points.back().amplitude !=
-                    lossless.points.back().amplitude,
-                "ordinary boundary reflection includes environment volume loss");
+  context.check(
+      biologicalLow.points.back().amplitude != lossless.points.back().amplitude,
+      "ordinary boundary reflection includes environment volume loss");
   context.check(biologicalHigh.points.back().complexTravelTime !=
                     biologicalLow.points.back().complexTravelTime,
                 "volume attenuation remains frequency local");
@@ -564,14 +564,15 @@ void testEnvironmentVolumeAttenuationProjection(Context& context) {
                 "500-2000-500 projection is deterministic");
 
   RayPath longPath = path;
-  longPath.events.front().longMaterialOverride = rayreuse::FrozenBoundaryMaterial{
-      .material = fluid,
-      .attenuationEvaluationDepth =
-          rayreuse::kLegacyLongBoundaryAttenuationDepth};
+  longPath.events.front().longMaterialOverride =
+      rayreuse::FrozenBoundaryMaterial{
+          .material = fluid,
+          .attenuationEvaluationDepth =
+              rayreuse::kLegacyLongBoundaryAttenuationDepth};
   const auto longState = biologicalProjector.project(longPath, 500.0, 1.0);
-  context.checkNear(longState.points.back().amplitude,
-                    lossless.points.back().amplitude, 0.0,
-                    "long material legacy depth excludes biological boundary loss");
+  context.checkNear(
+      longState.points.back().amplitude, lossless.points.back().amplitude, 0.0,
+      "long material legacy depth excludes biological boundary loss");
 
   const AcousticMaterial elastic{.compressionalSoundSpeed = 2000.0,
                                  .shearSoundSpeed = 1000.0,
@@ -591,11 +592,14 @@ void testEnvironmentVolumeAttenuationProjection(Context& context) {
                 "elastic reflection applies volume loss to material modes");
 
   const BoundaryModel grain = BoundaryModel::grainSizeHalfSpace(100.0, 3.0);
-  const auto grainLossless = FrequencyProjector(Environment(
-      profile, BoundaryModel::vacuum(0.0), grain)).project(path, 500.0, 1.0);
-  const auto grainBiological = FrequencyProjector(Environment(
-      profile, BoundaryModel::vacuum(0.0), grain, biological))
-                                  .project(path, 500.0, 1.0);
+  const auto grainLossless =
+      FrequencyProjector(
+          Environment(profile, BoundaryModel::vacuum(0.0), grain))
+          .project(path, 500.0, 1.0);
+  const auto grainBiological =
+      FrequencyProjector(
+          Environment(profile, BoundaryModel::vacuum(0.0), grain, biological))
+          .project(path, 500.0, 1.0);
   context.check(grainBiological.points.back().amplitude ==
                         grainLossless.points.back().amplitude &&
                     grainBiological.points.back().reflectionPhase ==
@@ -631,45 +635,40 @@ void testPchipFrequencyProjection(Context& context) {
       {{.depth = 0.0,
         .soundSpeed = 1500.0,
         .density = 1000.0,
-        .attenuation =
-            {.value = 0.1,
-             .unit = AttenuationUnit::DecibelsPerWavelength}},
+        .attenuation = {.value = 0.1,
+                        .unit = AttenuationUnit::DecibelsPerWavelength}},
        {.depth = 500.0,
         .soundSpeed = 1480.0,
         .density = 1100.0,
-        .attenuation =
-            {.value = 0.4,
-             .unit = AttenuationUnit::DecibelsPerWavelength}},
+        .attenuation = {.value = 0.4,
+                        .unit = AttenuationUnit::DecibelsPerWavelength}},
        {.depth = 1000.0,
         .soundSpeed = 1520.0,
         .density = 1200.0,
-        .attenuation =
-            {.value = 0.2,
-             .unit = AttenuationUnit::DecibelsPerWavelength}}},
+        .attenuation = {.value = 0.2,
+                        .unit = AttenuationUnit::DecibelsPerWavelength}}},
       rayreuse::SspInterpolationKind::Pchip);
   const Environment environment(profile, BoundaryModel::vacuum(0.0),
                                 BoundaryModel::rigid(1000.0));
   const FrequencyProjector projector(environment);
 
   RayPath path;
-  path.points = {
-      RayState{.position = {.range = 0.0, .depth = 250.0},
-               .slowness = {.range = 1.0 / 1483.75, .depth = 0.0},
-               .dynamicP = {1.0, 0.0},
-               .dynamicQ = {0.0, 1.0},
-               .soundSpeed = 1483.75,
-               .realTravelTime = 0.0},
-      RayState{.position = {.range = 100.0, .depth = 750.0},
-               .slowness = {.range = 1.0 / 1483.75, .depth = 0.0},
-               .dynamicP = {1.0, 0.0},
-               .dynamicQ = {0.0, 1.0},
-               .soundSpeed = 1483.75,
-               .realTravelTime = 100.0 / 1483.75}};
-  path.steps = {StepQuadrature{
-      .stepLength = 100.0,
-      .startWeight = 50.0,
-      .midpointWeight = 50.0,
-      .midpoint = {.range = 50.0, .depth = 500.0}}};
+  path.points = {RayState{.position = {.range = 0.0, .depth = 250.0},
+                          .slowness = {.range = 1.0 / 1483.75, .depth = 0.0},
+                          .dynamicP = {1.0, 0.0},
+                          .dynamicQ = {0.0, 1.0},
+                          .soundSpeed = 1483.75,
+                          .realTravelTime = 0.0},
+                 RayState{.position = {.range = 100.0, .depth = 750.0},
+                          .slowness = {.range = 1.0 / 1483.75, .depth = 0.0},
+                          .dynamicP = {1.0, 0.0},
+                          .dynamicQ = {0.0, 1.0},
+                          .soundSpeed = 1483.75,
+                          .realTravelTime = 100.0 / 1483.75}};
+  path.steps = {StepQuadrature{.stepLength = 100.0,
+                               .startWeight = 50.0,
+                               .midpointWeight = 50.0,
+                               .midpoint = {.range = 50.0, .depth = 500.0}}};
 
   const RayPath pathCopy = path;
   const RayFrequencyState state50 = projector.project(path, 50.0, 1.0);
@@ -679,29 +678,30 @@ void testPchipFrequencyProjection(Context& context) {
                 "PCHIP projection preserves ray point count");
   context.check(state50.frequency == 50.0 && state250.frequency == 250.0,
                 "projected states retain distinct frequencies");
-  context.check(state50.points.back().complexTravelTime.imag() < 0.0,
-                "attenuating PCHIP projection produces negative imaginary travel time");
-  context.check(state50.points.back().complexTravelTime !=
-                    state250.points.back().complexTravelTime,
-                "different frequencies produce different complex acoustic states");
+  context.check(
+      state50.points.back().complexTravelTime.imag() < 0.0,
+      "attenuating PCHIP projection produces negative imaginary travel time");
+  context.check(
+      state50.points.back().complexTravelTime !=
+          state250.points.back().complexTravelTime,
+      "different frequencies produce different complex acoustic states");
 }
 
 Environment makeN2AttenuatedEnvironment() {
   return Environment(
-      SoundSpeedProfile(
-          {{.depth = 0.0,
-            .soundSpeed = 1500.0,
-            .density = 1000.0,
-            .attenuation = thorpAttenuation()},
-           {.depth = 500.0,
-            .soundSpeed = 1480.0,
-            .density = 1100.0,
-            .attenuation = thorpAttenuation()},
-           {.depth = 1000.0,
-            .soundSpeed = 1520.0,
-            .density = 1200.0,
-            .attenuation = thorpAttenuation()}},
-          rayreuse::SspInterpolationKind::N2Linear),
+      SoundSpeedProfile({{.depth = 0.0,
+                          .soundSpeed = 1500.0,
+                          .density = 1000.0,
+                          .attenuation = thorpAttenuation()},
+                         {.depth = 500.0,
+                          .soundSpeed = 1480.0,
+                          .density = 1100.0,
+                          .attenuation = thorpAttenuation()},
+                         {.depth = 1000.0,
+                          .soundSpeed = 1520.0,
+                          .density = 1200.0,
+                          .attenuation = thorpAttenuation()}},
+                        rayreuse::SspInterpolationKind::N2Linear),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
 }
 
@@ -712,11 +712,10 @@ Environment makeN2AttenuatedEnvironment() {
 void testN2FrequencyProjection(Context& context) {
   const Environment environment = makeN2AttenuatedEnvironment();
   const RayPath path =
-      GeometryTracer(environment,
-                     IntegratorSettings{.stepLength = 100.0,
-                                        .rangeLimit = 5000.0,
-                                        .depthLimit = 3000.0,
-                                        .maximumRayPoints = 40U})
+      GeometryTracer(environment, IntegratorSettings{.stepLength = 100.0,
+                                                     .rangeLimit = 5000.0,
+                                                     .depthLimit = 3000.0,
+                                                     .maximumRayPoints = 40U})
           .trace(Source{.depth = 250.0}, 20.0 * std::numbers::pi / 180.0);
   context.check(path.points.size() >= 10U,
                 "N2 attenuated projection uses a nontrivial frozen path");
@@ -744,10 +743,9 @@ void testN2FrequencyProjection(Context& context) {
       std::abs(state250.points.back().complexTravelTime.imag() -
                state50.points.back().complexTravelTime.imag()) > 1.0e-9,
       "Thorp volume attenuation separates the two N2 frequency states");
-  context.check(
-      repeat50.points.back().complexTravelTime ==
-          state50.points.back().complexTravelTime,
-      "repeating an N2 projection at one frequency is bit-stable");
+  context.check(repeat50.points.back().complexTravelTime ==
+                    state50.points.back().complexTravelTime,
+                "repeating an N2 projection at one frequency is bit-stable");
 
   state50.points.front().amplitude = 0.25;
   context.checkNear(state250.points.front().amplitude, 1.0, 0.0,
@@ -811,11 +809,10 @@ void testN2LosslessProjectionReusesFrozenTravelTime(Context& context) {
           rayreuse::SspInterpolationKind::N2Linear),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
   const RayPath path =
-      GeometryTracer(environment,
-                     IntegratorSettings{.stepLength = 100.0,
-                                        .rangeLimit = 5000.0,
-                                        .depthLimit = 3000.0,
-                                        .maximumRayPoints = 40U})
+      GeometryTracer(environment, IntegratorSettings{.stepLength = 100.0,
+                                                     .rangeLimit = 5000.0,
+                                                     .depthLimit = 3000.0,
+                                                     .maximumRayPoints = 40U})
           .trace(Source{.depth = 250.0}, 20.0 * std::numbers::pi / 180.0);
 
   const RayFrequencyState state =
@@ -843,27 +840,25 @@ void testSplineFrozenPathProjection(Context& context) {
                           .volumeModel = VolumeAttenuationModel::Thorp};
   };
   const Environment environment(
-      SoundSpeedProfile(
-          {{.depth = 0.0,
-            .soundSpeed = 1500.0,
-            .density = 1000.0,
-            .attenuation = thorp()},
-           {.depth = 500.0,
-            .soundSpeed = 1480.0,
-            .density = 1100.0,
-            .attenuation = thorp()},
-           {.depth = 1000.0,
-            .soundSpeed = 1520.0,
-            .density = 1200.0,
-            .attenuation = thorp()}},
-          rayreuse::SspInterpolationKind::CubicSpline),
+      SoundSpeedProfile({{.depth = 0.0,
+                          .soundSpeed = 1500.0,
+                          .density = 1000.0,
+                          .attenuation = thorp()},
+                         {.depth = 500.0,
+                          .soundSpeed = 1480.0,
+                          .density = 1100.0,
+                          .attenuation = thorp()},
+                         {.depth = 1000.0,
+                          .soundSpeed = 1520.0,
+                          .density = 1200.0,
+                          .attenuation = thorp()}},
+                        rayreuse::SspInterpolationKind::CubicSpline),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
   const RayPath path =
-      GeometryTracer(environment,
-                     IntegratorSettings{.stepLength = 100.0,
-                                        .rangeLimit = 5000.0,
-                                        .depthLimit = 3000.0,
-                                        .maximumRayPoints = 40U})
+      GeometryTracer(environment, IntegratorSettings{.stepLength = 100.0,
+                                                     .rangeLimit = 5000.0,
+                                                     .depthLimit = 3000.0,
+                                                     .maximumRayPoints = 40U})
           .trace(Source{.depth = 250.0}, 20.0 * std::numbers::pi / 180.0);
   context.check(path.points.size() >= 10U,
                 "spline frozen projection uses a nontrivial traced path");
@@ -891,10 +886,9 @@ void testSplineFrozenPathProjection(Context& context) {
       std::abs(state250.points.back().complexTravelTime.imag() -
                state50.points.back().complexTravelTime.imag()) > 1.0e-9,
       "Thorp volume attenuation separates the two spline frequency states");
-  context.check(
-      repeat50.points.back().complexTravelTime ==
-          state50.points.back().complexTravelTime,
-      "repeating a spline projection at one frequency is bit-stable");
+  context.check(repeat50.points.back().complexTravelTime ==
+                    state50.points.back().complexTravelTime,
+                "repeating a spline projection at one frequency is bit-stable");
 
   state50.points.front().amplitude = 0.25;
   context.checkNear(state250.points.front().amplitude, 1.0, 0.0,
@@ -957,30 +951,28 @@ void testSplineFrozenPathProjection(Context& context) {
 // states independent, and repeat bit-stably.
 void testQuadrilateralFrozenPathProjection(Context& context) {
   const Environment environment(
-      SoundSpeedProfile(
-          {{.depth = 0.0,
-            .soundSpeed = 1500.0,
-            .density = 1000.0,
-            .attenuation = thorpAttenuation()},
-           {.depth = 100.0,
-            .soundSpeed = 1500.0,
-            .density = 1100.0,
-            .attenuation = thorpAttenuation()}},
-          rayreuse::SspInterpolationKind::Quadrilateral,
-          std::make_shared<const rayreuse::QuadrilateralSspGrid>(
-              rayreuse::QuadrilateralSspGrid{
-                  .rangesMeters = {0.0, 350.0, 800.0},
-                  .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                                       1500.0, 1520.0, 1540.0},
-                  .depthCount = 2U,
-                  .rangeCount = 3U})),
+      SoundSpeedProfile({{.depth = 0.0,
+                          .soundSpeed = 1500.0,
+                          .density = 1000.0,
+                          .attenuation = thorpAttenuation()},
+                         {.depth = 100.0,
+                          .soundSpeed = 1500.0,
+                          .density = 1100.0,
+                          .attenuation = thorpAttenuation()}},
+                        rayreuse::SspInterpolationKind::Quadrilateral,
+                        std::make_shared<const rayreuse::QuadrilateralSspGrid>(
+                            rayreuse::QuadrilateralSspGrid{
+                                .rangesMeters = {0.0, 350.0, 800.0},
+                                .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
+                                                     1500.0, 1520.0, 1540.0},
+                                .depthCount = 2U,
+                                .rangeCount = 3U})),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
   const RayPath path =
-      GeometryTracer(environment,
-                     IntegratorSettings{.stepLength = 50.0,
-                                        .rangeLimit = 400.0,
-                                        .depthLimit = 2000.0,
-                                        .maximumRayPoints = 64U})
+      GeometryTracer(environment, IntegratorSettings{.stepLength = 50.0,
+                                                     .rangeLimit = 400.0,
+                                                     .depthLimit = 2000.0,
+                                                     .maximumRayPoints = 64U})
           .trace(Source{.depth = 50.0}, 20.0 * std::numbers::pi / 180.0);
   context.check(path.points.size() >= 10U,
                 "quadrilateral frozen projection uses a nontrivial traced "
@@ -1045,8 +1037,7 @@ void testQuadrilateralFrozenPathProjection(Context& context) {
             path.points[index].slowness == before.points[index].slowness &&
             path.points[index].dynamicP == before.points[index].dynamicP &&
             path.points[index].dynamicQ == before.points[index].dynamicQ &&
-            path.points[index].soundSpeed ==
-                before.points[index].soundSpeed &&
+            path.points[index].soundSpeed == before.points[index].soundSpeed &&
             path.points[index].realTravelTime ==
                 before.points[index].realTravelTime,
         "quadrilateral projection leaves every geometry point unchanged");
@@ -1054,8 +1045,7 @@ void testQuadrilateralFrozenPathProjection(Context& context) {
   for (std::size_t index = 0U; index < path.steps.size(); ++index) {
     context.check(
         path.steps[index].stepLength == before.steps[index].stepLength &&
-            path.steps[index].startWeight ==
-                before.steps[index].startWeight &&
+            path.steps[index].startWeight == before.steps[index].startWeight &&
             path.steps[index].midpointWeight ==
                 before.steps[index].midpointWeight &&
             path.steps[index].midpoint == before.steps[index].midpoint,
@@ -1066,8 +1056,7 @@ void testQuadrilateralFrozenPathProjection(Context& context) {
     const ReflectionEvent& previous = before.events[index];
     context.check(
         event.rayPointIndex == previous.rayPointIndex &&
-            event.reflectedRayPointIndex ==
-                previous.reflectedRayPointIndex &&
+            event.reflectedRayPointIndex == previous.reflectedRayPointIndex &&
             event.boundary == previous.boundary &&
             event.boundarySegmentIndex == previous.boundarySegmentIndex &&
             event.boundaryCurvature == previous.boundaryCurvature &&
@@ -1096,19 +1085,18 @@ void testSplineFrequencyStateIndependence(Context& context) {
                           .unit = AttenuationUnit::DecibelsPerWavelength,
                           .volumeModel = VolumeAttenuationModel::Thorp};
   };
-  const SoundSpeedProfile profile(
-      {{.depth = 0.0,
-        .soundSpeed = 1500.0,
-        .density = 1000.0,
-        .attenuation = thorp()},
-       {.depth = 500.0,
-        .soundSpeed = 1480.0,
-        .density = 1100.0,
-        .attenuation = thorp()},
-       {.depth = 1000.0,
-        .soundSpeed = 1520.0,
-        .density = 1200.0,
-        .attenuation = thorp()}});
+  const SoundSpeedProfile profile({{.depth = 0.0,
+                                    .soundSpeed = 1500.0,
+                                    .density = 1000.0,
+                                    .attenuation = thorp()},
+                                   {.depth = 500.0,
+                                    .soundSpeed = 1480.0,
+                                    .density = 1100.0,
+                                    .attenuation = thorp()},
+                                   {.depth = 1000.0,
+                                    .soundSpeed = 1520.0,
+                                    .density = 1200.0,
+                                    .attenuation = thorp()}});
 
   const CubicSplineFrequencySsp low(profile, 50.0);
   const CubicSplineFrequencySsp high(profile, 250.0);
@@ -1135,13 +1123,11 @@ void testSplineFrequencyStateIndependence(Context& context) {
             lowState.density == highState.density &&
             lowState.segmentIndex == highState.segmentIndex,
         "spline real observables are bit-identical across frequencies");
-    context.check(
-        lowState.imaginarySoundSpeed != highState.imaginarySoundSpeed,
-        "Thorp spline imaginary states separate 50 Hz from 250 Hz");
+    context.check(lowState.imaginarySoundSpeed != highState.imaginarySoundSpeed,
+                  "Thorp spline imaginary states separate 50 Hz from 250 Hz");
     context.check(
         repeatedLow.soundSpeed == lowState.soundSpeed &&
-            repeatedLow.imaginarySoundSpeed ==
-                lowState.imaginarySoundSpeed &&
+            repeatedLow.imaginarySoundSpeed == lowState.imaginarySoundSpeed &&
             repeatedLow.soundSpeedGradient == lowState.soundSpeedGradient &&
             repeatedLow.soundSpeedHessian == lowState.soundSpeedHessian,
         "repeating a spline projection at one frequency is bit-stable");

@@ -193,8 +193,7 @@ BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
 BoundaryAcousticsResult evaluateFluidHalfSpaceAcoustics(
     const AcousticMaterial& material, double attenuationEvaluationDepth,
     const VolumeAttenuation& volumeAttenuation, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness) {
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness) {
   if (material.shearSoundSpeed != 0.0 ||
       material.shearAttenuation.value != 0.0) {
     throw ValidationError(
@@ -216,8 +215,7 @@ BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
 BoundaryAcousticsResult evaluateAcousticHalfSpaceAcoustics(
     const AcousticMaterial& material, double attenuationEvaluationDepth,
     const VolumeAttenuation& volumeAttenuation, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness) {
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness) {
   requireFinitePositive(frequency, "frequency");
   requireFinitePositive(waterDensity, "waterDensity");
   requireFinitePositive(material.compressionalSoundSpeed,
@@ -360,9 +358,8 @@ BoundaryAcousticsResult evaluateBoundaryAcoustics(
 }
 
 BoundaryAcousticsResult evaluateBoundaryAcoustics(
-    const BoundaryModel& boundary,
-    const VolumeAttenuation& volumeAttenuation, double frequency,
-    double waterDensity, double tangentSlowness,
+    const BoundaryModel& boundary, const VolumeAttenuation& volumeAttenuation,
+    double frequency, double waterDensity, double tangentSlowness,
     double outwardNormalSlowness) {
   return evaluateBoundaryAcoustics(boundary, 0U, volumeAttenuation, frequency,
                                    waterDensity, tangentSlowness,
@@ -381,8 +378,7 @@ BoundaryAcousticsResult evaluateBoundaryAcoustics(
 BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
     const VolumeAttenuation& volumeAttenuation, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness) {
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness) {
   requireFinitePositive(frequency, "frequency");
   requireFinitePositive(waterDensity, "waterDensity");
   requireFinite(tangentSlowness, "tangentSlowness");

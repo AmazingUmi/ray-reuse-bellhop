@@ -32,8 +32,8 @@ std::size_t PchipSsp::segmentCount() const noexcept {
   return coefficients_.size();
 }
 
-std::size_t PchipSsp::locateSegment(
-    double depth, std::size_t previousSegment) const {
+std::size_t PchipSsp::locateSegment(double depth,
+                                    std::size_t previousSegment) const {
   if (!std::isfinite(depth)) {
     throw ValidationError("SSP query depth must be finite");
   }
@@ -60,8 +60,8 @@ std::size_t PchipSsp::locateSegment(
   return std::min(upperNodeIndex - 1U, segmentCount() - 1U);
 }
 
-SoundSpeedSample PchipSsp::evaluatePolynomial(
-    Vec2 position, std::size_t segmentIndex) const {
+SoundSpeedSample PchipSsp::evaluatePolynomial(Vec2 position,
+                                              std::size_t segmentIndex) const {
   if (!isFinite(position)) {
     throw ValidationError("SSP query position must be finite");
   }
@@ -71,21 +71,17 @@ SoundSpeedSample PchipSsp::evaluatePolynomial(
   const DensitySegment& densitySegment = densitySegments_[segmentIndex];
   const ComplexCubicPolynomial& polynomial = coefficients_[segmentIndex];
   const double offset = position.depth - densitySegment.minimumDepth;
-  const double soundSpeed =
-      std::real(polynomial.constant +
-                offset * (polynomial.linear +
-                          offset * (polynomial.quadratic +
-                                    offset * polynomial.cubic)));
+  const double soundSpeed = std::real(
+      polynomial.constant +
+      offset * (polynomial.linear +
+                offset * (polynomial.quadratic + offset * polynomial.cubic)));
   const double gradient =
-      std::real(polynomial.linear +
-                offset * (2.0 * polynomial.quadratic +
-                          3.0 * offset * polynomial.cubic));
+      std::real(polynomial.linear + offset * (2.0 * polynomial.quadratic +
+                                              3.0 * offset * polynomial.cubic));
   const double curvature =
-      std::real(2.0 * polynomial.quadratic +
-                6.0 * offset * polynomial.cubic);
+      std::real(2.0 * polynomial.quadratic + 6.0 * offset * polynomial.cubic);
   const double densityWeight =
-      offset /
-      (densitySegment.maximumDepth - densitySegment.minimumDepth);
+      offset / (densitySegment.maximumDepth - densitySegment.minimumDepth);
   const double density =
       (1.0 - densityWeight) * densitySegment.densityAtMinimumDepth +
       densityWeight * densitySegment.densityAtMaximumDepth;
@@ -97,16 +93,15 @@ SoundSpeedSample PchipSsp::evaluatePolynomial(
   return {.soundSpeed = soundSpeed,
           .imaginarySoundSpeed = 0.0,
           .soundSpeedGradient = {.range = 0.0, .depth = gradient},
-          .soundSpeedHessian =
-              {.rangeRange = 0.0,
-               .rangeDepth = 0.0,
-               .depthDepth = curvature},
+          .soundSpeedHessian = {.rangeRange = 0.0,
+                                .rangeDepth = 0.0,
+                                .depthDepth = curvature},
           .density = density,
           .segmentIndex = segmentIndex};
 }
 
-SoundSpeedSample PchipSsp::evaluateAtSegment(
-    Vec2 position, std::size_t segmentIndex) const {
+SoundSpeedSample PchipSsp::evaluateAtSegment(Vec2 position,
+                                             std::size_t segmentIndex) const {
   if (segmentIndex >= segmentCount()) {
     throw ValidationError("SSP segment index is out of range");
   }
@@ -118,10 +113,10 @@ SoundSpeedSample PchipSsp::evaluateAtSegment(
   return evaluatePolynomial(position, segmentIndex);
 }
 
-SoundSpeedSample PchipSsp::evaluate(
-    Vec2 position, std::size_t previousSegment) const {
-  return evaluatePolynomial(
-      position, locateSegment(position.depth, previousSegment));
+SoundSpeedSample PchipSsp::evaluate(Vec2 position,
+                                    std::size_t previousSegment) const {
+  return evaluatePolynomial(position,
+                            locateSegment(position.depth, previousSegment));
 }
 
 }  // namespace rayreuse

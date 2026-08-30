@@ -36,8 +36,7 @@ void validateStrictlyIncreasing(const std::vector<double>& values,
 
 std::size_t checkedProduct(std::size_t left, std::size_t right,
                            const std::string& name) {
-  if (left != 0U &&
-      right > std::numeric_limits<std::size_t>::max() / left) {
+  if (left != 0U && right > std::numeric_limits<std::size_t>::max() / left) {
     throw ValidationError(name + " dimensions overflow size_t");
   }
   return left * right;
@@ -186,9 +185,7 @@ bool usesLloydMirror(SimulationRunMode mode) {
 ReceiverGrid::ReceiverGrid(std::vector<double> depths,
                            std::vector<double> ranges,
                            ReceiverGridLayout layout)
-    : depths_(std::move(depths)),
-      ranges_(std::move(ranges)),
-      layout_(layout) {
+    : depths_(std::move(depths)), ranges_(std::move(ranges)), layout_(layout) {
   validateStrictlyIncreasing(depths_, "receiver depths");
   validateStrictlyIncreasing(ranges_, "receiver ranges");
   if (ranges_.front() < 0.0) {
@@ -331,21 +328,22 @@ double SourceBeamPattern::maximumAngleDegrees() const noexcept {
   return anglesDegrees_.back();
 }
 
-SimulationCase::SimulationCase(
-    Environment environment, Source source, ReceiverGrid receivers,
-    FrequencyGrid frequencies, LaunchFan launchFan,
-    IntegratorSettings integrator, SourceBeamPattern sourceBeamPattern,
-    SimulationRunMode runMode, BeamFamily beamFamily,
-    FieldComponent fieldComponent, BoundaryCurvatureMode curvatureMode,
-    BeamWidthMode beamWidthMode,
-    CervenyCoordinateSystem cervenyCoordinateSystem,
-    SourceGeometry sourceGeometry)
-    : SimulationCase(
-          std::move(environment), std::vector<Source>{source},
-          std::move(receivers), std::move(frequencies), launchFan, integrator,
-          std::move(sourceBeamPattern), runMode, beamFamily, fieldComponent,
-          curvatureMode, beamWidthMode, cervenyCoordinateSystem,
-          sourceGeometry) {}
+SimulationCase::SimulationCase(Environment environment, Source source,
+                               ReceiverGrid receivers,
+                               FrequencyGrid frequencies, LaunchFan launchFan,
+                               IntegratorSettings integrator,
+                               SourceBeamPattern sourceBeamPattern,
+                               SimulationRunMode runMode, BeamFamily beamFamily,
+                               FieldComponent fieldComponent,
+                               BoundaryCurvatureMode curvatureMode,
+                               BeamWidthMode beamWidthMode,
+                               CervenyCoordinateSystem cervenyCoordinateSystem,
+                               SourceGeometry sourceGeometry)
+    : SimulationCase(std::move(environment), std::vector<Source>{source},
+                     std::move(receivers), std::move(frequencies), launchFan,
+                     integrator, std::move(sourceBeamPattern), runMode,
+                     beamFamily, fieldComponent, curvatureMode, beamWidthMode,
+                     cervenyCoordinateSystem, sourceGeometry) {}
 
 SimulationCase::SimulationCase(
     Environment environment, std::vector<Source> sources,
@@ -376,9 +374,8 @@ SimulationCase::SimulationCase(
   validateCurvatureMode(curvatureMode_);
   validateBeamWidthMode(beamWidthMode_);
   validateCervenyCoordinateSystem(cervenyCoordinateSystem_);
-  const bool rayCenteredCervenyTl =
-      isTransmissionLossMode(runMode_) &&
-      beamFamily_ == BeamFamily::CervenyGaussian;
+  const bool rayCenteredCervenyTl = isTransmissionLossMode(runMode_) &&
+                                    beamFamily_ == BeamFamily::CervenyGaussian;
   const bool rayCenteredGeometricHat =
       beamFamily_ == BeamFamily::GeometricHat &&
       (isTransmissionLossMode(runMode_) ||
@@ -432,15 +429,14 @@ SimulationCase::SimulationCase(
       throw ValidationError("source amplitude must be non-negative");
     }
   }
-  std::stable_sort(
-      sources_.begin(), sources_.end(),
-      [](const Source& left, const Source& right) {
-        return left.depth < right.depth;
-      });
+  std::stable_sort(sources_.begin(), sources_.end(),
+                   [](const Source& left, const Source& right) {
+                     return left.depth < right.depth;
+                   });
   if (isTransmissionLossMode(runMode_)) {
-    const std::size_t receiverValueCount = checkedProduct(
-        receivers_.receiversPerRange(), receivers_.rangeCount(),
-        "receiver grid");
+    const std::size_t receiverValueCount =
+        checkedProduct(receivers_.receiversPerRange(), receivers_.rangeCount(),
+                       "receiver grid");
     if (checkedProduct(sources_.size(), receiverValueCount,
                        "source/receiver workspace") >
         kMaximumReceiverGridValues) {

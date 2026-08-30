@@ -39,8 +39,8 @@ std::size_t CubicSplineSsp::segmentCount() const noexcept {
   return coefficients_.size();
 }
 
-std::size_t CubicSplineSsp::locateSegment(
-    double depth, std::size_t previousSegment) const {
+std::size_t CubicSplineSsp::locateSegment(double depth,
+                                          std::size_t previousSegment) const {
   if (!std::isfinite(depth)) {
     throw ValidationError("SSP query depth must be finite");
   }
@@ -78,37 +78,34 @@ SoundSpeedSample CubicSplineSsp::evaluatePolynomial(
   const DensitySegment& densitySegment = densitySegments_[segmentIndex];
   const ComplexSplinePolynomial& polynomial = coefficients_[segmentIndex];
   const double offset = position.depth - densitySegment.minimumDepth;
-  const double soundSpeed =
-      std::real(polynomial.value +
-                offset * (polynomial.derivative +
-                          offset * (0.5 * polynomial.curvature +
-                                    kFortranSixth * offset *
-                                        polynomial.thirdDerivative)));
+  const double soundSpeed = std::real(
+      polynomial.value + offset * (polynomial.derivative +
+                                   offset * (0.5 * polynomial.curvature +
+                                             kFortranSixth * offset *
+                                                 polynomial.thirdDerivative)));
   const double gradient =
       std::real(polynomial.derivative +
                 offset * (polynomial.curvature +
                           0.5 * offset * polynomial.thirdDerivative));
   const double curvature =
-      std::real(polynomial.curvature +
-                offset * polynomial.thirdDerivative);
+      std::real(polynomial.curvature + offset * polynomial.thirdDerivative);
   const double densityWeight =
-      offset /
-      (densitySegment.maximumDepth - densitySegment.minimumDepth);
+      offset / (densitySegment.maximumDepth - densitySegment.minimumDepth);
   const double density =
       (1.0 - densityWeight) * densitySegment.densityAtMinimumDepth +
       densityWeight * densitySegment.densityAtMaximumDepth;
   if (!std::isfinite(soundSpeed) || soundSpeed <= 0.0 ||
       !std::isfinite(gradient) || !std::isfinite(curvature) ||
       !std::isfinite(density)) {
-    throw ValidationError("cubic-spline SSP evaluation produced an invalid value");
+    throw ValidationError(
+        "cubic-spline SSP evaluation produced an invalid value");
   }
   return {.soundSpeed = soundSpeed,
           .imaginarySoundSpeed = 0.0,
           .soundSpeedGradient = {.range = 0.0, .depth = gradient},
-          .soundSpeedHessian =
-              {.rangeRange = 0.0,
-               .rangeDepth = 0.0,
-               .depthDepth = curvature},
+          .soundSpeedHessian = {.rangeRange = 0.0,
+                                .rangeDepth = 0.0,
+                                .depthDepth = curvature},
           .density = density,
           .segmentIndex = segmentIndex};
 }
@@ -126,10 +123,10 @@ SoundSpeedSample CubicSplineSsp::evaluateAtSegment(
   return evaluatePolynomial(position, segmentIndex);
 }
 
-SoundSpeedSample CubicSplineSsp::evaluate(
-    Vec2 position, std::size_t previousSegment) const {
-  return evaluatePolynomial(
-      position, locateSegment(position.depth, previousSegment));
+SoundSpeedSample CubicSplineSsp::evaluate(Vec2 position,
+                                          std::size_t previousSegment) const {
+  return evaluatePolynomial(position,
+                            locateSegment(position.depth, previousSegment));
 }
 
 }  // namespace rayreuse

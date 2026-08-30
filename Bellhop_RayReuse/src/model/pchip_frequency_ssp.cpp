@@ -8,13 +8,13 @@
 
 namespace rayreuse {
 
-PchipFrequencySsp::PchipFrequencySsp(
-    const SoundSpeedProfile& profile, double frequency)
+PchipFrequencySsp::PchipFrequencySsp(const SoundSpeedProfile& profile,
+                                     double frequency)
     : PchipFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
 
-PchipFrequencySsp::PchipFrequencySsp(
-    const SoundSpeedProfile& profile, double frequency,
-    const VolumeAttenuation& volumeAttenuation)
+PchipFrequencySsp::PchipFrequencySsp(const SoundSpeedProfile& profile,
+                                     double frequency,
+                                     const VolumeAttenuation& volumeAttenuation)
     : frequency_(frequency), realProfile_(profile) {
   if (!std::isfinite(frequency_) || frequency_ <= 0.0) {
     throw ValidationError("frequency must be finite and positive");
@@ -44,9 +44,9 @@ bool PchipFrequencySsp::isLossless() const noexcept {
 std::optional<std::complex<double>>
 PchipFrequencySsp::uniformComplexSoundSpeed() const noexcept {
   const std::complex<double> value = nodeSoundSpeeds_.front();
-  if (!std::ranges::all_of(
-          nodeSoundSpeeds_,
-          [value](const auto& candidate) { return candidate == value; })) {
+  if (!std::ranges::all_of(nodeSoundSpeeds_, [value](const auto& candidate) {
+        return candidate == value;
+      })) {
     return std::nullopt;
   }
   return value;
@@ -57,11 +57,10 @@ SoundSpeedSample PchipFrequencySsp::addImaginarySoundSpeed(
   const std::size_t index = sample.segmentIndex;
   const double offset = depth - depths_[index];
   const ComplexCubicPolynomial& polynomial = coefficients_[index];
-  sample.imaginarySoundSpeed =
-      std::imag(polynomial.constant +
-                offset * (polynomial.linear +
-                          offset * (polynomial.quadratic +
-                                    offset * polynomial.cubic)));
+  sample.imaginarySoundSpeed = std::imag(
+      polynomial.constant +
+      offset * (polynomial.linear +
+                offset * (polynomial.quadratic + offset * polynomial.cubic)));
   if (!std::isfinite(sample.imaginarySoundSpeed) ||
       sample.imaginarySoundSpeed < 0.0) {
     throw ValidationError(
@@ -74,8 +73,7 @@ SoundSpeedSample PchipFrequencySsp::addImaginarySoundSpeed(
 SoundSpeedSample PchipFrequencySsp::evaluateAtSegment(
     Vec2 position, std::size_t segmentIndex) const {
   return addImaginarySoundSpeed(
-      realProfile_.evaluateAtSegment(position, segmentIndex),
-      position.depth);
+      realProfile_.evaluateAtSegment(position, segmentIndex), position.depth);
 }
 
 SoundSpeedSample PchipFrequencySsp::evaluate(

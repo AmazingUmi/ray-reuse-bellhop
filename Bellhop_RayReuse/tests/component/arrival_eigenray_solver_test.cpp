@@ -24,8 +24,7 @@ SimulationCase makeSimulation(
     BeamFamily beamFamily = BeamFamily::GeometricHat,
     SimulationRunMode runMode = SimulationRunMode::AsciiArrivals,
     bool directional = false,
-    CervenyCoordinateSystem coordinates =
-        CervenyCoordinateSystem::Cartesian) {
+    CervenyCoordinateSystem coordinates = CervenyCoordinateSystem::Cartesian) {
   Environment environment(
       SoundSpeedProfile({{0.0, 1500.0, 1000.0}, {100.0, 1500.0, 1000.0}}),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
@@ -33,14 +32,13 @@ SimulationCase makeSimulation(
       directional ? SourceBeamPattern::directional(
                         {{-10.0, -20.0}, {0.0, 0.0}, {10.0, -20.0}})
                   : SourceBeamPattern::omnidirectional();
-  return SimulationCase(std::move(environment), Source{50.0, 1.0},
-                        ReceiverGrid({50.0}, {0.0, 10.0, 20.0}),
-                        FrequencyGrid({50.0, 100.0}), LaunchFan{-0.1, 0.1, 3U},
-                        IntegratorSettings{5.0, 25.0, 110.0, 1000U},
-                        std::move(sourceBeamPattern), runMode, beamFamily,
-                        FieldComponent::Pressure,
-                        BoundaryCurvatureMode::Standard,
-                        BeamWidthMode::MinimumWidth, coordinates);
+  return SimulationCase(
+      std::move(environment), Source{50.0, 1.0},
+      ReceiverGrid({50.0}, {0.0, 10.0, 20.0}), FrequencyGrid({50.0, 100.0}),
+      LaunchFan{-0.1, 0.1, 3U}, IntegratorSettings{5.0, 25.0, 110.0, 1000U},
+      std::move(sourceBeamPattern), runMode, beamFamily,
+      FieldComponent::Pressure, BoundaryCurvatureMode::Standard,
+      BeamWidthMode::MinimumWidth, coordinates);
 }
 
 SimulationCase makeZeroEigenraySimulation() {
@@ -104,8 +102,7 @@ void testArrivalModes(Context& context) {
       simulation,
       [&](std::size_t index, const std::vector<RayPathCache>& caches,
           const std::vector<ArrivalWorkspace>& workspaces) {
-        const std::uint64_t before =
-            caches.front().contentFingerprint();
+        const std::uint64_t before = caches.front().contentFingerprint();
         serial[index] = snapshot(workspaces.front());
         serialFingerprint[index] = caches.front().contentFingerprint();
         serialUnchanged[index] = before == serialFingerprint[index];
@@ -115,8 +112,7 @@ void testArrivalModes(Context& context) {
       simulation,
       [&](std::size_t index, const std::vector<RayPathCache>& caches,
           const std::vector<ArrivalWorkspace>& workspaces) {
-        const std::uint64_t before =
-            caches.front().contentFingerprint();
+        const std::uint64_t before = caches.front().contentFingerprint();
         nonreuse[index] = snapshot(workspaces.front());
         nonreuseFingerprint[index] = caches.front().contentFingerprint();
         nonreuseUnchanged[index] = before == nonreuseFingerprint[index];
@@ -126,8 +122,7 @@ void testArrivalModes(Context& context) {
       simulation,
       [&](std::size_t index, const std::vector<RayPathCache>& caches,
           const std::vector<ArrivalWorkspace>& workspaces) {
-        const std::uint64_t before =
-            caches.front().contentFingerprint();
+        const std::uint64_t before = caches.front().contentFingerprint();
         parallel[index] = snapshot(workspaces.front());
         parallelFingerprint[index] = caches.front().contentFingerprint();
         parallelUnchanged[index] = before == parallelFingerprint[index];
@@ -239,8 +234,7 @@ void testEigenrayModes(Context& context) {
       simulation,
       [&](std::size_t f, const std::vector<RayPathCache>& caches,
           const std::vector<EigenraySourceHits>& sourceHits) {
-        const std::uint64_t before =
-            caches.front().contentFingerprint();
+        const std::uint64_t before = caches.front().contentFingerprint();
         for (const auto& [launch, hit] : sourceHits.front())
           reuse[f].emplace_back(launch, hit.receiverRangeIndex,
                                 hit.receiverDepthIndex, hit.prefixPointCount);
@@ -252,8 +246,7 @@ void testEigenrayModes(Context& context) {
       simulation,
       [&](std::size_t f, const std::vector<RayPathCache>& caches,
           const std::vector<EigenraySourceHits>& sourceHits) {
-        const std::uint64_t before =
-            caches.front().contentFingerprint();
+        const std::uint64_t before = caches.front().contentFingerprint();
         for (const auto& [launch, hit] : sourceHits.front())
           nonreuse[f].emplace_back(launch, hit.receiverRangeIndex,
                                    hit.receiverDepthIndex,
@@ -266,8 +259,7 @@ void testEigenrayModes(Context& context) {
       simulation,
       [&](std::size_t f, const std::vector<RayPathCache>& caches,
           const std::vector<EigenraySourceHits>& sourceHits) {
-        const std::uint64_t before =
-            caches.front().contentFingerprint();
+        const std::uint64_t before = caches.front().contentFingerprint();
         for (const auto& [launch, hit] : sourceHits.front())
           parallel[f].emplace_back(launch, hit.receiverRangeIndex,
                                    hit.receiverDepthIndex,
@@ -307,19 +299,19 @@ void testEigenrayModes(Context& context) {
 }
 
 void testRayCenteredProductModes(Context& context) {
-  const SimulationCase arrivals = makeSimulation(
-      BeamFamily::GeometricHat, SimulationRunMode::AsciiArrivals, false,
-      CervenyCoordinateSystem::RayCentered);
-  using ArrivalIdentity =
-      std::tuple<float, float, float, float, float, float, std::int32_t,
-                 std::int32_t>;
+  const SimulationCase arrivals =
+      makeSimulation(BeamFamily::GeometricHat, SimulationRunMode::AsciiArrivals,
+                     false, CervenyCoordinateSystem::RayCentered);
+  using ArrivalIdentity = std::tuple<float, float, float, float, float, float,
+                                     std::int32_t, std::int32_t>;
   using ArrivalProducts = std::vector<std::vector<ArrivalIdentity>>;
   const auto arrivalConsumer = [](ArrivalProducts& products) {
     return [&products](std::size_t frequencyIndex,
                        const std::vector<RayPathCache>&,
                        const std::vector<ArrivalWorkspace>& workspaces) {
       const ArrivalWorkspace& workspace = workspaces.front();
-      for (std::size_t cell = 0U; cell < workspace.receiverCellCount(); ++cell) {
+      for (std::size_t cell = 0U; cell < workspace.receiverCellCount();
+           ++cell) {
         for (const Arrival& arrival : workspace.cellAt(cell)) {
           products[frequencyIndex].emplace_back(
               arrival.amplitude, arrival.phaseRadians,
@@ -332,8 +324,8 @@ void testRayCenteredProductModes(Context& context) {
     };
   };
   ArrivalProducts reuseArrivals(2U), nonreuseArrivals(2U), parallelArrivals(2U);
-  const ArrivalSolverStatistics reuseArrivalStats = ArrivalSolver::solve(
-      arrivals, arrivalConsumer(reuseArrivals), true);
+  const ArrivalSolverStatistics reuseArrivalStats =
+      ArrivalSolver::solve(arrivals, arrivalConsumer(reuseArrivals), true);
   const ArrivalSolverStatistics nonreuseArrivalStats =
       ArrivalSolver::solveNonReuse(arrivals, arrivalConsumer(nonreuseArrivals),
                                    true);
@@ -344,18 +336,17 @@ void testRayCenteredProductModes(Context& context) {
                     reuseArrivals == nonreuseArrivals &&
                     reuseArrivals == parallelArrivals,
                 "Ag products agree exactly across reuse modes");
-  context.check(
-      reuseArrivalStats.cacheFingerprintBefore ==
-              reuseArrivalStats.cacheFingerprintAfter &&
-          nonreuseArrivalStats.cacheFingerprintBefore ==
-              nonreuseArrivalStats.cacheFingerprintAfter &&
-          parallelArrivalStats.cacheFingerprintBefore ==
-              parallelArrivalStats.cacheFingerprintAfter,
-      "Ag projection preserves every frozen cache fingerprint");
+  context.check(reuseArrivalStats.cacheFingerprintBefore ==
+                        reuseArrivalStats.cacheFingerprintAfter &&
+                    nonreuseArrivalStats.cacheFingerprintBefore ==
+                        nonreuseArrivalStats.cacheFingerprintAfter &&
+                    parallelArrivalStats.cacheFingerprintBefore ==
+                        parallelArrivalStats.cacheFingerprintAfter,
+                "Ag projection preserves every frozen cache fingerprint");
 
-  const SimulationCase eigenrays = makeSimulation(
-      BeamFamily::GeometricHat, SimulationRunMode::Eigenray, false,
-      CervenyCoordinateSystem::RayCentered);
+  const SimulationCase eigenrays =
+      makeSimulation(BeamFamily::GeometricHat, SimulationRunMode::Eigenray,
+                     false, CervenyCoordinateSystem::RayCentered);
   using HitIdentity =
       std::tuple<std::size_t, std::size_t, std::size_t, std::size_t>;
   using HitProducts = std::vector<std::vector<HitIdentity>>;
@@ -371,8 +362,8 @@ void testRayCenteredProductModes(Context& context) {
     };
   };
   HitProducts reuseHits(2U), nonreuseHits(2U), parallelHits(2U);
-  const EigenraySolverStatistics reuseEigenrayStats = EigenraySolver::solve(
-      eigenrays, hitConsumer(reuseHits), true);
+  const EigenraySolverStatistics reuseEigenrayStats =
+      EigenraySolver::solve(eigenrays, hitConsumer(reuseHits), true);
   const EigenraySolverStatistics nonreuseEigenrayStats =
       EigenraySolver::solveNonReuse(eigenrays, hitConsumer(nonreuseHits), true);
   const EigenraySolverStatistics parallelEigenrayStats =
@@ -381,14 +372,13 @@ void testRayCenteredProductModes(Context& context) {
   context.check(!reuseHits[0U].empty() && reuseHits == nonreuseHits &&
                     reuseHits == parallelHits,
                 "Eg hit identities and prefixes agree across reuse modes");
-  context.check(
-      reuseEigenrayStats.cacheFingerprintBefore ==
-              reuseEigenrayStats.cacheFingerprintAfter &&
-          nonreuseEigenrayStats.cacheFingerprintBefore ==
-              nonreuseEigenrayStats.cacheFingerprintAfter &&
-          parallelEigenrayStats.cacheFingerprintBefore ==
-              parallelEigenrayStats.cacheFingerprintAfter,
-      "Eg traversal preserves every frozen cache fingerprint");
+  context.check(reuseEigenrayStats.cacheFingerprintBefore ==
+                        reuseEigenrayStats.cacheFingerprintAfter &&
+                    nonreuseEigenrayStats.cacheFingerprintBefore ==
+                        nonreuseEigenrayStats.cacheFingerprintAfter &&
+                    parallelEigenrayStats.cacheFingerprintBefore ==
+                        parallelEigenrayStats.cacheFingerprintAfter,
+                "Eg traversal preserves every frozen cache fingerprint");
 }
 
 void testGaussianEigenraySegmentEnvelope(Context& context) {
@@ -506,9 +496,8 @@ void testProductValidation(Context& context) {
   context.expectThrows<ValidationError>(
       [&] {
         static_cast<void>(EigenraySolver::solve(
-            binarySimulation,
-            [](std::size_t, const std::vector<RayPathCache>&,
-               const std::vector<EigenraySourceHits>&) {}));
+            binarySimulation, [](std::size_t, const std::vector<RayPathCache>&,
+                                 const std::vector<EigenraySourceHits>&) {}));
       },
       "Eigenray solver rejects a non-Eigenray run mode");
   std::error_code ignored;

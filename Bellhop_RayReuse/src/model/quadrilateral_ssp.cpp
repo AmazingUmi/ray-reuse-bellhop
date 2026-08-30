@@ -48,10 +48,9 @@ QuadrilateralSsp::QuadrilateralSsp(const SoundSpeedProfile& profile)
          ++rangeIndex) {
       // Preserve Quad's initialization order: one vertical slope is formed
       // for every matrix column before any query is evaluated.
-      const double gradient =
-          (speedAt(depthIndex + 1U, rangeIndex) -
-           speedAt(depthIndex, rangeIndex)) /
-          depthInterval;
+      const double gradient = (speedAt(depthIndex + 1U, rangeIndex) -
+                               speedAt(depthIndex, rangeIndex)) /
+                              depthInterval;
       requireFinite(gradient, "quadrilateral SSP depth gradient");
       depthGradients_.push_back(gradient);
     }
@@ -66,8 +65,8 @@ std::size_t QuadrilateralSsp::rangeSegmentCount() const noexcept {
   return grid_->rangeCount - 1U;
 }
 
-std::size_t QuadrilateralSsp::locateSegment(
-    double depth, std::size_t previousSegment) const {
+std::size_t QuadrilateralSsp::locateSegment(double depth,
+                                            std::size_t previousSegment) const {
   requireFinite(depth, "SSP query depth");
   if (previousSegment >= depthSegments_.size()) {
     throw ValidationError("SSP previous segment index is out of range");
@@ -101,8 +100,7 @@ std::size_t QuadrilateralSsp::locateRangeSegment(
     double range, std::size_t previousRangeSegment) const {
   requireFinite(range, "quadrilateral SSP query range");
   if (previousRangeSegment >= rangeSegmentCount()) {
-    throw ValidationError(
-        "SSP previous range segment index is out of range");
+    throw ValidationError("SSP previous range segment index is out of range");
   }
   if (range < grid_->rangesMeters.front() ||
       range > grid_->rangesMeters.back()) {
@@ -119,8 +117,8 @@ std::size_t QuadrilateralSsp::locateRangeSegment(
 
   // Quad's range cells are left-closed/right-open. An internal node therefore
   // selects the cell to its right; the accepted final node uses the last cell.
-  const auto upper = std::upper_bound(
-      grid_->rangesMeters.begin(), grid_->rangesMeters.end(), range);
+  const auto upper = std::upper_bound(grid_->rangesMeters.begin(),
+                                      grid_->rangesMeters.end(), range);
   if (upper == grid_->rangesMeters.end()) {
     return grid_->rangeCount - 2U;
   }
@@ -145,15 +143,12 @@ double QuadrilateralSsp::maximumRangeForSegment(
 
 double QuadrilateralSsp::speedAt(std::size_t depthIndex,
                                  std::size_t rangeIndex) const noexcept {
-  return grid_->speedsDepthMajor[
-      depthIndex * grid_->rangeCount + rangeIndex];
+  return grid_->speedsDepthMajor[depthIndex * grid_->rangeCount + rangeIndex];
 }
 
 double QuadrilateralSsp::depthGradientAt(
-    std::size_t depthSegmentIndex,
-    std::size_t rangeIndex) const noexcept {
-  return depthGradients_[
-      depthSegmentIndex * grid_->rangeCount + rangeIndex];
+    std::size_t depthSegmentIndex, std::size_t rangeIndex) const noexcept {
+  return depthGradients_[depthSegmentIndex * grid_->rangeCount + rangeIndex];
 }
 
 SoundSpeedSample QuadrilateralSsp::evaluateAtSegment(
@@ -169,8 +164,8 @@ SoundSpeedSample QuadrilateralSsp::evaluateAtSegment(
       position.depth > segment.maximumDepth) {
     throw ValidationError("SSP query depth is outside the selected segment");
   }
-  return evaluatePolynomial(
-      position, segmentIndex, locateRangeSegment(position.range, 0U));
+  return evaluatePolynomial(position, segmentIndex,
+                            locateRangeSegment(position.range, 0U));
 }
 
 SoundSpeedSample QuadrilateralSsp::evaluateAtSegments(
@@ -211,19 +206,16 @@ SoundSpeedSample QuadrilateralSsp::evaluatePolynomial(
   }
   const DepthSegment& depthSegment = depthSegments_[depthSegmentIndex];
   const double cz1 = depthGradientAt(depthSegmentIndex, rangeSegmentIndex);
-  const double cz2 =
-      depthGradientAt(depthSegmentIndex, rangeSegmentIndex + 1U);
+  const double cz2 = depthGradientAt(depthSegmentIndex, rangeSegmentIndex + 1U);
 
   double s2 = position.depth - depthSegment.minimumDepth;
-  const double deltaZ =
-      depthSegment.maximumDepth - depthSegment.minimumDepth;
+  const double deltaZ = depthSegment.maximumDepth - depthSegment.minimumDepth;
   const double c1 = speedAt(depthSegmentIndex, rangeSegmentIndex) + s2 * cz1;
   const double c2 =
       speedAt(depthSegmentIndex, rangeSegmentIndex + 1U) + s2 * cz2;
 
-  const double deltaR =
-      grid_->rangesMeters[rangeSegmentIndex + 1U] -
-      grid_->rangesMeters[rangeSegmentIndex];
+  const double deltaR = grid_->rangesMeters[rangeSegmentIndex + 1U] -
+                        grid_->rangesMeters[rangeSegmentIndex];
   double s1 =
       (position.range - grid_->rangesMeters[rangeSegmentIndex]) / deltaR;
   s1 = std::min(s1, 1.0);
@@ -234,9 +226,8 @@ SoundSpeedSample QuadrilateralSsp::evaluatePolynomial(
   const double cz = (1.0 - s1) * cz1 + s1 * cz2;
   const double cr = (c2 - c1) / deltaR;
   const double crz = (cz2 - cz1) / deltaR;
-  const double density =
-      (1.0 - s2) * depthSegment.densityAtMinimumDepth +
-      s2 * depthSegment.densityAtMaximumDepth;
+  const double density = (1.0 - s2) * depthSegment.densityAtMinimumDepth +
+                         s2 * depthSegment.densityAtMaximumDepth;
 
   requireFinite(soundSpeed, "interpolated sound speed");
   requireFinite(cr, "quadrilateral SSP range gradient");
@@ -248,15 +239,16 @@ SoundSpeedSample QuadrilateralSsp::evaluatePolynomial(
       .soundSpeed = soundSpeed,
       .imaginarySoundSpeed = 0.0,
       .soundSpeedGradient = Vec2{.range = cr, .depth = cz},
-      .soundSpeedHessian = SoundSpeedHessian{
-          .rangeRange = 0.0, .rangeDepth = crz, .depthDepth = 0.0},
+      .soundSpeedHessian =
+          SoundSpeedHessian{
+              .rangeRange = 0.0, .rangeDepth = crz, .depthDepth = 0.0},
       .density = density,
       .segmentIndex = depthSegmentIndex,
       .rangeSegmentIndex = rangeSegmentIndex};
 }
 
-SoundSpeedSample QuadrilateralSsp::evaluate(
-    Vec2 position, std::size_t previousSegment) const {
+SoundSpeedSample QuadrilateralSsp::evaluate(Vec2 position,
+                                            std::size_t previousSegment) const {
   return evaluate(position, previousSegment, 0U);
 }
 

@@ -14,9 +14,9 @@ namespace rayreuse {
 // indexed by SimulationCase::sources() order (depth ascending) and sized
 // sourceCount(); the workspaces are frequency-local product state and never
 // written back to the frozen caches.
-using RayReuseFrequencyConsumer = std::function<void(
-    std::size_t frequencyIndex,
-    std::vector<FrequencyWorkspace>&& sourceWorkspaces,
-    const SingleFrequencyTimings& timings)>;
+using RayReuseFrequencyConsumer =
+    std::function<void(std::size_t frequencyIndex,
+                       std::vector<FrequencyWorkspace>&& sourceWorkspaces,
+                       const SingleFrequencyTimings& timings)>;
 
 }  // namespace rayreuse

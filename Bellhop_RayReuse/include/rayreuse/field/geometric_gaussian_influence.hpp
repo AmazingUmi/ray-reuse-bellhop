@@ -58,16 +58,13 @@ class GeometricGaussianInfluence {
 
   [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulate(
       FrequencyWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
       std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
-  [[nodiscard]] std::optional<GeometricGaussianDiagnostic>
-  accumulateIntensity(
+  [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulateIntensity(
       IntensityWorkspace& workspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
       std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
@@ -83,10 +80,9 @@ class GeometricGaussianInfluence {
   [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulateField(
       FrequencyWorkspace* pressureWorkspace,
       IntensityWorkspace* intensityWorkspace, const RayPath& path,
-      const RayFrequencyState& frequencyState,
-      double launchAngleSpacingRadians,
-      std::optional<GeometricGaussianDiagnosticRequest>
-          diagnosticRequest) const;
+      const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
+      std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest)
+      const;
 
   ReceiverGrid receivers_;
   SourceGeometry sourceGeometry_{SourceGeometry::Point};

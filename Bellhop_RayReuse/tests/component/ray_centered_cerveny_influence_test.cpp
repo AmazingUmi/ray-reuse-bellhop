@@ -1,3 +1,5 @@
+#include "rayreuse/field/ray_centered_cerveny_influence.hpp"
+
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -9,7 +11,6 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
-#include "rayreuse/field/ray_centered_cerveny_influence.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -17,6 +18,7 @@ namespace {
 using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryModel;
 using rayreuse::CartesianCervenySettings;
+using rayreuse::cervenyHermiteTaper;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyWorkspace;
@@ -33,7 +35,6 @@ using rayreuse::SimulationRunMode;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::ValidationError;
-using rayreuse::cervenyHermiteTaper;
 using rayreuse::test::Context;
 
 constexpr double kSoundSpeed = 1500.0;
@@ -42,12 +43,10 @@ constexpr std::complex<double> kEpsilon{0.0, 1.0};
 Environment makeEnvironment() {
   return Environment(
       SoundSpeedProfile(
-          {SoundSpeedPoint{.depth = 0.0,
-                           .soundSpeed = kSoundSpeed,
-                           .density = 1000.0},
-           SoundSpeedPoint{.depth = 1000.0,
-                           .soundSpeed = kSoundSpeed,
-                           .density = 1000.0}}),
+          {SoundSpeedPoint{
+               .depth = 0.0, .soundSpeed = kSoundSpeed, .density = 1000.0},
+           SoundSpeedPoint{
+               .depth = 1000.0, .soundSpeed = kSoundSpeed, .density = 1000.0}}),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(1000.0));
 }
 
@@ -69,16 +68,14 @@ RayPath makeSlantedPath(std::size_t pointCount, double dynamicP) {
   return path;
 }
 
-RayFrequencyState makeFrequencyState(std::size_t pointCount,
-                                     double frequency) {
+RayFrequencyState makeFrequencyState(std::size_t pointCount, double frequency) {
   return RayFrequencyState{
       .frequency = frequency,
       .points = std::vector<RayFrequencyPoint>(
-          pointCount,
-          RayFrequencyPoint{.complexTravelTime = {},
-                            .amplitude = 1.0,
-                            .reflectionPhase = 0.0,
-                            .active = true})};
+          pointCount, RayFrequencyPoint{.complexTravelTime = {},
+                                        .amplitude = 1.0,
+                                        .reflectionPhase = 0.0,
+                                        .active = true})};
 }
 
 void checkComplexNear(Context& context, std::complex<double> actual,
@@ -90,8 +87,8 @@ void checkComplexNear(Context& context, std::complex<double> actual,
                     message + " imaginary");
 }
 
-RayCenteredCervenyDiagnostic runComponentDiagnostic(
-    Context& context, FieldComponent component) {
+RayCenteredCervenyDiagnostic runComponentDiagnostic(Context& context,
+                                                    FieldComponent component) {
   const Environment environment = makeEnvironment();
   const ReceiverGrid receivers({150.0}, {100.0, 200.0});
   const RayPath path = makeSlantedPath(3U, 1.0e-6);
@@ -103,8 +100,8 @@ RayCenteredCervenyDiagnostic runComponentDiagnostic(
       BeamWidthMode::MinimumWidth, SimulationRunMode::Coherent, component);
   const auto diagnostic = influence.accumulate(
       workspace, path, frequencyState, kEpsilon,
-      RayCenteredCervenyDiagnosticRequest{
-          .receiverRangeIndex = 1U, .receiverDepthIndex = 0U});
+      RayCenteredCervenyDiagnosticRequest{.receiverRangeIndex = 1U,
+                                          .receiverDepthIndex = 0U});
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "component diagnostic evaluates the selected receiver");
   return diagnostic.value();
@@ -113,20 +110,19 @@ RayCenteredCervenyDiagnostic runComponentDiagnostic(
 void testPressureAndVelocityComponents(Context& context) {
   const RayCenteredCervenyDiagnostic pressure =
       runComponentDiagnostic(context, FieldComponent::Pressure);
-  context.check(
-      pressure.evaluationCount == 1U && pressure.leftPointIndex == 1U &&
-          pressure.rightPointIndex == 2U,
-      "pressure diagnostic selects the expected ray chord");
+  context.check(pressure.evaluationCount == 1U &&
+                    pressure.leftPointIndex == 1U &&
+                    pressure.rightPointIndex == 2U,
+                "pressure diagnostic selects the expected ray chord");
   context.checkNear(pressure.interpolationWeight, 0.6, 1.0e-15,
                     "pressure diagnostic interpolation weight");
   context.checkNear(pressure.normalOffset, 40.0, 1.0e-13,
                     "pressure diagnostic normal coordinate");
   checkComplexNear(context, pressure.qInterpolated, {0.0, 1.0}, 0.0,
                    "pressure diagnostic q");
-  checkComplexNear(context, pressure.gammaInterpolated, {0.0, -1.0e-6},
-                   1.0e-21, "pressure diagnostic gamma=p/q");
-  const double attenuation =
-      std::exp(-std::numbers::pi * 1.0e-6 * 40.0 * 40.0);
+  checkComplexNear(context, pressure.gammaInterpolated, {0.0, -1.0e-6}, 1.0e-21,
+                   "pressure diagnostic gamma=p/q");
+  const double attenuation = std::exp(-std::numbers::pi * 1.0e-6 * 40.0 * 40.0);
   const std::complex<double> expectedPressure =
       std::sqrt(std::complex<double>{0.0, -kSoundSpeed}) * attenuation;
   checkComplexNear(context, pressure.pressureContribution, expectedPressure,
@@ -138,25 +134,22 @@ void testPressureAndVelocityComponents(Context& context) {
       runComponentDiagnostic(context, FieldComponent::Horizontal);
   const double omega = 2.0 * std::numbers::pi;
   const std::complex<double> normalDerivative =
-      std::complex<double>{0.0, -1.0} * omega *
-      pressure.gammaInterpolated * pressure.normalOffset *
-      pressure.pressureContribution;
-  const std::complex<double> alongDerivative =
-      std::complex<double>{0.0, -1.0} * omega / kSoundSpeed *
-      pressure.pressureContribution;
+      std::complex<double>{0.0, -1.0} * omega * pressure.gammaInterpolated *
+      pressure.normalOffset * pressure.pressureContribution;
+  const std::complex<double> alongDerivative = std::complex<double>{0.0, -1.0} *
+                                               omega / kSoundSpeed *
+                                               pressure.pressureContribution;
   const std::complex<double> expectedVertical =
-      kSoundSpeed *
-      (std::conj(normalDerivative) * (0.8 / kSoundSpeed) +
-       std::conj(alongDerivative) * (0.6 / kSoundSpeed));
+      kSoundSpeed * (std::conj(normalDerivative) * (0.8 / kSoundSpeed) +
+                     std::conj(alongDerivative) * (0.6 / kSoundSpeed));
   const std::complex<double> expectedHorizontal =
-      kSoundSpeed *
-      (-normalDerivative * (0.6 / kSoundSpeed) +
-       alongDerivative * (0.8 / kSoundSpeed));
+      kSoundSpeed * (-normalDerivative * (0.6 / kSoundSpeed) +
+                     alongDerivative * (0.8 / kSoundSpeed));
   checkComplexNear(context, vertical.pressureContribution, expectedVertical,
                    1.0e-13,
                    "V conjugates both derivatives like Fortran DOT_PRODUCT");
-  checkComplexNear(context, horizontal.pressureContribution,
-                   expectedHorizontal, 1.0e-13,
+  checkComplexNear(context, horizontal.pressureContribution, expectedHorizontal,
+                   1.0e-13,
                    "H preserves the handwritten non-conjugated expression");
 }
 
@@ -182,8 +175,7 @@ std::complex<double> runCoherentImages(std::size_t imageCount) {
   return workspace.at(0U, 1U);
 }
 
-double runIntensityImages(std::size_t imageCount,
-                          SimulationRunMode runMode) {
+double runIntensityImages(std::size_t imageCount, SimulationRunMode runMode) {
   const Environment environment = makeEnvironment();
   const ReceiverGrid receivers({100.0}, imageRanges());
   const RayPath path = makeSlantedPath(4U, 0.0);
@@ -193,8 +185,8 @@ double runIntensityImages(std::size_t imageCount,
       environment, receivers,
       CartesianCervenySettings{.imageCount = imageCount, .beamWindow = 5},
       BeamWidthMode::MinimumWidth, runMode);
-  static_cast<void>(influence.accumulateIntensity(
-      workspace, path, frequencyState, kEpsilon));
+  static_cast<void>(
+      influence.accumulateIntensity(workspace, path, frequencyState, kEpsilon));
   return workspace.at(0U, 1U);
 }
 
@@ -260,22 +252,20 @@ void testNearHorizontalStepDoesNotFlipImageNormals(Context& context) {
 RayPath makeWkbCrossingPath() {
   RayPath path;
   path.launchAngle = 0.0;
-  for (const auto& [range, dynamicQ] :
-       std::vector<std::pair<double, double>>{
+  for (const auto& [range, dynamicQ] : std::vector<std::pair<double, double>>{
            {0.0, 1.0}, {100.0, 1.0}, {300.0, -1.0}}) {
-    path.points.push_back(
-        RayState{.position = {range, 50.0},
-                 .slowness = {1.0 / kSoundSpeed, 0.0},
-                 .dynamicP = {0.0, 0.0},
-                 .dynamicQ = {dynamicQ, 0.0},
-                 .soundSpeed = kSoundSpeed,
-                 .realTravelTime = 0.0});
+    path.points.push_back(RayState{.position = {range, 50.0},
+                                   .slowness = {1.0 / kSoundSpeed, 0.0},
+                                   .dynamicP = {0.0, 0.0},
+                                   .dynamicQ = {dynamicQ, 0.0},
+                                   .soundSpeed = kSoundSpeed,
+                                   .realTravelTime = 0.0});
   }
   return path;
 }
 
-RayCenteredCervenyDiagnostic runWkbCrossingDiagnostic(
-    Context& context, double receiverRange) {
+RayCenteredCervenyDiagnostic runWkbCrossingDiagnostic(Context& context,
+                                                      double receiverRange) {
   const Environment environment = makeEnvironment();
   const ReceiverGrid receivers({50.0}, {0.0, receiverRange});
   const RayPath path = makeWkbCrossingPath();
@@ -287,8 +277,8 @@ RayCenteredCervenyDiagnostic runWkbCrossingDiagnostic(
       BeamWidthMode::Wkb);
   const auto diagnostic = influence.accumulate(
       workspace, path, frequencyState, {1.0, 0.0},
-      RayCenteredCervenyDiagnosticRequest{
-          .receiverRangeIndex = 1U, .receiverDepthIndex = 0U});
+      RayCenteredCervenyDiagnosticRequest{.receiverRangeIndex = 1U,
+                                          .receiverDepthIndex = 0U});
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "WKB crossing diagnostic evaluates the receiver chord");
   return diagnostic.value();
@@ -315,8 +305,8 @@ void testWkbReceiverInterpolationUpdatesKmah(Context& context) {
         FrequencyWorkspace workspace(1.0, receivers);
         const RayCenteredCervenyInfluence minimumWidth(
             environment, receivers, {}, BeamWidthMode::MinimumWidth);
-        static_cast<void>(minimumWidth.accumulate(
-            workspace, path, frequencyState, {1.0, 0.0}));
+        static_cast<void>(minimumWidth.accumulate(workspace, path,
+                                                  frequencyState, {1.0, 0.0}));
       },
       "F/M ray-centered epsilon remains positive imaginary only");
   context.expectThrows<ValidationError>(
@@ -324,8 +314,8 @@ void testWkbReceiverInterpolationUpdatesKmah(Context& context) {
         FrequencyWorkspace workspace(1.0, receivers);
         const RayCenteredCervenyInfluence wkb(environment, receivers, {},
                                               BeamWidthMode::Wkb);
-        static_cast<void>(wkb.accumulate(workspace, path, frequencyState,
-                                         {0.0, 1.0}));
+        static_cast<void>(
+            wkb.accumulate(workspace, path, frequencyState, {0.0, 1.0}));
       },
       "WKB ray-centered epsilon remains real only");
 }
@@ -342,8 +332,8 @@ void testHermiteAppliedOnceToIntensity(Context& context) {
       BeamWidthMode::MinimumWidth, SimulationRunMode::Incoherent);
   const auto diagnostic = influence.accumulateIntensity(
       workspace, path, frequencyState, kEpsilon,
-      RayCenteredCervenyDiagnosticRequest{
-          .receiverRangeIndex = 1U, .receiverDepthIndex = 0U});
+      RayCenteredCervenyDiagnosticRequest{.receiverRangeIndex = 1U,
+                                          .receiverDepthIndex = 0U});
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "Hermite intensity diagnostic is evaluated");
   const double expectedTaper = cervenyHermiteTaper(40.0, 30.0, 60.0);
@@ -363,9 +353,9 @@ void testModeAndGridContracts(Context& context) {
   const RayPath path = makeSlantedPath(3U, 0.0);
   const RayFrequencyState frequencyState = makeFrequencyState(3U, 1.0);
   const RayCenteredCervenyInfluence coherent(environment, receivers);
-  const RayCenteredCervenyInfluence incoherent(
-      environment, receivers, {}, BeamWidthMode::MinimumWidth,
-      SimulationRunMode::Incoherent);
+  const RayCenteredCervenyInfluence incoherent(environment, receivers, {},
+                                               BeamWidthMode::MinimumWidth,
+                                               SimulationRunMode::Incoherent);
   context.expectThrows<ValidationError>(
       [&] {
         IntensityWorkspace workspace(1.0, receivers);

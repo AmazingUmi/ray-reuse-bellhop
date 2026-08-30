@@ -34,8 +34,8 @@ void EigenrayWriter::write(
     const std::vector<std::pair<std::size_t, EigenrayHit>>& hits) {
   write(path, title, simulation, frequency,
         std::span<const RayPathCache>(&cache, 1U),
-        std::span<const std::vector<std::pair<std::size_t, EigenrayHit>>>(
-            &hits, 1U));
+        std::span<const std::vector<std::pair<std::size_t, EigenrayHit>>>(&hits,
+                                                                          1U));
 }
 
 void EigenrayWriter::write(
@@ -67,8 +67,8 @@ void EigenrayWriter::write(
           "eigenray writer requires one complete frozen launch fan per source");
     }
   }
-  static_cast<void>(checkedOriginInt32(simulation.sourceCount(),
-                                       "E source count"));
+  static_cast<void>(
+      checkedOriginInt32(simulation.sourceCount(), "E source count"));
   static_cast<void>(checkedOriginInt32(
       simulation.launchFanPlan().launchAngleCount, "E launch-angle count"));
   std::filesystem::path temporary = path;
@@ -106,7 +106,8 @@ void EigenrayWriter::write(
         if (hit.receiverRangeIndex >= simulation.receivers().rangeCount() ||
             hit.receiverDepthIndex >=
                 simulation.receivers().receiversPerRange())
-          throw ValidationError("eigenray writer receiver index is out of range");
+          throw ValidationError(
+              "eigenray writer receiver index is out of range");
         if (hit.prefixPointCount < 2U ||
             hit.prefixPointCount > pathValue.points.size())
           throw ValidationError(
@@ -122,9 +123,8 @@ void EigenrayWriter::write(
         static_cast<void>(checkedOriginInt32(encoded.bottomBounceCount,
                                              "E bottom bounce count"));
         output << pathValue.launchAngle * (180.0 / std::numbers::pi) << '\n'
-               << encoded.pointIndices.size() << ' '
-               << encoded.topBounceCount << ' ' << encoded.bottomBounceCount
-               << '\n';
+               << encoded.pointIndices.size() << ' ' << encoded.topBounceCount
+               << ' ' << encoded.bottomBounceCount << '\n';
         for (std::size_t index : encoded.pointIndices)
           output << pathValue.points[index].position.range << ' '
                  << pathValue.points[index].position.depth << '\n';
@@ -137,7 +137,8 @@ void EigenrayWriter::write(
     std::error_code error;
     std::filesystem::rename(temporary, path, error);
     if (error)
-      throw BellhopError("unable to publish eigenray output: " + error.message());
+      throw BellhopError("unable to publish eigenray output: " +
+                         error.message());
   } catch (...) {
     std::error_code ignored;
     std::filesystem::remove(temporary, ignored);

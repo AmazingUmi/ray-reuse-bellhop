@@ -221,14 +221,13 @@ void testN2CurvatureEntersDynamicEquations(Context& context) {
   const GeometrySspEvaluator n2Linear(
       SoundSpeedProfile(profile.points(), SspInterpolationKind::N2Linear));
   constexpr double angle = 37.0 * kPi / 180.0;
-  RayState initial{
-      .position = Vec2{.range = 10.0, .depth = 200.0},
-      .slowness = Vec2{.range = std::cos(angle) / 1500.0,
-                       .depth = std::sin(angle) / 1500.0},
-      .dynamicP = {1.0, -1.0},
-      .dynamicQ = {0.0, 0.0},
-      .soundSpeed = 1500.0,
-      .realTravelTime = 0.75};
+  RayState initial{.position = Vec2{.range = 10.0, .depth = 200.0},
+                   .slowness = Vec2{.range = std::cos(angle) / 1500.0,
+                                    .depth = std::sin(angle) / 1500.0},
+                   .dynamicP = {1.0, -1.0},
+                   .dynamicQ = {0.0, 0.0},
+                   .soundSpeed = 1500.0,
+                   .realTravelTime = 0.75};
 
   const auto cResult = stepRay(cLinear, initial, 0U, 120.0);
   const auto n2Result = stepRay(n2Linear, initial, 0U, 120.0);
@@ -416,34 +415,30 @@ void testN2DiffersFromCLinearAndPchip(Context& context) {
 // across this finite step; accidentally routing it through applyGradientJump
 // would mistake that smooth evolution for a jump and materially change p.
 void testSplineGradientContinuityAvoidsNodeJump(Context& context) {
-  static_assert(
-      CubicSplineSsp::gradientContinuity() ==
-      SspGradientContinuity::ContinuousAtNodes);
-  static_assert(
-      CubicSplineFrequencySsp::gradientContinuity() ==
-      SspGradientContinuity::ContinuousAtNodes);
-  context.check(
-      CubicSplineSsp::gradientContinuity() ==
-          SspGradientContinuity::ContinuousAtNodes &&
-          CubicSplineFrequencySsp::gradientContinuity() ==
-              SspGradientContinuity::ContinuousAtNodes,
-      "spline selects the ContinuousAtNodes branch that never calls "
-      "applyGradientJump");
+  static_assert(CubicSplineSsp::gradientContinuity() ==
+                SspGradientContinuity::ContinuousAtNodes);
+  static_assert(CubicSplineFrequencySsp::gradientContinuity() ==
+                SspGradientContinuity::ContinuousAtNodes);
+  context.check(CubicSplineSsp::gradientContinuity() ==
+                        SspGradientContinuity::ContinuousAtNodes &&
+                    CubicSplineFrequencySsp::gradientContinuity() ==
+                        SspGradientContinuity::ContinuousAtNodes,
+                "spline selects the ContinuousAtNodes branch that never calls "
+                "applyGradientJump");
 
   const SoundSpeedProfile profile = makePiecewiseLinearProfile();
   const GeometrySspEvaluator spline(
       SoundSpeedProfile(profile.points(), SspInterpolationKind::CubicSpline));
-  context.check(spline.gradientContinuity() ==
-                    SspGradientContinuity::ContinuousAtNodes,
-                "runtime spline evaluator reports continuous node gradients");
+  context.check(
+      spline.gradientContinuity() == SspGradientContinuity::ContinuousAtNodes,
+      "runtime spline evaluator reports continuous node gradients");
 
   const Vec2 node{.range = 0.0, .depth = 100.0};
   const auto splineBelow = spline.evaluateAtSegment(node, 0U);
   const auto splineAbove = spline.evaluateAtSegment(node, 1U);
-  context.check(
-      std::abs(splineBelow.soundSpeedGradient.depth -
-               splineAbove.soundSpeedGradient.depth) < 1.0e-9,
-      "spline gradient is continuous across the node");
+  context.check(std::abs(splineBelow.soundSpeedGradient.depth -
+                         splineAbove.soundSpeedGradient.depth) < 1.0e-9,
+                "spline gradient is continuous across the node");
 
   constexpr double stepLength = 30.0;
   RayState initial{
@@ -453,8 +448,7 @@ void testSplineGradientContinuityAvoidsNodeJump(Context& context) {
       .dynamicQ = {0.5, 1.0},
       .soundSpeed = 1498.0,
       .realTravelTime = 0.0};
-  const SoundSpeedSample initialSample =
-      spline.evaluate(initial.position, 0U);
+  const SoundSpeedSample initialSample = spline.evaluate(initial.position, 0U);
   initial.soundSpeed = initialSample.soundSpeed;
 
   const double halfStep = 0.5 * stepLength;
@@ -463,8 +457,7 @@ void testSplineGradientContinuityAvoidsNodeJump(Context& context) {
       initial.position + halfStep * initialSample.soundSpeed * initial.slowness;
   midpoint.slowness =
       initial.slowness -
-      (halfStep /
-       (initialSample.soundSpeed * initialSample.soundSpeed)) *
+      (halfStep / (initialSample.soundSpeed * initialSample.soundSpeed)) *
           initialSample.soundSpeedGradient;
   const double initialCurvature =
       rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
@@ -486,18 +479,18 @@ void testSplineGradientContinuityAvoidsNodeJump(Context& context) {
   std::array<double, 2> expectedP{};
   std::array<double, 2> expectedQ{};
   for (std::size_t index = 0; index < expectedP.size(); ++index) {
-    expectedP[index] = initial.dynamicP[index] -
-                       stepLength * midpointCurvature *
-                           midpoint.dynamicQ[index];
-    expectedQ[index] = initial.dynamicQ[index] +
-                       stepLength * midpointSample.soundSpeed *
-                           midpoint.dynamicP[index];
+    expectedP[index] = initial.dynamicP[index] - stepLength *
+                                                     midpointCurvature *
+                                                     midpoint.dynamicQ[index];
+    expectedQ[index] = initial.dynamicQ[index] + stepLength *
+                                                     midpointSample.soundSpeed *
+                                                     midpoint.dynamicP[index];
   }
 
   const auto result = stepRay(spline, initial, 0U, stepLength);
-  context.check(result.segmentIndex == 1U &&
-                    result.endState.position.depth > node.depth,
-                "production spline step crosses the interior SSP node");
+  context.check(
+      result.segmentIndex == 1U && result.endState.position.depth > node.depth,
+      "production spline step crosses the interior SSP node");
   for (std::size_t index = 0; index < expectedP.size(); ++index) {
     context.checkNear(result.endState.dynamicP[index], expectedP[index],
                       1.0e-14,
@@ -525,10 +518,10 @@ void testSplineGradientContinuityAvoidsNodeJump(Context& context) {
        incidenceTangent *
            rayreuse::dot(gradientDifference, result.endState.slowness)) /
       endSample.soundSpeed;
-  context.check(std::abs(result.endState.dynamicQ[1] *
-                         erroneousJumpCorrection) > 1.0e-6,
-                "routing a smooth spline crossing through applyGradientJump "
-                "would cause a detectable dynamic-p regression");
+  context.check(
+      std::abs(result.endState.dynamicQ[1] * erroneousJumpCorrection) > 1.0e-6,
+      "routing a smooth spline crossing through applyGradientJump "
+      "would cause a detectable dynamic-p regression");
 }
 
 // The dynamic-ray equations consume c_nn/c² built from the sample Hessian;
@@ -543,10 +536,10 @@ void testSplineHessianFeedsDynamicCurvature(Context& context) {
   const CLinearSsp cLinear(makePiecewiseLinearProfile());
   const Vec2 slowness{.range = 0.8 / 1498.0, .depth = 0.6 / 1498.0};
 
-  const SoundSpeedSample splineSample = spline.evaluateAtSegment(
-      Vec2{.range = 0.0, .depth = 50.0}, 0U);
-  const SoundSpeedSample cSample = cLinear.evaluateAtSegment(
-      Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  const SoundSpeedSample splineSample =
+      spline.evaluateAtSegment(Vec2{.range = 0.0, .depth = 50.0}, 0U);
+  const SoundSpeedSample cSample =
+      cLinear.evaluateAtSegment(Vec2{.range = 0.0, .depth = 50.0}, 0U);
 
   context.check(std::abs(splineSample.soundSpeedHessian.depthDepth) > 1.0e-9,
                 "spline sample carries a nonzero depth Hessian");
@@ -584,14 +577,13 @@ void testSplineCurvatureEntersDynamicEquations(Context& context) {
   const GeometrySspEvaluator spline(
       SoundSpeedProfile(profile.points(), SspInterpolationKind::CubicSpline));
   constexpr double angle = 37.0 * kPi / 180.0;
-  RayState initial{
-      .position = Vec2{.range = 10.0, .depth = 50.0},
-      .slowness = Vec2{.range = std::cos(angle) / 1490.0,
-                       .depth = std::sin(angle) / 1490.0},
-      .dynamicP = {1.0, -1.0},
-      .dynamicQ = {0.0, 0.0},
-      .soundSpeed = 1490.0,
-      .realTravelTime = 0.75};
+  RayState initial{.position = Vec2{.range = 10.0, .depth = 50.0},
+                   .slowness = Vec2{.range = std::cos(angle) / 1490.0,
+                                    .depth = std::sin(angle) / 1490.0},
+                   .dynamicP = {1.0, -1.0},
+                   .dynamicQ = {0.0, 0.0},
+                   .soundSpeed = 1490.0,
+                   .realTravelTime = 0.75};
 
   const auto cResult = stepRay(cLinear, initial, 0U, 30.0);
   const auto splineResult = stepRay(spline, initial, 0U, 30.0);
@@ -677,10 +669,11 @@ void testValidation(Context& context) {
       "a limiter cannot increase its proposed step");
 }
 
-SoundSpeedProfile makeQuadrilateralProfile(
-    std::vector<SoundSpeedPoint> points, std::vector<double> ranges,
-    std::vector<double> speedsDepthMajor, std::size_t depthCount,
-    std::size_t rangeCount) {
+SoundSpeedProfile makeQuadrilateralProfile(std::vector<SoundSpeedPoint> points,
+                                           std::vector<double> ranges,
+                                           std::vector<double> speedsDepthMajor,
+                                           std::size_t depthCount,
+                                           std::size_t rangeCount) {
   return SoundSpeedProfile(
       std::move(points), SspInterpolationKind::Quadrilateral,
       std::make_shared<const QuadrilateralSspGrid>(
@@ -712,8 +705,7 @@ SoundSpeedProfile makeQCornerProfile() {
        {.depth = 100.0, .soundSpeed = 1505.0, .density = 1000.0},
        {.depth = 200.0, .soundSpeed = 1515.0, .density = 1000.0}},
       {0.0, 350.0, 800.0},
-      {1500.0, 1540.0, 1560.0, 1505.0, 1545.0, 1565.0, 1515.0, 1555.0,
-       1575.0},
+      {1500.0, 1540.0, 1560.0, 1505.0, 1545.0, 1565.0, 1515.0, 1555.0, 1575.0},
       3U, 3U);
 }
 
@@ -725,8 +717,8 @@ SoundSpeedProfile makeQDyadicProfile() {
   return makeQuadrilateralProfile(
       {{.depth = 0.0, .soundSpeed = 1024.0, .density = 1000.0},
        {.depth = 200.0, .soundSpeed = 1024.0, .density = 1000.0}},
-      {0.0, 256.0, 512.0},
-      {1024.0, 1024.0, 1024.0, 1024.0, 1024.0, 1024.0}, 2U, 3U);
+      {0.0, 256.0, 512.0}, {1024.0, 1024.0, 1024.0, 1024.0, 1024.0, 1024.0}, 2U,
+      3U);
 }
 
 // Cross-gradient grid with a deliberately steep third column, so the dc/dr
@@ -736,8 +728,8 @@ SoundSpeedProfile makeQCrossGradientProfile() {
   return makeQuadrilateralProfile(
       {{.depth = 0.0, .soundSpeed = 1490.0, .density = 1000.0},
        {.depth = 100.0, .soundSpeed = 1490.0, .density = 1100.0}},
-      {0.0, 350.0, 800.0},
-      {1500.0, 1540.0, 1660.0, 1500.0, 1520.0, 1560.0}, 2U, 3U);
+      {0.0, 350.0, 800.0}, {1500.0, 1540.0, 1660.0, 1500.0, 1520.0, 1560.0}, 2U,
+      3U);
 }
 
 RayState makeDiagonalRayState(double range, double depth) {
@@ -754,8 +746,7 @@ RayState makeDiagonalRayState(double range, double depth) {
 // exactly as applyGradientJump forms it, for either crossing branch.
 double jumpCorrection(const GeometrySspEvaluator& ssp, const RayState& initial,
                       const RayState& end, bool depthBranch) {
-  const SoundSpeedSample initialSample =
-      ssp.evaluate(initial.position, 0U, 0U);
+  const SoundSpeedSample initialSample = ssp.evaluate(initial.position, 0U, 0U);
   const SoundSpeedSample endSample = ssp.evaluate(end.position, 0U, 0U);
   const Vec2 gradientJump =
       endSample.soundSpeedGradient - initialSample.soundSpeedGradient;
@@ -767,8 +758,7 @@ double jumpCorrection(const GeometrySspEvaluator& ssp, const RayState& initial,
       depthBranch ? end.slowness.range / end.slowness.depth
                   : -end.slowness.depth / end.slowness.range;
   return incidenceTangent *
-         (2.0 * normalGradientJump -
-          incidenceTangent * tangentGradientJump) /
+         (2.0 * normalGradientJump - incidenceTangent * tangentGradientJump) /
          endSample.soundSpeed;
 }
 
@@ -788,15 +778,13 @@ void testQCrossDepthSegmentKeepsDepthJumpSemantics(Context& context) {
   context.check(result.endState.position.depth > 100.0,
                 "Q depth crossing lands below the internal depth node");
 
-  const double correction =
-      jumpCorrection(ssp, initial, result.endState, true);
+  const double correction = jumpCorrection(ssp, initial, result.endState, true);
   context.check(std::abs(correction) > 1.0e-8,
                 "the Q depth node carries a material gradient jump");
   for (std::size_t index = 0; index < initial.dynamicP.size(); ++index) {
     context.checkNear(
         result.endState.dynamicP[index],
-        initial.dynamicP[index] -
-            result.endState.dynamicQ[index] * correction,
+        initial.dynamicP[index] - result.endState.dynamicQ[index] * correction,
         1.0e-15,
         "Q depth crossing applies the iSegz jump to dynamic pair " +
             std::to_string(index));
@@ -836,15 +824,14 @@ void testQCornerCrossingPrefersDepthBranchSingleJump(Context& context) {
     context.check(
         std::abs(result.endState.dynamicP[index] -
                  (initial.dynamicP[index] -
-                  result.endState.dynamicQ[index] * rangeCorrection)) >
-            1.0e-9,
+                  result.endState.dynamicQ[index] * rangeCorrection)) > 1.0e-9,
         "corner crossing does not use the range-branch correction on pair " +
             std::to_string(index));
     context.check(
         std::abs(result.endState.dynamicP[index] -
-                 (initial.dynamicP[index] - result.endState.dynamicQ[index] *
-                                               (depthCorrection +
-                                                rangeCorrection))) > 1.0e-9,
+                 (initial.dynamicP[index] -
+                  result.endState.dynamicQ[index] *
+                      (depthCorrection + rangeCorrection))) > 1.0e-9,
         "corner crossing does not stack a second range correction on pair " +
             std::to_string(index));
   }
@@ -933,17 +920,14 @@ void testQRangeJumpActuallyChangesDynamicP(Context& context) {
                 "the range crossing advances only the range segment");
 
   // Manual predictor, mirroring predictorState() from public samples.
-  const SoundSpeedSample initialSample =
-      ssp.evaluate(initial.position, 0U, 0U);
-  const Vec2 initialTangent =
-      initialSample.soundSpeed * initial.slowness;
+  const SoundSpeedSample initialSample = ssp.evaluate(initial.position, 0U, 0U);
+  const Vec2 initialTangent = initialSample.soundSpeed * initial.slowness;
   RayState midpoint = initial;
   midpoint.position = initial.position + halfStep * initialTangent;
   const double initialSpeedSquared =
       initialSample.soundSpeed * initialSample.soundSpeed;
-  midpoint.slowness =
-      initial.slowness -
-      (halfStep / initialSpeedSquared) * initialSample.soundSpeedGradient;
+  midpoint.slowness = initial.slowness - (halfStep / initialSpeedSquared) *
+                                             initialSample.soundSpeedGradient;
   const double initialCurvature =
       rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
           initialSample.soundSpeedHessian, initial.slowness);
@@ -960,21 +944,21 @@ void testQRangeJumpActuallyChangesDynamicP(Context& context) {
       "the predictor midpoint of this fixture stays inside the left cell");
 
   // Unlimited-step corrector: start weight zero, midpoint weight = step.
-  const SoundSpeedSample midpointSample = ssp.evaluate(
-      midpoint.position, initialSample.segmentIndex,
-      initialSample.rangeSegmentIndex);
+  const SoundSpeedSample midpointSample =
+      ssp.evaluate(midpoint.position, initialSample.segmentIndex,
+                   initialSample.rangeSegmentIndex);
   const double midpointCurvature =
       rayreuse::soundSpeedNormalSecondDerivativeOverSquaredSpeed(
           midpointSample.soundSpeedHessian, midpoint.slowness);
   std::array<double, 2> expectedP{};
   std::array<double, 2> expectedQ{};
   for (std::size_t index = 0; index < expectedP.size(); ++index) {
-    expectedP[index] =
-        initial.dynamicP[index] -
-        stepLength * midpointCurvature * midpoint.dynamicQ[index];
-    expectedQ[index] =
-        initial.dynamicQ[index] +
-        stepLength * midpointSample.soundSpeed * midpoint.dynamicP[index];
+    expectedP[index] = initial.dynamicP[index] - stepLength *
+                                                     midpointCurvature *
+                                                     midpoint.dynamicQ[index];
+    expectedQ[index] = initial.dynamicQ[index] + stepLength *
+                                                     midpointSample.soundSpeed *
+                                                     midpoint.dynamicP[index];
   }
   for (std::size_t index = 0; index < expectedP.size(); ++index) {
     context.checkNear(result.endState.dynamicQ[index], expectedQ[index],
@@ -990,16 +974,14 @@ void testQRangeJumpActuallyChangesDynamicP(Context& context) {
                 "the cross-gradient range node produces a material jump");
   for (std::size_t index = 0; index < expectedP.size(); ++index) {
     context.check(
-        std::abs(result.endState.dynamicP[index] - expectedP[index]) >
-            1.0e-6,
+        std::abs(result.endState.dynamicP[index] - expectedP[index]) > 1.0e-6,
         "the range jump observably moves dynamic p of pair " +
             std::to_string(index) + " away from the no-jump update");
     context.checkNear(result.endState.dynamicP[index],
-                      expectedP[index] -
-                          expectedQ[index] * correction,
-                      1.0e-10,
+                      expectedP[index] - expectedQ[index] * correction, 1.0e-10,
                       "range crossing applies the -tz/tr jump to dynamic "
-                      "pair " + std::to_string(index));
+                      "pair " +
+                          std::to_string(index));
   }
 }
 
@@ -1008,7 +990,8 @@ void testQRangeJumpActuallyChangesDynamicP(Context& context) {
 // including the StepLimitRequest payloads handed to the limiter, and the
 // CLinearSsp direct overload must agree with the dispatched path.
 void testNonQRangeHintZeroIsBitIdentical(Context& context) {
-  const std::vector<SoundSpeedPoint> nodes = makePiecewiseLinearProfile().points();
+  const std::vector<SoundSpeedPoint> nodes =
+      makePiecewiseLinearProfile().points();
   const RayState initial = makeRayState(37.0 * kPi / 180.0);
 
   for (const SspInterpolationKind kind :
@@ -1029,23 +1012,24 @@ void testNonQRangeHintZeroIsBitIdentical(Context& context) {
     const auto single = stepRay(ssp, initial, 1U, 120.0, singleRecorder);
     const auto dual = stepRay(ssp, initial, 1U, 0U, 120.0, doubleRecorder);
 
-    const std::string label = "non-Q kind " + std::to_string(static_cast<int>(kind));
-    context.check(single.endState.position == dual.endState.position &&
-                      single.endState.slowness == dual.endState.slowness &&
-                      single.endState.soundSpeed == dual.endState.soundSpeed &&
-                      single.endState.realTravelTime ==
-                          dual.endState.realTravelTime,
-                  label + " keeps position/slowness/speed/travel bit-identical");
+    const std::string label =
+        "non-Q kind " + std::to_string(static_cast<int>(kind));
+    context.check(
+        single.endState.position == dual.endState.position &&
+            single.endState.slowness == dual.endState.slowness &&
+            single.endState.soundSpeed == dual.endState.soundSpeed &&
+            single.endState.realTravelTime == dual.endState.realTravelTime,
+        label + " keeps position/slowness/speed/travel bit-identical");
     context.check(single.endState.dynamicP == dual.endState.dynamicP &&
                       single.endState.dynamicQ == dual.endState.dynamicQ,
                   label + " keeps dynamic states bit-identical");
-    context.check(single.quadrature.stepLength == dual.quadrature.stepLength &&
-                      single.quadrature.startWeight ==
-                          dual.quadrature.startWeight &&
-                      single.quadrature.midpointWeight ==
-                          dual.quadrature.midpointWeight &&
-                      single.quadrature.midpoint == dual.quadrature.midpoint,
-                  label + " keeps quadrature bit-identical");
+    context.check(
+        single.quadrature.stepLength == dual.quadrature.stepLength &&
+            single.quadrature.startWeight == dual.quadrature.startWeight &&
+            single.quadrature.midpointWeight ==
+                dual.quadrature.midpointWeight &&
+            single.quadrature.midpoint == dual.quadrature.midpoint,
+        label + " keeps quadrature bit-identical");
     context.check(single.segmentIndex == dual.segmentIndex &&
                       single.rangeSegmentIndex == dual.rangeSegmentIndex,
                   label + " reports identical segment indices");
@@ -1069,12 +1053,12 @@ void testNonQRangeHintZeroIsBitIdentical(Context& context) {
     if (kind == SspInterpolationKind::CLinear) {
       const CLinearSsp concrete(SoundSpeedProfile(nodes, kind));
       const auto direct = stepRay(concrete, initial, 1U, 120.0);
-      context.check(direct.endState.dynamicP == dual.endState.dynamicP &&
-                        direct.quadrature.stepLength ==
-                            dual.quadrature.stepLength &&
-                        direct.rangeSegmentIndex == 0U,
-                    "the CLinearSsp direct overload matches the dispatched "
-                    "two-hint path");
+      context.check(
+          direct.endState.dynamicP == dual.endState.dynamicP &&
+              direct.quadrature.stepLength == dual.quadrature.stepLength &&
+              direct.rangeSegmentIndex == 0U,
+          "the CLinearSsp direct overload matches the dispatched "
+          "two-hint path");
     }
   }
 }

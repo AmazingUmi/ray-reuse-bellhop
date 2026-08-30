@@ -32,8 +32,8 @@ class GeometrySspEvaluator {
   [[nodiscard]] SspGradientContinuity gradientContinuity() const noexcept;
   [[nodiscard]] std::size_t segmentCount() const noexcept;
   [[nodiscard]] std::size_t rangeSegmentCount() const noexcept;
-  [[nodiscard]] std::size_t locateSegment(
-      double depth, std::size_t previousSegment) const;
+  [[nodiscard]] std::size_t locateSegment(double depth,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] std::size_t locateRangeSegment(
       double range, std::size_t previousRangeSegment) const;
   [[nodiscard]] double minimumRangeForSegment(
@@ -45,15 +45,15 @@ class GeometrySspEvaluator {
   [[nodiscard]] SoundSpeedSample evaluateAtSegments(
       Vec2 position, std::size_t segmentIndex,
       std::size_t rangeSegmentIndex) const;
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] SoundSpeedSample evaluate(
       Vec2 position, std::size_t previousSegment,
       std::size_t previousRangeSegment) const;
 
  private:
-  using Backend = std::variant<CLinearSsp, PchipSsp, N2LinearSsp, CubicSplineSsp,
-                               QuadrilateralSsp>;
+  using Backend = std::variant<CLinearSsp, PchipSsp, N2LinearSsp,
+                               CubicSplineSsp, QuadrilateralSsp>;
 
   SspInterpolationKind interpolationKind_;
   Backend backend_;
@@ -80,24 +80,23 @@ class FrequencySspEvaluator {
   [[nodiscard]] double maximumRangeForSegment(
       std::size_t rangeSegmentIndex) const;
   [[nodiscard]] bool isLossless() const noexcept;
-  [[nodiscard]] std::optional<std::complex<double>>
-  uniformComplexSoundSpeed() const noexcept;
+  [[nodiscard]] std::optional<std::complex<double>> uniformComplexSoundSpeed()
+      const noexcept;
   [[nodiscard]] SoundSpeedSample evaluateAtSegment(
       Vec2 position, std::size_t segmentIndex) const;
   [[nodiscard]] SoundSpeedSample evaluateAtSegments(
       Vec2 position, std::size_t segmentIndex,
       std::size_t rangeSegmentIndex) const;
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] SoundSpeedSample evaluate(
       Vec2 position, std::size_t previousSegment,
       std::size_t previousRangeSegment) const;
 
  private:
   using Backend =
-      std::variant<CLinearFrequencySsp, PchipFrequencySsp,
-                   N2LinearFrequencySsp, CubicSplineFrequencySsp,
-                   QuadrilateralFrequencySsp>;
+      std::variant<CLinearFrequencySsp, PchipFrequencySsp, N2LinearFrequencySsp,
+                   CubicSplineFrequencySsp, QuadrilateralFrequencySsp>;
 
   SspInterpolationKind interpolationKind_;
   Backend backend_;

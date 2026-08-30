@@ -42,8 +42,7 @@ class GeometricHatInfluence {
 
   explicit GeometricHatInfluence(
       ReceiverGrid receivers,
-      CervenyCoordinateSystem coordinates =
-          CervenyCoordinateSystem::Cartesian,
+      CervenyCoordinateSystem coordinates = CervenyCoordinateSystem::Cartesian,
       SourceGeometry sourceGeometry = SourceGeometry::Point);
 
   [[nodiscard]] std::optional<GeometricHatDiagnostic> accumulate(

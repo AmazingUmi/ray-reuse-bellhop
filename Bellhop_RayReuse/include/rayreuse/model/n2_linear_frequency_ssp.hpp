@@ -23,8 +23,8 @@ class N2LinearFrequencySsp {
   N2LinearFrequencySsp(const SoundSpeedProfile& profile, double frequency,
                        const VolumeAttenuation& volumeAttenuation);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::N2Linear);
   }
   [[nodiscard]] double frequency() const noexcept;
@@ -32,12 +32,12 @@ class N2LinearFrequencySsp {
   // These queries let the frequency projector bypass repeated N² evaluation
   // without changing the general nonuniform path.
   [[nodiscard]] bool isLossless() const noexcept;
-  [[nodiscard]] std::optional<std::complex<double>>
-  uniformComplexSoundSpeed() const noexcept;
+  [[nodiscard]] std::optional<std::complex<double>> uniformComplexSoundSpeed()
+      const noexcept;
   [[nodiscard]] SoundSpeedSample evaluateAtSegment(
       Vec2 position, std::size_t segmentIndex) const;
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
 
  private:
   struct Segment {
@@ -45,8 +45,8 @@ class N2LinearFrequencySsp {
     std::complex<double> n2DepthGradient{};
   };
 
-  [[nodiscard]] SoundSpeedSample addComplexSoundSpeed(
-      SoundSpeedSample sample, double depth) const;
+  [[nodiscard]] SoundSpeedSample addComplexSoundSpeed(SoundSpeedSample sample,
+                                                      double depth) const;
 
   double frequency_{};
   N2LinearSsp realProfile_;

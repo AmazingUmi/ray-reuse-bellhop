@@ -519,8 +519,8 @@ struct ParsedBoundaryFile {
   std::vector<double> ranges;
   ranges.reserve(rangeCount);
   for (std::size_t index = 0U; index < rangeCount; ++index) {
-    const double rangeKilometers = parseDouble(
-        rangesRecord, index, source, "quadrilateral SSP range");
+    const double rangeKilometers =
+        parseDouble(rangesRecord, index, source, "quadrilateral SSP range");
     const double rangeMeters = rangeKilometers * kKilometersToMeters;
     if (!std::isfinite(rangeMeters)) {
       fail(source, rangesRecord.lineNumber,
@@ -539,8 +539,8 @@ struct ParsedBoundaryFile {
     requireTokenCount(rowRecord, rangeCount, source,
                       "quadrilateral SSP speed row");
     for (std::size_t rangeIndex = 0U; rangeIndex < rangeCount; ++rangeIndex) {
-      const double speed = parseDouble(
-          rowRecord, rangeIndex, source, "quadrilateral SSP sound speed");
+      const double speed = parseDouble(rowRecord, rangeIndex, source,
+                                       "quadrilateral SSP sound speed");
       if (speed <= 0.0) {
         fail(source, rowRecord.lineNumber,
              "quadrilateral SSP sound speeds must be positive");
@@ -654,11 +654,10 @@ struct ParsedBoundaryFile {
   }
   reader.requireEnd();
   BoundaryGeometry geometry =
-      format == "C"
-          ? BoundaryGeometry::curvilinear(
-                std::move(nodes), referenceDepth, orientation)
-          : BoundaryGeometry::piecewiseLinear(
-                std::move(nodes), referenceDepth, orientation);
+      format == "C" ? BoundaryGeometry::curvilinear(std::move(nodes),
+                                                    referenceDepth, orientation)
+                    : BoundaryGeometry::piecewiseLinear(
+                          std::move(nodes), referenceDepth, orientation);
   SharedLongBoundaryMaterials longMaterials;
   if (longFormat) {
     longMaterials = std::make_shared<const std::vector<AcousticMaterial>>(
@@ -722,8 +721,7 @@ struct ParsedRunType {
          "'Ag/ag/Eg' run types are supported");
   }
   if (arrivals || eigenray) {
-    if (runType[1U] != 'G' && runType[1U] != 'g' &&
-        runType[1U] != 'B') {
+    if (runType[1U] != 'G' && runType[1U] != 'g' && runType[1U] != 'B') {
       fail(sourceName, record.lineNumber,
            "arrival and eigenray run types require G, g, or B beams");
     }
@@ -780,10 +778,9 @@ struct ParsedRunType {
                                     : BeamFamily::GeometricGaussian;
   }
   return ParsedRunType{.runMode = mode,
-                       .receiverLayout =
-                           irregularReceivers
-                               ? ReceiverGridLayout::Irregular
-                               : ReceiverGridLayout::Rectilinear,
+                       .receiverLayout = irregularReceivers
+                                             ? ReceiverGridLayout::Irregular
+                                             : ReceiverGridLayout::Rectilinear,
                        .sourceGeometry = sourceGeometry,
                        .cervenyCoordinateSystem = coordinateSystem,
                        .beamFamily = beamFamily,
@@ -877,14 +874,14 @@ struct ParsedRunType {
       requireTokenCount(parametersRecord, 4U, source,
                         "Francois-Garrison parameters");
       FrancoisGarrisonParameters parameters{
-          .temperatureCelsius = parseDouble(
-              parametersRecord, 0U, source, "Francois-Garrison temperature"),
+          .temperatureCelsius = parseDouble(parametersRecord, 0U, source,
+                                            "Francois-Garrison temperature"),
           .salinityPsu = parseDouble(parametersRecord, 1U, source,
                                      "Francois-Garrison salinity"),
-          .pH = parseDouble(parametersRecord, 2U, source,
-                            "Francois-Garrison pH"),
-          .meanDepthMeters = parseDouble(
-              parametersRecord, 3U, source, "Francois-Garrison mean depth")};
+          .pH =
+              parseDouble(parametersRecord, 2U, source, "Francois-Garrison pH"),
+          .meanDepthMeters = parseDouble(parametersRecord, 3U, source,
+                                         "Francois-Garrison mean depth")};
       if (parameters.temperatureCelsius <= -273.0 ||
           parameters.salinityPsu < 0.0 || parameters.meanDepthMeters < 0.0 ||
           !std::isfinite(parameters.pH)) {
@@ -913,13 +910,12 @@ struct ParsedRunType {
                                         "biological minimum depth"),
             .maximumDepth = parseDouble(layerRecord, 1U, source,
                                         "biological maximum depth"),
-            .resonanceFrequency = parseDouble(
-                layerRecord, 2U, source, "biological resonance frequency"),
+            .resonanceFrequency = parseDouble(layerRecord, 2U, source,
+                                              "biological resonance frequency"),
             .qualityFactor = parseDouble(layerRecord, 3U, source,
                                          "biological quality factor"),
             .attenuationCoefficientDecibelsPerKilometer = parseDouble(
-                layerRecord, 4U, source,
-                "biological attenuation coefficient")};
+                layerRecord, 4U, source, "biological attenuation coefficient")};
         if (layer.minimumDepth > layer.maximumDepth ||
             layer.resonanceFrequency <= 0.0 || layer.qualityFactor <= 0.0 ||
             layer.attenuationCoefficientDecibelsPerKilometer < 0.0) {
@@ -1178,14 +1174,12 @@ struct ParsedRunType {
   const ParsedRunType runType = canonicalRunType(runTypeRecord, source);
   if ((isTransmissionLossMode(runType.runMode) &&
        runType.beamFamily == BeamFamily::CervenyGaussian) ||
-      runType.cervenyCoordinateSystem ==
-          CervenyCoordinateSystem::RayCentered) {
+      runType.cervenyCoordinateSystem == CervenyCoordinateSystem::RayCentered) {
     requireUniformRanges(receiverRanges, receiverRangeCountRecord, source);
   }
   if ((runType.beamFamily == BeamFamily::CervenyGaussian ||
        runType.beamFamily == BeamFamily::GeometricHat) &&
-      runType.cervenyCoordinateSystem ==
-          CervenyCoordinateSystem::RayCentered &&
+      runType.cervenyCoordinateSystem == CervenyCoordinateSystem::RayCentered &&
       runType.receiverLayout == ReceiverGridLayout::Irregular) {
     fail(source, runTypeRecord.lineNumber,
          "ray-centered beam families do not support irregular receiver grids");
@@ -1335,9 +1329,8 @@ struct ParsedRunType {
     sources.push_back(Source{.depth = sourceDepth, .amplitude = 1.0});
   }
   SimulationCase simulationCase(
-      std::move(environment),
-      std::move(sources),
-      std::move(receivers), FrequencyGrid(std::move(frequencies)),
+      std::move(environment), std::move(sources), std::move(receivers),
+      FrequencyGrid(std::move(frequencies)),
       LaunchFan{
           .minimumAngle = minimumLaunchAngleDegrees * degreesToRadians,
           .maximumAngle = maximumLaunchAngleDegrees * degreesToRadians,

@@ -33,10 +33,9 @@ class ShdFrequencyWriter {
   // NSz x receiversPerRange pressure records, laid out source-major (Origin:
   // IRec = 10 + freqIndex*NSz*NRz_per_range + sourceIndex*NRz_per_range +
   // depthIndex).
-  void writeFrequency(std::size_t index,
-                      const FrequencyWorkspace& firstSourceWorkspace,
-                      std::span<const FrequencyWorkspace>
-                          additionalSourceWorkspaces);
+  void writeFrequency(
+      std::size_t index, const FrequencyWorkspace& firstSourceWorkspace,
+      std::span<const FrequencyWorkspace> additionalSourceWorkspaces);
 
   // Per-source entry over one contiguous source-major workspace sequence.
   void writeFrequency(std::size_t index,

@@ -387,11 +387,11 @@ SimulationCase makeMultiSourceSimulation(std::vector<Source> sources,
 }
 
 void testPerSourceTraceProducesIndependentFrozenCaches(Context& context) {
-  const SimulationCase simulation = makeMultiSourceSimulation(
-      {{.depth = 750.0, .amplitude = 1.0},
-       {.depth = 250.0, .amplitude = 1.0},
-       {.depth = 500.0, .amplitude = 1.0}},
-      1000U);
+  const SimulationCase simulation =
+      makeMultiSourceSimulation({{.depth = 750.0, .amplitude = 1.0},
+                                 {.depth = 250.0, .amplitude = 1.0},
+                                 {.depth = 500.0, .amplitude = 1.0}},
+                                1000U);
   context.check(simulation.sourceCount() == 3U &&
                     simulation.sources()[0U].depth == 250.0 &&
                     simulation.sources()[1U].depth == 500.0 &&
@@ -486,8 +486,7 @@ void testPerSourceTraceDiagnostics(Context& context) {
       20U);
   std::string diagnostic;
   try {
-    static_cast<void>(
-        SingleFrequencySolver::traceSourceFan(pointLimited, 1U));
+    static_cast<void>(SingleFrequencySolver::traceSourceFan(pointLimited, 1U));
   } catch (const ValidationError& error) {
     diagnostic = error.what();
   }
@@ -924,8 +923,7 @@ void testSplineEnvironmentSolverSmoke(Context& context) {
   const rayreuse::GeometrySspEvaluator cEvaluator(
       cSimulation.environment().soundSpeedProfile());
   context.check(
-      splineSampleSpeed !=
-          cEvaluator.evaluate(midDepthSample, 0U).soundSpeed,
+      splineSampleSpeed != cEvaluator.evaluate(midDepthSample, 0U).soundSpeed,
       "spline and C-linear evaluations of the same nodes differ, so the "
       "input itself distinguishes the backends");
 
@@ -933,13 +931,13 @@ void testSplineEnvironmentSolverSmoke(Context& context) {
       SingleFrequencySolver::traceRayFan(splineSimulation);
   const rayreuse::RayFanTraceResult cTrace =
       SingleFrequencySolver::traceRayFan(cSimulation);
+  context.check(splineTrace.cache.size() == cTrace.cache.size() &&
+                    splineTrace.cache.size() ==
+                        splineSimulation.launchFanPlan().launchAngleCount,
+                "spline environment traces the complete planned launch fan");
   context.check(
-      splineTrace.cache.size() == cTrace.cache.size() &&
-          splineTrace.cache.size() ==
-              splineSimulation.launchFanPlan().launchAngleCount,
-      "spline environment traces the complete planned launch fan");
-  context.check(
-      splineTrace.cache.contentFingerprint() != cTrace.cache.contentFingerprint(),
+      splineTrace.cache.contentFingerprint() !=
+          cTrace.cache.contentFingerprint(),
       "frozen spline geometry differs from C-linear, proving the variant "
       "backend really enters the tracer");
 
@@ -955,10 +953,12 @@ void testSplineEnvironmentSolverSmoke(Context& context) {
   bool differsFromCLinear = false;
   for (std::size_t index = 0U; index < splineResult.workspace.pressure().size();
        ++index) {
-    const std::complex<double> pressure = splineResult.workspace.pressure()[index];
+    const std::complex<double> pressure =
+        splineResult.workspace.pressure()[index];
     haveFinite = haveFinite && std::isfinite(pressure.real()) &&
                  std::isfinite(pressure.imag());
-    haveNonzeroPressure = haveNonzeroPressure || pressure != std::complex<double>{};
+    haveNonzeroPressure =
+        haveNonzeroPressure || pressure != std::complex<double>{};
     differsFromCLinear =
         differsFromCLinear || pressure != cResult.workspace.pressure()[index];
   }

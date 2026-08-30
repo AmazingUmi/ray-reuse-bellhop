@@ -1,3 +1,5 @@
+#include "rayreuse/model/sound_speed_evaluator.hpp"
+
 #include <array>
 #include <cmath>
 #include <complex>
@@ -16,18 +18,17 @@
 #include "rayreuse/model/n2_linear_ssp.hpp"
 #include "rayreuse/model/pchip_frequency_ssp.hpp"
 #include "rayreuse/model/pchip_ssp.hpp"
-#include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "support/munk_case_fixture.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
 
 using rayreuse::AttenuationUnit;
+using rayreuse::BoundaryModel;
 using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
 using rayreuse::CubicSplineFrequencySsp;
 using rayreuse::CubicSplineSsp;
-using rayreuse::BoundaryModel;
 using rayreuse::Environment;
 using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencySspEvaluator;
@@ -40,8 +41,8 @@ using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::SoundSpeedSample;
 using rayreuse::SspGradientContinuity;
-using rayreuse::SspInterpolationKind;
 using rayreuse::sspGradientContinuity;
+using rayreuse::SspInterpolationKind;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
 using rayreuse::VolumeAttenuation;
@@ -63,23 +64,22 @@ SoundSpeedProfile makeAttenuatingProfile(
       {{.depth = 0.0,
         .soundSpeed = 1480.0,
         .density = 1000.0,
-        .attenuation =
-            {.value = 0.1, .unit = AttenuationUnit::DecibelsPerWavelength}},
+        .attenuation = {.value = 0.1,
+                        .unit = AttenuationUnit::DecibelsPerWavelength}},
        {.depth = 100.0,
         .soundSpeed = 1500.0,
         .density = 1020.0,
-        .attenuation =
-            {.value = 0.2, .unit = AttenuationUnit::DecibelsPerWavelength}},
+        .attenuation = {.value = 0.2,
+                        .unit = AttenuationUnit::DecibelsPerWavelength}},
        {.depth = 300.0,
         .soundSpeed = 1460.0,
         .density = 1060.0,
-        .attenuation =
-            {.value = 0.3, .unit = AttenuationUnit::DecibelsPerWavelength}}},
+        .attenuation = {.value = 0.3,
+                        .unit = AttenuationUnit::DecibelsPerWavelength}}},
       kind);
 }
 
-void checkSameSample(Context& context,
-                     const SoundSpeedSample& expected,
+void checkSameSample(Context& context, const SoundSpeedSample& expected,
                      const SoundSpeedSample& actual) {
   context.check(expected.soundSpeed == actual.soundSpeed,
                 "evaluator preserves sound speed exactly");
@@ -96,7 +96,8 @@ void checkSameSample(Context& context,
 }
 
 void testCLinearDispatchIsExact(Context& context) {
-  const SoundSpeedProfile profile = makePiecewiseProfile(SspInterpolationKind::CLinear);
+  const SoundSpeedProfile profile =
+      makePiecewiseProfile(SspInterpolationKind::CLinear);
   const CLinearSsp concrete(profile);
   const GeometrySspEvaluator evaluator(profile);
 
@@ -113,23 +114,23 @@ void testCLinearDispatchIsExact(Context& context) {
                   evaluator.evaluate(query, 0U));
   checkSameSample(context, concrete.evaluateAtSegment(query, 0U),
                   evaluator.evaluateAtSegment(query, 0U));
-  context.check(concrete.locateSegment(150.0, 0U) ==
-                    evaluator.locateSegment(150.0, 0U),
-                "evaluator preserves segment location");
+  context.check(
+      concrete.locateSegment(150.0, 0U) == evaluator.locateSegment(150.0, 0U),
+      "evaluator preserves segment location");
 
   const SoundSpeedProfile attProfile =
       makeAttenuatingProfile(SspInterpolationKind::CLinear);
   const CLinearFrequencySsp freqConcrete(attProfile, 1000.0);
   const FrequencySspEvaluator freqEvaluator(attProfile, 1000.0);
 
-  context.check(freqEvaluator.interpolationKind() ==
-                    SspInterpolationKind::CLinear,
-                "frequency evaluator reports C-linear interpolation");
+  context.check(
+      freqEvaluator.interpolationKind() == SspInterpolationKind::CLinear,
+      "frequency evaluator reports C-linear interpolation");
   context.check(freqEvaluator.gradientContinuity() ==
                     SspGradientContinuity::DiscontinuousAtNodes,
                 "frequency evaluator reports discontinuous gradient at nodes");
   context.checkNear(freqEvaluator.frequency(), 1000.0, 0.0,
-                "frequency evaluator reports frequency");
+                    "frequency evaluator reports frequency");
   context.check(freqEvaluator.isLossless() == freqConcrete.isLossless(),
                 "frequency evaluator preserves lossless state");
   context.check(freqEvaluator.uniformComplexSoundSpeed() ==
@@ -160,23 +161,23 @@ void testPchipDispatchIsExact(Context& context) {
                   evaluator.evaluate(query, 0U));
   checkSameSample(context, concrete.evaluateAtSegment(query, 0U),
                   evaluator.evaluateAtSegment(query, 0U));
-  context.check(concrete.locateSegment(150.0, 0U) ==
-                    evaluator.locateSegment(150.0, 0U),
-                "evaluator preserves segment location");
+  context.check(
+      concrete.locateSegment(150.0, 0U) == evaluator.locateSegment(150.0, 0U),
+      "evaluator preserves segment location");
 
   const SoundSpeedProfile attProfile =
       makeAttenuatingProfile(SspInterpolationKind::Pchip);
   const PchipFrequencySsp freqConcrete(attProfile, 50.0);
   const FrequencySspEvaluator freqEvaluator(attProfile, 50.0);
 
-  context.check(freqEvaluator.interpolationKind() ==
-                    SspInterpolationKind::Pchip,
-                "frequency evaluator reports PCHIP interpolation");
+  context.check(
+      freqEvaluator.interpolationKind() == SspInterpolationKind::Pchip,
+      "frequency evaluator reports PCHIP interpolation");
   context.check(freqEvaluator.gradientContinuity() ==
                     SspGradientContinuity::ContinuousAtNodes,
                 "frequency evaluator reports continuous gradient at nodes");
   context.checkNear(freqEvaluator.frequency(), 50.0, 0.0,
-                "frequency evaluator reports frequency");
+                    "frequency evaluator reports frequency");
   context.check(freqEvaluator.isLossless() == freqConcrete.isLossless(),
                 "frequency evaluator preserves lossless state");
   context.check(freqEvaluator.uniformComplexSoundSpeed() ==
@@ -203,8 +204,7 @@ void testN2LinearDispatchIsExact(Context& context) {
   const N2LinearSsp concrete(profile);
   const GeometrySspEvaluator evaluator(profile);
 
-  context.check(evaluator.interpolationKind() ==
-                    SspInterpolationKind::N2Linear,
+  context.check(evaluator.interpolationKind() == SspInterpolationKind::N2Linear,
                 "evaluator reports N2-linear interpolation");
   context.check(evaluator.gradientContinuity() ==
                     SspGradientContinuity::DiscontinuousAtNodes,
@@ -217,24 +217,24 @@ void testN2LinearDispatchIsExact(Context& context) {
                   evaluator.evaluate(query, 0U));
   checkSameSample(context, concrete.evaluateAtSegment(query, 0U),
                   evaluator.evaluateAtSegment(query, 0U));
-  context.check(concrete.locateSegment(150.0, 0U) ==
-                    evaluator.locateSegment(150.0, 0U),
-                "evaluator preserves segment location");
+  context.check(
+      concrete.locateSegment(150.0, 0U) == evaluator.locateSegment(150.0, 0U),
+      "evaluator preserves segment location");
 
   const SoundSpeedProfile attProfile =
       makeAttenuatingProfile(SspInterpolationKind::N2Linear);
   const N2LinearFrequencySsp freqConcrete(attProfile, 50.0);
   const FrequencySspEvaluator freqEvaluator(attProfile, 50.0);
 
-  context.check(freqEvaluator.interpolationKind() ==
-                    SspInterpolationKind::N2Linear,
-                "frequency evaluator reports N2-linear interpolation");
+  context.check(
+      freqEvaluator.interpolationKind() == SspInterpolationKind::N2Linear,
+      "frequency evaluator reports N2-linear interpolation");
   context.check(freqEvaluator.gradientContinuity() ==
                     SspGradientContinuity::DiscontinuousAtNodes,
                 "N2-linear frequency evaluator reports discontinuous gradient "
                 "at nodes");
   context.checkNear(freqEvaluator.frequency(), 50.0, 0.0,
-                "frequency evaluator reports frequency");
+                    "frequency evaluator reports frequency");
   context.check(freqEvaluator.isLossless() == freqConcrete.isLossless(),
                 "frequency evaluator preserves lossless state");
   context.check(freqEvaluator.uniformComplexSoundSpeed() ==
@@ -268,9 +268,9 @@ void testCubicSplineDispatchIsExact(Context& context) {
   const CubicSplineSsp concrete(profile);
   const GeometrySspEvaluator evaluator(profile);
 
-  context.check(evaluator.interpolationKind() ==
-                    SspInterpolationKind::CubicSpline,
-                "evaluator reports cubic-spline interpolation");
+  context.check(
+      evaluator.interpolationKind() == SspInterpolationKind::CubicSpline,
+      "evaluator reports cubic-spline interpolation");
   context.check(evaluator.gradientContinuity() ==
                     SspGradientContinuity::ContinuousAtNodes,
                 "cubic-spline evaluator reports continuous gradient at nodes");
@@ -282,9 +282,9 @@ void testCubicSplineDispatchIsExact(Context& context) {
                   evaluator.evaluate(query, 0U));
   checkSameSample(context, concrete.evaluateAtSegment(query, 0U),
                   evaluator.evaluateAtSegment(query, 0U));
-  context.check(concrete.locateSegment(150.0, 0U) ==
-                    evaluator.locateSegment(150.0, 0U),
-                "evaluator preserves segment location");
+  context.check(
+      concrete.locateSegment(150.0, 0U) == evaluator.locateSegment(150.0, 0U),
+      "evaluator preserves segment location");
 
   const GeometrySspEvaluator cEvaluator(
       makePiecewiseProfile(SspInterpolationKind::CLinear));
@@ -297,8 +297,7 @@ void testCubicSplineDispatchIsExact(Context& context) {
       splineSample.soundSpeed != cEvaluator.evaluate(query, 0U).soundSpeed &&
           splineSample.soundSpeed !=
               pchipEvaluator.evaluate(query, 0U).soundSpeed &&
-          splineSample.soundSpeed !=
-              n2Evaluator.evaluate(query, 0U).soundSpeed,
+          splineSample.soundSpeed != n2Evaluator.evaluate(query, 0U).soundSpeed,
       "dispatched spline sample differs from C/P/N2 at the same query "
       "point, excluding a silent fallback backend");
 
@@ -307,15 +306,15 @@ void testCubicSplineDispatchIsExact(Context& context) {
   const CubicSplineFrequencySsp freqConcrete(attProfile, 50.0);
   const FrequencySspEvaluator freqEvaluator(attProfile, 50.0);
 
-  context.check(freqEvaluator.interpolationKind() ==
-                    SspInterpolationKind::CubicSpline,
-                "frequency evaluator reports cubic-spline interpolation");
+  context.check(
+      freqEvaluator.interpolationKind() == SspInterpolationKind::CubicSpline,
+      "frequency evaluator reports cubic-spline interpolation");
   context.check(freqEvaluator.gradientContinuity() ==
                     SspGradientContinuity::ContinuousAtNodes,
                 "cubic-spline frequency evaluator reports continuous gradient "
                 "at nodes");
   context.checkNear(freqEvaluator.frequency(), 50.0, 0.0,
-                "frequency evaluator reports frequency");
+                    "frequency evaluator reports frequency");
   context.check(freqEvaluator.isLossless() == freqConcrete.isLossless(),
                 "frequency evaluator preserves lossless state");
   context.check(freqEvaluator.uniformComplexSoundSpeed() ==
@@ -352,11 +351,14 @@ void testExplicitAndEnvironmentVolumeDispatch(Context& context) {
                                                .salinityPsu = 35.0,
                                                .pH = 8.0,
                                                .meanDepthMeters = 100.0}};
-  const auto layers = std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
-      rayreuse::BiologicalAttenuationLayers{{
-          .minimumDepth = 0.0, .maximumDepth = 100.0,
-          .resonanceFrequency = 1000.0, .qualityFactor = 2.0,
-          .attenuationCoefficientDecibelsPerKilometer = 10.0}});
+  const auto layers =
+      std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
+          rayreuse::BiologicalAttenuationLayers{
+              {.minimumDepth = 0.0,
+               .maximumDepth = 100.0,
+               .resonanceFrequency = 1000.0,
+               .qualityFactor = 2.0,
+               .attenuationCoefficientDecibelsPerKilometer = 10.0}});
   const VolumeAttenuation biological{
       .model = VolumeAttenuationModel::Biological, .parameters = layers};
   for (const SspInterpolationKind kind :
@@ -370,23 +372,24 @@ void testExplicitAndEnvironmentVolumeDispatch(Context& context) {
     context.check(!FrequencySspEvaluator(profile, 1000.0, fg).isLossless(),
                   "evaluator forwards FG to its backend");
     const FrequencySspEvaluator bio(profile, 1000.0, biological);
-    context.check(bio.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U)
-                          .imaginarySoundSpeed > 0.0 &&
-                      bio.evaluate(Vec2{.range = 0.0, .depth = 100.0}, 0U)
-                          .imaginarySoundSpeed > 0.0 &&
-                      std::abs(bio.evaluate(
-                                   Vec2{.range = 0.0, .depth = 300.0}, 1U)
-                                   .imaginarySoundSpeed) < 1.0e-12,
-                  "evaluator biological dispatch preserves endpoint/depth semantics");
-    context.check(bio.evaluate(Vec2{.range = 0.0, .depth = 200.0}, 1U)
-                          .imaginarySoundSpeed > 0.0,
-                  "evaluator biological dispatch preserves node-first interpolation");
-    const auto low = FrequencySspEvaluator(profile, 500.0, biological).evaluate(
-        Vec2{.range = 0.0, .depth = 50.0}, 0U);
-    static_cast<void>(FrequencySspEvaluator(profile, 2000.0, biological).evaluate(
-        Vec2{.range = 0.0, .depth = 50.0}, 0U));
-    const auto repeated = FrequencySspEvaluator(profile, 500.0, biological).evaluate(
-        Vec2{.range = 0.0, .depth = 50.0}, 0U);
+    context.check(
+        bio.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U).imaginarySoundSpeed >
+                0.0 &&
+            bio.evaluate(Vec2{.range = 0.0, .depth = 100.0}, 0U)
+                    .imaginarySoundSpeed > 0.0 &&
+            std::abs(bio.evaluate(Vec2{.range = 0.0, .depth = 300.0}, 1U)
+                         .imaginarySoundSpeed) < 1.0e-12,
+        "evaluator biological dispatch preserves endpoint/depth semantics");
+    context.check(
+        bio.evaluate(Vec2{.range = 0.0, .depth = 200.0}, 1U)
+                .imaginarySoundSpeed > 0.0,
+        "evaluator biological dispatch preserves node-first interpolation");
+    const auto low = FrequencySspEvaluator(profile, 500.0, biological)
+                         .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U);
+    static_cast<void>(FrequencySspEvaluator(profile, 2000.0, biological)
+                          .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U));
+    const auto repeated = FrequencySspEvaluator(profile, 500.0, biological)
+                              .evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U);
     context.check(low.imaginarySoundSpeed == repeated.imaginarySoundSpeed,
                   "evaluator low/high/low dispatch is deterministic");
   }
@@ -396,18 +399,17 @@ void testExplicitAndEnvironmentVolumeDispatch(Context& context) {
                                 BoundaryModel::rigid(300.0), biological);
   const FrequencySspEvaluator fromEnvironment(environment, 1000.0);
   const FrequencySspEvaluator explicitModel(profile, 1000.0, biological);
-  checkSameSample(context,
-                  explicitModel.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U),
-                  fromEnvironment.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U));
+  checkSameSample(
+      context, explicitModel.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U),
+      fromEnvironment.evaluate(Vec2{.range = 0.0, .depth = 50.0}, 0U));
 }
 
 void testPchipNonzeroCurvature(Context& context) {
   const auto munkEnvironment =
       rayreuse::test::makeMunkEnvironment(SspInterpolationKind::Pchip);
-  const GeometrySspEvaluator evaluator(
-      munkEnvironment.soundSpeedProfile());
-  const auto sample = evaluator.evaluate(
-      Vec2{.range = 0.0, .depth = 100.0}, 0U);
+  const GeometrySspEvaluator evaluator(munkEnvironment.soundSpeedProfile());
+  const auto sample =
+      evaluator.evaluate(Vec2{.range = 0.0, .depth = 100.0}, 0U);
   context.check(sample.soundSpeedHessian.depthDepth != 0.0,
                 "PCHIP evaluator evaluates non-zero second derivative d2c/dz2");
   context.checkNear(sample.soundSpeedHessian.depthDepth, 1.53910656288373468e-4,

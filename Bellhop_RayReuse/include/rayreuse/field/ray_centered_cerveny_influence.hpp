@@ -51,8 +51,7 @@ class RayCenteredCervenyInfluence {
       std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest =
           std::nullopt) const;
 
-  [[nodiscard]] std::optional<RayCenteredCervenyDiagnostic>
-  accumulateIntensity(
+  [[nodiscard]] std::optional<RayCenteredCervenyDiagnostic> accumulateIntensity(
       IntensityWorkspace& workspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest =
@@ -63,8 +62,8 @@ class RayCenteredCervenyInfluence {
       FrequencyWorkspace* pressureWorkspace,
       IntensityWorkspace* intensityWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
-      std::optional<RayCenteredCervenyDiagnosticRequest>
-          diagnosticRequest) const;
+      std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest)
+      const;
 
   Environment environment_;
   ReceiverGrid receivers_;

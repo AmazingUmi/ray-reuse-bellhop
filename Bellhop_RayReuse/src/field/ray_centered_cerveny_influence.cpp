@@ -26,16 +26,14 @@ void requireFinite(double value, std::string_view name) {
   }
 }
 
-void requireFiniteComplex(std::complex<double> value,
-                          std::string_view name) {
+void requireFiniteComplex(std::complex<double> value, std::string_view name) {
   if (!finiteComplex(value)) {
     throw ValidationError(std::string(name) + " must be finite");
   }
 }
 
 [[nodiscard]] double floatingSpacing(double value) {
-  return std::nextafter(value, std::numeric_limits<double>::infinity()) -
-         value;
+  return std::nextafter(value, std::numeric_limits<double>::infinity()) - value;
 }
 
 [[nodiscard]] std::complex<double> negativeImaginaryExponential(
@@ -86,8 +84,8 @@ struct PrecomputedRayValues {
 };
 
 [[nodiscard]] PrecomputedRayValues precomputeRayValues(
-    const RayPath& path, std::complex<double> epsilon,
-    std::size_t pointCount, BeamWidthMode widthMode) {
+    const RayPath& path, std::complex<double> epsilon, std::size_t pointCount,
+    BeamWidthMode widthMode) {
   PrecomputedRayValues values;
   values.q.reserve(pointCount);
   values.gamma.reserve(pointCount);
@@ -133,9 +131,9 @@ void validateAccumulateInput(
     throw ValidationError(
         "ray-centered Cerveny requires exactly one workspace");
   }
-  const double workspaceFrequency =
-      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
-                                   : intensityWorkspace->frequency();
+  const double workspaceFrequency = pressureWorkspace != nullptr
+                                        ? pressureWorkspace->frequency()
+                                        : intensityWorkspace->frequency();
   const std::size_t workspaceDepthCount =
       pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
                                    : intensityWorkspace->depthCount();
@@ -218,10 +216,10 @@ RayCenteredCervenyInfluence::RayCenteredCervenyInfluence(
       runMode_(runMode),
       fieldComponent_(fieldComponent),
       sourceGeometry_(sourceGeometry),
-      receiverRangeDelta_(
-          receivers_.rangeCount() >= 2U
-              ? receivers_.ranges()[1U] - receivers_.ranges()[0U]
-              : 0.0) {
+      receiverRangeDelta_(receivers_.rangeCount() >= 2U
+                              ? receivers_.ranges()[1U] -
+                                    receivers_.ranges()[0U]
+                              : 0.0) {
   if (settings_.imageCount == 0U || settings_.imageCount > 3U) {
     throw ValidationError(
         "ray-centered Cerveny image count must lie in [1, 3]");
@@ -256,8 +254,8 @@ std::optional<RayCenteredCervenyDiagnostic>
 RayCenteredCervenyInfluence::accumulate(
     FrequencyWorkspace& workspace, const RayPath& path,
     const RayFrequencyState& frequencyState, std::complex<double> epsilon,
-    std::optional<RayCenteredCervenyDiagnosticRequest>
-        diagnosticRequest) const {
+    std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest)
+    const {
   if (runMode_ != SimulationRunMode::Coherent) {
     throw ValidationError(
         "ray-centered complex pressure requires coherent TL mode");
@@ -270,8 +268,8 @@ std::optional<RayCenteredCervenyDiagnostic>
 RayCenteredCervenyInfluence::accumulateIntensity(
     IntensityWorkspace& workspace, const RayPath& path,
     const RayFrequencyState& frequencyState, std::complex<double> epsilon,
-    std::optional<RayCenteredCervenyDiagnosticRequest>
-        diagnosticRequest) const {
+    std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest)
+    const {
   if (runMode_ != SimulationRunMode::Incoherent &&
       runMode_ != SimulationRunMode::SemiCoherent) {
     throw ValidationError(
@@ -286,8 +284,8 @@ RayCenteredCervenyInfluence::accumulateImpl(
     FrequencyWorkspace* pressureWorkspace,
     IntensityWorkspace* intensityWorkspace, const RayPath& path,
     const RayFrequencyState& frequencyState, std::complex<double> epsilon,
-    std::optional<RayCenteredCervenyDiagnosticRequest>
-        diagnosticRequest) const {
+    std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest)
+    const {
   validateAccumulateInput(pressureWorkspace, intensityWorkspace, path,
                           frequencyState, epsilon, receivers_, widthMode_,
                           diagnosticRequest);
@@ -311,9 +309,8 @@ RayCenteredCervenyInfluence::accumulateImpl(
       2.0 * std::numbers::pi * frequencyState.frequency;
   const double radiusMax =
       30.0 * path.points.front().soundSpeed / frequencyState.frequency;
-  const double beamWindowSquared =
-      static_cast<double>(settings_.beamWindow) *
-      static_cast<double>(settings_.beamWindow);
+  const double beamWindowSquared = static_cast<double>(settings_.beamWindow) *
+                                   static_cast<double>(settings_.beamWindow);
   const double ratio = sourceGeometry_ == SourceGeometry::Line
                            ? 1.0
                            : std::sqrt(std::abs(std::cos(path.launchAngle)));
@@ -327,10 +324,9 @@ RayCenteredCervenyInfluence::accumulateImpl(
     for (std::size_t imageIndex = 0U; imageIndex < settings_.imageCount;
          ++imageIndex) {
       const CervenyImageKind imageKind =
-          imageIndex == 0U
-              ? CervenyImageKind::True
-              : (imageIndex == 1U ? CervenyImageKind::Surface
-                                  : CervenyImageKind::Bottom);
+          imageIndex == 0U ? CervenyImageKind::True
+                           : (imageIndex == 1U ? CervenyImageKind::Surface
+                                               : CervenyImageKind::Bottom);
       std::size_t previousReceiverIndex1Based =
           std::numeric_limits<std::size_t>::max();
       double previousProjectedRange = 0.0;
@@ -358,8 +354,7 @@ RayCenteredCervenyInfluence::accumulateImpl(
         const Vec2 endpointNormal = imageNormals[rightIndex];
         double imageDepth = rightPoint.position.depth;
         if (imageKind == CervenyImageKind::Surface) {
-          imageDepth =
-              2.0 * environment_.seaSurface().depth() - imageDepth;
+          imageDepth = 2.0 * environment_.seaSurface().depth() - imageDepth;
         } else if (imageKind == CervenyImageKind::Bottom) {
           imageDepth = 2.0 * environment_.seabed().depth() - imageDepth;
         }
@@ -367,9 +362,8 @@ RayCenteredCervenyInfluence::accumulateImpl(
             (receiverDepth - imageDepth) / endpointNormal.depth;
         const double projectedRange =
             rightPoint.position.range + normalOffset * endpointNormal.range;
-        const std::size_t upperReceiverIndex1Based =
-            clampedReceiverIndex1Based(projectedRange, receivers_,
-                                       receiverRangeDelta_);
+        const std::size_t upperReceiverIndex1Based = clampedReceiverIndex1Based(
+            projectedRange, receivers_, receiverRangeDelta_);
         const bool duplicatePoint =
             std::abs(rightPoint.position.range -
                      path.points[rightIndex - 1U].position.range) <
@@ -382,8 +376,7 @@ RayCenteredCervenyInfluence::accumulateImpl(
           continue;
         }
 
-        for (std::size_t receiverIndex1Based =
-                 previousReceiverIndex1Based + 1U;
+        for (std::size_t receiverIndex1Based = previousReceiverIndex1Based + 1U;
              receiverIndex1Based <= upperReceiverIndex1Based;
              ++receiverIndex1Based) {
           const std::size_t rangeIndex = receiverIndex1Based - 1U;
@@ -395,11 +388,9 @@ RayCenteredCervenyInfluence::accumulateImpl(
               weight * (ray.q[rightIndex] - ray.q[rightIndex - 1U]);
           const std::complex<double> gamma =
               ray.gamma[rightIndex - 1U] +
-              weight *
-                  (ray.gamma[rightIndex] - ray.gamma[rightIndex - 1U]);
-          const double normal =
-              previousNormalOffset +
-              weight * (normalOffset - previousNormalOffset);
+              weight * (ray.gamma[rightIndex] - ray.gamma[rightIndex - 1U]);
+          const double normal = previousNormalOffset +
+                                weight * (normalOffset - previousNormalOffset);
           const double normalSquared = normal * normal;
           requireFinite(weight, "ray-centered interpolation weight");
           requireFiniteComplex(q, "ray-centered interpolated q");
@@ -410,21 +401,18 @@ RayCenteredCervenyInfluence::accumulateImpl(
                   beamWindowSquared) {
             continue;
           }
-          const double soundSpeed =
-              path.points[rightIndex - 1U].soundSpeed;
+          const double soundSpeed = path.points[rightIndex - 1U].soundSpeed;
           const std::complex<double> tau =
               frequencyState.points[rightIndex - 1U].complexTravelTime +
               weight *
                   (frequencyState.points[rightIndex].complexTravelTime -
-                   frequencyState.points[rightIndex - 1U]
-                       .complexTravelTime);
+                   frequencyState.points[rightIndex - 1U].complexTravelTime);
           std::complex<double> contribution =
               ratio * frequencyState.points[rightIndex].amplitude *
               std::sqrt(soundSpeed * std::abs(epsilon) / q) *
               negativeImaginaryExponential(
-                  angularFrequency *
-                          (tau + 0.5 * gamma * normalSquared) -
-                      frequencyState.points[rightIndex].reflectionPhase);
+                  angularFrequency * (tau + 0.5 * gamma * normalSquared) -
+                  frequencyState.points[rightIndex].reflectionPhase);
           const Vec2 slowness = rightPoint.slowness;
           if (fieldComponent_ != FieldComponent::Pressure) {
             const std::complex<double> normalDerivative =
@@ -438,19 +426,15 @@ RayCenteredCervenyInfluence::accumulateImpl(
               // complex. Reflect that asymmetric legacy rule for V; the H
               // branch below is handwritten and is not conjugated in Origin.
               contribution =
-                  soundSpeed *
-                  (std::conj(normalDerivative) * slowness.range +
-                   std::conj(alongDerivative) * slowness.depth);
+                  soundSpeed * (std::conj(normalDerivative) * slowness.range +
+                                std::conj(alongDerivative) * slowness.depth);
             } else {
-              contribution =
-                  soundSpeed *
-                  (-normalDerivative * slowness.depth +
-                   alongDerivative * slowness.range);
+              contribution = soundSpeed * (-normalDerivative * slowness.depth +
+                                           alongDerivative * slowness.range);
             }
           }
           int kmah = ray.kmah[rightIndex - 1U];
-          kmah = updateCervenyKmah(ray.q[rightIndex - 1U], q, kmah,
-                                  widthMode_);
+          kmah = updateCervenyKmah(ray.q[rightIndex - 1U], q, kmah, widthMode_);
           if (kmah < 0) {
             contribution = -contribution;
           }
@@ -466,15 +450,13 @@ RayCenteredCervenyInfluence::accumulateImpl(
             const std::complex<double> increment = taper * contribution;
             const std::complex<double> updated =
                 pressureWorkspace->at(depthIndex, rangeIndex) + increment;
-            requireFiniteComplex(updated,
-                                 "ray-centered accumulated pressure");
+            requireFiniteComplex(updated, "ray-centered accumulated pressure");
             pressureWorkspace->at(depthIndex, rangeIndex) = updated;
           } else {
             const double magnitude = std::abs(contribution);
             const double power = magnitude * magnitude;
             intensityIncrement = taper * power;
-            intensityWorkspace->add(depthIndex, rangeIndex,
-                                    intensityIncrement);
+            intensityWorkspace->add(depthIndex, rangeIndex, intensityIncrement);
           }
 
           if (diagnosticRequest.has_value() &&

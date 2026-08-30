@@ -71,16 +71,13 @@ rayreuse::Environment makeI5QuadrilateralEnvironment() {
   const auto grid = std::make_shared<const rayreuse::QuadrilateralSspGrid>(
       rayreuse::QuadrilateralSspGrid{
           .rangesMeters = {0.0, 350.0, 800.0},
-          .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                               1500.0, 1520.0, 1540.0},
+          .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 1520.0, 1540.0},
           .depthCount = 2U,
           .rangeCount = 3U});
   return rayreuse::Environment(
       rayreuse::SoundSpeedProfile(
           {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
-           {.depth = 100.0,
-            .soundSpeed = 1500.0,
-            .density = 1000.0}},
+           {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}},
           rayreuse::SspInterpolationKind::Quadrilateral, grid),
       rayreuse::BoundaryModel::vacuum(0.0),
       rayreuse::BoundaryModel::rigid(100.0));
@@ -103,12 +100,9 @@ int main(int argc, char* argv[]) {
   const std::string namedConfiguration = argc == 4 ? argv[3] : "";
   const bool useMunkConfiguration =
       namedConfiguration == "munk" || namedConfiguration == "munk-n2" ||
-      namedConfiguration == "munk-pchip" ||
-      namedConfiguration == "munk-spline";
-  const bool useCurvilinear =
-      namedConfiguration == "i3-curvilinear";
-  const bool useI5Quadrilateral =
-      namedConfiguration == "i5-quadrilateral";
+      namedConfiguration == "munk-pchip" || namedConfiguration == "munk-spline";
+  const bool useCurvilinear = namedConfiguration == "i3-curvilinear";
+  const bool useI5Quadrilateral = namedConfiguration == "i5-quadrilateral";
   const bool useN2 = namedConfiguration == "munk-n2";
   const bool usePchip = namedConfiguration == "munk-pchip";
   const bool useSpline = namedConfiguration == "munk-spline";
@@ -118,21 +112,26 @@ int main(int argc, char* argv[]) {
     return 2;
   }
   double launchAngle = 0.0;
-  double bottomDepth = useMunkConfiguration ? 5000.0
-                       : (useCurvilinear ? 130.0
-                       : (useI5Quadrilateral ? 100.0 : 1000.0));
-  double sourceDepth = useMunkConfiguration ? 1000.0
-                       : (useCurvilinear ? 48.0
-                       : (useI5Quadrilateral ? 50.0 : 500.0));
-  double depthLimit = useMunkConfiguration ? 5500.0
-                      : (useCurvilinear ? 131.0
-                      : (useI5Quadrilateral ? 101.0 : 1100.0));
-  double stepLength = useMunkConfiguration ? 500.0
-                      : (useCurvilinear ? 500.0
-                      : (useI5Quadrilateral ? 1.0 : 10.0));
-  double rangeLimit = useMunkConfiguration ? 101000.0
-                      : (useCurvilinear ? 2100.0
-                      : (useI5Quadrilateral ? 710.0 : 5100.0));
+  double bottomDepth =
+      useMunkConfiguration
+          ? 5000.0
+          : (useCurvilinear ? 130.0 : (useI5Quadrilateral ? 100.0 : 1000.0));
+  double sourceDepth =
+      useMunkConfiguration
+          ? 1000.0
+          : (useCurvilinear ? 48.0 : (useI5Quadrilateral ? 50.0 : 500.0));
+  double depthLimit =
+      useMunkConfiguration
+          ? 5500.0
+          : (useCurvilinear ? 131.0 : (useI5Quadrilateral ? 101.0 : 1100.0));
+  double stepLength =
+      useMunkConfiguration
+          ? 500.0
+          : (useCurvilinear ? 500.0 : (useI5Quadrilateral ? 1.0 : 10.0));
+  double rangeLimit =
+      useMunkConfiguration
+          ? 101000.0
+          : (useCurvilinear ? 2100.0 : (useI5Quadrilateral ? 710.0 : 5100.0));
   std::size_t maximumRayPoints = 10000U;
   try {
     std::size_t parsedCharacters = 0U;

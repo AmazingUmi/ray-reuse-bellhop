@@ -458,19 +458,16 @@ void writeConfigurationSummary(std::ostream& stream,
     stream << "Rectilinear receiver grid\n";
   }
   writeBoundarySummary(stream, environment.seaSurface(), "top");
-  stream << "Attenuation units: "
-         << attenuationUnitLabel(environment.soundSpeedProfile()
-                                     .points()
-                                     .front()
-                                     .attenuation.unit)
-         << '\n';
+  stream
+      << "Attenuation units: "
+      << attenuationUnitLabel(
+             environment.soundSpeedProfile().points().front().attenuation.unit)
+      << '\n';
   if (environment.soundSpeedProfile().interpolationKind() ==
       rayreuse::SspInterpolationKind::Quadrilateral) {
     stream << "Using range-dependent sound speed\n"
            << "Number of SSP ranges = "
-           << environment.soundSpeedProfile()
-                  .quadrilateralGrid()
-                  ->rangeCount
+           << environment.soundSpeedProfile().quadrilateralGrid()->rangeCount
            << '\n';
   }
   writeBoundarySummary(stream, environment.seabed(), "bottom");
@@ -631,8 +628,7 @@ void writeProductExecutionMode(std::ostream& stream,
 }
 
 void writePerSourceCacheFingerprints(
-    std::ostream& stream,
-    const std::vector<std::uint64_t>& fingerprintsBefore,
+    std::ostream& stream, const std::vector<std::uint64_t>& fingerprintsBefore,
     const std::vector<std::uint64_t>& fingerprintsAfter,
     std::string_view label) {
   // Multi-source runs list one fingerprint pair per source; single-source
@@ -640,8 +636,8 @@ void writePerSourceCacheFingerprints(
   if (fingerprintsBefore.size() <= 1U) {
     return;
   }
-  for (std::size_t sourceIndex = 0U;
-       sourceIndex < fingerprintsBefore.size(); ++sourceIndex) {
+  for (std::size_t sourceIndex = 0U; sourceIndex < fingerprintsBefore.size();
+       ++sourceIndex) {
     stream << "source index " << sourceIndex << ' ' << label
            << " before = " << fingerprintsBefore[sourceIndex] << '\n'
            << "source index " << sourceIndex << ' ' << label
@@ -748,13 +744,12 @@ int main(int argumentCount, char* arguments[]) {
                << "cache fingerprint verification = "
                << (options.verifyCache ? "enabled\n" : "disabled\n");
       if (options.verifyCache) {
-        printLog << "cache fingerprint before = "
-                 << fingerprintsBefore.front() << '\n'
+        printLog << "cache fingerprint before = " << fingerprintsBefore.front()
+                 << '\n'
                  << "cache fingerprint after = " << fingerprintsAfter.front()
                  << '\n';
         writePerSourceCacheFingerprints(printLog, fingerprintsBefore,
-                                        fingerprintsAfter,
-                                        "cache fingerprint");
+                                        fingerprintsAfter, "cache fingerprint");
       }
     } else if (runMode == rayreuse::SimulationRunMode::AsciiArrivals ||
                runMode == rayreuse::SimulationRunMode::BinaryArrivals) {
@@ -767,39 +762,41 @@ int main(int argumentCount, char* arguments[]) {
           [&](std::size_t frequencyIndex,
               const std::vector<rayreuse::RayPathCache>& caches,
               const std::vector<rayreuse::ArrivalWorkspace>& workspaces) {
-        std::vector<std::uint64_t> before;
-        before.reserve(caches.size());
-        for (const rayreuse::RayPathCache& cache : caches) {
-          before.push_back(cache.contentFingerprint());
-        }
-        const double frequency = workspaces.front().frequency();
-        const std::filesystem::path output = productPath(
-            fileRoot, frequencyIndex,
-            parsed.simulationCase.frequencies().size(), frequency, extension);
-        // One per-source block in depth-ascending order; the ARR header
-        // carries the source count and every source depth (Origin ArrMod).
-        rayreuse::ArrivalWriter::write(output, parsed.title,
-                                       parsed.simulationCase, workspaces,
-                                       encoding);
-        std::vector<std::uint64_t> after;
-        after.reserve(caches.size());
-        for (const rayreuse::RayPathCache& cache : caches) {
-          after.push_back(cache.contentFingerprint());
-        }
-        if (options.verifyCache && after != before) {
-          throw rayreuse::ValidationError(
-              "arrival product modified the frozen ray cache");
-        }
-        printLog << "frequency product index = " << frequencyIndex
-                 << " frequency Hz = " << frequency << '\n'
-                 << "product = " << output << '\n';
-        if (options.verifyCache) {
-          printLog << "cache fingerprint before = " << before.front() << '\n'
-                   << "cache fingerprint after = " << after.front() << '\n';
-          writePerSourceCacheFingerprints(printLog, before, after,
-                                          "cache fingerprint");
-        }
-      };
+            std::vector<std::uint64_t> before;
+            before.reserve(caches.size());
+            for (const rayreuse::RayPathCache& cache : caches) {
+              before.push_back(cache.contentFingerprint());
+            }
+            const double frequency = workspaces.front().frequency();
+            const std::filesystem::path output =
+                productPath(fileRoot, frequencyIndex,
+                            parsed.simulationCase.frequencies().size(),
+                            frequency, extension);
+            // One per-source block in depth-ascending order; the ARR header
+            // carries the source count and every source depth (Origin ArrMod).
+            rayreuse::ArrivalWriter::write(output, parsed.title,
+                                           parsed.simulationCase, workspaces,
+                                           encoding);
+            std::vector<std::uint64_t> after;
+            after.reserve(caches.size());
+            for (const rayreuse::RayPathCache& cache : caches) {
+              after.push_back(cache.contentFingerprint());
+            }
+            if (options.verifyCache && after != before) {
+              throw rayreuse::ValidationError(
+                  "arrival product modified the frozen ray cache");
+            }
+            printLog << "frequency product index = " << frequencyIndex
+                     << " frequency Hz = " << frequency << '\n'
+                     << "product = " << output << '\n';
+            if (options.verifyCache) {
+              printLog << "cache fingerprint before = " << before.front()
+                       << '\n'
+                       << "cache fingerprint after = " << after.front() << '\n';
+              writePerSourceCacheFingerprints(printLog, before, after,
+                                              "cache fingerprint");
+            }
+          };
       const std::size_t workers = resolvedWorkerCount(options.workerCount);
       rayreuse::ArrivalSolverStatistics statistics;
       if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
@@ -876,8 +873,7 @@ int main(int argumentCount, char* arguments[]) {
             if (options.verifyCache) {
               printLog << "cache fingerprint before = " << before.front()
                        << '\n'
-                       << "cache fingerprint after = " << after.front()
-                       << '\n';
+                       << "cache fingerprint after = " << after.front() << '\n';
               writePerSourceCacheFingerprints(printLog, before, after,
                                               "cache fingerprint");
             }
@@ -963,9 +959,9 @@ int main(int argumentCount, char* arguments[]) {
       }
 
       const Clock::time_point writeBegin = Clock::now();
-      rayreuse::ShdWriter::writeFrequencies(
-          shadePath, parsed.title, parsed.simulationCase,
-          sourceWorkspacesPerFrequency);
+      rayreuse::ShdWriter::writeFrequencies(shadePath, parsed.title,
+                                            parsed.simulationCase,
+                                            sourceWorkspacesPerFrequency);
       const double writeSeconds =
           std::chrono::duration<double>(Clock::now() - writeBegin).count();
 

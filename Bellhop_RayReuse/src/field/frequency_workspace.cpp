@@ -102,8 +102,8 @@ double IntensityWorkspace::at(std::size_t depthIndex,
   return intensity_.at(flatIndex(depthIndex, rangeIndex));
 }
 
-void IntensityWorkspace::add(std::size_t depthIndex,
-                             std::size_t rangeIndex, double contribution) {
+void IntensityWorkspace::add(std::size_t depthIndex, std::size_t rangeIndex,
+                             double contribution) {
   const std::size_t index = flatIndex(depthIndex, rangeIndex);
   if (!std::isfinite(contribution) || contribution < 0.0) {
     throw ValidationError(

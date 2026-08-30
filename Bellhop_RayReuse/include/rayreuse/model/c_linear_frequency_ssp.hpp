@@ -21,8 +21,8 @@ class CLinearFrequencySsp {
   CLinearFrequencySsp(const SoundSpeedProfile& profile, double frequency,
                       const VolumeAttenuation& volumeAttenuation);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::CLinear);
   }
 

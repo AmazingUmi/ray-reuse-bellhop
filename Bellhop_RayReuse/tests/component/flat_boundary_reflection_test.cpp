@@ -208,15 +208,15 @@ void testLegacyCurvilinearFrame(Context& context) {
   const FlatBoundaryReflection standard = rayreuse::reflectAtBoundary(
       incident, ReflectionBoundary::Seabed, geometry, 8U,
       BoundaryCurvatureMode::Standard);
-  const FlatBoundaryReflection doubled = rayreuse::reflectAtBoundary(
-      incident, ReflectionBoundary::Seabed, geometry, 8U,
-      BoundaryCurvatureMode::Double);
-  const FlatBoundaryReflection zeroed = rayreuse::reflectAtBoundary(
-      incident, ReflectionBoundary::Seabed, geometry, 8U,
-      BoundaryCurvatureMode::Zero);
+  const FlatBoundaryReflection doubled =
+      rayreuse::reflectAtBoundary(incident, ReflectionBoundary::Seabed,
+                                  geometry, 8U, BoundaryCurvatureMode::Double);
+  const FlatBoundaryReflection zeroed =
+      rayreuse::reflectAtBoundary(incident, ReflectionBoundary::Seabed,
+                                  geometry, 8U, BoundaryCurvatureMode::Zero);
 
-  const double normalSlowness = rayreuse::fortranDotProduct2D(
-      incident.slowness, reflectionNormal);
+  const double normalSlowness =
+      rayreuse::fortranDotProduct2D(incident.slowness, reflectionNormal);
   const double twiceNormalSlowness = 2.0 * normalSlowness;
   const Vec2 expectedSlowness{
       .range = std::fma(-twiceNormalSlowness, reflectionNormal.range,
@@ -262,18 +262,17 @@ void testLegacyCurvilinearFrame(Context& context) {
   const FlatBoundaryReflection drifted = rayreuse::reflectAtBoundary(
       driftedIncident, ReflectionBoundary::Seabed, geometry, 8U,
       BoundaryCurvatureMode::Standard);
-  const double driftedNormalSlowness = rayreuse::fortranDotProduct2D(
-      driftedIncident.slowness, reflectionNormal);
+  const double driftedNormalSlowness =
+      rayreuse::fortranDotProduct2D(driftedIncident.slowness, reflectionNormal);
   checkVectorNear(
       context, drifted.reflectedState.slowness,
-      Vec2{.range = std::fma(-2.0 * driftedNormalSlowness,
-                             reflectionNormal.range,
-                             driftedIncident.slowness.range),
-           .depth = std::fma(-2.0 * driftedNormalSlowness,
-                             reflectionNormal.depth,
-                             driftedIncident.slowness.depth)},
-      0.0,
-      "non-unit curvilinear frame accepts materially drifted slowness");
+      Vec2{.range =
+               std::fma(-2.0 * driftedNormalSlowness, reflectionNormal.range,
+                        driftedIncident.slowness.range),
+           .depth =
+               std::fma(-2.0 * driftedNormalSlowness, reflectionNormal.depth,
+                        driftedIncident.slowness.depth)},
+      0.0, "non-unit curvilinear frame accepts materially drifted slowness");
 }
 
 void testInvalidGeometry(Context& context) {

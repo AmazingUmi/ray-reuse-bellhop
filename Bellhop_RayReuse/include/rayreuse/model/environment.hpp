@@ -52,8 +52,7 @@ struct BiologicalAttenuationLayer {
   double attenuationCoefficientDecibelsPerKilometer{};
 };
 
-using BiologicalAttenuationLayers =
-    std::vector<BiologicalAttenuationLayer>;
+using BiologicalAttenuationLayers = std::vector<BiologicalAttenuationLayer>;
 using SharedBiologicalAttenuationLayers =
     std::shared_ptr<const BiologicalAttenuationLayers>;
 using VolumeAttenuationParameters =
@@ -83,8 +82,7 @@ struct QuadrilateralSspGrid {
   std::size_t rangeCount{};
 };
 
-using SharedQuadrilateralSspGrid =
-    std::shared_ptr<const QuadrilateralSspGrid>;
+using SharedQuadrilateralSspGrid = std::shared_ptr<const QuadrilateralSspGrid>;
 
 class SoundSpeedProfile {
  public:
@@ -196,8 +194,7 @@ class BoundaryModel {
 class Environment {
  public:
   Environment(SoundSpeedProfile soundSpeedProfile, BoundaryModel seaSurface,
-              BoundaryModel seabed,
-              VolumeAttenuation volumeAttenuation = {});
+              BoundaryModel seabed, VolumeAttenuation volumeAttenuation = {});
 
   [[nodiscard]] const SoundSpeedProfile& soundSpeedProfile() const noexcept;
   [[nodiscard]] const BoundaryModel& seaSurface() const noexcept;

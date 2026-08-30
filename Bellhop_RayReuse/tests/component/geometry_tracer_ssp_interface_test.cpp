@@ -29,13 +29,13 @@ using rayreuse::QuadrilateralSspGrid;
 using rayreuse::RayPath;
 using rayreuse::RayState;
 using rayreuse::RayTerminationReason;
+using rayreuse::reflectAtFlatBoundary;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SspGradientContinuity;
 using rayreuse::SspInterpolationKind;
 using rayreuse::Vec2;
-using rayreuse::reflectAtFlatBoundary;
 using rayreuse::test::Context;
 
 constexpr double kPi = 3.141592653589793238462643383279502884;
@@ -279,9 +279,8 @@ void testN2UpwardInterfaceCrossing(Context& context) {
     context.checkNear(path.steps[nodeIndex].stepLength, kMinimumStep, 1.0e-14,
                       "N2 upward node departure uses one minimum forward "
                       "step");
-    context.check(
-        path.points[nodeIndex + 1U].position.depth < kInterfaceDepth,
-        "N2 upward crossing updates the segment hint after the node");
+    context.check(path.points[nodeIndex + 1U].position.depth < kInterfaceDepth,
+                  "N2 upward crossing updates the segment hint after the node");
   }
 }
 
@@ -322,19 +321,19 @@ void checkN2ReflectionAgainstArrivalSideWaterSample(
   const rayreuse::ReflectionEvent& event = path.events.front();
   const rayreuse::SoundSpeedSample arrivalWater =
       ssp.evaluate(event.position, arrivalSegment);
-  context.check(
-      std::abs(arrivalWater.soundSpeedGradient.depth) > 1.0e-9,
-      std::string(label) +
-          " arrival-side N2 water sample carries a nonzero gradient");
+  context.check(std::abs(arrivalWater.soundSpeedGradient.depth) > 1.0e-9,
+                std::string(label) +
+                    " arrival-side N2 water sample carries a nonzero gradient");
   const auto expected = reflectAtFlatBoundary(
       path.points[event.rayPointIndex], event.boundary,
-      FlatBoundaryGeometry{.point = event.position,
-                           .tangent = rayreuse::Vec2{1.0, 0.0},
-                           .outwardNormal = rayreuse::Vec2{0.0, outwardNormalDepth},
-                           .soundSpeedGradient = arrivalWater.soundSpeedGradient,
-                           .segmentIndex = 0U,
-                           .curvature = 0.0,
-                           .maximumIncidentPlaneDistance = 1.0e-3 * kNominalStep},
+      FlatBoundaryGeometry{
+          .point = event.position,
+          .tangent = rayreuse::Vec2{1.0, 0.0},
+          .outwardNormal = rayreuse::Vec2{0.0, outwardNormalDepth},
+          .soundSpeedGradient = arrivalWater.soundSpeedGradient,
+          .segmentIndex = 0U,
+          .curvature = 0.0,
+          .maximumIncidentPlaneDistance = 1.0e-3 * kNominalStep},
       event.rayPointIndex, BoundaryCurvatureMode::Standard);
   context.checkNear(
       path.points[event.reflectedRayPointIndex].dynamicP[0],
@@ -381,8 +380,8 @@ void testN2SeaBoundariesReflect(Context& context) {
                     surface.steps.size() + surface.events.size() + 1U,
                 "N2 surface reflection preserves P = 1 + S + E");
   checkFiniteStates(context, surface, "N2 surface");
-  checkN2ReflectionAgainstArrivalSideWaterSample(
-      context, surface, ssp, 0U, -1.0, "N2 surface");
+  checkN2ReflectionAgainstArrivalSideWaterSample(context, surface, ssp, 0U,
+                                                 -1.0, "N2 surface");
 
   const RayPath seabed = tracer.trace(Source{.depth = 950.0}, 0.5 * kPi);
   context.check(seabed.terminationReason == RayTerminationReason::PointLimit,
@@ -397,14 +396,13 @@ void testN2SeaBoundariesReflect(Context& context) {
   checkFiniteStates(context, seabed, "N2 seabed");
   // The seabed plane coincides with the last profile node: the water sample
   // must come from the arrival-side segment above it.
-  checkN2ReflectionAgainstArrivalSideWaterSample(
-      context, seabed, ssp, 1U, 1.0, "N2 seabed");
+  checkN2ReflectionAgainstArrivalSideWaterSample(context, seabed, ssp, 1U, 1.0,
+                                                 "N2 seabed");
 
   // A longer vertical N² ray collects several reflections and node
   // crossings; event ordering and the point/step/event accounting must hold.
-  const RayPath multi =
-      GeometryTracer(environment, makeSettings(20U))
-          .trace(Source{.depth = 50.0}, -0.5 * kPi);
+  const RayPath multi = GeometryTracer(environment, makeSettings(20U))
+                            .trace(Source{.depth = 50.0}, -0.5 * kPi);
   context.check(multi.events.size() >= 2U,
                 "N2 vertical ray accumulates multiple reflections");
   context.check(
@@ -426,14 +424,13 @@ void testN2SeaBoundariesReflect(Context& context) {
 // backend are G01, so the full spline crossing/reflection runs (mirroring the
 // N2 tests above) are added once the tracer can construct the backend.
 void testSplineSspInterfaceContract(Context& context) {
-  const CubicSplineSsp spline(
-      SoundSpeedProfile(
-          {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
-           {.depth = kInterfaceDepth, .soundSpeed = 1500.0, .density = 1000.0},
-           {.depth = 1000.0, .soundSpeed = 1550.0, .density = 1000.0}}));
-  context.check(spline.gradientContinuity() ==
-                    SspGradientContinuity::ContinuousAtNodes,
-                "spline exposes the ContinuousAtNodes tracer contract");
+  const CubicSplineSsp spline(SoundSpeedProfile(
+      {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = kInterfaceDepth, .soundSpeed = 1500.0, .density = 1000.0},
+       {.depth = 1000.0, .soundSpeed = 1550.0, .density = 1000.0}}));
+  context.check(
+      spline.gradientContinuity() == SspGradientContinuity::ContinuousAtNodes,
+      "spline exposes the ContinuousAtNodes tracer contract");
   context.check(spline.segmentCount() == 2U,
                 "spline segment count matches the depth-node topology");
 
@@ -443,17 +440,15 @@ void testSplineSspInterfaceContract(Context& context) {
   context.check(arrivalFromBelow.segmentIndex == 0U &&
                     arrivalFromAbove.segmentIndex == 1U,
                 "spline keeps the arrival-side segment at an aligned node");
-  context.checkNear(arrivalFromBelow.soundSpeed,
-                    arrivalFromAbove.soundSpeed, 1.0e-9,
+  context.checkNear(arrivalFromBelow.soundSpeed, arrivalFromAbove.soundSpeed,
+                    1.0e-9,
                     "spline value is continuous across the tracer node");
   context.checkNear(arrivalFromBelow.soundSpeedGradient.depth,
                     arrivalFromAbove.soundSpeedGradient.depth, 1.0e-9,
                     "spline gradient is continuous across the tracer node");
 
-  const auto above = spline.evaluate(
-      Vec2{.range = 0.0, .depth = -10.0}, 1U);
-  const auto below = spline.evaluate(
-      Vec2{.range = 0.0, .depth = 1010.0}, 0U);
+  const auto above = spline.evaluate(Vec2{.range = 0.0, .depth = -10.0}, 1U);
+  const auto below = spline.evaluate(Vec2{.range = 0.0, .depth = 1010.0}, 0U);
   context.check(above.segmentIndex == 0U && below.segmentIndex == 1U,
                 "spline extrapolation selects edge segments for the tracer");
 }
@@ -477,12 +472,12 @@ Environment makeQCrossGradientEnvironment() {
           {{.depth = 0.0, .soundSpeed = 1490.0, .density = 1000.0},
            {.depth = 100.0, .soundSpeed = 1490.0, .density = 1100.0}},
           SspInterpolationKind::Quadrilateral,
-          std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
-              .rangesMeters = {0.0, 350.0, 800.0},
-              .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                                   1500.0, 1520.0, 1540.0},
-              .depthCount = 2U,
-              .rangeCount = 3U})),
+          std::make_shared<const QuadrilateralSspGrid>(
+              QuadrilateralSspGrid{.rangesMeters = {0.0, 350.0, 800.0},
+                                   .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
+                                                        1500.0, 1520.0, 1540.0},
+                                   .depthCount = 2U,
+                                   .rangeCount = 3U})),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(100.0));
 }
 
@@ -497,12 +492,12 @@ Environment makeQUniformEnvironment() {
           {{.depth = 0.0, .soundSpeed = 1500.0, .density = 1000.0},
            {.depth = 200.0, .soundSpeed = 1500.0, .density = 1100.0}},
           SspInterpolationKind::Quadrilateral,
-          std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
-              .rangesMeters = {0.0, 350.0, 800.0},
-              .speedsDepthMajor = {1500.0, 1500.0, 1500.0,
-                                   1500.0, 1500.0, 1500.0},
-              .depthCount = 2U,
-              .rangeCount = 3U})),
+          std::make_shared<const QuadrilateralSspGrid>(
+              QuadrilateralSspGrid{.rangesMeters = {0.0, 350.0, 800.0},
+                                   .speedsDepthMajor = {1500.0, 1500.0, 1500.0,
+                                                        1500.0, 1500.0, 1500.0},
+                                   .depthCount = 2U,
+                                   .rangeCount = 3U})),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(200.0));
 }
 
@@ -516,13 +511,12 @@ Environment makeQDepthNodeEnvironment() {
            {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
            {.depth = 200.0, .soundSpeed = 1550.0, .density = 1000.0}},
           SspInterpolationKind::Quadrilateral,
-          std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
-              .rangesMeters = {0.0, 1000.0},
-              .speedsDepthMajor = {1500.0, 1500.0,
-                                   1500.0, 1500.0,
-                                   1550.0, 1550.0},
-              .depthCount = 3U,
-              .rangeCount = 2U})),
+          std::make_shared<const QuadrilateralSspGrid>(
+              QuadrilateralSspGrid{.rangesMeters = {0.0, 1000.0},
+                                   .speedsDepthMajor = {1500.0, 1500.0, 1500.0,
+                                                        1500.0, 1550.0, 1550.0},
+                                   .depthCount = 3U,
+                                   .rangeCount = 2U})),
       BoundaryModel::vacuum(0.0), BoundaryModel::rigid(200.0));
 }
 
@@ -680,9 +674,10 @@ void testQBackNodeRejectedBeyondGrid(Context& context) {
                               makeQSettings(32U, 10000.0));
   const RayPath path = tracer.trace(Source{.depth = 100.0}, 0.0);
 
-  context.check(path.terminationReason == RayTerminationReason::NumericalFailure,
-                "stepping past the grid back terminates with a numerical "
-                "failure");
+  context.check(
+      path.terminationReason == RayTerminationReason::NumericalFailure,
+      "stepping past the grid back terminates with a numerical "
+      "failure");
   context.checkNear(path.points.back().position.range, kQGridBack, 1.0e-12,
                     "the last completed point sits on the 800 m back node");
   for (const auto& step : path.steps) {

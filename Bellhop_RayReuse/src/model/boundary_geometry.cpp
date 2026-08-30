@@ -119,13 +119,10 @@ BoundaryGeometry::BoundaryGeometry(std::vector<Vec2> nodes,
       const double slope = segment.tangent.depth / segment.tangent.range;
       const double nextSlope =
           nextSegment.tangent.depth / nextSegment.tangent.range;
-      const double deltaRange =
-          nodes_[index + 1U].range - nodes_[index].range;
+      const double deltaRange = nodes_[index + 1U].range - nodes_[index].range;
       const double tangentRangeCubed =
-          segment.tangent.range * segment.tangent.range *
-          segment.tangent.range;
-      segment.curvature =
-          (nextSlope - slope) / deltaRange * tangentRangeCubed;
+          segment.tangent.range * segment.tangent.range * segment.tangent.range;
+      segment.curvature = (nextSlope - slope) / deltaRange * tangentRangeCubed;
     }
   }
 }
@@ -134,8 +131,7 @@ BoundaryOrientation BoundaryGeometry::orientation() const noexcept {
   return orientation_;
 }
 
-BoundaryInterpolationKind BoundaryGeometry::interpolationKind()
-    const noexcept {
+BoundaryInterpolationKind BoundaryGeometry::interpolationKind() const noexcept {
   return interpolationKind_;
 }
 
@@ -255,18 +251,15 @@ BoundaryGeometrySample BoundaryGeometry::reflectionSampleAtSegment(
 
   const Segment& segment = segments_[segmentIndex];
   const double fraction =
-      fortranDotProduct2D(
-          incidentPosition - segment.point, segment.tangent) /
+      fortranDotProduct2D(incidentPosition - segment.point, segment.tangent) /
       segment.length;
   // The locked gfortran oracle fuses the leading start-frame product into
   // the already-rounded end-frame product for this array expression.
   const double startWeight = 1.0 - fraction;
   const Vec2 tangent{
-      .range = std::fma(startWeight,
-                        segment.reflectionStartTangent.range,
+      .range = std::fma(startWeight, segment.reflectionStartTangent.range,
                         fraction * segment.reflectionEndTangent.range),
-      .depth = std::fma(startWeight,
-                        segment.reflectionStartTangent.depth,
+      .depth = std::fma(startWeight, segment.reflectionStartTangent.depth,
                         fraction * segment.reflectionEndTangent.depth)};
   const Vec2 outwardNormal =
       orientation_ == BoundaryOrientation::Upper

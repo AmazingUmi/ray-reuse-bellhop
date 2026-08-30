@@ -1,3 +1,5 @@
+#include "rayreuse/field/simple_gaussian_influence.hpp"
+
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -6,7 +8,6 @@
 #include <string>
 
 #include "rayreuse/error.hpp"
-#include "rayreuse/field/simple_gaussian_influence.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -25,45 +26,43 @@ using rayreuse::ValidationError;
 using rayreuse::test::Context;
 
 template <typename Influence>
-concept HasIntensityAccumulator = requires(
-    Influence& influence, IntensityWorkspace& workspace,
-    const RayPath& path, const RayFrequencyState& frequencyState) {
-  influence.accumulateIntensity(workspace, path, frequencyState, 0.1);
-};
+concept HasIntensityAccumulator =
+    requires(Influence& influence, IntensityWorkspace& workspace,
+             const RayPath& path, const RayFrequencyState& frequencyState) {
+      influence.accumulateIntensity(workspace, path, frequencyState, 0.1);
+    };
 
 static_assert(!HasIntensityAccumulator<SimpleGaussianInfluence>);
 
 RayPath makePath() {
   RayPath path;
   path.launchAngle = 0.2;
-  path.points = {
-      RayState{.position = {0.0, 0.0},
-               .slowness = {0.001, 0.002},
-               .dynamicP = {0.0, 0.0},
-               .dynamicQ = {1.0, 0.0},
-               .soundSpeed = 1500.0,
-               .realTravelTime = 0.0},
-      RayState{.position = {100.0, 20.0},
-               .slowness = {0.003, 0.004},
-               .dynamicP = {0.0, 0.0},
-               .dynamicQ = {-3.0, 0.0},
-               .soundSpeed = 1500.0,
-               .realTravelTime = 0.1}};
+  path.points = {RayState{.position = {0.0, 0.0},
+                          .slowness = {0.001, 0.002},
+                          .dynamicP = {0.0, 0.0},
+                          .dynamicQ = {1.0, 0.0},
+                          .soundSpeed = 1500.0,
+                          .realTravelTime = 0.0},
+                 RayState{.position = {100.0, 20.0},
+                          .slowness = {0.003, 0.004},
+                          .dynamicP = {0.0, 0.0},
+                          .dynamicQ = {-3.0, 0.0},
+                          .soundSpeed = 1500.0,
+                          .realTravelTime = 0.1}};
   return path;
 }
 
 RayFrequencyState makeFrequencyState() {
   return RayFrequencyState{
       .frequency = 1.0,
-      .points =
-          {RayFrequencyPoint{.complexTravelTime = {0.0, 0.0},
-                             .amplitude = 100.0,
-                             .reflectionPhase = 9.0,
-                             .active = true},
-           RayFrequencyPoint{.complexTravelTime = {0.1, 0.002},
-                             .amplitude = 2.0,
-                             .reflectionPhase = 0.3,
-                             .active = true}}};
+      .points = {RayFrequencyPoint{.complexTravelTime = {0.0, 0.0},
+                                   .amplitude = 100.0,
+                                   .reflectionPhase = 9.0,
+                                   .active = true},
+                 RayFrequencyPoint{.complexTravelTime = {0.1, 0.002},
+                                   .amplitude = 2.0,
+                                   .reflectionPhase = 0.3,
+                                   .active = true}}};
 }
 
 void checkComplexNear(Context& context, std::complex<double> actual,
@@ -82,8 +81,8 @@ SimpleGaussianDiagnostic runDiagnostic(Context& context,
   const SimpleGaussianInfluence influence(receivers, 10.0);
   const auto diagnostic = influence.accumulate(
       workspace, makePath(), makeFrequencyState(), 0.1,
-      SimpleGaussianDiagnosticRequest{
-          .receiverRangeIndex = rangeIndex, .receiverDepthIndex = 0U});
+      SimpleGaussianDiagnosticRequest{.receiverRangeIndex = rangeIndex,
+                                      .receiverDepthIndex = 0U});
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "simple Gaussian diagnostic evaluates the selected cell");
   context.check(workspace.at(1U, rangeIndex) != std::complex<double>{},
@@ -96,16 +95,14 @@ void testOriginFormulaAndLegacyStepLength(Context& context) {
   const double weight = 0.5;
   const double beta = static_cast<double>(0.98F);
   const double gaussianA = -4.0 * std::log(beta) / (0.1 * 0.1);
-  const double normalization =
-      0.1 * std::sqrt(gaussianA / std::numbers::pi);
+  const double normalization = 0.1 * std::sqrt(gaussianA / std::numbers::pi);
   const double legacyArcLength = 15.0;
   const double segmentLength = std::sqrt(100.0 * 100.0 + 20.0 * 20.0);
   const double deltaDepth = 5.0;
   const double closestPointDistance =
       std::abs(deltaDepth * 100.0) / segmentLength;
   const double offRayDistance = std::sqrt(
-      deltaDepth * deltaDepth -
-      closestPointDistance * closestPointDistance);
+      deltaDepth * deltaDepth - closestPointDistance * closestPointDistance);
   const double effectiveDistance = legacyArcLength + offRayDistance;
   const double angularOffset =
       std::atan(closestPointDistance / effectiveDistance);
@@ -120,11 +117,10 @@ void testOriginFormulaAndLegacyStepLength(Context& context) {
       std::exp(-gaussianA * angularOffset * angularOffset -
                std::complex<double>{0.0, 1.0} * phase);
 
-  context.check(
-      diagnostic.evaluationCount == 1U &&
-          diagnostic.leftPointIndex == 0U &&
-          diagnostic.rightPointIndex == 1U,
-      "simple Gaussian diagnostic selects the first receiver chord");
+  context.check(diagnostic.evaluationCount == 1U &&
+                    diagnostic.leftPointIndex == 0U &&
+                    diagnostic.rightPointIndex == 1U,
+                "simple Gaussian diagnostic selects the first receiver chord");
   context.checkNear(diagnostic.interpolationWeight, weight, 0.0,
                     "simple Gaussian range interpolation weight");
   context.checkNear(diagnostic.qInterpolated, -1.0, 0.0,
@@ -144,8 +140,8 @@ void testOriginFormulaAndLegacyStepLength(Context& context) {
                     1.0e-15, "simple Gaussian CPA");
   context.checkNear(diagnostic.offRayDistance, offRayDistance, 1.0e-15,
                     "simple Gaussian DS");
-  context.checkNear(diagnostic.effectiveDistance, effectiveDistance,
-                    1.0e-15, "simple Gaussian SX1");
+  context.checkNear(diagnostic.effectiveDistance, effectiveDistance, 1.0e-15,
+                    "simple Gaussian SX1");
   context.checkNear(diagnostic.angularOffset, angularOffset, 1.0e-15,
                     "simple Gaussian theta");
   context.checkNear(diagnostic.causticPhase, causticPhase, 0.0,
@@ -174,35 +170,31 @@ void testInterpolatedCausticPhasePersists(Context& context) {
 void testSafeSubsetContracts(Context& context) {
   const ReceiverGrid receivers({15.0, 25.0}, {50.0, 75.0});
   context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(SimpleGaussianInfluence(receivers, 0.0));
-      },
+      [&] { static_cast<void>(SimpleGaussianInfluence(receivers, 0.0)); },
       "simple Gaussian rejects non-positive configured deltas");
   context.expectThrows<ValidationError>(
       [&] {
         FrequencyWorkspace workspace(1.0, receivers);
         const SimpleGaussianInfluence influence(receivers, 10.0);
-        static_cast<void>(influence.accumulate(
-            workspace, makePath(), makeFrequencyState(), 0.0));
+        static_cast<void>(influence.accumulate(workspace, makePath(),
+                                               makeFrequencyState(), 0.0));
       },
       "simple Gaussian rejects non-positive launch spacing");
 }
 
 void testInactiveTerminalPointCompletesLastSegment(Context& context) {
   RayPath path = makePath();
-  path.points.push_back(
-      RayState{.position = {200.0, 40.0},
-               .slowness = {0.003, 0.004},
-               .dynamicP = {0.0, 0.0},
-               .dynamicQ = {-4.0, 0.0},
-               .soundSpeed = 1500.0,
-               .realTravelTime = 0.2});
+  path.points.push_back(RayState{.position = {200.0, 40.0},
+                                 .slowness = {0.003, 0.004},
+                                 .dynamicP = {0.0, 0.0},
+                                 .dynamicQ = {-4.0, 0.0},
+                                 .soundSpeed = 1500.0,
+                                 .realTravelTime = 0.2});
   RayFrequencyState state = makeFrequencyState();
-  state.points.push_back(
-      RayFrequencyPoint{.complexTravelTime = {0.2, 0.002},
-                        .amplitude = 3.0,
-                        .reflectionPhase = 0.4,
-                        .active = false});
+  state.points.push_back(RayFrequencyPoint{.complexTravelTime = {0.2, 0.002},
+                                           .amplitude = 3.0,
+                                           .reflectionPhase = 0.4,
+                                           .active = false});
   const ReceiverGrid receivers({30.0}, {150.0});
   FrequencyWorkspace workspace(1.0, receivers);
   static_cast<void>(SimpleGaussianInfluence(receivers, 10.0)

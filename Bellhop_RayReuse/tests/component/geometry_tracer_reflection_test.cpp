@@ -195,8 +195,7 @@ void testTracerPropagatesCurvatureMode(Context& context) {
       GeometryTracer(environment, settings, BoundaryCurvatureMode::Zero)
           .trace(Source{.depth = 5.0}, angle);
 
-  context.check(standard.events.size() == 1U &&
-                    doubled.events.size() == 1U &&
+  context.check(standard.events.size() == 1U && doubled.events.size() == 1U &&
                     zeroed.events.size() == 1U &&
                     standard.points.size() == doubled.points.size() &&
                     standard.points.size() == zeroed.points.size(),
@@ -222,9 +221,8 @@ void testTracerPropagatesCurvatureMode(Context& context) {
     const double standardJump =
         standard.points[reflectedIndex].dynamicP[basis] -
         standard.points[incidentIndex].dynamicP[basis];
-    const double doubledJump =
-        doubled.points[reflectedIndex].dynamicP[basis] -
-        doubled.points[incidentIndex].dynamicP[basis];
+    const double doubledJump = doubled.points[reflectedIndex].dynamicP[basis] -
+                               doubled.points[incidentIndex].dynamicP[basis];
     context.check(standardJump != 0.0,
                   "gradient reflection produces a nonzero standard RN jump");
     context.checkNear(doubledJump, 2.0 * standardJump, 1.0e-14,
@@ -409,9 +407,8 @@ void testUnreflectedDirectRayDoesNotDrift(Context& context) {
 
 void testCurvilinearMultiBounceMatchesFortran(Context& context) {
   constexpr double launchAngle = -2.438888037721334e-1;
-  const GeometryTracer tracer(
-      makeCurvilinearSurfaceAndBottomEnvironment(),
-      makeSettings(500.0, 10000U, 2100.0, 131.0));
+  const GeometryTracer tracer(makeCurvilinearSurfaceAndBottomEnvironment(),
+                              makeSettings(500.0, 10000U, 2100.0, 131.0));
   const RayPath path = tracer.trace(Source{.depth = 48.0}, launchAngle);
 
   const std::size_t topBounceCount = static_cast<std::size_t>(std::count_if(
@@ -434,10 +431,9 @@ void testCurvilinearMultiBounceMatchesFortran(Context& context) {
   }
   if (path.events.size() >= 2U) {
     const auto& top = path.events[0U];
-    context.check(
-        top.boundary == ReflectionBoundary::SeaSurface &&
-            top.boundarySegmentIndex == 1U,
-        "first curvilinear oracle event uses top physical segment");
+    context.check(top.boundary == ReflectionBoundary::SeaSurface &&
+                      top.boundarySegmentIndex == 1U,
+                  "first curvilinear oracle event uses top physical segment");
     context.checkNear(top.position.range, 161.4882321836457, 1.0e-10,
                       "first curvilinear reflection range matches oracle");
     context.checkNear(top.position.depth, 7.814890518004077, 1.0e-12,
@@ -449,32 +445,27 @@ void testCurvilinearMultiBounceMatchesFortran(Context& context) {
     context.checkNear(top.boundaryCurvature, -0.0001023773616463405, 1.0e-18,
                       "first top curvature matches oracle");
     context.checkNear(top.reflectedSlowness.range, 0.0006441655711190538,
-                      1.0e-18,
-                      "first reflected range slowness matches oracle");
+                      1.0e-18, "first reflected range slowness matches oracle");
     context.checkNear(top.reflectedSlowness.depth, 0.00017164054349210126,
-                      1.0e-18,
-                      "first reflected depth slowness matches oracle");
+                      1.0e-18, "first reflected depth slowness matches oracle");
     context.checkNear(path.points[top.reflectedRayPointIndex].dynamicP[0],
                       1.1365591001486675, 1.0e-14,
                       "first curvature jump p1 matches oracle");
 
     const auto& bottom = path.events[1U];
-    context.check(
-        bottom.boundary == ReflectionBoundary::Seabed &&
-            bottom.boundarySegmentIndex == 1U,
-        "second curvilinear oracle event uses bottom segment");
-    context.checkNear(bottom.boundaryTangent.range, 0.9991572645683603,
-                      1.0e-15,
+    context.check(bottom.boundary == ReflectionBoundary::Seabed &&
+                      bottom.boundarySegmentIndex == 1U,
+                  "second curvilinear oracle event uses bottom segment");
+    context.checkNear(bottom.boundaryTangent.range, 0.9991572645683603, 1.0e-15,
                       "second interpolated tangent range matches oracle");
     context.checkNear(bottom.boundaryTangent.depth, 0.006256177145108277,
                       1.0e-15,
                       "second interpolated tangent depth matches oracle");
     context.checkNear(bottom.boundaryCurvature, 0.0001518221312076167, 1.0e-18,
                       "second bottom curvature matches oracle");
-    context.checkNear(
-        path.points[bottom.reflectedRayPointIndex].dynamicP[0],
-        1.803666459473942, 1.0e-13,
-        "second curvature jump p1 matches oracle");
+    context.checkNear(path.points[bottom.reflectedRayPointIndex].dynamicP[0],
+                      1.803666459473942, 1.0e-13,
+                      "second curvature jump p1 matches oracle");
   }
 
   RayPathCache cache;
@@ -488,8 +479,7 @@ void testCurvilinearMultiBounceMatchesFortran(Context& context) {
 
 void testCurvilinearTracerPropagatesCurvatureMode(Context& context) {
   constexpr double launchAngle = -2.438888037721334e-1;
-  const Environment environment =
-      makeCurvilinearSurfaceAndBottomEnvironment();
+  const Environment environment = makeCurvilinearSurfaceAndBottomEnvironment();
   const IntegratorSettings settings =
       makeSettings(500.0, 10000U, 2100.0, 131.0);
   const RayPath standard =
@@ -508,8 +498,7 @@ void testCurvilinearTracerPropagatesCurvatureMode(Context& context) {
       standard.events.front().reflectedRayPointIndex;
   const std::size_t doubledPoint =
       doubled.events.front().reflectedRayPointIndex;
-  const std::size_t zeroedPoint =
-      zeroed.events.front().reflectedRayPointIndex;
+  const std::size_t zeroedPoint = zeroed.events.front().reflectedRayPointIndex;
   context.checkNear(standard.points[standardPoint].dynamicP[0U],
                     1.1365591001486675, 1.0e-14,
                     "standard tracer curvature jump matches Origin");
@@ -524,7 +513,7 @@ void testCurvilinearTracerPropagatesCurvatureMode(Context& context) {
                     standard.events.size() == zeroed.events.size(),
                 "curvature mode changes dynamics without retracing centers");
   context.check(standard.points[standardPoint].position ==
-                    doubled.points[doubledPoint].position &&
+                        doubled.points[doubledPoint].position &&
                     standard.points[standardPoint].position ==
                         zeroed.points[zeroedPoint].position &&
                     standard.points[standardPoint].slowness ==
@@ -544,9 +533,8 @@ void testCurvilinearTwoPointsOutsideTermination(Context& context) {
            {.range = 1650.0, .depth = 19.0},
            {.range = 2300.0, .depth = 7.0}},
           0.0, rayreuse::BoundaryOrientation::Upper);
-  const GeometryTracer tracer(
-      makeCurvilinearSurfaceAndBottomEnvironment(),
-      makeSettings(500.0, 10000U, 2100.0, 131.0));
+  const GeometryTracer tracer(makeCurvilinearSurfaceAndBottomEnvironment(),
+                              makeSettings(500.0, 10000U, 2100.0, 131.0));
   const RayPath path = tracer.trace(Source{.depth = 48.0}, launchAngle);
 
   context.check(path.terminationReason == RayTerminationReason::ExitedDomain,

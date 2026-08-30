@@ -21,8 +21,8 @@ class CLinearSsp {
  public:
   explicit CLinearSsp(const SoundSpeedProfile& profile);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::CLinear);
   }
 

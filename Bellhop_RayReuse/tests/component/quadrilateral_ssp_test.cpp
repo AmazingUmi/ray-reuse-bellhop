@@ -1,3 +1,5 @@
+#include "rayreuse/model/quadrilateral_ssp.hpp"
+
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -19,7 +21,6 @@
 #include "rayreuse/model/c_linear_ssp.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/quadrilateral_frequency_ssp.hpp"
-#include "rayreuse/model/quadrilateral_ssp.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "support/test_harness.hpp"
 
@@ -27,9 +28,9 @@ namespace {
 
 using rayreuse::AttenuationUnit;
 using rayreuse::BellhopError;
-using rayreuse::convertAttenuation;
 using rayreuse::CLinearFrequencySsp;
 using rayreuse::CLinearSsp;
+using rayreuse::convertAttenuation;
 using rayreuse::EnvironmentParser;
 using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencySspEvaluator;
@@ -43,8 +44,8 @@ using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
 using rayreuse::SoundSpeedSample;
 using rayreuse::SspGradientContinuity;
-using rayreuse::SspInterpolationKind;
 using rayreuse::sspGradientContinuity;
+using rayreuse::SspInterpolationKind;
 using rayreuse::ValidationError;
 using rayreuse::Vec2;
 using rayreuse::VolumeAttenuation;
@@ -58,8 +59,7 @@ using rayreuse::test::Context;
 SharedQuadrilateralSspGrid makeCrossGradientGrid() {
   return std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
       .rangesMeters = {0.0, 350.0, 800.0},
-      .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                           1500.0, 1520.0, 1540.0},
+      .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 1520.0, 1540.0},
       .depthCount = 2U,
       .rangeCount = 3U});
 }
@@ -80,9 +80,7 @@ SoundSpeedProfile makeDepthLocatorProfile() {
       SspInterpolationKind::Quadrilateral,
       std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
           .rangesMeters = {0.0, 1000.0},
-          .speedsDepthMajor = {1500.0, 1510.0,
-                               1520.0, 1530.0,
-                               1540.0, 1550.0,
+          .speedsDepthMajor = {1500.0, 1510.0, 1520.0, 1530.0, 1540.0, 1550.0,
                                1560.0, 1570.0},
           .depthCount = 4U,
           .rangeCount = 2U}));
@@ -107,33 +105,32 @@ SoundSpeedProfile makeAttenuatingProfile() {
 }
 
 SoundSpeedProfile makeThorpProfile() {
-  const RawAttenuation thorp{
-      .value = 0.0,
-      .unit = AttenuationUnit::DecibelsPerWavelength,
-      .volumeModel = VolumeAttenuationModel::Thorp};
-  return SoundSpeedProfile(
-      {{.depth = 0.0,
-        .soundSpeed = 1400.0,
-        .density = 1000.0,
-        .attenuation = thorp},
-       {.depth = 100.0,
-        .soundSpeed = 1800.0,
-        .density = 1200.0,
-        .attenuation = thorp}},
-      SspInterpolationKind::Quadrilateral, makeCrossGradientGrid());
+  const RawAttenuation thorp{.value = 0.0,
+                             .unit = AttenuationUnit::DecibelsPerWavelength,
+                             .volumeModel = VolumeAttenuationModel::Thorp};
+  return SoundSpeedProfile({{.depth = 0.0,
+                             .soundSpeed = 1400.0,
+                             .density = 1000.0,
+                             .attenuation = thorp},
+                            {.depth = 100.0,
+                             .soundSpeed = 1800.0,
+                             .density = 1200.0,
+                             .attenuation = thorp}},
+                           SspInterpolationKind::Quadrilateral,
+                           makeCrossGradientGrid());
 }
 
 void checkSameSample(Context& context, const SoundSpeedSample& expected,
                      const SoundSpeedSample& actual, const char* what) {
-  context.check(expected.soundSpeed == actual.soundSpeed &&
-                    expected.imaginarySoundSpeed ==
-                        actual.imaginarySoundSpeed &&
-                    expected.soundSpeedGradient == actual.soundSpeedGradient &&
-                    expected.soundSpeedHessian == actual.soundSpeedHessian &&
-                    expected.density == actual.density &&
-                    expected.segmentIndex == actual.segmentIndex &&
-                    expected.rangeSegmentIndex == actual.rangeSegmentIndex,
-                what);
+  context.check(
+      expected.soundSpeed == actual.soundSpeed &&
+          expected.imaginarySoundSpeed == actual.imaginarySoundSpeed &&
+          expected.soundSpeedGradient == actual.soundSpeedGradient &&
+          expected.soundSpeedHessian == actual.soundSpeedHessian &&
+          expected.density == actual.density &&
+          expected.segmentIndex == actual.segmentIndex &&
+          expected.rangeSegmentIndex == actual.rangeSegmentIndex,
+      what);
 }
 
 void testGridValidation(Context& context) {
@@ -152,8 +149,8 @@ void testGridValidation(Context& context) {
             points, SspInterpolationKind::Quadrilateral,
             std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
                 .rangesMeters = {0.0, 350.0, 350.0},
-                .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                                     1500.0, 1520.0, 1540.0},
+                .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 1520.0,
+                                     1540.0},
                 .depthCount = 2U,
                 .rangeCount = 3U})));
       },
@@ -164,8 +161,8 @@ void testGridValidation(Context& context) {
             points, SspInterpolationKind::Quadrilateral,
             std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
                 .rangesMeters = {0.0, 350.0},
-                .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                                     1500.0, 1520.0, 1540.0},
+                .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 1520.0,
+                                     1540.0},
                 .depthCount = 2U,
                 .rangeCount = 3U})));
       },
@@ -176,8 +173,8 @@ void testGridValidation(Context& context) {
             points, SspInterpolationKind::Quadrilateral,
             std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
                 .rangesMeters = {0.0, 350.0, 800.0},
-                .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                                     1500.0, 0.0, 1540.0},
+                .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 0.0,
+                                     1540.0},
                 .depthCount = 2U,
                 .rangeCount = 3U})));
       },
@@ -199,16 +196,16 @@ void testGridValidation(Context& context) {
             points, SspInterpolationKind::Quadrilateral,
             std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
                 .rangesMeters = {0.0, 350.0, 800.0},
-                .speedsDepthMajor = {1500.0, 1540.0, 1580.0,
-                                     1500.0, 1520.0, 1540.0},
+                .speedsDepthMajor = {1500.0, 1540.0, 1580.0, 1500.0, 1520.0,
+                                     1540.0},
                 .depthCount = 3U,
                 .rangeCount = 3U})));
       },
       "a grid depth count that disagrees with the ENV profile is rejected");
   context.expectThrows<ValidationError>(
       [&] {
-        static_cast<void>(SoundSpeedProfile(
-            points, SspInterpolationKind::Quadrilateral, {}));
+        static_cast<void>(
+            SoundSpeedProfile(points, SspInterpolationKind::Quadrilateral, {}));
       },
       "a quadrilateral profile without a grid is rejected");
   context.expectThrows<ValidationError>(
@@ -219,7 +216,7 @@ void testGridValidation(Context& context) {
       "a non-quadrilateral profile cannot carry a quadrilateral grid");
 
   const SoundSpeedProfile rangeIndependent(points,
-                                            SspInterpolationKind::CLinear);
+                                           SspInterpolationKind::CLinear);
   context.check(!rangeIndependent.quadrilateralGrid(),
                 "non-Q profiles hold no quadrilateral grid storage");
   context.expectThrows<ValidationError>(
@@ -315,30 +312,26 @@ void testOutsideRangeRejection(Context& context) {
       },
       "Q rejects a non-finite range query");
   context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(profile.locateRangeSegment(100.0, 2U));
-      },
+      [&] { static_cast<void>(profile.locateRangeSegment(100.0, 2U)); },
       "Q rejects an out-of-range previous range hint");
   context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(profile.minimumRangeForSegment(2U));
-      },
+      [&] { static_cast<void>(profile.minimumRangeForSegment(2U)); },
       "Q rejects an out-of-range minimum range segment index");
   context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(profile.maximumRangeForSegment(2U));
-      },
+      [&] { static_cast<void>(profile.maximumRangeForSegment(2U)); },
       "Q rejects an out-of-range maximum range segment index");
   context.expectThrows<ValidationError>(
       [&] {
-        static_cast<void>(makeCrossGradientProfile().quadrilateralRealSoundSpeedAt(
-            Vec2{.range = 175.0, .depth = 101.0}));
+        static_cast<void>(
+            makeCrossGradientProfile().quadrilateralRealSoundSpeedAt(
+                Vec2{.range = 175.0, .depth = 101.0}));
       },
       "the launch helper rejects a depth outside the ENV profile");
   context.expectThrows<ValidationError>(
       [&] {
-        static_cast<void>(makeCrossGradientProfile().quadrilateralRealSoundSpeedAt(
-            Vec2{.range = 900.0, .depth = 50.0}));
+        static_cast<void>(
+            makeCrossGradientProfile().quadrilateralRealSoundSpeedAt(
+                Vec2{.range = 900.0, .depth = 50.0}));
       },
       "the launch helper rejects a range outside the grid");
 }
@@ -372,14 +365,14 @@ void testBilinearValuesAndGradients(Context& context) {
                     "Q cross derivative at the quarter point");
 
   constexpr double step = 1.0;
-  const auto rangeMinus = profile.evaluate(
-      Vec2{.range = 175.0 - step, .depth = 50.0}, 0U);
-  const auto rangePlus = profile.evaluate(
-      Vec2{.range = 175.0 + step, .depth = 50.0}, 0U);
-  const auto depthMinus = profile.evaluate(
-      Vec2{.range = 175.0, .depth = 50.0 - step}, 0U);
-  const auto depthPlus = profile.evaluate(
-      Vec2{.range = 175.0, .depth = 50.0 + step}, 0U);
+  const auto rangeMinus =
+      profile.evaluate(Vec2{.range = 175.0 - step, .depth = 50.0}, 0U);
+  const auto rangePlus =
+      profile.evaluate(Vec2{.range = 175.0 + step, .depth = 50.0}, 0U);
+  const auto depthMinus =
+      profile.evaluate(Vec2{.range = 175.0, .depth = 50.0 - step}, 0U);
+  const auto depthPlus =
+      profile.evaluate(Vec2{.range = 175.0, .depth = 50.0 + step}, 0U);
   context.checkNear(
       (rangePlus.soundSpeedGradient.depth -
        rangeMinus.soundSpeedGradient.depth) /
@@ -393,17 +386,15 @@ void testBilinearValuesAndGradients(Context& context) {
       interior.soundSpeedHessian.rangeDepth, 2.0e-16,
       "Q cross derivative matches the depth finite difference of dc/dr");
 
-  const auto lowerLeft =
-      profile.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U);
+  const auto lowerLeft = profile.evaluate(Vec2{.range = 0.0, .depth = 0.0}, 0U);
   const auto upperRight =
       profile.evaluate(Vec2{.range = 800.0, .depth = 100.0}, 0U);
-  context.check(lowerLeft.soundSpeed == 1500.0 &&
-                    upperRight.soundSpeed == 1540.0,
-                "Q returns the tabulated sound speed exactly at grid nodes");
+  context.check(
+      lowerLeft.soundSpeed == 1500.0 && upperRight.soundSpeed == 1540.0,
+      "Q returns the tabulated sound speed exactly at grid nodes");
   const auto lastCellMid =
       profile.evaluate(Vec2{.range = 575.0, .depth = 50.0}, 0U);
-  context.checkNear(lastCellMid.soundSpeed,
-                    0.5 * 1530.0 + 0.5 * 1560.0, 0.0,
+  context.checkNear(lastCellMid.soundSpeed, 0.5 * 1530.0 + 0.5 * 1560.0, 0.0,
                     "Q interpolates the last range cell at its midpoint");
   context.check(lastCellMid.rangeSegmentIndex == 1U,
                 "the last-cell midpoint reports range cell one");
@@ -414,8 +405,8 @@ void testBilinearValuesAndGradients(Context& context) {
             Vec2{.range = 175.0, .depth = 101.0}, 0U));
       },
       "Q explicit-segment evaluation rejects a depth outside that segment");
-  const auto relocated = profile.evaluateAtSegment(
-      Vec2{.range = 575.0, .depth = 50.0}, 0U);
+  const auto relocated =
+      profile.evaluateAtSegment(Vec2{.range = 575.0, .depth = 50.0}, 0U);
   context.check(relocated.rangeSegmentIndex == 1U &&
                     relocated.soundSpeed == lastCellMid.soundSpeed,
                 "single-segment entry relocates the range cell from zero");
@@ -423,15 +414,13 @@ void testBilinearValuesAndGradients(Context& context) {
 
 void testDensityInterpolation(Context& context) {
   const QuadrilateralSsp profile(makeCrossGradientProfile());
-  const auto quarter =
-      profile.evaluate(Vec2{.range = 87.5, .depth = 25.0}, 0U);
+  const auto quarter = profile.evaluate(Vec2{.range = 87.5, .depth = 25.0}, 0U);
   const auto middle = profile.evaluate(Vec2{.range = 175.0, .depth = 50.0}, 0U);
   const auto otherCell =
       profile.evaluate(Vec2{.range = 575.0, .depth = 50.0}, 0U);
   context.checkNear(quarter.density, 1025.0, 0.0,
                     "Q density interpolates the ENV reference profile");
-  context.checkNear(middle.density, 1050.0, 0.0,
-                    "Q density at the half depth");
+  context.checkNear(middle.density, 1050.0, 0.0, "Q density at the half depth");
   context.check(otherCell.density == middle.density,
                 "Q density is range independent");
 }
@@ -441,15 +430,14 @@ void testEvaluatorDispatch(Context& context) {
   const QuadrilateralSsp concrete(profile);
   const GeometrySspEvaluator evaluator(profile);
 
+  context.check(sspGradientContinuity(SspInterpolationKind::Quadrilateral) ==
+                    SspGradientContinuity::DiscontinuousAtNodes,
+                "Q interpolation keeps a gradient jump at cell boundaries");
   context.check(
-      sspGradientContinuity(SspInterpolationKind::Quadrilateral) ==
-          SspGradientContinuity::DiscontinuousAtNodes,
-      "Q interpolation keeps a gradient jump at cell boundaries");
-  context.check(evaluator.interpolationKind() ==
-                    SspInterpolationKind::Quadrilateral &&
-                    evaluator.gradientContinuity() ==
-                        SspGradientContinuity::DiscontinuousAtNodes &&
-                    evaluator.segmentCount() == 1U,
+      evaluator.interpolationKind() == SspInterpolationKind::Quadrilateral &&
+          evaluator.gradientContinuity() ==
+              SspGradientContinuity::DiscontinuousAtNodes &&
+          evaluator.segmentCount() == 1U,
       "Q dispatches to the discontinuous-gradient geometry backend");
   context.check(evaluator.rangeSegmentCount() == 2U &&
                     evaluator.minimumRangeForSegment(0U) == 0.0 &&
@@ -473,12 +461,13 @@ void testEvaluatorDispatch(Context& context) {
                     "geometry wrapper preserves the concrete Q sample");
   }
   checkSameSample(
-      context, concrete.evaluateAtSegments(Vec2{.range = 350.0, .depth = 50.0},
-                                           0U, 1U),
+      context,
+      concrete.evaluateAtSegments(Vec2{.range = 350.0, .depth = 50.0}, 0U, 1U),
       evaluator.evaluateAtSegments(Vec2{.range = 350.0, .depth = 50.0}, 0U, 1U),
       "geometry wrapper preserves the explicit two-segment entry");
 
-  const auto interior = evaluator.evaluate(Vec2{.range = 175.0, .depth = 50.0}, 0U);
+  const auto interior =
+      evaluator.evaluate(Vec2{.range = 175.0, .depth = 50.0}, 0U);
   context.check(
       profile.quadrilateralRealSoundSpeedAt(
           Vec2{.range = 175.0, .depth = 50.0}) == interior.soundSpeed,
@@ -500,9 +489,8 @@ void testEvaluatorDispatch(Context& context) {
             other.maximumRangeForSegment(0U) ==
                 std::numeric_limits<double>::infinity() &&
             other.locateRangeSegment(25.0, 0U) == 0U &&
-            other.evaluateAtSegments(Vec2{.range = 25.0, .depth = 50.0}, 0U,
-                                     0U)
-                .rangeSegmentIndex == 0U,
+            other.evaluateAtSegments(Vec2{.range = 25.0, .depth = 50.0}, 0U, 0U)
+                    .rangeSegmentIndex == 0U,
         "range-independent backends retain range segment zero");
     context.expectThrows<ValidationError>(
         [&] {
@@ -512,8 +500,8 @@ void testEvaluatorDispatch(Context& context) {
         "range-independent backends reject a nonzero range segment");
     context.expectThrows<ValidationError>(
         [&] {
-          static_cast<void>(other.evaluate(
-              Vec2{.range = 25.0, .depth = 50.0}, 0U, 1U));
+          static_cast<void>(
+              other.evaluate(Vec2{.range = 25.0, .depth = 50.0}, 0U, 1U));
         },
         "range-independent backends reject a nonzero previous range hint");
     context.expectThrows<ValidationError>(
@@ -553,12 +541,12 @@ void testFrequencyImaginaryAnchors(Context& context) {
   const auto realSample = geometry.evaluateAtSegments(position, 0U, 0U);
   checkSameSample(context, concreteSample, actual,
                   "frequency wrapper preserves the concrete Q sample");
-  context.check(actual.soundSpeed == realSample.soundSpeed &&
-                    actual.soundSpeedGradient ==
-                        realSample.soundSpeedGradient &&
-                    actual.soundSpeedHessian == realSample.soundSpeedHessian &&
-                    actual.density == realSample.density,
-                "Q frequency real fields delegate exactly to Q geometry");
+  context.check(
+      actual.soundSpeed == realSample.soundSpeed &&
+          actual.soundSpeedGradient == realSample.soundSpeedGradient &&
+          actual.soundSpeedHessian == realSample.soundSpeedHessian &&
+          actual.density == realSample.density,
+      "Q frequency real fields delegate exactly to Q geometry");
 
   // Closed-form anchor for dB-per-wavelength:
   // cImag = value * referenceSpeed / (kDecibelsPerNeper * 2 * pi).
@@ -568,12 +556,12 @@ void testFrequencyImaginaryAnchors(Context& context) {
   const double bottomImaginary =
       0.10 * 1800.0 / (kDecibelsPerNeper * 2.0 * std::acos(-1.0));
   context.checkNear(
-      actual.imaginarySoundSpeed,
-      0.75 * topImaginary + 0.25 * bottomImaginary, 1.0e-9,
-      "Q converts the ENV reference nodes before depth interpolation");
+      actual.imaginarySoundSpeed, 0.75 * topImaginary + 0.25 * bottomImaginary,
+      1.0e-9, "Q converts the ENV reference nodes before depth interpolation");
 
-  const double convertedTop = convertAttenuation(
-      profile.points()[0U].attenuation, frequency, 1400.0).imaginarySoundSpeed;
+  const double convertedTop =
+      convertAttenuation(profile.points()[0U].attenuation, frequency, 1400.0)
+          .imaginarySoundSpeed;
   const double convertedBottom =
       convertAttenuation(profile.points()[1U].attenuation, frequency, 1800.0)
           .imaginarySoundSpeed;
@@ -583,8 +571,9 @@ void testFrequencyImaginaryAnchors(Context& context) {
   context.checkNear(convertedTop, topImaginary, 1.0e-12,
                     "dB-per-wavelength anchors agree with the converter");
 
-  const double wrongTop = convertAttenuation(
-      profile.points()[0U].attenuation, frequency, 1540.0).imaginarySoundSpeed;
+  const double wrongTop =
+      convertAttenuation(profile.points()[0U].attenuation, frequency, 1540.0)
+          .imaginarySoundSpeed;
   const double wrongBottom =
       convertAttenuation(profile.points()[1U].attenuation, frequency, 1520.0)
           .imaginarySoundSpeed;
@@ -595,14 +584,14 @@ void testFrequencyImaginaryAnchors(Context& context) {
   context.checkNear(actual.density, 1050.0, 0.0,
                     "Q frequency density remains ENV depth interpolation");
 
-  const auto secondCell = evaluator.evaluate(
-      Vec2{.range = 500.0, .depth = 25.0}, 0U, 1U);
-  context.check(secondCell.rangeSegmentIndex == 1U &&
-                    secondCell.imaginarySoundSpeed ==
-                        actual.imaginarySoundSpeed,
-                "Q imaginary sound speed is depth-only across range cells");
-  const auto deeper = evaluator.evaluate(
-      Vec2{.range = 500.0, .depth = 75.0}, 0U, 1U);
+  const auto secondCell =
+      evaluator.evaluate(Vec2{.range = 500.0, .depth = 25.0}, 0U, 1U);
+  context.check(
+      secondCell.rangeSegmentIndex == 1U &&
+          secondCell.imaginarySoundSpeed == actual.imaginarySoundSpeed,
+      "Q imaginary sound speed is depth-only across range cells");
+  const auto deeper =
+      evaluator.evaluate(Vec2{.range = 500.0, .depth = 75.0}, 0U, 1U);
   context.checkNear(deeper.imaginarySoundSpeed,
                     0.25 * topImaginary + 0.75 * bottomImaginary, 1.0e-9,
                     "Q imaginary interpolation follows depth alone");
@@ -615,8 +604,8 @@ void testFrequencyImaginaryAnchors(Context& context) {
       "Q frequency evaluator rejects range below its grid");
   context.expectThrows<ValidationError>(
       [&] {
-        static_cast<void>(evaluator.evaluate(
-            Vec2{.range = 800.0001, .depth = 25.0}, 0U, 0U));
+        static_cast<void>(
+            evaluator.evaluate(Vec2{.range = 800.0001, .depth = 25.0}, 0U, 0U));
       },
       "Q frequency evaluator rejects range above its grid");
 
@@ -627,17 +616,14 @@ void testFrequencyImaginaryAnchors(Context& context) {
       },
       "non-finite frequency is rejected");
   context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(QuadrilateralFrequencySsp(profile, -50.0));
-      },
+      [&] { static_cast<void>(QuadrilateralFrequencySsp(profile, -50.0)); },
       "negative frequency is rejected");
 
   const auto uniformGrid = std::make_shared<const QuadrilateralSspGrid>(
-      QuadrilateralSspGrid{
-          .rangesMeters = {0.0, 100.0},
-          .speedsDepthMajor = {1500.0, 1500.0, 1500.0, 1500.0},
-          .depthCount = 2U,
-          .rangeCount = 2U});
+      QuadrilateralSspGrid{.rangesMeters = {0.0, 100.0},
+                           .speedsDepthMajor = {1500.0, 1500.0, 1500.0, 1500.0},
+                           .depthCount = 2U,
+                           .rangeCount = 2U});
   const SoundSpeedProfile uniformProfile(
       {{.depth = 0.0, .soundSpeed = 1400.0, .density = 1000.0},
        {.depth = 100.0, .soundSpeed = 1800.0, .density = 1000.0}},
@@ -652,12 +638,12 @@ void testFrequencyImaginaryAnchors(Context& context) {
 }
 
 void testExplicitVolumePaths(Context& context) {
-  const auto grid = std::make_shared<const QuadrilateralSspGrid>(
-      QuadrilateralSspGrid{
+  const auto grid =
+      std::make_shared<const QuadrilateralSspGrid>(QuadrilateralSspGrid{
           .rangesMeters = {0.0, 100.0},
-          .speedsDepthMajor = {2000.0, 2100.0, 2000.0, 2100.0,
-                               2000.0, 2100.0},
-          .depthCount = 3U, .rangeCount = 2U});
+          .speedsDepthMajor = {2000.0, 2100.0, 2000.0, 2100.0, 2000.0, 2100.0},
+          .depthCount = 3U,
+          .rangeCount = 2U});
   const SoundSpeedProfile source(
       {{.depth = 0.0, .soundSpeed = 1400.0, .density = 1000.0},
        {.depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0},
@@ -670,11 +656,14 @@ void testExplicitVolumePaths(Context& context) {
                                                .salinityPsu = 35.0,
                                                .pH = 8.0,
                                                .meanDepthMeters = 100.0}};
-  const auto layers = std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
-      rayreuse::BiologicalAttenuationLayers{{
-          .minimumDepth = 0.0, .maximumDepth = 100.0,
-          .resonanceFrequency = 1000.0, .qualityFactor = 2.0,
-          .attenuationCoefficientDecibelsPerKilometer = 10.0}});
+  const auto layers =
+      std::make_shared<const rayreuse::BiologicalAttenuationLayers>(
+          rayreuse::BiologicalAttenuationLayers{
+              {.minimumDepth = 0.0,
+               .maximumDepth = 100.0,
+               .resonanceFrequency = 1000.0,
+               .qualityFactor = 2.0,
+               .attenuationCoefficientDecibelsPerKilometer = 10.0}});
   const VolumeAttenuation biological{
       .model = VolumeAttenuationModel::Biological, .parameters = layers};
   context.check(QuadrilateralFrequencySsp(source, 1000.0).isLossless(),
@@ -698,43 +687,44 @@ void testExplicitVolumePaths(Context& context) {
   }
   const SoundSpeedProfile matchingLegacy(
       std::move(legacyPoints), SspInterpolationKind::Quadrilateral, grid);
-  context.check(
-      QuadrilateralFrequencySsp(source, 1000.0, thorp)
-              .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
-              .imaginarySoundSpeed ==
-          QuadrilateralFrequencySsp(matchingLegacy, 1000.0)
-              .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
-              .imaginarySoundSpeed,
-      "Q explicit and legacy Thorp baselines are exact");
+  context.check(QuadrilateralFrequencySsp(source, 1000.0, thorp)
+                        .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
+                        .imaginarySoundSpeed ==
+                    QuadrilateralFrequencySsp(matchingLegacy, 1000.0)
+                        .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U)
+                        .imaginarySoundSpeed,
+                "Q explicit and legacy Thorp baselines are exact");
   const QuadrilateralFrequencySsp bio(source, 1000.0, biological);
   const FrequencySspEvaluator dispatched(source, 1000.0, biological);
-  checkSameSample(context,
-                  bio.evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U),
+  checkSameSample(context, bio.evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U),
                   dispatched.evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U),
                   "Q evaluator forwards the explicit biological model");
-  context.check(bio.evaluate(Vec2{.range = 50.0, .depth = 0.0}, 0U)
-                        .imaginarySoundSpeed > 0.0 &&
-                    bio.evaluate(Vec2{.range = 50.0, .depth = 100.0}, 0U)
-                        .imaginarySoundSpeed > 0.0 &&
-                    bio.evaluate(Vec2{.range = 50.0, .depth = 200.0}, 1U)
-                            .imaginarySoundSpeed == 0.0,
-                "Q biological endpoints are inclusive and outside node is lossless");
+  context.check(
+      bio.evaluate(Vec2{.range = 50.0, .depth = 0.0}, 0U).imaginarySoundSpeed >
+              0.0 &&
+          bio.evaluate(Vec2{.range = 50.0, .depth = 100.0}, 0U)
+                  .imaginarySoundSpeed > 0.0 &&
+          bio.evaluate(Vec2{.range = 50.0, .depth = 200.0}, 1U)
+                  .imaginarySoundSpeed == 0.0,
+      "Q biological endpoints are inclusive and outside node is lossless");
   const auto interpolated =
       bio.evaluate(Vec2{.range = 50.0, .depth = 150.0}, 1U);
   context.check(interpolated.imaginarySoundSpeed > 0.0,
                 "Q biological loss is node-first, not query-depth converted");
   const double expectedUpper =
       convertAttenuation(source.points()[1U].attenuation, biological, 1000.0,
-                         1500.0, 100.0).imaginarySoundSpeed;
-  context.check(bio.evaluate(Vec2{.range = 50.0, .depth = 100.0}, 0U)
-                        .imaginarySoundSpeed == expectedUpper,
-                "Q attenuation uses the ENV reference speed, not Q matrix speed");
-  const auto low = QuadrilateralFrequencySsp(source, 500.0, biological).evaluate(
-      Vec2{.range = 50.0, .depth = 50.0}, 0U);
-  static_cast<void>(QuadrilateralFrequencySsp(source, 2000.0, biological).evaluate(
-      Vec2{.range = 50.0, .depth = 50.0}, 0U));
-  const auto repeated = QuadrilateralFrequencySsp(source, 500.0, biological).evaluate(
-      Vec2{.range = 50.0, .depth = 50.0}, 0U);
+                         1500.0, 100.0)
+          .imaginarySoundSpeed;
+  context.check(
+      bio.evaluate(Vec2{.range = 50.0, .depth = 100.0}, 0U)
+              .imaginarySoundSpeed == expectedUpper,
+      "Q attenuation uses the ENV reference speed, not Q matrix speed");
+  const auto low = QuadrilateralFrequencySsp(source, 500.0, biological)
+                       .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U);
+  static_cast<void>(QuadrilateralFrequencySsp(source, 2000.0, biological)
+                        .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U));
+  const auto repeated = QuadrilateralFrequencySsp(source, 500.0, biological)
+                            .evaluate(Vec2{.range = 50.0, .depth = 50.0}, 0U);
   context.check(low.imaginarySoundSpeed == repeated.imaginarySoundSpeed,
                 "Q low/high/low evaluation is deterministic");
 }
@@ -746,16 +736,14 @@ void testTwoFrequencyIndependence(Context& context) {
   QuadrilateralFrequencySsp low(profile, 1000.0);
   const auto lowBefore = low.evaluateAtSegments(position, 0U, 0U);
   const auto lowAgain = low.evaluateAtSegments(position, 0U, 0U);
-  context.check(lowBefore.imaginarySoundSpeed ==
-                    lowAgain.imaginarySoundSpeed,
+  context.check(lowBefore.imaginarySoundSpeed == lowAgain.imaginarySoundSpeed,
                 "repeated Q frequency evaluation is bit-stable");
 
   QuadrilateralFrequencySsp high(profile, 2000.0);
   const auto highSample = high.evaluateAtSegments(position, 0U, 0U);
   const auto lowAfter = low.evaluateAtSegments(position, 0U, 0U);
-  context.check(
-      lowBefore.imaginarySoundSpeed != highSample.imaginarySoundSpeed,
-      "Thorp-converted Q imaginary sound speed depends on frequency");
+  context.check(lowBefore.imaginarySoundSpeed != highSample.imaginarySoundSpeed,
+                "Thorp-converted Q imaginary sound speed depends on frequency");
   context.check(
       lowBefore.imaginarySoundSpeed == lowAfter.imaginarySoundSpeed,
       "constructing a second frequency evaluator leaves the first unchanged");
@@ -799,11 +787,11 @@ void testTwoFrequencyIndependence(Context& context) {
 class TempDirectory {
  public:
   TempDirectory() {
-    path_ = std::filesystem::temp_directory_path() /
-            ("rayreuse_q_ssp_test_" +
-             std::to_string(static_cast<long long>(
-                 std::chrono::system_clock::to_time_t(
-                     std::chrono::system_clock::now()))));
+    path_ =
+        std::filesystem::temp_directory_path() /
+        ("rayreuse_q_ssp_test_" + std::to_string(static_cast<long long>(
+                                      std::chrono::system_clock::to_time_t(
+                                          std::chrono::system_clock::now()))));
     std::filesystem::create_directories(path_);
   }
   ~TempDirectory() {
@@ -826,7 +814,8 @@ void writeFile(const std::filesystem::path& path, const std::string& contents) {
   output << contents;
 }
 
-constexpr const char* kQuadrilateralEnv = R"ENV('A01 quadrilateral parser fixture'
+constexpr const char* kQuadrilateralEnv =
+    R"ENV('A01 quadrilateral parser fixture'
 1000.0
 1
 'QVW'
@@ -862,18 +851,18 @@ void testParserQuadrilateral(Context& context) {
   const auto parsed = EnvironmentParser::parseFile(environmentPath);
   const SoundSpeedProfile& profile =
       parsed.simulationCase.environment().soundSpeedProfile();
-  context.check(profile.interpolationKind() ==
-                    SspInterpolationKind::Quadrilateral,
-                "top option 'QVW' parses as quadrilateral SSP interpolation");
+  context.check(
+      profile.interpolationKind() == SspInterpolationKind::Quadrilateral,
+      "top option 'QVW' parses as quadrilateral SSP interpolation");
   const SharedQuadrilateralSspGrid& grid = profile.quadrilateralGrid();
-  context.check(static_cast<bool>(grid) && grid->depthCount == 2U &&
-                    grid->rangeCount == 3U &&
-                    grid->rangesMeters ==
-                        std::vector<double>({0.0, 350.0, 800.0}) &&
-                    grid->speedsDepthMajor ==
-                        std::vector<double>({1500.0, 1540.0, 1580.0, 1500.0,
-                                             1520.0, 1540.0}),
-                "the sibling .ssp grid is loaded with km-to-m conversion");
+  context.check(
+      static_cast<bool>(grid) && grid->depthCount == 2U &&
+          grid->rangeCount == 3U &&
+          grid->rangesMeters == std::vector<double>({0.0, 350.0, 800.0}) &&
+          grid->speedsDepthMajor ==
+              std::vector<double>(
+                  {1500.0, 1540.0, 1580.0, 1500.0, 1520.0, 1540.0}),
+      "the sibling .ssp grid is loaded with km-to-m conversion");
   const GeometrySspEvaluator evaluator(profile);
   context.checkNear(
       evaluator.evaluate(Vec2{.range = 175.0, .depth = 50.0}, 0U).soundSpeed,
@@ -887,13 +876,10 @@ void testParserQuadrilateral(Context& context) {
       },
       "quadrilateral SSP through a stream parse requires parseFile");
 
-  const std::filesystem::path lonelyPath =
-      directory.path() / "lonely_q.env";
+  const std::filesystem::path lonelyPath = directory.path() / "lonely_q.env";
   writeFile(lonelyPath, kQuadrilateralEnv);
   context.expectThrows<BellhopError>(
-      [&] {
-        static_cast<void>(EnvironmentParser::parseFile(lonelyPath));
-      },
+      [&] { static_cast<void>(EnvironmentParser::parseFile(lonelyPath)); },
       "a missing sibling .ssp file fails explicitly");
 
   const std::filesystem::path nonMonotonicPath =
@@ -912,15 +898,12 @@ void testParserQuadrilateral(Context& context) {
 
   const std::filesystem::path shortRowPath =
       directory.path() / "shortrow_q.env";
-  const std::filesystem::path shortRowSsp =
-      directory.path() / "shortrow_q.ssp";
+  const std::filesystem::path shortRowSsp = directory.path() / "shortrow_q.ssp";
   writeFile(shortRowPath, kQuadrilateralEnv);
   writeFile(shortRowSsp,
             "3\n0.0  0.35  0.80\n1500.0  1540.0  1580.0\n1500.0  1520.0\n");
   context.expectThrows<ValidationError>(
-      [&] {
-        static_cast<void>(EnvironmentParser::parseFile(shortRowPath));
-      },
+      [&] { static_cast<void>(EnvironmentParser::parseFile(shortRowPath)); },
       "a short .ssp speed row fails explicitly");
 }
 

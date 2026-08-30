@@ -21,9 +21,8 @@ enum class ReceiverGridLayout {
 
 class ReceiverGrid {
  public:
-  ReceiverGrid(
-      std::vector<double> depths, std::vector<double> ranges,
-      ReceiverGridLayout layout = ReceiverGridLayout::Rectilinear);
+  ReceiverGrid(std::vector<double> depths, std::vector<double> ranges,
+               ReceiverGridLayout layout = ReceiverGridLayout::Rectilinear);
 
   [[nodiscard]] const std::vector<double>& depths() const noexcept;
   [[nodiscard]] const std::vector<double>& ranges() const noexcept;
@@ -160,8 +159,8 @@ class SimulationCase {
       SourceGeometry sourceGeometry = SourceGeometry::Point);
   SimulationCase(
       Environment environment, std::vector<Source> sources,
-      ReceiverGrid receivers, FrequencyGrid frequencies,
-      LaunchFan launchFan, IntegratorSettings integrator,
+      ReceiverGrid receivers, FrequencyGrid frequencies, LaunchFan launchFan,
+      IntegratorSettings integrator,
       SourceBeamPattern sourceBeamPattern =
           SourceBeamPattern::omnidirectional(),
       SimulationRunMode runMode = SimulationRunMode::Coherent,
@@ -188,8 +187,8 @@ class SimulationCase {
   [[nodiscard]] SourceGeometry sourceGeometry() const noexcept;
   [[nodiscard]] BoundaryCurvatureMode curvatureMode() const noexcept;
   [[nodiscard]] BeamWidthMode beamWidthMode() const noexcept;
-  [[nodiscard]] CervenyCoordinateSystem cervenyCoordinateSystem() const
-      noexcept;
+  [[nodiscard]] CervenyCoordinateSystem cervenyCoordinateSystem()
+      const noexcept;
 
  private:
   Environment environment_;

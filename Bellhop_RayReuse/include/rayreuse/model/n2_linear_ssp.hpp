@@ -21,17 +21,17 @@ class N2LinearSsp {
  public:
   explicit N2LinearSsp(const SoundSpeedProfile& profile);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::N2Linear);
   }
   [[nodiscard]] std::size_t segmentCount() const noexcept;
-  [[nodiscard]] std::size_t locateSegment(
-      double depth, std::size_t previousSegment) const;
+  [[nodiscard]] std::size_t locateSegment(double depth,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] SoundSpeedSample evaluateAtSegment(
       Vec2 position, std::size_t segmentIndex) const;
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
 
  private:
   struct Segment {

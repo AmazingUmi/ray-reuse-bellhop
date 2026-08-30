@@ -26,8 +26,7 @@ void requireFinite(double value, std::string_view name) {
   }
 }
 
-void requireFiniteComplex(std::complex<double> value,
-                          std::string_view name) {
+void requireFiniteComplex(std::complex<double> value, std::string_view name) {
   if (!std::isfinite(value.real()) || !std::isfinite(value.imag())) {
     throw ValidationError(std::string(name) + " must be finite");
   }
@@ -46,8 +45,7 @@ bool crosses(double previous, double current) {
          (current >= 0.0 && previous < 0.0);
 }
 
-std::complex<double> negativeImaginaryExponential(
-    std::complex<double> phase) {
+std::complex<double> negativeImaginaryExponential(std::complex<double> phase) {
   const double magnitude = std::exp(phase.imag());
   return {magnitude * std::cos(phase.real()),
           -magnitude * std::sin(phase.real())};
@@ -56,8 +54,7 @@ std::complex<double> negativeImaginaryExponential(
 GeometricGaussianWidthBranch classifyWidthBranch(
     double geometricSigma, double nearFieldSigma,
     double wavelengthSigma) noexcept {
-  const double broadeningSigma =
-      std::min(nearFieldSigma, wavelengthSigma);
+  const double broadeningSigma = std::min(nearFieldSigma, wavelengthSigma);
   if (geometricSigma >= broadeningSigma) {
     return GeometricGaussianWidthBranch::Geometric;
   }
@@ -86,20 +83,21 @@ void validate(const ReceiverGrid& receivers, const RayPath& path,
   }
 }
 
-void validateField(
-    const ReceiverGrid& receivers, const FrequencyWorkspace* pressureWorkspace,
-    const IntensityWorkspace* intensityWorkspace, const RayPath& path,
-    const RayFrequencyState& state, double launchSpacing,
-    const std::optional<GeometricGaussianDiagnosticRequest>&
-        diagnosticRequest) {
+void validateField(const ReceiverGrid& receivers,
+                   const FrequencyWorkspace* pressureWorkspace,
+                   const IntensityWorkspace* intensityWorkspace,
+                   const RayPath& path, const RayFrequencyState& state,
+                   double launchSpacing,
+                   const std::optional<GeometricGaussianDiagnosticRequest>&
+                       diagnosticRequest) {
   validate(receivers, path, state, launchSpacing);
   if ((pressureWorkspace == nullptr) == (intensityWorkspace == nullptr)) {
     throw ValidationError(
         "geometric Gaussian field influence requires exactly one workspace");
   }
-  const double workspaceFrequency =
-      pressureWorkspace != nullptr ? pressureWorkspace->frequency()
-                                   : intensityWorkspace->frequency();
+  const double workspaceFrequency = pressureWorkspace != nullptr
+                                        ? pressureWorkspace->frequency()
+                                        : intensityWorkspace->frequency();
   const std::size_t workspaceDepthCount =
       pressureWorkspace != nullptr ? pressureWorkspace->depthCount()
                                    : intensityWorkspace->depthCount();
@@ -155,16 +153,13 @@ void validateField(
 
 GeometricGaussianInfluence::GeometricGaussianInfluence(
     ReceiverGrid receivers, SourceGeometry sourceGeometry)
-    : receivers_(std::move(receivers)),
-      sourceGeometry_(sourceGeometry) {}
+    : receivers_(std::move(receivers)), sourceGeometry_(sourceGeometry) {}
 
 std::optional<GeometricGaussianDiagnostic>
 GeometricGaussianInfluence::accumulate(
     FrequencyWorkspace& workspace, const RayPath& path,
-    const RayFrequencyState& frequencyState,
-    double launchAngleSpacingRadians,
-    std::optional<GeometricGaussianDiagnosticRequest>
-        diagnosticRequest) const {
+    const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
+    std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest) const {
   return accumulateField(&workspace, nullptr, path, frequencyState,
                          launchAngleSpacingRadians, diagnosticRequest);
 }
@@ -172,10 +167,8 @@ GeometricGaussianInfluence::accumulate(
 std::optional<GeometricGaussianDiagnostic>
 GeometricGaussianInfluence::accumulateIntensity(
     IntensityWorkspace& workspace, const RayPath& path,
-    const RayFrequencyState& frequencyState,
-    double launchAngleSpacingRadians,
-    std::optional<GeometricGaussianDiagnosticRequest>
-        diagnosticRequest) const {
+    const RayFrequencyState& frequencyState, double launchAngleSpacingRadians,
+    std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest) const {
   return accumulateField(nullptr, &workspace, path, frequencyState,
                          launchAngleSpacingRadians, diagnosticRequest);
 }
@@ -185,22 +178,18 @@ GeometricGaussianInfluence::accumulateField(
     FrequencyWorkspace* pressureWorkspace,
     IntensityWorkspace* intensityWorkspace, const RayPath& path,
     const RayFrequencyState& state, double launchSpacing,
-    std::optional<GeometricGaussianDiagnosticRequest>
-        diagnosticRequest) const {
+    std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest) const {
   validateField(receivers_, pressureWorkspace, intensityWorkspace, path, state,
                 launchSpacing, diagnosticRequest);
   std::optional<GeometricGaussianDiagnostic> diagnostic;
   if (diagnosticRequest.has_value()) {
     diagnostic.emplace();
-    diagnostic->receiverRangeIndex =
-        diagnosticRequest->receiverRangeIndex;
-    diagnostic->receiverDepthIndex =
-        diagnosticRequest->receiverDepthIndex;
+    diagnostic->receiverRangeIndex = diagnosticRequest->receiverRangeIndex;
+    diagnostic->receiverDepthIndex = diagnosticRequest->receiverDepthIndex;
   }
 
   const std::size_t pointCount = activeCount(state);
-  const double angularFrequency =
-      2.0 * std::numbers::pi * state.frequency;
+  const double angularFrequency = 2.0 * std::numbers::pi * state.frequency;
   const double q0 = path.points.front().soundSpeed / launchSpacing;
   const double sourceRatio =
       sourceGeometry_ == SourceGeometry::Point
@@ -211,10 +200,9 @@ GeometricGaussianInfluence::accumulateField(
   requireFinite(sourceRatio, "geometric Gaussian source ratio");
 
   const std::vector<double>& ranges = receivers_.ranges();
-  const auto firstReceiver =
-      std::find_if(ranges.begin(), ranges.end(), [&](double range) {
-        return range > path.points.front().position.range;
-      });
+  const auto firstReceiver = std::find_if(
+      ranges.begin(), ranges.end(),
+      [&](double range) { return range > path.points.front().position.range; });
   std::size_t receiverIndex{};
   if (firstReceiver == ranges.end()) {
     if (path.points.front().slowness.range >= 0.0) {
@@ -222,8 +210,7 @@ GeometricGaussianInfluence::accumulateField(
     }
     receiverIndex = ranges.size() - 1U;
   } else {
-    receiverIndex =
-        static_cast<std::size_t>(firstReceiver - ranges.begin());
+    receiverIndex = static_cast<std::size_t>(firstReceiver - ranges.begin());
     if (path.points.front().slowness.range < 0.0 && receiverIndex > 0U) {
       --receiverIndex;
     }
@@ -260,21 +247,18 @@ GeometricGaussianInfluence::accumulateField(
     segmentSigma =
         std::max(segmentSigma,
                  std::min(kNearFieldFactor * state.frequency *
-                              state.points[rightIndex]
-                                  .complexTravelTime.real(),
+                              state.points[rightIndex].complexTravelTime.real(),
                           wavelengthSigma));
     const double segmentRadius = kBeamWindow * segmentSigma;
     double minimumDepth = -std::numeric_limits<double>::infinity();
     double maximumDepth = std::numeric_limits<double>::infinity();
     if (std::abs(tangent.range) > 0.5) {
-      minimumDepth =
-          std::min(path.points[leftIndex].position.depth,
-                   path.points[rightIndex].position.depth) -
-          segmentRadius;
-      maximumDepth =
-          std::max(path.points[leftIndex].position.depth,
-                   path.points[rightIndex].position.depth) +
-          segmentRadius;
+      minimumDepth = std::min(path.points[leftIndex].position.depth,
+                              path.points[rightIndex].position.depth) -
+                     segmentRadius;
+      maximumDepth = std::max(path.points[leftIndex].position.depth,
+                              path.points[rightIndex].position.depth) +
+                     segmentRadius;
     }
 
     for (;;) {
@@ -286,15 +270,13 @@ GeometricGaussianInfluence::accumulateField(
         // rows.
         for (std::size_t depthIndex = 0U;
              depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
-          const Vec2 receiver{.range = receiverRange,
-                              .depth = receivers_.depthAt(depthIndex,
-                                                          receiverIndex)};
-          if (receiver.depth < minimumDepth ||
-              receiver.depth > maximumDepth) {
+          const Vec2 receiver{
+              .range = receiverRange,
+              .depth = receivers_.depthAt(depthIndex, receiverIndex)};
+          if (receiver.depth < minimumDepth || receiver.depth > maximumDepth) {
             continue;
           }
-          const Vec2 offset =
-              receiver - path.points[leftIndex].position;
+          const Vec2 offset = receiver - path.points[leftIndex].position;
           const double interpolationWeight =
               fortranDotProduct2D(offset, tangent) / segmentLength;
           const double normalOffset =
@@ -306,9 +288,8 @@ GeometricGaussianInfluence::accumulateField(
           const double nearFieldSigma =
               kNearFieldFactor * state.frequency *
               state.points[rightIndex].complexTravelTime.real();
-          const double sigma1 =
-              std::max(geometricSigma,
-                       std::min(nearFieldSigma, wavelengthSigma));
+          const double sigma1 = std::max(
+              geometricSigma, std::min(nearFieldSigma, wavelengthSigma));
           if (normalOffset >= kBeamWindow * sigma1) {
             continue;
           }
@@ -331,20 +312,15 @@ GeometricGaussianInfluence::accumulateField(
             phaseAtReceiver += std::numbers::pi / 2.0;
           }
 
-          requireFinite(qInterpolated,
-                        "geometric Gaussian interpolated q");
-          requireFinite(geometricSigma,
-                        "geometric Gaussian geometric sigma");
-          requireFinite(nearFieldSigma,
-                        "geometric Gaussian near-field sigma");
-          requireFinite(wavelengthSigma,
-                        "geometric Gaussian wavelength sigma");
+          requireFinite(qInterpolated, "geometric Gaussian interpolated q");
+          requireFinite(geometricSigma, "geometric Gaussian geometric sigma");
+          requireFinite(nearFieldSigma, "geometric Gaussian near-field sigma");
+          requireFinite(wavelengthSigma, "geometric Gaussian wavelength sigma");
           requireFinite(sigma1, "geometric Gaussian sigma1");
           requireFinite(gaussianWeight, "geometric Gaussian weight");
           requireFinite(amplitudeConstant,
                         "geometric Gaussian amplitude constant");
-          requireFinite(phaseAtReceiver,
-                        "geometric Gaussian caustic phase");
+          requireFinite(phaseAtReceiver, "geometric Gaussian caustic phase");
           requireFiniteComplex(delay, "geometric Gaussian delay");
 
           std::complex<double> pressureIncrement{};
@@ -365,11 +341,10 @@ GeometricGaussianInfluence::accumulateField(
             pressureWorkspace->at(depthIndex, receiverIndex) = updated;
           } else {
             const double attenuatedConstant =
-                amplitudeConstant *
-                std::exp((angularFrequency * delay).imag());
+                amplitudeConstant * std::exp((angularFrequency * delay).imag());
             const double power = attenuatedConstant * attenuatedConstant;
-            intensityIncrement = std::sqrt(2.0 * std::numbers::pi) *
-                                 power * gaussianWeight;
+            intensityIncrement =
+                std::sqrt(2.0 * std::numbers::pi) * power * gaussianWeight;
             if (!std::isfinite(intensityIncrement) ||
                 intensityIncrement < 0.0) {
               throw ValidationError(

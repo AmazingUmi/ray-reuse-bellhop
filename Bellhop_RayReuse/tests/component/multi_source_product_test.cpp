@@ -24,8 +24,8 @@
 
 namespace {
 
-using rayreuse::ArrivalSolverStatistics;
 using rayreuse::ArrivalSolver;
+using rayreuse::ArrivalSolverStatistics;
 using rayreuse::BeamFamily;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
@@ -33,8 +33,8 @@ using rayreuse::BroadbandNonReuseResult;
 using rayreuse::BroadbandNonReuseSolver;
 using rayreuse::CervenyCoordinateSystem;
 using rayreuse::EigenrayHit;
-using rayreuse::EigenraySolverStatistics;
 using rayreuse::EigenraySolver;
+using rayreuse::EigenraySolverStatistics;
 using rayreuse::EigenraySourceHits;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
@@ -76,13 +76,13 @@ Environment makeEnvironment() {
 
 SourceBeamPattern makePattern(bool directional) {
   return directional ? SourceBeamPattern::directional(
-                            {{-10.0, -20.0}, {0.0, 0.0}, {10.0, -20.0}})
+                           {{-10.0, -20.0}, {0.0, 0.0}, {10.0, -20.0}})
                      : SourceBeamPattern::omnidirectional();
 }
 
-SimulationCase makeCase(std::vector<Source> sources,
-                        SimulationRunMode runMode, BeamFamily beamFamily,
-                        std::vector<double> frequencies, bool directional,
+SimulationCase makeCase(std::vector<Source> sources, SimulationRunMode runMode,
+                        BeamFamily beamFamily, std::vector<double> frequencies,
+                        bool directional,
                         std::size_t explicitLaunchAngleCount = 300U) {
   return SimulationCase(
       makeEnvironment(), std::move(sources),
@@ -95,8 +95,8 @@ SimulationCase makeCase(std::vector<Source> sources,
                          .rangeLimit = 110.0,
                          .depthLimit = 110.0,
                          .maximumRayPoints = 1000U},
-      makePattern(directional), runMode, beamFamily,
-      FieldComponent::Pressure, BoundaryCurvatureMode::Standard);
+      makePattern(directional), runMode, beamFamily, FieldComponent::Pressure,
+      BoundaryCurvatureMode::Standard);
 }
 
 // Dual-source fixture given out of depth order; the model sorts ascending.
@@ -114,7 +114,8 @@ bool workspaceEqual(const FrequencyWorkspace& left,
                     right.pressure().begin(), right.pressure().end());
 }
 
-bool sameArrival(const rayreuse::Arrival& left, const rayreuse::Arrival& right) {
+bool sameArrival(const rayreuse::Arrival& left,
+                 const rayreuse::Arrival& right) {
   return left.amplitude == right.amplitude &&
          left.phaseRadians == right.phaseRadians &&
          left.delaySeconds == right.delaySeconds &&
@@ -129,12 +130,14 @@ using ArrivalCells = std::vector<std::vector<rayreuse::Arrival>>;
 ArrivalCells snapshotArrivals(const rayreuse::ArrivalWorkspace& workspace) {
   ArrivalCells cells(workspace.receiverCellCount());
   for (std::size_t cell = 0U; cell < cells.size(); ++cell) {
-    cells[cell].assign(workspace.cellAt(cell).begin(), workspace.cellAt(cell).end());
+    cells[cell].assign(workspace.cellAt(cell).begin(),
+                       workspace.cellAt(cell).end());
   }
   return cells;
 }
 
-using HitIdentity = std::tuple<std::size_t, std::size_t, std::size_t, std::size_t>;
+using HitIdentity =
+    std::tuple<std::size_t, std::size_t, std::size_t, std::size_t>;
 
 std::vector<HitIdentity> snapshotHits(const EigenraySourceHits& hits) {
   std::vector<HitIdentity> identities;
@@ -153,8 +156,7 @@ struct ParallelRun {
 
 ParallelRun runParallel(const SimulationCase& simulation) {
   ParallelRun run{
-      .workspaces = std::vector<
-          std::optional<std::vector<FrequencyWorkspace>>>(
+      .workspaces = std::vector<std::optional<std::vector<FrequencyWorkspace>>>(
           simulation.frequencies().size()),
       .statistics = {}};
   run.statistics = ParallelRayReuseSolver::solveStreaming(
@@ -175,13 +177,12 @@ ParallelRun runParallel(const SimulationCase& simulation) {
 // execution modes, frozen trace-pass semantics, per-source fingerprint
 // stability, and per-source numerics against equivalent single-source runs.
 void testDualSourceTlThreeModes(Context& context) {
-  const SimulationCase dual = makeCase(
-      dualSources(), SimulationRunMode::SemiCoherent,
-      BeamFamily::CervenyGaussian, {50.0, 100.0}, true);
+  const SimulationCase dual =
+      makeCase(dualSources(), SimulationRunMode::SemiCoherent,
+               BeamFamily::CervenyGaussian, {50.0, 100.0}, true);
   const std::size_t sourceCount = dual.sourceCount();
   const std::size_t fanCount = dual.launchFanPlan().launchAngleCount;
-  context.check(sourceCount == 2U &&
-                    dual.sources()[0U].depth == 30.0 &&
+  context.check(sourceCount == 2U && dual.sources()[0U].depth == 30.0 &&
                     dual.sources()[1U].depth == 70.0,
                 "dual-source TL fixture is depth sorted");
 
@@ -191,17 +192,15 @@ void testDualSourceTlThreeModes(Context& context) {
       SerialRayReuseSolver::solve(dual, 1.0, 50.0, {}, true);
   const ParallelRun parallel = runParallel(dual);
 
-  context.check(
-      nonReuse.statistics.tracePassCount == 4U &&
-          reuse.statistics.tracePassCount == 2U &&
-          parallel.statistics.tracePassCount == 2U,
-      "dual-source two-frequency trace passes follow 4/2/2");
-  context.check(
-      reuse.statistics.rayCount == 2U * fanCount &&
-          parallel.statistics.rayCount == 2U * fanCount &&
-          nonReuse.statistics.totalRayCount == 4U * fanCount,
-      "reuse ray counts cover both sources; non-reuse covers both "
-      "frequencies and both sources");
+  context.check(nonReuse.statistics.tracePassCount == 4U &&
+                    reuse.statistics.tracePassCount == 2U &&
+                    parallel.statistics.tracePassCount == 2U,
+                "dual-source two-frequency trace passes follow 4/2/2");
+  context.check(reuse.statistics.rayCount == 2U * fanCount &&
+                    parallel.statistics.rayCount == 2U * fanCount &&
+                    nonReuse.statistics.totalRayCount == 4U * fanCount,
+                "reuse ray counts cover both sources; non-reuse covers both "
+                "frequencies and both sources");
   context.check(
       reuse.statistics.sourceCacheFingerprintsBefore.size() == 2U &&
           reuse.statistics.sourceCacheFingerprintsAfter ==
@@ -214,8 +213,7 @@ void testDualSourceTlThreeModes(Context& context) {
       "reuse modes verify per-source fingerprints before == after");
   context.check(
       parallel.statistics.estimatedWorkspaceBytes ==
-          2U * 3U * 3U *
-              (sizeof(std::complex<double>) + sizeof(double)),
+          2U * 3U * 3U * (sizeof(std::complex<double>) + sizeof(double)),
       "parallel workspace estimate covers the per-source intensity "
       "workspace sequence");
 
@@ -225,12 +223,10 @@ void testDualSourceTlThreeModes(Context& context) {
         nonReuse.frequencyResults[frequencyIndex];
     const std::vector<FrequencyWorkspace>& serialWorkspaces =
         reuse.frequencyResults[frequencyIndex].workspaces;
-    allModesAgree =
-        allModesAgree &&
-        nonReuseResult.sourceCount() == 2U &&
-        serialWorkspaces.size() == 2U &&
-        parallel.workspaces[frequencyIndex].has_value() &&
-        parallel.workspaces[frequencyIndex]->size() == 2U;
+    allModesAgree = allModesAgree && nonReuseResult.sourceCount() == 2U &&
+                    serialWorkspaces.size() == 2U &&
+                    parallel.workspaces[frequencyIndex].has_value() &&
+                    parallel.workspaces[frequencyIndex]->size() == 2U;
     if (!allModesAgree) {
       break;
     }
@@ -257,12 +253,11 @@ void testDualSourceTlThreeModes(Context& context) {
         makeCase({Source{.depth = sourceDepth, .amplitude = 1.0}},
                  SimulationRunMode::SemiCoherent, BeamFamily::CervenyGaussian,
                  {50.0, 100.0}, true);
-    context.check(
-        single.launchFanPlan().launchAngles ==
-                dual.launchFanPlan().launchAngles &&
-            single.launchFanPlan().launchAngleStep ==
-                dual.launchFanPlan().launchAngleStep,
-        "single-source reference plans the same launch fan");
+    context.check(single.launchFanPlan().launchAngles ==
+                          dual.launchFanPlan().launchAngles &&
+                      single.launchFanPlan().launchAngleStep ==
+                          dual.launchFanPlan().launchAngleStep,
+                  "single-source reference plans the same launch fan");
     const SerialRayReuseResult singleReuse =
         SerialRayReuseSolver::solve(single, 1.0, 50.0, {}, true);
     bool sourceMatchesSingle = true;
@@ -291,40 +286,39 @@ void testDualSourceArrivalThreeModes(Context& context) {
   const auto capture = [](ModeCells& cells,
                           std::vector<std::vector<std::uint64_t>>& fingerprints,
                           std::size_t expectedSources) {
-    return [&cells, &fingerprints, expectedSources](
-               std::size_t frequencyIndex,
-               const std::vector<RayPathCache>& caches,
-               const std::vector<rayreuse::ArrivalWorkspace>& workspaces) {
-      for (std::size_t sourceIndex = 0U; sourceIndex < expectedSources;
-           ++sourceIndex) {
-        cells[frequencyIndex].push_back(
-            snapshotArrivals(workspaces[sourceIndex]));
-        fingerprints[frequencyIndex].push_back(
-            caches[sourceIndex].contentFingerprint());
-      }
-    };
+    return
+        [&cells, &fingerprints, expectedSources](
+            std::size_t frequencyIndex, const std::vector<RayPathCache>& caches,
+            const std::vector<rayreuse::ArrivalWorkspace>& workspaces) {
+          for (std::size_t sourceIndex = 0U; sourceIndex < expectedSources;
+               ++sourceIndex) {
+            cells[frequencyIndex].push_back(
+                snapshotArrivals(workspaces[sourceIndex]));
+            fingerprints[frequencyIndex].push_back(
+                caches[sourceIndex].contentFingerprint());
+          }
+        };
   };
 
   ModeCells serial(2U), nonreuse(2U), parallel(2U);
   std::vector<std::vector<std::uint64_t>> serialFingerprints(2U),
       nonreuseFingerprints(2U), parallelFingerprints(2U);
-  const ArrivalSolverStatistics serialStats = ArrivalSolver::solve(
-      dual, capture(serial, serialFingerprints, 2U), true);
+  const ArrivalSolverStatistics serialStats =
+      ArrivalSolver::solve(dual, capture(serial, serialFingerprints, 2U), true);
   const ArrivalSolverStatistics nonreuseStats = ArrivalSolver::solveNonReuse(
       dual, capture(nonreuse, nonreuseFingerprints, 2U), true);
   const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveParallel(
       dual, capture(parallel, parallelFingerprints, 2U), 2U, true);
 
-  context.check(
-      serialStats.frequencyCount == 2U && nonreuseStats.frequencyCount == 2U &&
-          parallelStats.frequencyCount == 2U,
-      "dual-source arrival modes process every frequency");
-  context.check(
-      serialStats.rayCount == 2U * fanCount &&
-          parallelStats.rayCount == 2U * fanCount &&
-          nonreuseStats.rayCount == 4U * fanCount,
-      "dual-source arrival ray counts cover every source (and every "
-      "frequency for non-reuse)");
+  context.check(serialStats.frequencyCount == 2U &&
+                    nonreuseStats.frequencyCount == 2U &&
+                    parallelStats.frequencyCount == 2U,
+                "dual-source arrival modes process every frequency");
+  context.check(serialStats.rayCount == 2U * fanCount &&
+                    parallelStats.rayCount == 2U * fanCount &&
+                    nonreuseStats.rayCount == 4U * fanCount,
+                "dual-source arrival ray counts cover every source (and every "
+                "frequency for non-reuse)");
   context.check(
       serialStats.sourceCacheFingerprintsBefore.size() == 2U &&
           serialStats.sourceCacheFingerprintsAfter ==
@@ -336,22 +330,18 @@ void testDualSourceArrivalThreeModes(Context& context) {
 
   bool allModesAgree = true;
   for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U; ++frequencyIndex) {
-    allModesAgree =
-        allModesAgree &&
-        serial[frequencyIndex].size() == 2U &&
-        nonreuse[frequencyIndex].size() == 2U &&
-        parallel[frequencyIndex].size() == 2U &&
-        serialFingerprints[frequencyIndex] ==
-            nonreuseFingerprints[frequencyIndex] &&
-        serialFingerprints[frequencyIndex] ==
-            parallelFingerprints[frequencyIndex];
+    allModesAgree = allModesAgree && serial[frequencyIndex].size() == 2U &&
+                    nonreuse[frequencyIndex].size() == 2U &&
+                    parallel[frequencyIndex].size() == 2U &&
+                    serialFingerprints[frequencyIndex] ==
+                        nonreuseFingerprints[frequencyIndex] &&
+                    serialFingerprints[frequencyIndex] ==
+                        parallelFingerprints[frequencyIndex];
     for (std::size_t sourceIndex = 0U; sourceIndex < 2U && allModesAgree;
          ++sourceIndex) {
       const ArrivalCells& reference = serial[frequencyIndex][sourceIndex];
-      const ArrivalCells& otherModes1 =
-          nonreuse[frequencyIndex][sourceIndex];
-      const ArrivalCells& otherModes2 =
-          parallel[frequencyIndex][sourceIndex];
+      const ArrivalCells& otherModes1 = nonreuse[frequencyIndex][sourceIndex];
+      const ArrivalCells& otherModes2 = parallel[frequencyIndex][sourceIndex];
       if (reference.size() != otherModes1.size() ||
           reference.size() != otherModes2.size()) {
         allModesAgree = false;
@@ -385,10 +375,10 @@ void testDualSourceArrivalThreeModes(Context& context) {
 
   for (std::size_t sourceIndex = 0U; sourceIndex < 2U; ++sourceIndex) {
     const double sourceDepth = dual.sources()[sourceIndex].depth;
-    const SimulationCase single = makeCase(
-        {Source{.depth = sourceDepth, .amplitude = 1.0}},
-        SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat,
-        {50.0, 100.0}, true);
+    const SimulationCase single =
+        makeCase({Source{.depth = sourceDepth, .amplitude = 1.0}},
+                 SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat,
+                 {50.0, 100.0}, true);
     ModeCells singleCells(2U);
     std::vector<std::vector<std::uint64_t>> singleFingerprints(2U);
     static_cast<void>(ArrivalSolver::solve(
@@ -435,8 +425,7 @@ void testDualSourceEigenrayThreeModes(Context& context) {
   const std::size_t fanCount = dual.launchFanPlan().launchAngleCount;
   using ModeHits = std::vector<std::vector<std::vector<HitIdentity>>>;
   const auto capture = [](ModeHits& hits) {
-    return [&hits](std::size_t frequencyIndex,
-                   const std::vector<RayPathCache>&,
+    return [&hits](std::size_t frequencyIndex, const std::vector<RayPathCache>&,
                    const std::vector<EigenraySourceHits>& sourceHits) {
       for (const EigenraySourceHits& source : sourceHits) {
         hits[frequencyIndex].push_back(snapshotHits(source));
@@ -452,15 +441,14 @@ void testDualSourceEigenrayThreeModes(Context& context) {
   const EigenraySolverStatistics parallelStats =
       EigenraySolver::solveParallel(dual, capture(parallel), 2U, true);
 
-  context.check(
-      serialStats.frequencyCount == 2U && nonreuseStats.frequencyCount == 2U &&
-          parallelStats.frequencyCount == 2U,
-      "dual-source eigenray modes process every frequency");
-  context.check(
-      serialStats.rayCount == 2U * fanCount &&
-          parallelStats.rayCount == 2U * fanCount &&
-          nonreuseStats.rayCount == 4U * fanCount,
-      "dual-source eigenray ray counts cover every source");
+  context.check(serialStats.frequencyCount == 2U &&
+                    nonreuseStats.frequencyCount == 2U &&
+                    parallelStats.frequencyCount == 2U,
+                "dual-source eigenray modes process every frequency");
+  context.check(serialStats.rayCount == 2U * fanCount &&
+                    parallelStats.rayCount == 2U * fanCount &&
+                    nonreuseStats.rayCount == 4U * fanCount,
+                "dual-source eigenray ray counts cover every source");
   context.check(
       serialStats.sourceCacheFingerprintsBefore.size() == 2U &&
           serialStats.sourceCacheFingerprintsAfter ==
@@ -472,12 +460,11 @@ void testDualSourceEigenrayThreeModes(Context& context) {
 
   bool allModesAgree = true;
   for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U; ++frequencyIndex) {
-    allModesAgree = allModesAgree &&
-        serial[frequencyIndex].size() == 2U &&
-        nonreuse[frequencyIndex].size() == 2U &&
-        parallel[frequencyIndex].size() == 2U &&
-        serial[frequencyIndex] == nonreuse[frequencyIndex] &&
-        serial[frequencyIndex] == parallel[frequencyIndex];
+    allModesAgree = allModesAgree && serial[frequencyIndex].size() == 2U &&
+                    nonreuse[frequencyIndex].size() == 2U &&
+                    parallel[frequencyIndex].size() == 2U &&
+                    serial[frequencyIndex] == nonreuse[frequencyIndex] &&
+                    serial[frequencyIndex] == parallel[frequencyIndex];
   }
   context.check(allModesAgree,
                 "dual-source eigenray hits agree per (frequency, source) "
@@ -485,19 +472,18 @@ void testDualSourceEigenrayThreeModes(Context& context) {
 
   for (std::size_t sourceIndex = 0U; sourceIndex < 2U; ++sourceIndex) {
     const double sourceDepth = dual.sources()[sourceIndex].depth;
-    const SimulationCase single = makeCase(
-        {Source{.depth = sourceDepth, .amplitude = 1.0}},
-        SimulationRunMode::Eigenray, BeamFamily::GeometricGaussian,
-        {50.0, 100.0}, false);
+    const SimulationCase single =
+        makeCase({Source{.depth = sourceDepth, .amplitude = 1.0}},
+                 SimulationRunMode::Eigenray, BeamFamily::GeometricGaussian,
+                 {50.0, 100.0}, false);
     ModeHits singleHits(2U);
     static_cast<void>(EigenraySolver::solve(single, capture(singleHits), true));
     bool sourceMatchesSingle = true;
     for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U;
          ++frequencyIndex) {
       sourceMatchesSingle =
-          sourceMatchesSingle &&
-          serial[frequencyIndex][sourceIndex] ==
-              singleHits[frequencyIndex].front();
+          sourceMatchesSingle && serial[frequencyIndex][sourceIndex] ==
+                                     singleHits[frequencyIndex].front();
     }
     context.check(sourceMatchesSingle,
                   "per-source eigenray hits equal a single-source run at the "
@@ -512,24 +498,21 @@ void testDualSourceRayProduct(Context& context) {
       makeCase(dualSources(), SimulationRunMode::RayTrace,
                BeamFamily::GeometricHat, {50.0}, false, 3U);
   const std::vector<RayPathCache> caches = traceRayProducts(dual);
-  context.check(caches.size() == 2U && caches[0U].frozen() &&
-                    caches[1U].frozen(),
-                "R product traces one frozen fan per source");
   context.check(
-      caches[0U].at(0U).points.front().position.depth == 30.0 &&
-          caches[1U].at(0U).points.front().position.depth == 70.0,
-      "R per-source caches start at their own source depth");
+      caches.size() == 2U && caches[0U].frozen() && caches[1U].frozen(),
+      "R product traces one frozen fan per source");
+  context.check(caches[0U].at(0U).points.front().position.depth == 30.0 &&
+                    caches[1U].at(0U).points.front().position.depth == 70.0,
+                "R per-source caches start at their own source depth");
   context.check(caches[0U].size() == dual.launchFanPlan().launchAngleCount &&
-                    caches[1U].size() ==
-                        dual.launchFanPlan().launchAngleCount,
+                    caches[1U].size() == dual.launchFanPlan().launchAngleCount,
                 "R per-source caches carry the full shared fan");
 
   for (std::size_t sourceIndex = 0U; sourceIndex < 2U; ++sourceIndex) {
-    const SimulationCase single =
-        makeCase({Source{.depth = dual.sources()[sourceIndex].depth,
-                         .amplitude = 1.0}},
-                 SimulationRunMode::RayTrace, BeamFamily::GeometricHat, {50.0},
-                 false, 3U);
+    const SimulationCase single = makeCase(
+        {Source{.depth = dual.sources()[sourceIndex].depth, .amplitude = 1.0}},
+        SimulationRunMode::RayTrace, BeamFamily::GeometricHat, {50.0}, false,
+        3U);
     const RayPathCache singleCache = traceRayProduct(single);
     context.check(caches[sourceIndex].contentFingerprint() ==
                       singleCache.contentFingerprint(),

@@ -45,25 +45,24 @@ VolumeAttenuation makeThorpAttenuation() {
 }
 
 VolumeAttenuation makeFrancoisGarrisonAttenuation(double temperature) {
-  return VolumeAttenuation{
-      .model = VolumeAttenuationModel::FrancoisGarrison,
-      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = temperature,
-                                               .salinityPsu = 35.0,
-                                               .pH = 8.0,
-                                               .meanDepthMeters = 50.0}};
+  return VolumeAttenuation{.model = VolumeAttenuationModel::FrancoisGarrison,
+                           .parameters = FrancoisGarrisonParameters{
+                               .temperatureCelsius = temperature,
+                               .salinityPsu = 35.0,
+                               .pH = 8.0,
+                               .meanDepthMeters = 50.0}};
 }
 
 VolumeAttenuation makeBiologicalAttenuation(double coefficient) {
   return VolumeAttenuation{
       .model = VolumeAttenuationModel::Biological,
-      .parameters =
-          std::make_shared<const BiologicalAttenuationLayers>(
-              BiologicalAttenuationLayers{{
-                  .minimumDepth = 0.0,
-                  .maximumDepth = 100.0,
-                  .resonanceFrequency = 100.0,
-                  .qualityFactor = 2.0,
-                  .attenuationCoefficientDecibelsPerKilometer = coefficient}})};
+      .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+          BiologicalAttenuationLayers{
+              {.minimumDepth = 0.0,
+               .maximumDepth = 100.0,
+               .resonanceFrequency = 100.0,
+               .qualityFactor = 2.0,
+               .attenuationCoefficientDecibelsPerKilometer = coefficient}})};
 }
 
 SimulationCase makeSimulation(VolumeAttenuation volumeAttenuation = {}) {
@@ -92,19 +91,18 @@ void checkPressureEqual(Context& context,
                         const SerialRayReuseFrequencyResult& actual,
                         const rayreuse::SingleFrequencyResult& expected,
                         const char* message) {
-  context.check(
-      actual.workspaces.size() == expected.sourceCount() &&
-          actual.workspaces.front().frequency() ==
-              expected.workspace.frequency() &&
-          actual.workspaces.front().depthCount() ==
-              expected.workspace.depthCount() &&
-          actual.workspaces.front().rangeCount() ==
-              expected.workspace.rangeCount() &&
-          std::equal(actual.workspaces.front().pressure().begin(),
-                     actual.workspaces.front().pressure().end(),
-                     expected.workspace.pressure().begin(),
-                     expected.workspace.pressure().end()),
-      message);
+  context.check(actual.workspaces.size() == expected.sourceCount() &&
+                    actual.workspaces.front().frequency() ==
+                        expected.workspace.frequency() &&
+                    actual.workspaces.front().depthCount() ==
+                        expected.workspace.depthCount() &&
+                    actual.workspaces.front().rangeCount() ==
+                        expected.workspace.rangeCount() &&
+                    std::equal(actual.workspaces.front().pressure().begin(),
+                               actual.workspaces.front().pressure().end(),
+                               expected.workspace.pressure().begin(),
+                               expected.workspace.pressure().end()),
+                message);
 }
 
 void testTwoFrequencySerialReuse(Context& context) {
@@ -115,10 +113,11 @@ void testTwoFrequencySerialReuse(Context& context) {
       simulation, 1.0, 50.0,
       rayreuse::CartesianCervenySettings{.collectStatistics = true}, true);
 
-  context.check(reuse.frequencyResults.size() == 2U &&
-                    reuse.frequencyResults[0].workspaces.front().frequency() == 50.0 &&
-                    reuse.frequencyResults[1].workspaces.front().frequency() == 100.0,
-                "serial reuse preserves input frequency order");
+  context.check(
+      reuse.frequencyResults.size() == 2U &&
+          reuse.frequencyResults[0].workspaces.front().frequency() == 50.0 &&
+          reuse.frequencyResults[1].workspaces.front().frequency() == 100.0,
+      "serial reuse preserves input frequency order");
   checkPressureEqual(context, reuse.frequencyResults[0],
                      nonReuse.frequencyResults[0],
                      "first reused frequency is bitwise equal to non-reuse");
@@ -178,7 +177,8 @@ void testEnvironmentPayloadIsExternalToFrozenCache(Context& context) {
         std::pair{makeBiologicalAttenuation(100.0),
                   makeBiologicalAttenuation(250.0)}}) {
     const SimulationCase firstSimulation = makeSimulation(parameterPair.first);
-    const SimulationCase changedSimulation = makeSimulation(parameterPair.second);
+    const SimulationCase changedSimulation =
+        makeSimulation(parameterPair.second);
     const rayreuse::RayFanTraceResult trace =
         rayreuse::SingleFrequencySolver::traceRayFan(firstSimulation);
     const rayreuse::RayFanTraceResult changedTrace =
@@ -214,11 +214,10 @@ void testEnvironmentPayloadIsExternalToFrozenCache(Context& context) {
     context.check(fingerprint == trace.cache.contentFingerprint(),
                   "cross-environment projection leaves RayPathCache "
                   "unchanged");
-    context.check(
-        std::equal(firstLow.workspace.pressure().begin(),
-                   firstLow.workspace.pressure().end(),
-                   repeatedLow.workspace.pressure().begin()),
-        "serial low/high/low projection is bitwise deterministic");
+    context.check(std::equal(firstLow.workspace.pressure().begin(),
+                             firstLow.workspace.pressure().end(),
+                             repeatedLow.workspace.pressure().begin()),
+                  "serial low/high/low projection is bitwise deterministic");
     context.check(
         !std::equal(firstLow.workspace.pressure().begin(),
                     firstLow.workspace.pressure().end(),
@@ -246,8 +245,7 @@ void testMunkSplineFrozenGeometryAnchor(Context& context) {
                 .maximumAngle = 20.3 * kRadiansPerDegree,
                 .explicitLaunchAngleCount = 5000U,
                 .inputDegreeBounds =
-                    LaunchAngleDegreeBounds{.minimum = -20.3,
-                                            .maximum = 20.3}},
+                    LaunchAngleDegreeBounds{.minimum = -20.3, .maximum = 20.3}},
       rayreuse::test::makeMunkIntegratorSettings());
 
   const rayreuse::RayFanTraceResult trace =
@@ -264,8 +262,8 @@ void testStreamingSerialReuse(Context& context) {
   std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
       streamed(simulation.frequencies().size());
   std::vector<std::size_t> callbackCounts(simulation.frequencies().size(), 0U);
-  std::vector<std::size_t> callbackSourceCounts(
-      simulation.frequencies().size(), 0U);
+  std::vector<std::size_t> callbackSourceCounts(simulation.frequencies().size(),
+                                                0U);
   std::vector<std::size_t> callbackOrder;
 
   const rayreuse::SerialRayReuseStatistics statistics =
@@ -284,30 +282,27 @@ void testStreamingSerialReuse(Context& context) {
                 "serial streaming callback preserves frequency order");
   context.check(callbackCounts == std::vector<std::size_t>{1U, 1U},
                 "serial streaming callback consumes every frequency once");
-  context.check(callbackSourceCounts ==
-                    std::vector<std::size_t>{1U, 1U},
+  context.check(callbackSourceCounts == std::vector<std::size_t>{1U, 1U},
                 "single-source streaming publishes one workspace per "
                 "frequency");
   context.check(statistics.tracePassCount == 1U,
                 "serial streaming traces the ray fan once");
 
   for (std::size_t index = 0U; index < streamed.size(); ++index) {
-    context.check(
-        streamed[index].has_value() &&
-            streamed[index]->size() == 1U &&
-            std::equal(
-                streamed[index]->front().pressure().begin(),
-                streamed[index]->front().pressure().end(),
-                collected.frequencyResults[index]
-                    .workspaces.front()
-                    .pressure()
-                    .begin(),
-                collected.frequencyResults[index]
-                    .workspaces.front()
-                    .pressure()
-                    .end()),
-        "serial streamed workspace is bitwise equal to "
-        "the collected result");
+    context.check(streamed[index].has_value() &&
+                      streamed[index]->size() == 1U &&
+                      std::equal(streamed[index]->front().pressure().begin(),
+                                 streamed[index]->front().pressure().end(),
+                                 collected.frequencyResults[index]
+                                     .workspaces.front()
+                                     .pressure()
+                                     .begin(),
+                                 collected.frequencyResults[index]
+                                     .workspaces.front()
+                                     .pressure()
+                                     .end()),
+                  "serial streamed workspace is bitwise equal to "
+                  "the collected result");
   }
 }
 

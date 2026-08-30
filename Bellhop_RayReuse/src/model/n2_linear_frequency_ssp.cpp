@@ -8,8 +8,8 @@
 
 namespace rayreuse {
 
-N2LinearFrequencySsp::N2LinearFrequencySsp(
-    const SoundSpeedProfile& profile, double frequency)
+N2LinearFrequencySsp::N2LinearFrequencySsp(const SoundSpeedProfile& profile,
+                                           double frequency)
     : N2LinearFrequencySsp(profile, frequency, VolumeAttenuation{}) {}
 
 N2LinearFrequencySsp::N2LinearFrequencySsp(
@@ -32,14 +32,11 @@ N2LinearFrequencySsp::N2LinearFrequencySsp(
     const std::complex<double> firstN2 =
         1.0 / (nodeSoundSpeeds_[index] * nodeSoundSpeeds_[index]);
     const std::complex<double> secondN2 =
-        1.0 /
-        (nodeSoundSpeeds_[index + 1U] * nodeSoundSpeeds_[index + 1U]);
+        1.0 / (nodeSoundSpeeds_[index + 1U] * nodeSoundSpeeds_[index + 1U]);
     const std::complex<double> gradient =
-        (secondN2 - firstN2) /
-        (depths_[index + 1U] - depths_[index]);
+        (secondN2 - firstN2) / (depths_[index + 1U] - depths_[index]);
     if (!std::isfinite(firstN2.real()) || !std::isfinite(firstN2.imag()) ||
-        !std::isfinite(gradient.real()) ||
-        !std::isfinite(gradient.imag())) {
+        !std::isfinite(gradient.real()) || !std::isfinite(gradient.imag())) {
       throw ValidationError("frequency N2-linear coefficient must be finite");
     }
     segments_.push_back(
@@ -61,9 +58,9 @@ bool N2LinearFrequencySsp::isLossless() const noexcept {
 std::optional<std::complex<double>>
 N2LinearFrequencySsp::uniformComplexSoundSpeed() const noexcept {
   const std::complex<double> value = nodeSoundSpeeds_.front();
-  if (!std::ranges::all_of(
-          nodeSoundSpeeds_,
-          [value](const auto& candidate) { return candidate == value; })) {
+  if (!std::ranges::all_of(nodeSoundSpeeds_, [value](const auto& candidate) {
+        return candidate == value;
+      })) {
     return std::nullopt;
   }
   return value;
@@ -78,12 +75,12 @@ SoundSpeedSample N2LinearFrequencySsp::addComplexSoundSpeed(
   const std::complex<double> soundSpeed = 1.0 / std::sqrt(n2);
   sample.soundSpeed = soundSpeed.real();
   sample.imaginarySoundSpeed = soundSpeed.imag();
-  sample.soundSpeedGradient.depth =
-      -0.5 * sample.soundSpeed * sample.soundSpeed * sample.soundSpeed *
-      segments_[index].n2DepthGradient.real();
-  sample.soundSpeedHessian.depthDepth =
-      3.0 * sample.soundSpeedGradient.depth *
-      sample.soundSpeedGradient.depth / sample.soundSpeed;
+  sample.soundSpeedGradient.depth = -0.5 * sample.soundSpeed *
+                                    sample.soundSpeed * sample.soundSpeed *
+                                    segments_[index].n2DepthGradient.real();
+  sample.soundSpeedHessian.depthDepth = 3.0 * sample.soundSpeedGradient.depth *
+                                        sample.soundSpeedGradient.depth /
+                                        sample.soundSpeed;
   if (!std::isfinite(sample.soundSpeed) || sample.soundSpeed <= 0.0 ||
       !std::isfinite(sample.imaginarySoundSpeed) ||
       sample.imaginarySoundSpeed < 0.0 ||
@@ -102,8 +99,8 @@ SoundSpeedSample N2LinearFrequencySsp::evaluateAtSegment(
 
 SoundSpeedSample N2LinearFrequencySsp::evaluate(
     Vec2 position, std::size_t previousSegment) const {
-  return addComplexSoundSpeed(
-      realProfile_.evaluate(position, previousSegment), position.depth);
+  return addComplexSoundSpeed(realProfile_.evaluate(position, previousSegment),
+                              position.depth);
 }
 
 }  // namespace rayreuse

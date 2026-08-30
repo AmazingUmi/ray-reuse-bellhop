@@ -16,8 +16,7 @@ struct ComplexSplinePolynomial {
 // both endpoints. The returned polynomial uses ordinary powers, unlike the
 // Fortran derivative/curvature/third-derivative storage convention.
 [[nodiscard]] std::vector<ComplexSplinePolynomial>
-computeCubicSplineCoefficients(
-    const std::vector<double>& nodes,
-    const std::vector<std::complex<double>>& values);
+computeCubicSplineCoefficients(const std::vector<double>& nodes,
+                               const std::vector<std::complex<double>>& values);
 
 }  // namespace rayreuse

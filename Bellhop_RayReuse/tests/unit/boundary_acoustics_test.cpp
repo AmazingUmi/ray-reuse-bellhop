@@ -170,17 +170,16 @@ void testGrainAndTabulatedOracles(Context& context) {
                     "tabulated unwrapped phase interpolation");
 }
 
-VolumeAttenuation biologicalLayer(double minimumDepth,
-                                  double maximumDepth) {
+VolumeAttenuation biologicalLayer(double minimumDepth, double maximumDepth) {
   return VolumeAttenuation{
       .model = VolumeAttenuationModel::Biological,
       .parameters = std::make_shared<const BiologicalAttenuationLayers>(
-          BiologicalAttenuationLayers{{
-              .minimumDepth = minimumDepth,
-              .maximumDepth = maximumDepth,
-              .resonanceFrequency = 1000.0,
-              .qualityFactor = 2.0,
-              .attenuationCoefficientDecibelsPerKilometer = 100.0}})};
+          BiologicalAttenuationLayers{
+              {.minimumDepth = minimumDepth,
+               .maximumDepth = maximumDepth,
+               .resonanceFrequency = 1000.0,
+               .qualityFactor = 2.0,
+               .attenuationCoefficientDecibelsPerKilometer = 100.0}})};
 }
 
 void testVolumeAttenuationAtBoundaries(Context& context) {
@@ -208,9 +207,9 @@ void testVolumeAttenuationAtBoundaries(Context& context) {
       elastic, 100.0, VolumeAttenuation{}, 1000.0, 1000.0, tangent, normal);
   const auto elasticBiological = evaluateAcousticHalfSpaceAcoustics(
       elastic, 100.0, layer, 1000.0, 1000.0, tangent, normal);
-  context.check(elasticBiological.rawCoefficient !=
-                    elasticLossless.rawCoefficient,
-                "elastic compressional and shear conversion includes volume loss");
+  context.check(
+      elasticBiological.rawCoefficient != elasticLossless.rawCoefficient,
+      "elastic compressional and shear conversion includes volume loss");
 
   const BoundaryModel flat = BoundaryModel::acousticHalfSpace(100.0, fluid);
   const auto flatLossless = evaluateBoundaryAcoustics(
@@ -220,19 +219,19 @@ void testVolumeAttenuationAtBoundaries(Context& context) {
   context.check(flatBiological.rawCoefficient != flatLossless.rawCoefficient,
                 "flat boundary evaluates biological loss at boundary depth");
 
-  const BoundaryGeometry longGeometry = BoundaryGeometry::piecewiseLinear(
-      {Vec2{.range = 0.0, .depth = 100.0},
-       Vec2{.range = 100.0, .depth = 100.0}},
-      100.0, BoundaryOrientation::Lower);
-  const auto materials =
-      std::make_shared<const std::vector<AcousticMaterial>>(
-          std::vector<AcousticMaterial>{fluid, fluid});
-  const BoundaryModel longBoundary = BoundaryModel::acousticHalfSpace(
-      longGeometry, fluid, materials);
+  const BoundaryGeometry longGeometry =
+      BoundaryGeometry::piecewiseLinear({Vec2{.range = 0.0, .depth = 100.0},
+                                         Vec2{.range = 100.0, .depth = 100.0}},
+                                        100.0, BoundaryOrientation::Lower);
+  const auto materials = std::make_shared<const std::vector<AcousticMaterial>>(
+      std::vector<AcousticMaterial>{fluid, fluid});
+  const BoundaryModel longBoundary =
+      BoundaryModel::acousticHalfSpace(longGeometry, fluid, materials);
   const auto longBiological = evaluateBoundaryAcoustics(
       longBoundary, 0U, layer, 1000.0, 1000.0, tangent, normal);
-  context.check(longBiological.rawCoefficient == flatLossless.rawCoefficient,
-                "legacy 1e20 long-material depth excludes physical biological layer");
+  context.check(
+      longBiological.rawCoefficient == flatLossless.rawCoefficient,
+      "legacy 1e20 long-material depth excludes physical biological layer");
 
   const GrainSizeMaterial grain =
       *BoundaryModel::grainSizeHalfSpace(100.0, 3.0).grainSizeMaterial();

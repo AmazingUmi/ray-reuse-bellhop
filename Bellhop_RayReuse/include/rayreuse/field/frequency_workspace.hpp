@@ -57,10 +57,8 @@ class IntensityWorkspace {
   [[nodiscard]] std::size_t depthCount() const noexcept;
   [[nodiscard]] std::size_t rangeCount() const noexcept;
   [[nodiscard]] std::span<const double> intensity() const noexcept;
-  [[nodiscard]] double at(std::size_t depthIndex,
-                          std::size_t rangeIndex) const;
-  void add(std::size_t depthIndex, std::size_t rangeIndex,
-           double contribution);
+  [[nodiscard]] double at(std::size_t depthIndex, std::size_t rangeIndex) const;
+  void add(std::size_t depthIndex, std::size_t rangeIndex, double contribution);
   void clear() noexcept;
 
  private:

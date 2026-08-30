@@ -55,25 +55,24 @@ VolumeAttenuation makeThorpAttenuation() {
 }
 
 VolumeAttenuation makeFrancoisGarrisonAttenuation(double temperature) {
-  return VolumeAttenuation{
-      .model = VolumeAttenuationModel::FrancoisGarrison,
-      .parameters = FrancoisGarrisonParameters{.temperatureCelsius = temperature,
-                                               .salinityPsu = 35.0,
-                                               .pH = 8.0,
-                                               .meanDepthMeters = 50.0}};
+  return VolumeAttenuation{.model = VolumeAttenuationModel::FrancoisGarrison,
+                           .parameters = FrancoisGarrisonParameters{
+                               .temperatureCelsius = temperature,
+                               .salinityPsu = 35.0,
+                               .pH = 8.0,
+                               .meanDepthMeters = 50.0}};
 }
 
 VolumeAttenuation makeBiologicalAttenuation(double coefficient) {
   return VolumeAttenuation{
       .model = VolumeAttenuationModel::Biological,
-      .parameters =
-          std::make_shared<const BiologicalAttenuationLayers>(
-              BiologicalAttenuationLayers{{
-                  .minimumDepth = 0.0,
-                  .maximumDepth = 100.0,
-                  .resonanceFrequency = 1000.0,
-                  .qualityFactor = 2.0,
-                  .attenuationCoefficientDecibelsPerKilometer = coefficient}})};
+      .parameters = std::make_shared<const BiologicalAttenuationLayers>(
+          BiologicalAttenuationLayers{
+              {.minimumDepth = 0.0,
+               .maximumDepth = 100.0,
+               .resonanceFrequency = 1000.0,
+               .qualityFactor = 2.0,
+               .attenuationCoefficientDecibelsPerKilometer = coefficient}})};
 }
 
 SimulationCase makeSimulation(
@@ -109,8 +108,8 @@ SimulationCase makeSimulation(
       curvatureMode, beamWidthMode, coordinateSystem);
 }
 
-SimulationCase makeAttenuatedSimulation(
-    std::vector<double> frequencies, VolumeAttenuation volumeAttenuation) {
+SimulationCase makeAttenuatedSimulation(std::vector<double> frequencies,
+                                        VolumeAttenuation volumeAttenuation) {
   return makeSimulation(
       std::move(frequencies), SimulationRunMode::Coherent,
       BeamFamily::CervenyGaussian, FieldComponent::Pressure,
@@ -139,8 +138,7 @@ StreamedParallelRun runParallel(const SimulationCase& simulation,
                                 bool verifyCacheFingerprint = false) {
   StreamedParallelRun run{
       .workspaces =
-          std::vector<
-              std::optional<std::vector<rayreuse::FrequencyWorkspace>>>(
+          std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>(
               simulation.frequencies().size()),
       .callbackCounts =
           std::vector<std::size_t>(simulation.frequencies().size(), 0U),
@@ -251,7 +249,8 @@ void testRepeatedRunIsDeterministic(Context& context) {
                   "repeated parallel runs return every workspace");
     if (first.workspaces[index] && second.workspaces[index]) {
       checkWorkspaceEqual(
-          context, first.workspaces[index]->front(), second.workspaces[index]->front(),
+          context, first.workspaces[index]->front(),
+          second.workspaces[index]->front(),
           "repeated parallel pressure is bitwise deterministic");
     }
   }
@@ -272,7 +271,8 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
     const SerialRayReuseResult serial =
         SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
     const StreamedParallelRun first = runParallel(simulation, settings, true);
-    const StreamedParallelRun repeated = runParallel(simulation, settings, true);
+    const StreamedParallelRun repeated =
+        runParallel(simulation, settings, true);
 
     context.check(
         serial.statistics.cacheFingerprintVerified &&
@@ -315,14 +315,14 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
                   makeFrancoisGarrisonAttenuation(18.0)},
         std::pair{makeBiologicalAttenuation(100.0),
                   makeBiologicalAttenuation(250.0)}}) {
-    const SimulationCase firstSimulation = makeAttenuatedSimulation(
-        {500.0, 1000.0, 2000.0}, parameterPair.first);
-    const SimulationCase changedSimulation = makeAttenuatedSimulation(
-        {500.0, 1000.0, 2000.0}, parameterPair.second);
-    const SerialRayReuseResult first = SerialRayReuseSolver::solve(
-        firstSimulation, 1.0, 50.0, {}, true);
-    const SerialRayReuseResult changed = SerialRayReuseSolver::solve(
-        changedSimulation, 1.0, 50.0, {}, true);
+    const SimulationCase firstSimulation =
+        makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, parameterPair.first);
+    const SimulationCase changedSimulation =
+        makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, parameterPair.second);
+    const SerialRayReuseResult first =
+        SerialRayReuseSolver::solve(firstSimulation, 1.0, 50.0, {}, true);
+    const SerialRayReuseResult changed =
+        SerialRayReuseSolver::solve(changedSimulation, 1.0, 50.0, {}, true);
     context.check(
         first.statistics.cacheFingerprintBefore ==
                 changed.statistics.cacheFingerprintBefore &&
@@ -333,15 +333,20 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
         "changing FG/biological payload preserves identical frozen geometry");
 
     bool pressureDiffers = false;
-    for (std::size_t index = 0U; index < first.frequencyResults.size(); ++index) {
-      pressureDiffers = pressureDiffers ||
-                        !std::equal(
-                            first.frequencyResults[index]
-                                .workspaces.front().pressure().begin(),
-                            first.frequencyResults[index]
-                                .workspaces.front().pressure().end(),
-                            changed.frequencyResults[index]
-                                .workspaces.front().pressure().begin());
+    for (std::size_t index = 0U; index < first.frequencyResults.size();
+         ++index) {
+      pressureDiffers =
+          pressureDiffers ||
+          !std::equal(
+              first.frequencyResults[index]
+                  .workspaces.front()
+                  .pressure()
+                  .begin(),
+              first.frequencyResults[index].workspaces.front().pressure().end(),
+              changed.frequencyResults[index]
+                  .workspaces.front()
+                  .pressure()
+                  .begin());
     }
     context.check(pressureDiffers,
                   "changing FG/biological payload changes projected pressure");
@@ -383,8 +388,8 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
         if (!parallel.workspaces[index].has_value()) {
           continue;
         }
-        checkWorkspaceEqual(
-            context, reuse.frequencyResults[index].workspaces.front(),
+        checkWorkspaceEqual(context,
+                            reuse.frequencyResults[index].workspaces.front(),
                             nonReuse.frequencyResults[index].workspace,
                             "serial reuse C/I/S is bitwise equal to non-reuse");
         checkWorkspaceEqual(
@@ -589,8 +594,8 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
       context.check(parallel.workspaces[index].has_value(),
                     "parallel ray-centered GeoHat returns every frequency");
       if (!parallel.workspaces[index].has_value()) continue;
-      checkWorkspaceEqual(
-          context, reuse.frequencyResults[index].workspaces.front(),
+      checkWorkspaceEqual(context,
+                          reuse.frequencyResults[index].workspaces.front(),
                           nonReuse.frequencyResults[index].workspace,
                           "ray-centered GeoHat reuse equals non-reuse bitwise");
       checkWorkspaceEqual(

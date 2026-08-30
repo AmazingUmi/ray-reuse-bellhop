@@ -86,9 +86,8 @@ ArrivalTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
        ++sourceIndex) {
     RayPathCache cache = traceSourceCache(simulation, sourceIndex);
     for (const RayPath& path : cache.paths()) {
-      batch.totalRayPointCount =
-          checkedAdd(batch.totalRayPointCount, path.points.size(),
-                     "arrival point count");
+      batch.totalRayPointCount = checkedAdd(
+          batch.totalRayPointCount, path.points.size(), "arrival point count");
     }
     batch.peakRayCacheBytes =
         std::max(batch.peakRayCacheBytes, cache.memoryFootprintBytes());
@@ -101,8 +100,7 @@ ArrivalTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
 ArrivalWorkspace projectArrivals(const SimulationCase& simulation,
                                  const RayPathCache& cache,
                                  std::size_t frequencyIndex,
-                                 std::size_t sourceIndex,
-                                 BeamFamily beamFamily,
+                                 std::size_t sourceIndex, BeamFamily beamFamily,
                                  std::size_t& projectedCount) {
   const double frequency = simulation.frequencies().values().at(frequencyIndex);
   const Source& source = simulation.sources().at(sourceIndex);
@@ -252,7 +250,8 @@ ArrivalSolverStatistics ArrivalSolver::solve(
     for (const RayPathCache& cache : caches)
       stats.sourceCacheFingerprintsAfter.push_back(cache.contentFingerprint());
     stats.cacheFingerprintAfter = stats.sourceCacheFingerprintsAfter.front();
-    if (stats.sourceCacheFingerprintsAfter != stats.sourceCacheFingerprintsBefore)
+    if (stats.sourceCacheFingerprintsAfter !=
+        stats.sourceCacheFingerprintsBefore)
       throw ValidationError("arrival projection modified the frozen ray cache");
   }
   return stats;
@@ -296,13 +295,13 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
       stats.peakRayCacheBytes =
           std::max(stats.peakRayCacheBytes, cache.memoryFootprintBytes());
     }
-    stats.totalRayPointCount = checkedAdd(
-        stats.totalRayPointCount, batch.totalRayPointCount,
-        "arrival point count");
+    stats.totalRayPointCount =
+        checkedAdd(stats.totalRayPointCount, batch.totalRayPointCount,
+                   "arrival point count");
     std::size_t projected = 0U;
     const auto projectBegin = Clock::now();
-    std::vector<ArrivalWorkspace> workspaces = projectAllSourceArrivals(
-        simulation, caches, fi, beamFamily, projected);
+    std::vector<ArrivalWorkspace> workspaces =
+        projectAllSourceArrivals(simulation, caches, fi, beamFamily, projected);
     const auto projectEnd = Clock::now();
     stats.projectSeconds += elapsed(projectBegin, projectEnd);
     stats.influenceSeconds += elapsed(projectBegin, projectEnd);
@@ -311,11 +310,11 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
       stats.candidateCount =
           checkedAdd(stats.candidateCount, workspace.candidateCount(),
                      "arrival candidate count");
-      stats.saturatedCellCount = checkedAdd(
-          stats.saturatedCellCount, workspace.saturatedCellCount(),
-          "arrival saturated-cell count");
-      stats.peakArrivalWorkspaceBytes = std::max(
-          stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
+      stats.saturatedCellCount =
+          checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
+                     "arrival saturated-cell count");
+      stats.peakArrivalWorkspaceBytes =
+          std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
     }
     const auto consumeBegin = Clock::now();
     consumer(fi, caches, workspaces);
@@ -403,11 +402,11 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
       stats.candidateCount =
           checkedAdd(stats.candidateCount, workspace.candidateCount(),
                      "arrival candidate count");
-      stats.saturatedCellCount = checkedAdd(
-          stats.saturatedCellCount, workspace.saturatedCellCount(),
-          "arrival saturated-cell count");
-      stats.peakArrivalWorkspaceBytes = std::max(
-          stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
+      stats.saturatedCellCount =
+          checkedAdd(stats.saturatedCellCount, workspace.saturatedCellCount(),
+                     "arrival saturated-cell count");
+      stats.peakArrivalWorkspaceBytes =
+          std::max(stats.peakArrivalWorkspaceBytes, workspaceBytes(workspace));
     }
     const auto consumeBegin = Clock::now();
     consumer(fi, caches, results[fi].workspaces);

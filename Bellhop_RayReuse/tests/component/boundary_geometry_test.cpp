@@ -37,8 +37,8 @@ struct ChordFrame {
 };
 
 [[nodiscard]] ChordFrame chordFrame(Vec2 delta) {
-  const double length = std::sqrt(delta.range * delta.range +
-                                  delta.depth * delta.depth);
+  const double length =
+      std::sqrt(delta.range * delta.range + delta.depth * delta.depth);
   return ChordFrame{.length = length,
                     .tangent = delta / length,
                     .slope = delta.depth / delta.range};
@@ -50,17 +50,17 @@ struct ChordFrame {
   // Origin overrides kappa with Dss = Dxx * t1^3 where
   // Dxx = (Dx[next] - Dx[segment]) / (x[next] - x[segment]).
   const double secondDerivative = (next.slope - segment.slope) / deltaRange;
-  return secondDerivative * segment.tangent.range *
-         segment.tangent.range * segment.tangent.range;
+  return secondDerivative * segment.tangent.range * segment.tangent.range *
+         segment.tangent.range;
 }
 
 void testCurvilinearNodeFrameAndCurvature(Context& context) {
   const BoundaryGeometry bottom = BoundaryGeometry::curvilinear(
       std::vector<Vec2>(kNodes.begin(), kNodes.end()), 130.0,
       BoundaryOrientation::Lower);
-  context.check(bottom.interpolationKind() ==
-                    BoundaryInterpolationKind::Curvilinear,
-                "curvilinear factory records the interpolation kind");
+  context.check(
+      bottom.interpolationKind() == BoundaryInterpolationKind::Curvilinear,
+      "curvilinear factory records the interpolation kind");
   context.check(!bottom.isFlat() && bottom.segmentCount() == 5U,
                 "curvilinear geometry extends four nodes with two outside "
                 "chords");
@@ -102,29 +102,24 @@ void testCurvilinearNodeFrameAndCurvature(Context& context) {
   // including the trailing segment whose next chord is the flat extension
   // (slope zero by Origin Bdry(NPts)%Nodet = [1, 0]).
   const ChordFrame flatExtension{
-      .length = 1.0,
-      .tangent = Vec2{.range = 1.0, .depth = 0.0},
-      .slope = 0.0};
+      .length = 1.0, .tangent = Vec2{.range = 1.0, .depth = 0.0}, .slope = 0.0};
+  context.checkNear(bottom.reflectionSampleAtSegment(midpoint, 1U).curvature,
+                    curvatureFromOriginFormula(first, second, 1000.0), 1.0e-15,
+                    "segment 1 curvature matches the Origin Dss formula");
   context.checkNear(
-      bottom.reflectionSampleAtSegment(midpoint, 1U).curvature,
-      curvatureFromOriginFormula(first, second, 1000.0), 1.0e-15,
-      "segment 1 curvature matches the Origin Dss formula");
-  context.checkNear(
-      bottom.reflectionSampleAtSegment(
-              Vec2{.range = 1500.0, .depth = 7.0}, 2U)
+      bottom.reflectionSampleAtSegment(Vec2{.range = 1500.0, .depth = 7.0}, 2U)
           .curvature,
       curvatureFromOriginFormula(second, third, 1000.0), 1.0e-15,
       "segment 2 curvature matches the Origin Dss formula");
   context.checkNear(
-      bottom.reflectionSampleAtSegment(
-              Vec2{.range = 2500.0, .depth = 6.0}, 3U)
+      bottom.reflectionSampleAtSegment(Vec2{.range = 2500.0, .depth = 6.0}, 3U)
           .curvature,
       curvatureFromOriginFormula(third, flatExtension, 1000.0), 1.0e-15,
       "segment 3 curvature uses the flat extension chord slope zero");
   context.check(
       bottom.reflectionSampleAtSegment(midpoint, 1U).curvature != 0.0 &&
-          bottom.reflectionSampleAtSegment(
-                 Vec2{.range = 1500.0, .depth = 7.0}, 2U)
+          bottom.reflectionSampleAtSegment(Vec2{.range = 1500.0, .depth = 7.0},
+                                           2U)
                   .curvature != 0.0,
       "interior curvilinear segments report non-zero curvature");
 
@@ -150,11 +145,10 @@ void testCurvilinearNodeFrameAndCurvature(Context& context) {
                     leadIn.curvature == 0.0,
                 "leading extension segment reflects with the flat chord");
   const BoundaryGeometrySample tail =
-      bottom.reflectionSampleAtSegment(Vec2{.range = 3100.0, .depth = 8.0},
-                                       4U);
-  context.check(tail.tangent == Vec2{.range = 1.0, .depth = 0.0} &&
-                    tail.curvature == 0.0,
-                "trailing extension segment reflects with the flat chord");
+      bottom.reflectionSampleAtSegment(Vec2{.range = 3100.0, .depth = 8.0}, 4U);
+  context.check(
+      tail.tangent == Vec2{.range = 1.0, .depth = 0.0} && tail.curvature == 0.0,
+      "trailing extension segment reflects with the flat chord");
 
   // Upper boundaries rotate the interpolated outward normal the other way.
   const BoundaryGeometry top = BoundaryGeometry::curvilinear(
@@ -162,16 +156,14 @@ void testCurvilinearNodeFrameAndCurvature(Context& context) {
       BoundaryOrientation::Upper);
   const BoundaryGeometrySample topSample =
       top.reflectionSampleAtSegment(midpoint, 1U);
-  context.checkNear(topSample.outwardNormal.range, topSample.tangent.depth,
-                    0.0,
+  context.checkNear(topSample.outwardNormal.range, topSample.tangent.depth, 0.0,
                     "upper interpolated outward normal keeps tangent depth");
   context.checkNear(topSample.outwardNormal.depth, -topSample.tangent.range,
                     0.0,
                     "upper interpolated outward normal flips tangent range");
   context.checkNear(topSample.curvature,
                     bottom.reflectionSampleAtSegment(midpoint, 1U).curvature,
-                    0.0,
-                    "curvature is orientation independent");
+                    0.0, "curvature is orientation independent");
 }
 
 void testPiecewiseAndFlatReflectionFramesUnchanged(Context& context) {
@@ -193,14 +185,13 @@ void testPiecewiseAndFlatReflectionFramesUnchanged(Context& context) {
 
   const BoundaryGeometry flat =
       BoundaryGeometry::flat(100.0, BoundaryOrientation::Lower);
-  context.check(flat.interpolationKind() ==
-                    BoundaryInterpolationKind::PiecewiseLinear,
-                "flat geometry defaults to the piecewise kind");
-  const BoundaryGeometrySample flatReflection = flat.reflectionSampleAtSegment(
-      Vec2{.range = 250.0, .depth = 101.0}, 0U);
+  context.check(
+      flat.interpolationKind() == BoundaryInterpolationKind::PiecewiseLinear,
+      "flat geometry defaults to the piecewise kind");
+  const BoundaryGeometrySample flatReflection =
+      flat.reflectionSampleAtSegment(Vec2{.range = 250.0, .depth = 101.0}, 0U);
   context.check(flatReflection.curvature == 0.0 &&
-                    flatReflection.tangent ==
-                        Vec2{.range = 1.0, .depth = 0.0},
+                    flatReflection.tangent == Vec2{.range = 1.0, .depth = 0.0},
                 "flat reflection sample keeps zero curvature");
 
   context.expectThrows<rayreuse::ValidationError>(

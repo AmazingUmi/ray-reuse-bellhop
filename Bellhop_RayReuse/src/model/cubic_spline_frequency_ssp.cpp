@@ -34,8 +34,7 @@ CubicSplineFrequencySsp::CubicSplineFrequencySsp(
                            point.soundSpeed, point.depth)
             .imaginarySoundSpeed);
   }
-  coefficients_ =
-      computeCubicSplineCoefficients(depths_, nodeSoundSpeeds_);
+  coefficients_ = computeCubicSplineCoefficients(depths_, nodeSoundSpeeds_);
 }
 
 double CubicSplineFrequencySsp::frequency() const noexcept {
@@ -54,9 +53,9 @@ bool CubicSplineFrequencySsp::isLossless() const noexcept {
 std::optional<std::complex<double>>
 CubicSplineFrequencySsp::uniformComplexSoundSpeed() const noexcept {
   const std::complex<double> value = nodeSoundSpeeds_.front();
-  if (!std::ranges::all_of(
-          nodeSoundSpeeds_,
-          [value](const auto& candidate) { return candidate == value; })) {
+  if (!std::ranges::all_of(nodeSoundSpeeds_, [value](const auto& candidate) {
+        return candidate == value;
+      })) {
     return std::nullopt;
   }
   return value;
@@ -71,12 +70,11 @@ SoundSpeedSample CubicSplineFrequencySsp::evaluateComplex(
       polynomial.value +
       offset * (polynomial.derivative +
                 offset * (0.5 * polynomial.curvature +
-                          kFortranSixth * offset *
-                              polynomial.thirdDerivative));
+                          kFortranSixth * offset * polynomial.thirdDerivative));
   const std::complex<double> gradient =
       polynomial.derivative +
-      offset * (polynomial.curvature +
-                0.5 * offset * polynomial.thirdDerivative);
+      offset *
+          (polynomial.curvature + 0.5 * offset * polynomial.thirdDerivative);
   const std::complex<double> curvature =
       polynomial.curvature + offset * polynomial.thirdDerivative;
   sample.soundSpeed = soundSpeed.real();
@@ -94,15 +92,14 @@ SoundSpeedSample CubicSplineFrequencySsp::evaluateComplex(
 
 SoundSpeedSample CubicSplineFrequencySsp::evaluateAtSegment(
     Vec2 position, std::size_t segmentIndex) const {
-  return evaluateComplex(
-      realProfile_.evaluateAtSegment(position, segmentIndex),
-      position.depth);
+  return evaluateComplex(realProfile_.evaluateAtSegment(position, segmentIndex),
+                         position.depth);
 }
 
 SoundSpeedSample CubicSplineFrequencySsp::evaluate(
     Vec2 position, std::size_t previousSegment) const {
-  return evaluateComplex(
-      realProfile_.evaluate(position, previousSegment), position.depth);
+  return evaluateComplex(realProfile_.evaluate(position, previousSegment),
+                         position.depth);
 }
 
 }  // namespace rayreuse

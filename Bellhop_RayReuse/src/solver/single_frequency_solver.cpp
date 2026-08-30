@@ -156,8 +156,8 @@ std::vector<RayFanTraceResult> SingleFrequencySolver::traceAllSourceFans(
     const SimulationCase& simulation) {
   std::vector<RayFanTraceResult> sourceTraces;
   sourceTraces.reserve(simulation.sourceCount());
-  for (std::size_t sourceIndex = 0U;
-       sourceIndex < simulation.sourceCount(); ++sourceIndex) {
+  for (std::size_t sourceIndex = 0U; sourceIndex < simulation.sourceCount();
+       ++sourceIndex) {
     sourceTraces.push_back(traceSourceFan(simulation, sourceIndex));
   }
   return sourceTraces;
@@ -209,8 +209,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const GeometrySspEvaluator soundSpeedProfile(
       simulation.environment().soundSpeedProfile());
-  const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
-      Vec2{.range = 0.0, .depth = source.depth}, 0U);
+  const SoundSpeedSample sourceSample =
+      soundSpeedProfile.evaluate(Vec2{.range = 0.0, .depth = source.depth}, 0U);
   const double sourceSoundSpeed = sourceSample.soundSpeed;
   if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
       simulation.beamFamily() != BeamFamily::GeometricHat &&
@@ -249,7 +249,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
                                   simulation.sourceGeometry());
   } else if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
     geometricGaussianInfluence.emplace(simulation.receivers(),
-                                        simulation.sourceGeometry());
+                                       simulation.sourceGeometry());
   } else if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
     simpleGaussianInfluence.emplace(simulation.receivers(),
                                     simulation.integrator().stepLength,
@@ -368,15 +368,13 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
                 simulation.sourceGeometry());
   if (coherentWorkspace.has_value()) {
     if (geometricNormalization) {
-      scaleCoherentGeometricPressure(workspace, simulation.receivers(),
-                                     launchFan.launchAngleStep,
-                                     sourceSoundSpeed,
-                                     simulation.sourceGeometry());
+      scaleCoherentGeometricPressure(
+          workspace, simulation.receivers(), launchFan.launchAngleStep,
+          sourceSoundSpeed, simulation.sourceGeometry());
     } else {
-      scaleCoherentCartesianPressure(workspace, simulation.receivers(),
-                                     launchFan.launchAngleStep,
-                                     sourceSoundSpeed,
-                                     simulation.sourceGeometry());
+      scaleCoherentCartesianPressure(
+          workspace, simulation.receivers(), launchFan.launchAngleStep,
+          sourceSoundSpeed, simulation.sourceGeometry());
     }
   }
   const Clock::time_point scaleEnd = Clock::now();
@@ -423,12 +421,10 @@ SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
     SingleFrequencyResult sourceResult = solveFrequencyFromSourceCache(
         simulation, frequency, sourceTraces[sourceIndex].cache, sourceIndex,
         epsilonMultiplier, loopRange, influenceSettings);
-    sourceResult.timings.traceSeconds =
-        sourceTraces[sourceIndex].traceSeconds;
+    sourceResult.timings.traceSeconds = sourceTraces[sourceIndex].traceSeconds;
     rayCount += sourceResult.rayCount;
     totalRayPointCount += sourceResult.totalRayPointCount;
-    peakRayCacheBytes =
-        std::max(peakRayCacheBytes, sourceResult.rayCacheBytes);
+    peakRayCacheBytes = std::max(peakRayCacheBytes, sourceResult.rayCacheBytes);
     accumulateFrequencyTimings(totalTimings, sourceResult.timings);
     sourceWorkspaces.push_back(std::move(sourceResult.workspace));
   }

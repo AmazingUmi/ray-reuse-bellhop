@@ -64,7 +64,6 @@ struct BoundaryAcousticsResult {
 [[nodiscard]] BoundaryAcousticsResult evaluateBoundaryAcoustics(
     const BoundaryModel& boundary, std::size_t boundarySegmentIndex,
     const VolumeAttenuation& volumeAttenuation, double frequency,
-    double waterDensity, double tangentSlowness,
-    double outwardNormalSlowness);
+    double waterDensity, double tangentSlowness, double outwardNormalSlowness);
 
 }  // namespace rayreuse

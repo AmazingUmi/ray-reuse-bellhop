@@ -50,8 +50,7 @@ std::vector<ComplexSplinePolynomial> computeCubicSplineCoefficients(
     work[0U][3U] = work[2U][2U];
     work[0U][2U] = work[1U][2U] + work[2U][2U];
     work[0U][1U] =
-        ((work[1U][2U] + 2.0 * work[0U][2U]) * work[1U][3U] *
-             work[2U][2U] +
+        ((work[1U][2U] + 2.0 * work[0U][2U]) * work[1U][3U] * work[2U][2U] +
          work[1U][2U] * work[1U][2U] * work[2U][3U]) /
         work[0U][2U];
   } else {
@@ -63,13 +62,11 @@ std::vector<ComplexSplinePolynomial> computeCubicSplineCoefficients(
   for (std::size_t node = 1U; node + 1U < nodeCount; ++node) {
     const std::complex<double> factor =
         -work[node + 1U][2U] / work[node - 1U][3U];
-    work[node][1U] =
-        factor * work[node - 1U][1U] +
-        3.0 * (work[node][2U] * work[node + 1U][3U] +
-               work[node + 1U][2U] * work[node][3U]);
-    work[node][3U] =
-        factor * work[node - 1U][2U] +
-        2.0 * (work[node][2U] + work[node + 1U][2U]);
+    work[node][1U] = factor * work[node - 1U][1U] +
+                     3.0 * (work[node][2U] * work[node + 1U][3U] +
+                            work[node + 1U][2U] * work[node][3U]);
+    work[node][3U] = factor * work[node - 1U][2U] +
+                     2.0 * (work[node][2U] + work[node + 1U][2U]);
   }
 
   if (nodeCount == 2U) {
@@ -79,32 +76,26 @@ std::vector<ComplexSplinePolynomial> computeCubicSplineCoefficients(
     work[2U][3U] = 1.0;
     const std::complex<double> factor = -1.0 / work[1U][3U];
     work[2U][3U] = factor * work[1U][2U] + work[2U][3U];
-    work[2U][1U] =
-        (factor * work[1U][1U] + work[2U][1U]) / work[2U][3U];
+    work[2U][1U] = (factor * work[1U][1U] + work[2U][1U]) / work[2U][3U];
   } else {
     const std::size_t last = nodeCount - 1U;
-    std::complex<double> factor =
-        work[last - 1U][2U] + work[last][2U];
-    work[last][1U] =
-        ((work[last][2U] + 2.0 * factor) * work[last][3U] *
-             work[last - 1U][2U] +
-         work[last][2U] * work[last][2U] *
-             (work[last - 1U][0U] - work[last - 2U][0U]) /
-             work[last - 1U][2U]) /
-        factor;
+    std::complex<double> factor = work[last - 1U][2U] + work[last][2U];
+    work[last][1U] = ((work[last][2U] + 2.0 * factor) * work[last][3U] *
+                          work[last - 1U][2U] +
+                      work[last][2U] * work[last][2U] *
+                          (work[last - 1U][0U] - work[last - 2U][0U]) /
+                          work[last - 1U][2U]) /
+                     factor;
     factor = -factor / work[last - 1U][3U];
     work[last][3U] = work[last - 1U][2U];
-    work[last][3U] =
-        factor * work[last - 1U][2U] + work[last][3U];
+    work[last][3U] = factor * work[last - 1U][2U] + work[last][3U];
     work[last][1U] =
-        (factor * work[last - 1U][1U] + work[last][1U]) /
-        work[last][3U];
+        (factor * work[last - 1U][1U] + work[last][1U]) / work[last][3U];
   }
 
   for (std::size_t node = nodeCount - 1U; node-- > 0U;) {
-    work[node][1U] =
-        (work[node][1U] - work[node][2U] * work[node + 1U][1U]) /
-        work[node][3U];
+    work[node][1U] = (work[node][1U] - work[node][2U] * work[node + 1U][1U]) /
+                     work[node][3U];
   }
 
   std::vector<ComplexSplinePolynomial> coefficients;

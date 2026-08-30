@@ -15,23 +15,23 @@ class PchipFrequencySsp {
   PchipFrequencySsp(const SoundSpeedProfile& profile, double frequency,
                     const VolumeAttenuation& volumeAttenuation);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::Pchip);
   }
   [[nodiscard]] double frequency() const noexcept;
   [[nodiscard]] std::size_t segmentCount() const noexcept;
   [[nodiscard]] bool isLossless() const noexcept;
-  [[nodiscard]] std::optional<std::complex<double>>
-  uniformComplexSoundSpeed() const noexcept;
+  [[nodiscard]] std::optional<std::complex<double>> uniformComplexSoundSpeed()
+      const noexcept;
   [[nodiscard]] SoundSpeedSample evaluateAtSegment(
       Vec2 position, std::size_t segmentIndex) const;
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
 
  private:
-  [[nodiscard]] SoundSpeedSample addImaginarySoundSpeed(
-      SoundSpeedSample sample, double depth) const;
+  [[nodiscard]] SoundSpeedSample addImaginarySoundSpeed(SoundSpeedSample sample,
+                                                        double depth) const;
 
   double frequency_{};
   PchipSsp realProfile_;

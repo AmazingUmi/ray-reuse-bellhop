@@ -145,11 +145,11 @@ RayFrequencyState FrequencyProjector::project(const RayPath& path,
                     environment_.volumeAttenuation(), frequency,
                     waterSample.density, event.tangentSlowness,
                     event.normalSlowness)
-              : evaluateBoundaryAcoustics(
-                    boundary, event.boundarySegmentIndex,
-                    environment_.volumeAttenuation(), frequency,
-                    waterSample.density, event.tangentSlowness,
-                    event.normalSlowness);
+              : evaluateBoundaryAcoustics(boundary, event.boundarySegmentIndex,
+                                          environment_.volumeAttenuation(),
+                                          frequency, waterSample.density,
+                                          event.tangentSlowness,
+                                          event.normalSlowness);
       next.amplitude *= acoustics.amplitudeMultiplier;
       next.reflectionPhase += acoustics.phaseIncrement;
       next.active = current.active && amplitudeRemainsActive(next.amplitude);

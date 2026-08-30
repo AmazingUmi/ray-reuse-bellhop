@@ -120,23 +120,20 @@ void testIntensityToPressureScaling(Context& context) {
   checkComplexNear(context, pressure.at(0U, 0U), {}, 0.0,
                    "point intensity conversion preserves zero-range rule");
   checkComplexNear(
-      context, pressure.at(0U, 1U),
-      {3.0 * beamScale / std::sqrt(1000.0), -0.0}, 1.0e-21,
-      "point intensity is square-rooted exactly once before scaling");
+      context, pressure.at(0U, 1U), {3.0 * beamScale / std::sqrt(1000.0), -0.0},
+      1.0e-21, "point intensity is square-rooted exactly once before scaling");
   checkComplexNear(
-      context, pressure.at(0U, 2U),
-      {5.0 * beamScale / std::sqrt(4000.0), -0.0}, 1.0e-21,
-      "point intensity conversion keeps the range spreading factor");
-  context.check(intensity.at(0U, 0U) == 4.0 &&
-                    intensity.at(0U, 1U) == 9.0 &&
+      context, pressure.at(0U, 2U), {5.0 * beamScale / std::sqrt(4000.0), -0.0},
+      1.0e-21, "point intensity conversion keeps the range spreading factor");
+  context.check(intensity.at(0U, 0U) == 4.0 && intensity.at(0U, 1U) == 9.0 &&
                     intensity.at(0U, 2U) == 25.0,
                 "intensity conversion leaves its strong input unchanged");
 
   context.expectThrows<ValidationError>(
       [&] {
         static_cast<void>(scaleCartesianPointIntensityToPressure(
-            intensity, ReceiverGrid({10.0, 20.0}, {0.0, 1000.0, 4000.0}),
-            0.001, 1500.0));
+            intensity, ReceiverGrid({10.0, 20.0}, {0.0, 1000.0, 4000.0}), 0.001,
+            1500.0));
       },
       "intensity conversion rejects a receiver-grid size mismatch");
 }
@@ -150,15 +147,14 @@ void testGeometricPointScaling(Context& context) {
   scaleCoherentGeometricPointPressure(coherent, receivers, 0.001, 1500.0);
   checkComplexNear(context, coherent.at(0U, 0U), {}, 0.0,
                    "geometric point scaling preserves zero-range rule");
-  checkComplexNear(context, coherent.at(0U, 1U),
-                   {3.0 * (-1.0 / std::sqrt(1000.0)),
-                    -4.0 * (-1.0 / std::sqrt(1000.0))},
-                   0.0, "geometric point pressure uses -1/sqrt(range)");
-  checkComplexNear(context, coherent.at(0U, 2U),
-                   {-5.0 * (-1.0 / std::sqrt(4000.0)),
-                    2.0 * (-1.0 / std::sqrt(4000.0))},
-                   0.0,
-                   "geometric normalization omits Cerveny frequency scale");
+  checkComplexNear(
+      context, coherent.at(0U, 1U),
+      {3.0 * (-1.0 / std::sqrt(1000.0)), -4.0 * (-1.0 / std::sqrt(1000.0))},
+      0.0, "geometric point pressure uses -1/sqrt(range)");
+  checkComplexNear(
+      context, coherent.at(0U, 2U),
+      {-5.0 * (-1.0 / std::sqrt(4000.0)), 2.0 * (-1.0 / std::sqrt(4000.0))},
+      0.0, "geometric normalization omits Cerveny frequency scale");
 
   IntensityWorkspace intensity(100.0, receivers);
   intensity.add(0U, 0U, 4.0);
@@ -186,8 +182,8 @@ void testLineSourceScaling(Context& context) {
   workspace.at(1U, 1U) = {-3.0, -4.0};
   workspace.at(1U, 2U) = {2.0, 1.0};
 
-  scaleCoherentCartesianPressure(
-      workspace, receivers, 0.001, 1500.0, SourceGeometry::Line);
+  scaleCoherentCartesianPressure(workspace, receivers, 0.001, 1500.0,
+                                 SourceGeometry::Line);
 
   constexpr float legacyPi = 3.14159265F;
   const float linePrefix = -4.0F * std::sqrt(legacyPi);
@@ -218,22 +214,19 @@ void testLineSourceScaling(Context& context) {
 
   const FrequencyWorkspace lineIntensity = scaleCartesianIntensityToPressure(
       intensity, receivers, 0.001, 1500.0, SourceGeometry::Line);
-  checkComplexNear(context, lineIntensity.at(0U, 0U),
-                   {2.0 * lineFactor, 0.0}, 1.0e-20,
-                   "line intensity retains zero range");
-  checkComplexNear(context, lineIntensity.at(0U, 1U),
-                   {3.0 * lineFactor, 0.0}, 1.0e-20,
-                   "line intensity preserves mixed-precision factor");
-  checkComplexNear(context, lineIntensity.at(0U, 2U),
-                   {5.0 * lineFactor, 0.0}, 1.0e-20,
-                   "line intensity is range independent");
+  checkComplexNear(context, lineIntensity.at(0U, 0U), {2.0 * lineFactor, 0.0},
+                   1.0e-20, "line intensity retains zero range");
+  checkComplexNear(context, lineIntensity.at(0U, 1U), {3.0 * lineFactor, 0.0},
+                   1.0e-20, "line intensity preserves mixed-precision factor");
+  checkComplexNear(context, lineIntensity.at(0U, 2U), {5.0 * lineFactor, 0.0},
+                   1.0e-20, "line intensity is range independent");
 
   // Geometric normalization line source test
   FrequencyWorkspace geomLine(100.0, receivers);
   geomLine.at(0U, 0U) = {2.0, -3.0};
   geomLine.at(0U, 1U) = {4.0, 5.0};
-  scaleCoherentGeometricPressure(
-      geomLine, receivers, 0.001, 1500.0, SourceGeometry::Line);
+  scaleCoherentGeometricPressure(geomLine, receivers, 0.001, 1500.0,
+                                 SourceGeometry::Line);
   const double geomLineFactor = static_cast<double>(linePrefix) * (-1.0);
   checkComplexNear(context, geomLine.at(0U, 0U),
                    {2.0 * geomLineFactor, -3.0 * geomLineFactor}, 1.0e-15,

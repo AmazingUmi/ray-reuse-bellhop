@@ -50,9 +50,8 @@ std::size_t QuadrilateralFrequencySsp::rangeSegmentCount() const noexcept {
 }
 
 bool QuadrilateralFrequencySsp::isLossless() const noexcept {
-  return std::ranges::all_of(
-      imaginarySoundSpeeds_,
-      [](double value) { return value == 0.0; });
+  return std::ranges::all_of(imaginarySoundSpeeds_,
+                             [](double value) { return value == 0.0; });
 }
 
 std::optional<std::complex<double>>
@@ -63,9 +62,8 @@ QuadrilateralFrequencySsp::uniformComplexSoundSpeed() const noexcept {
       grid_->speedsDepthMajor,
       [realValue](double value) { return value == realValue; });
   const bool uniformImaginary = std::ranges::all_of(
-      imaginarySoundSpeeds_, [imaginaryValue](double value) {
-        return value == imaginaryValue;
-      });
+      imaginarySoundSpeeds_,
+      [imaginaryValue](double value) { return value == imaginaryValue; });
   if (!uniformReal || !uniformImaginary) {
     return std::nullopt;
   }
@@ -96,11 +94,9 @@ SoundSpeedSample QuadrilateralFrequencySsp::addImaginarySoundSpeed(
     SoundSpeedSample sample, double depth) const {
   const std::size_t index = sample.segmentIndex;
   const double weight =
-      (depth - depths_[index]) /
-      (depths_[index + 1U] - depths_[index]);
-  sample.imaginarySoundSpeed =
-      (1.0 - weight) * imaginarySoundSpeeds_[index] +
-      weight * imaginarySoundSpeeds_[index + 1U];
+      (depth - depths_[index]) / (depths_[index + 1U] - depths_[index]);
+  sample.imaginarySoundSpeed = (1.0 - weight) * imaginarySoundSpeeds_[index] +
+                               weight * imaginarySoundSpeeds_[index + 1U];
   if (!std::isfinite(sample.imaginarySoundSpeed) ||
       sample.imaginarySoundSpeed < 0.0) {
     throw ValidationError(
@@ -113,17 +109,15 @@ SoundSpeedSample QuadrilateralFrequencySsp::addImaginarySoundSpeed(
 SoundSpeedSample QuadrilateralFrequencySsp::evaluateAtSegment(
     Vec2 position, std::size_t segmentIndex) const {
   return addImaginarySoundSpeed(
-      realProfile_.evaluateAtSegment(position, segmentIndex),
-      position.depth);
+      realProfile_.evaluateAtSegment(position, segmentIndex), position.depth);
 }
 
 SoundSpeedSample QuadrilateralFrequencySsp::evaluateAtSegments(
     Vec2 position, std::size_t segmentIndex,
     std::size_t rangeSegmentIndex) const {
-  return addImaginarySoundSpeed(
-      realProfile_.evaluateAtSegments(
-          position, segmentIndex, rangeSegmentIndex),
-      position.depth);
+  return addImaginarySoundSpeed(realProfile_.evaluateAtSegments(
+                                    position, segmentIndex, rangeSegmentIndex),
+                                position.depth);
 }
 
 SoundSpeedSample QuadrilateralFrequencySsp::evaluate(
@@ -136,8 +130,7 @@ SoundSpeedSample QuadrilateralFrequencySsp::evaluate(
     Vec2 position, std::size_t previousSegment,
     std::size_t previousRangeSegment) const {
   return addImaginarySoundSpeed(
-      realProfile_.evaluate(
-          position, previousSegment, previousRangeSegment),
+      realProfile_.evaluate(position, previousSegment, previousRangeSegment),
       position.depth);
 }
 

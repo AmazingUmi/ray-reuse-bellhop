@@ -53,12 +53,11 @@ RayFrequencyState makeFrequencyState(std::size_t pointCount,
   for (std::size_t index = 0U; index < pointCount; ++index) {
     const double weight =
         static_cast<double>(index) / static_cast<double>(pointCount - 1U);
-    result.points.push_back(
-        RayFrequencyPoint{.complexTravelTime =
-                              {weight * rightRealDelay, imaginaryDelay},
-                          .amplitude = 1.0,
-                          .reflectionPhase = 0.0,
-                          .active = true});
+    result.points.push_back(RayFrequencyPoint{
+        .complexTravelTime = {weight * rightRealDelay, imaginaryDelay},
+        .amplitude = 1.0,
+        .reflectionPhase = 0.0,
+        .active = true});
   }
   return result;
 }
@@ -72,14 +71,13 @@ void checkComplexNear(Context& context, std::complex<double> actual,
                     message + " imaginary");
 }
 
-GeometricGaussianDiagnostic runWidthDiagnostic(
-    Context& context, double leftQ, double rightQ, double rightRealDelay,
-    double receiverDepth = 500.0) {
+GeometricGaussianDiagnostic runWidthDiagnostic(Context& context, double leftQ,
+                                               double rightQ,
+                                               double rightRealDelay,
+                                               double receiverDepth = 500.0) {
   const ReceiverGrid receivers({receiverDepth}, {100.0, 300.0});
-  const RayPath path =
-      makeHorizontalPath({0.0, 200.0}, {leftQ, rightQ});
-  const RayFrequencyState state =
-      makeFrequencyState(2U, rightRealDelay);
+  const RayPath path = makeHorizontalPath({0.0, 200.0}, {leftQ, rightQ});
+  const RayFrequencyState state = makeFrequencyState(2U, rightRealDelay);
   FrequencyWorkspace workspace(kFrequency, receivers);
   const auto diagnostic = GeometricGaussianInfluence(receivers).accumulate(
       workspace, path, state, kDalpha,
@@ -93,24 +91,22 @@ GeometricGaussianDiagnostic runWidthDiagnostic(
 void testSigmaBranchesAndOriginAnchor(Context& context) {
   const GeometricGaussianDiagnostic geometric =
       runWidthDiagnostic(context, 200.0, 400.0, 0.001);
-  context.check(geometric.widthBranch ==
-                    GeometricGaussianWidthBranch::Geometric,
-                "Cartesian B selects the geometric width branch");
+  context.check(
+      geometric.widthBranch == GeometricGaussianWidthBranch::Geometric,
+      "Cartesian B selects the geometric width branch");
   context.checkNear(geometric.geometricSigma, 0.02, 1.0e-18,
                     "Cartesian B geometric sigma");
-  context.checkNear(geometric.nearFieldSigma,
-                    0.010000000149011612, 0.0,
+  context.checkNear(geometric.nearFieldSigma, 0.010000000149011612, 0.0,
                     "Cartesian B preserves Origin REAL4 0.2 promotion");
-  context.checkNear(geometric.wavelengthSigma,
-                    94.24777960769379, 2.0e-14,
+  context.checkNear(geometric.wavelengthSigma, 94.24777960769379, 2.0e-14,
                     "Cartesian B pi-lambda candidate");
   context.checkNear(geometric.sigma1, 0.02, 1.0e-18,
                     "Cartesian B geometric sigma1");
   context.checkNear(geometric.gaussianWeight, 1.0, 0.0,
                     "Cartesian B centerline Gaussian weight");
   checkComplexNear(context, geometric.pressureIncrement,
-                   {0.8810792938493487, -0.13954925083786673},
-                   2.0e-15, "Cartesian B coherent F2CPP anchor");
+                   {0.8810792938493487, -0.13954925083786673}, 2.0e-15,
+                   "Cartesian B coherent F2CPP anchor");
 
   const GeometricGaussianDiagnostic offset =
       runWidthDiagnostic(context, 200.0, 400.0, 0.001, 500.01);
@@ -121,26 +117,22 @@ void testSigmaBranchesAndOriginAnchor(Context& context) {
 
   const GeometricGaussianDiagnostic nearField =
       runWidthDiagnostic(context, 100.0, 200.0, 0.002);
-  context.check(nearField.widthBranch ==
-                    GeometricGaussianWidthBranch::NearField,
-                "Cartesian B selects the near-field branch");
-  context.checkNear(nearField.nearFieldSigma,
-                    0.020000000298023225, 0.0,
+  context.check(
+      nearField.widthBranch == GeometricGaussianWidthBranch::NearField,
+      "Cartesian B selects the near-field branch");
+  context.checkNear(nearField.nearFieldSigma, 0.020000000298023225, 0.0,
                     "Cartesian B near-field sigma");
-  context.checkNear(nearField.sigma1,
-                    0.020000000298023225, 0.0,
+  context.checkNear(nearField.sigma1, 0.020000000298023225, 0.0,
                     "Cartesian B near-field sigma1");
-  context.checkNear(nearField.gaussianWeight,
-                    0.70710677591819149, 0.0,
+  context.checkNear(nearField.gaussianWeight, 0.70710677591819149, 0.0,
                     "Cartesian B widening weight");
 
   const GeometricGaussianDiagnostic wavelength =
       runWidthDiagnostic(context, 100.0, 200.0, 20.0);
-  context.check(wavelength.widthBranch ==
-                    GeometricGaussianWidthBranch::WavelengthCap,
-                "Cartesian B selects the wavelength-cap branch");
-  context.checkNear(wavelength.nearFieldSigma,
-                    200.00000298023224, 0.0,
+  context.check(
+      wavelength.widthBranch == GeometricGaussianWidthBranch::WavelengthCap,
+      "Cartesian B selects the wavelength-cap branch");
+  context.checkNear(wavelength.nearFieldSigma, 200.00000298023224, 0.0,
                     "Cartesian B uncapped near-field candidate");
   context.checkNear(wavelength.sigma1, wavelength.wavelengthSigma, 0.0,
                     "Cartesian B caps width at pi lambda");
@@ -148,10 +140,8 @@ void testSigmaBranchesAndOriginAnchor(Context& context) {
 
 void testIntensityUsesAttenuationAndGaussianOnce(Context& context) {
   const ReceiverGrid receivers({500.0}, {100.0, 300.0});
-  const RayPath path =
-      makeHorizontalPath({0.0, 200.0}, {100.0, 200.0});
-  const RayFrequencyState state =
-      makeFrequencyState(2U, 0.002, -1.0e-4);
+  const RayPath path = makeHorizontalPath({0.0, 200.0}, {100.0, 200.0});
+  const RayFrequencyState state = makeFrequencyState(2U, 0.002, -1.0e-4);
   IntensityWorkspace workspace(kFrequency, receivers);
   const auto diagnostic =
       GeometricGaussianInfluence(receivers).accumulateIntensity(
@@ -159,11 +149,9 @@ void testIntensityUsesAttenuationAndGaussianOnce(Context& context) {
           GeometricGaussianDiagnosticRequest{0U, 0U});
   context.check(diagnostic.has_value() && diagnostic->evaluated,
                 "Cartesian IB evaluates the selected receiver");
-  context.checkNear(diagnostic->intensityIncrement,
-                    1.324577993883975, 0.0,
+  context.checkNear(diagnostic->intensityIncrement, 1.324577993883975, 0.0,
                     "Cartesian IB uses sqrt(2pi)*power*W");
-  context.checkNear(workspace.at(0U, 0U),
-                    diagnostic->intensityIncrement, 0.0,
+  context.checkNear(workspace.at(0U, 0U), diagnostic->intensityIncrement, 0.0,
                     "Cartesian IB stores the per-ray intensity increment");
   context.check(
       std::abs(diagnostic->intensityIncrement - 0.9366181026208776) > 0.3,
@@ -173,8 +161,7 @@ void testIntensityUsesAttenuationAndGaussianOnce(Context& context) {
 void testCausticAndActivePrefix(Context& context) {
   {
     const ReceiverGrid receivers({500.0}, {150.0, 300.0});
-    const RayPath path =
-        makeHorizontalPath({0.0, 200.0}, {1.0, -1.0});
+    const RayPath path = makeHorizontalPath({0.0, 200.0}, {1.0, -1.0});
     const RayFrequencyState state = makeFrequencyState(2U, 0.002);
     FrequencyWorkspace workspace(kFrequency, receivers);
     const auto diagnostic = GeometricGaussianInfluence(receivers).accumulate(
@@ -190,8 +177,8 @@ void testCausticAndActivePrefix(Context& context) {
 
   {
     const ReceiverGrid receivers({500.0}, {100.0, 300.0, 500.0});
-    const RayPath path = makeHorizontalPath(
-        {0.0, 200.0, 400.0, 600.0}, {1.0, 100.0, 200.0, 300.0});
+    const RayPath path = makeHorizontalPath({0.0, 200.0, 400.0, 600.0},
+                                            {1.0, 100.0, 200.0, 300.0});
     RayFrequencyState state = makeFrequencyState(4U, 0.006);
     state.points[2U].active = false;
     state.points[3U].active = false;

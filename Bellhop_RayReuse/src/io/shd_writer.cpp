@@ -192,9 +192,9 @@ class ShdFrequencyWriter::Impl {
              ++rangeIndex) {
           const std::complex<double> pressure =
               workspace.at(depthIndex, rangeIndex);
-          storeFloat32(record, 8U * rangeIndex,
-                       checkedFloat32(pressure.real(),
-                                      "SHD pressure real part"));
+          storeFloat32(
+              record, 8U * rangeIndex,
+              checkedFloat32(pressure.real(), "SHD pressure real part"));
           storeFloat32(
               record, 8U * rangeIndex + 4U,
               checkedFloat32(pressure.imag(), "SHD pressure imaginary part"));
@@ -226,8 +226,7 @@ class ShdFrequencyWriter::Impl {
  private:
   static constexpr std::size_t kHeaderRecordCount = 10U;
 
-  static std::vector<double> sourceDepthList(
-      const SimulationCase& simulation) {
+  static std::vector<double> sourceDepthList(const SimulationCase& simulation) {
     std::vector<double> depths;
     depths.reserve(simulation.sourceCount());
     for (const Source& source : simulation.sources()) {
@@ -453,8 +452,7 @@ void ShdFrequencyWriter::writeFrequency(
 }
 
 void ShdFrequencyWriter::writeFrequency(
-    std::size_t index,
-    std::span<const FrequencyWorkspace> sourceWorkspaces) {
+    std::size_t index, std::span<const FrequencyWorkspace> sourceWorkspaces) {
   if (!impl_) {
     throw ValidationError("cannot write with a moved-from SHD writer");
   }

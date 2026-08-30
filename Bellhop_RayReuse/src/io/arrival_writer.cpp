@@ -40,8 +40,7 @@ void checkWorkspaces(const SimulationCase& simulation,
   }
   for (const ArrivalWorkspace& workspace : sourceWorkspaces) {
     if (workspace.frequency() != frequency ||
-        workspace.depthCount() !=
-            simulation.receivers().receiversPerRange() ||
+        workspace.depthCount() != simulation.receivers().receiversPerRange() ||
         workspace.rangeCount() != simulation.receivers().rangeCount()) {
       throw ValidationError("ARR workspace metadata does not match simulation");
     }
@@ -67,16 +66,16 @@ void writeAsciiSourceBlock(std::ofstream& output,
   for (std::size_t d = 0U; d < workspace.depthCount(); ++d)
     for (std::size_t r = 0U; r < workspace.rangeCount(); ++r) {
       const auto arrivals = workspace.arrivalsAt(d, r);
-      const float scale =
-          sourceScale(simulation.sourceGeometry(), simulation.receivers().ranges()[r]);
+      const float scale = sourceScale(simulation.sourceGeometry(),
+                                      simulation.receivers().ranges()[r]);
       output << arrivals.size() << '\n';
       for (const Arrival& a : arrivals)
         output << scale * a.amplitude << ' '
                << radiansToDegrees * a.phaseRadians << ' '
                << a.delaySeconds.real() << ' ' << a.delaySeconds.imag() << ' '
                << a.sourceDeclinationDegrees << ' '
-               << a.receiverDeclinationDegrees << ' ' << a.topBounceCount
-               << ' ' << a.bottomBounceCount << '\n';
+               << a.receiverDeclinationDegrees << ' ' << a.topBounceCount << ' '
+               << a.bottomBounceCount << '\n';
     }
 }
 void writeAscii(const std::filesystem::path& path, std::string_view title,
@@ -136,8 +135,8 @@ void writeBinarySourceBlock(std::ofstream& output,
       std::vector<std::byte> cell(4U);
       store32(cell, 0U, static_cast<std::uint32_t>(arrivals.size()));
       record(output, cell);
-      const float scale =
-          sourceScale(simulation.sourceGeometry(), simulation.receivers().ranges()[r]);
+      const float scale = sourceScale(simulation.sourceGeometry(),
+                                      simulation.receivers().ranges()[r]);
       for (const Arrival& a : arrivals) {
         std::vector<std::byte> payload(32U);
         auto put = [&](std::size_t o, float v) {
@@ -164,10 +163,9 @@ void writeBinary(const std::filesystem::path& path,
   record(output, {static_cast<std::byte>(0x27), static_cast<std::byte>('2'),
                   static_cast<std::byte>('D'), static_cast<std::byte>(0x27)});
   std::vector<std::byte> frequency(4U);
-  store32(
-      frequency, 0U,
-      std::bit_cast<std::uint32_t>(
-          static_cast<float>(sourceWorkspaces.front().frequency())));
+  store32(frequency, 0U,
+          std::bit_cast<std::uint32_t>(
+              static_cast<float>(sourceWorkspaces.front().frequency())));
   record(output, frequency);
   // F2CPP writeBinaryHeader source record: NSz followed by Sz(1:NSz) as
   // float32 values (one Fortran unformatted record).

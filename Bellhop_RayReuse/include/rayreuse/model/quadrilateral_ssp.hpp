@@ -16,16 +16,16 @@ class QuadrilateralSsp {
  public:
   explicit QuadrilateralSsp(const SoundSpeedProfile& profile);
 
-  [[nodiscard]] static constexpr SspGradientContinuity gradientContinuity()
-      noexcept {
+  [[nodiscard]] static constexpr SspGradientContinuity
+  gradientContinuity() noexcept {
     return sspGradientContinuity(SspInterpolationKind::Quadrilateral);
   }
 
   [[nodiscard]] std::size_t segmentCount() const noexcept;
   [[nodiscard]] std::size_t rangeSegmentCount() const noexcept;
 
-  [[nodiscard]] std::size_t locateSegment(
-      double depth, std::size_t previousSegment) const;
+  [[nodiscard]] std::size_t locateSegment(double depth,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] std::size_t locateRangeSegment(
       double range, std::size_t previousRangeSegment) const;
   [[nodiscard]] double minimumRangeForSegment(
@@ -39,8 +39,8 @@ class QuadrilateralSsp {
       Vec2 position, std::size_t segmentIndex,
       std::size_t rangeSegmentIndex) const;
 
-  [[nodiscard]] SoundSpeedSample evaluate(
-      Vec2 position, std::size_t previousSegment) const;
+  [[nodiscard]] SoundSpeedSample evaluate(Vec2 position,
+                                          std::size_t previousSegment) const;
   [[nodiscard]] SoundSpeedSample evaluate(
       Vec2 position, std::size_t previousSegment,
       std::size_t previousRangeSegment) const;
@@ -58,9 +58,8 @@ class QuadrilateralSsp {
       std::size_t rangeSegmentIndex) const;
   [[nodiscard]] double speedAt(std::size_t depthIndex,
                                std::size_t rangeIndex) const noexcept;
-  [[nodiscard]] double depthGradientAt(
-      std::size_t depthSegmentIndex,
-      std::size_t rangeIndex) const noexcept;
+  [[nodiscard]] double depthGradientAt(std::size_t depthSegmentIndex,
+                                       std::size_t rangeIndex) const noexcept;
 
   SharedQuadrilateralSspGrid grid_;
   std::vector<double> depths_;

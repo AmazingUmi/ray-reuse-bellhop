@@ -1,15 +1,3 @@
-#include "rayreuse/field/arrival_workspace.hpp"
-#include "rayreuse/field/cartesian_cerveny_influence.hpp"
-#include "rayreuse/field/frequency_workspace.hpp"
-#include "rayreuse/field/beam_epsilon.hpp"
-#include "rayreuse/field/frequency_projector.hpp"
-#include "rayreuse/field/geometric_gaussian_influence.hpp"
-#include "rayreuse/field/geometric_hat_influence.hpp"
-#include "rayreuse/model/environment.hpp"
-#include "rayreuse/model/simulation_case.hpp"
-#include "rayreuse/ray/geometry_tracer.hpp"
-#include "rayreuse/solver/single_frequency_solver.hpp"
-
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -19,6 +7,17 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/arrival_workspace.hpp"
+#include "rayreuse/field/beam_epsilon.hpp"
+#include "rayreuse/field/cartesian_cerveny_influence.hpp"
+#include "rayreuse/field/frequency_projector.hpp"
+#include "rayreuse/field/frequency_workspace.hpp"
+#include "rayreuse/field/geometric_gaussian_influence.hpp"
+#include "rayreuse/field/geometric_hat_influence.hpp"
+#include "rayreuse/model/environment.hpp"
+#include "rayreuse/model/simulation_case.hpp"
+#include "rayreuse/ray/geometry_tracer.hpp"
+#include "rayreuse/solver/single_frequency_solver.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -41,8 +40,8 @@ using rayreuse::GeometricGaussianInfluence;
 using rayreuse::GeometricHatDiagnosticRequest;
 using rayreuse::GeometricHatInfluence;
 using rayreuse::GeometryTracer;
-using rayreuse::IntensityWorkspace;
 using rayreuse::IntegratorSettings;
+using rayreuse::IntensityWorkspace;
 using rayreuse::LaunchFan;
 using rayreuse::pickMinimumWidthEpsilon;
 using rayreuse::RayFrequencyPoint;
@@ -121,15 +120,15 @@ void testIrregularWorkspaceDimensions(Context& context) {
   const FrequencyWorkspace pressure(kFrequency, receivers);
   const IntensityWorkspace intensity(kFrequency, receivers);
   const ArrivalWorkspace arrivals(kFrequency, receivers);
-  context.check(pressure.depthCount() == 1U &&
-                    pressure.rangeCount() == kPairedRangeCount,
-                "irregular pressure workspace is receiversPerRange x ranges");
+  context.check(
+      pressure.depthCount() == 1U && pressure.rangeCount() == kPairedRangeCount,
+      "irregular pressure workspace is receiversPerRange x ranges");
   context.check(intensity.depthCount() == 1U &&
                     intensity.rangeCount() == kPairedRangeCount,
                 "irregular intensity workspace is receiversPerRange x ranges");
-  context.check(arrivals.depthCount() == 1U &&
-                    arrivals.rangeCount() == kPairedRangeCount,
-                "irregular arrival workspace is receiversPerRange x ranges");
+  context.check(
+      arrivals.depthCount() == 1U && arrivals.rangeCount() == kPairedRangeCount,
+      "irregular arrival workspace is receiversPerRange x ranges");
 
   // Rectilinear grids keep the historical depth-count workspace shape.
   const ReceiverGrid rectilinear({400.0, 500.0, 600.0}, {100.0, 300.0, 500.0});
@@ -148,19 +147,18 @@ void testGeometricHatPairedAddressing(Context& context) {
   static_cast<void>(GeometricHatInfluence(irregular).accumulate(
       irregularWorkspace, path, state, kDalpha));
   context.check(irregularWorkspace.at(0U, 0U) == std::complex<double>{} &&
-                    irregularWorkspace.at(0U, 2U) ==
-                        std::complex<double>{},
+                    irregularWorkspace.at(0U, 2U) == std::complex<double>{},
                 "Cartesian G skips off-axis paired depths");
   context.check(irregularWorkspace.at(0U, 1U) != std::complex<double>{},
                 "Cartesian G accumulates into the on-axis paired receiver");
 
   // The paired result must reproduce the rectilinear diagonal exactly: the
   // per-cell arithmetic is identical, so equality is bit-exact.
-  const ReceiverGrid rectilinear({400.0, 500.0, 600.0},
-                                 {100.0, 300.0, 500.0});
+  const ReceiverGrid rectilinear({400.0, 500.0, 600.0}, {100.0, 300.0, 500.0});
   FrequencyWorkspace rectilinearWorkspace(kFrequency, rectilinear);
-  static_cast<void>(GeometricHatInfluence(rectilinear).accumulate(
-      rectilinearWorkspace, path, state, kDalpha));
+  static_cast<void>(
+      GeometricHatInfluence(rectilinear)
+          .accumulate(rectilinearWorkspace, path, state, kDalpha));
   for (std::size_t rangeIndex = 0U; rangeIndex < kPairedRangeCount;
        ++rangeIndex) {
     context.check(irregularWorkspace.at(0U, rangeIndex) ==
@@ -196,17 +194,16 @@ void testGeometricGaussianPairedAddressing(Context& context) {
   // receiver), so the 100 m off-axis paired depths fall outside the
   // 4-sigma beam window while the on-axis pair stays inside.
   context.check(irregularWorkspace.at(0U, 0U) == std::complex<double>{} &&
-                    irregularWorkspace.at(0U, 2U) ==
-                        std::complex<double>{},
+                    irregularWorkspace.at(0U, 2U) == std::complex<double>{},
                 "Cartesian B skips off-axis paired depths");
   context.check(irregularWorkspace.at(0U, 1U) != std::complex<double>{},
                 "Cartesian B accumulates into the on-axis paired receiver");
 
-  const ReceiverGrid rectilinear({400.0, 500.0, 600.0},
-                                 {100.0, 300.0, 500.0});
+  const ReceiverGrid rectilinear({400.0, 500.0, 600.0}, {100.0, 300.0, 500.0});
   FrequencyWorkspace rectilinearWorkspace(kFrequency, rectilinear);
-  static_cast<void>(GeometricGaussianInfluence(rectilinear).accumulate(
-      rectilinearWorkspace, path, state, kDalpha));
+  static_cast<void>(
+      GeometricGaussianInfluence(rectilinear)
+          .accumulate(rectilinearWorkspace, path, state, kDalpha));
   for (std::size_t rangeIndex = 0U; rangeIndex < kPairedRangeCount;
        ++rangeIndex) {
     context.check(irregularWorkspace.at(0U, rangeIndex) ==
@@ -252,15 +249,13 @@ Environment makeIsovelocityEnvironment() {
                                    .density = 1800.0}));
 }
 
-std::vector<double> linearGrid(double first, double last,
-                               std::size_t count) {
+std::vector<double> linearGrid(double first, double last, std::size_t count) {
   std::vector<double> values;
   values.reserve(count);
   const double denominator = static_cast<double>(count - 1U);
   for (std::size_t index = 0U; index < count; ++index) {
     values.push_back(first +
-                     (last - first) * static_cast<double>(index) /
-                         denominator);
+                     (last - first) * static_cast<double>(index) / denominator);
   }
   return values;
 }
@@ -274,61 +269,59 @@ void testCartesianCervenyLegacyFirstDepthAddressing(Context& context) {
   const std::vector<double> pairedDepths = linearGrid(400.0, 600.0, 51U);
   const ReceiverGrid irregular(pairedDepths, ranges,
                                ReceiverGridLayout::Irregular);
-  const ReceiverGrid firstDepthOnly(
-      std::vector<double>{pairedDepths.front()}, ranges);
+  const ReceiverGrid firstDepthOnly(std::vector<double>{pairedDepths.front()},
+                                    ranges);
 
   const Environment environment = makeIsovelocityEnvironment();
-  const RayPath path = GeometryTracer(
-      environment, IntegratorSettings{.stepLength = 10.0,
-                                      .rangeLimit = 5100.0,
-                                      .depthLimit = 1100.0,
-                                      .maximumRayPoints = 10000U})
-      .trace(Source{.depth = 500.0}, 0.0);
+  const RayPath path =
+      GeometryTracer(environment,
+                     IntegratorSettings{.stepLength = 10.0,
+                                        .rangeLimit = 5100.0,
+                                        .depthLimit = 1100.0,
+                                        .maximumRayPoints = 10000U})
+          .trace(Source{.depth = 500.0}, 0.0);
   const RayFrequencyState frequencyState =
       FrequencyProjector(environment).project(path, kFrequency, 1.0);
-  const auto epsilon =
-      pickMinimumWidthEpsilon(kFrequency, 1500.0, 2500.0, 1.0);
-  const CartesianCervenySettings settings{.imageCount = 3U,
-                                          .beamWindow = 5};
+  const auto epsilon = pickMinimumWidthEpsilon(kFrequency, 1500.0, 2500.0, 1.0);
+  const CartesianCervenySettings settings{.imageCount = 3U, .beamWindow = 5};
 
   FrequencyWorkspace irregularWorkspace(kFrequency, irregular);
-  static_cast<void>(CartesianCervenyInfluence(
-      environment, irregular, settings, BeamWidthMode::MinimumWidth)
-      .accumulate(irregularWorkspace, path, frequencyState, epsilon.value));
+  static_cast<void>(
+      CartesianCervenyInfluence(environment, irregular, settings,
+                                BeamWidthMode::MinimumWidth)
+          .accumulate(irregularWorkspace, path, frequencyState, epsilon.value));
   FrequencyWorkspace firstDepthWorkspace(kFrequency, firstDepthOnly);
-  static_cast<void>(CartesianCervenyInfluence(
-      environment, firstDepthOnly, settings, BeamWidthMode::MinimumWidth)
-      .accumulate(firstDepthWorkspace, path, frequencyState,
-                  epsilon.value));
+  static_cast<void>(CartesianCervenyInfluence(environment, firstDepthOnly,
+                                              settings,
+                                              BeamWidthMode::MinimumWidth)
+                        .accumulate(firstDepthWorkspace, path, frequencyState,
+                                    epsilon.value));
 
   context.check(irregularWorkspace.depthCount() == 1U,
                 "Cartesian C irregular workspace keeps one depth row");
   bool identicalToFirstDepth = true;
-  for (std::size_t rangeIndex = 0U; rangeIndex < ranges.size();
-       ++rangeIndex) {
+  for (std::size_t rangeIndex = 0U; rangeIndex < ranges.size(); ++rangeIndex) {
     identicalToFirstDepth =
-        identicalToFirstDepth &&
-        irregularWorkspace.at(0U, rangeIndex) ==
-            firstDepthWorkspace.at(0U, rangeIndex);
+        identicalToFirstDepth && irregularWorkspace.at(0U, rangeIndex) ==
+                                     firstDepthWorkspace.at(0U, rangeIndex);
   }
   context.check(identicalToFirstDepth,
                 "Cartesian C irregular run reproduces the Rz(1) single-depth "
                 "rectilinear run bit-for-bit");
 
-  const ReceiverGrid middleDepthOnly(
-      std::vector<double>{pairedDepths[25U]}, ranges);
+  const ReceiverGrid middleDepthOnly(std::vector<double>{pairedDepths[25U]},
+                                     ranges);
   FrequencyWorkspace middleDepthWorkspace(kFrequency, middleDepthOnly);
-  static_cast<void>(CartesianCervenyInfluence(
-      environment, middleDepthOnly, settings, BeamWidthMode::MinimumWidth)
-      .accumulate(middleDepthWorkspace, path, frequencyState,
-                  epsilon.value));
+  static_cast<void>(CartesianCervenyInfluence(environment, middleDepthOnly,
+                                              settings,
+                                              BeamWidthMode::MinimumWidth)
+                        .accumulate(middleDepthWorkspace, path, frequencyState,
+                                    epsilon.value));
   bool differsFromMiddleDepth = false;
-  for (std::size_t rangeIndex = 0U; rangeIndex < ranges.size();
-       ++rangeIndex) {
+  for (std::size_t rangeIndex = 0U; rangeIndex < ranges.size(); ++rangeIndex) {
     differsFromMiddleDepth =
-        differsFromMiddleDepth ||
-        irregularWorkspace.at(0U, rangeIndex) !=
-            middleDepthWorkspace.at(0U, rangeIndex);
+        differsFromMiddleDepth || irregularWorkspace.at(0U, rangeIndex) !=
+                                      middleDepthWorkspace.at(0U, rangeIndex);
   }
   context.check(differsFromMiddleDepth,
                 "Cartesian C irregular run does not silently follow the ray "
@@ -371,12 +364,12 @@ void checkSolverParity(Context& context, BeamFamily beamFamily,
                                ReceiverGridLayout::Irregular);
   const ReceiverGrid rectilinear({25.0, 50.0, 75.0}, {10.0, 55.0, 100.0});
 
-  const SingleFrequencyResult irregularResult = SingleFrequencySolver::
-      solveAtFrequency(makeTlCase(irregular, beamFamily), kFrequency, 1.0,
-                       2500.0);
-  const SingleFrequencyResult rectilinearResult = SingleFrequencySolver::
-      solveAtFrequency(makeTlCase(rectilinear, beamFamily), kFrequency, 1.0,
-                       2500.0);
+  const SingleFrequencyResult irregularResult =
+      SingleFrequencySolver::solveAtFrequency(makeTlCase(irregular, beamFamily),
+                                              kFrequency, 1.0, 2500.0);
+  const SingleFrequencyResult rectilinearResult =
+      SingleFrequencySolver::solveAtFrequency(
+          makeTlCase(rectilinear, beamFamily), kFrequency, 1.0, 2500.0);
   const FrequencyWorkspace& irregularWorkspace = irregularResult.workspace;
   const FrequencyWorkspace& rectilinearWorkspace = rectilinearResult.workspace;
   context.check(irregularWorkspace.depthCount() == 1U &&
@@ -387,44 +380,44 @@ void checkSolverParity(Context& context, BeamFamily beamFamily,
     // Legacy Rz(1) addressing: the whole irregular product equals the
     // single-depth rectilinear run at the first paired depth, and differs
     // from the rectilinear diagonal outside the first column.
-    const ReceiverGrid firstDepthOnly(
-        std::vector<double>{25.0}, {10.0, 55.0, 100.0});
-    const SingleFrequencyResult firstDepthResult = SingleFrequencySolver::
-        solveAtFrequency(makeTlCase(firstDepthOnly, beamFamily), kFrequency,
-                         1.0, 2500.0);
+    const ReceiverGrid firstDepthOnly(std::vector<double>{25.0},
+                                      {10.0, 55.0, 100.0});
+    const SingleFrequencyResult firstDepthResult =
+        SingleFrequencySolver::solveAtFrequency(
+            makeTlCase(firstDepthOnly, beamFamily), kFrequency, 1.0, 2500.0);
     bool firstDepthMatches = true;
     for (std::size_t rangeIndex = 0U; rangeIndex < 3U; ++rangeIndex) {
-      firstDepthMatches =
-          firstDepthMatches &&
-          irregularWorkspace.at(0U, rangeIndex) ==
-              firstDepthResult.workspace.at(0U, rangeIndex);
+      firstDepthMatches = firstDepthMatches &&
+                          irregularWorkspace.at(0U, rangeIndex) ==
+                              firstDepthResult.workspace.at(0U, rangeIndex);
     }
     context.check(firstDepthMatches,
-                  label + " paired irregular TL equals the Rz(1) "
-                          "single-depth rectilinear run bit-for-bit");
+                  label +
+                      " paired irregular TL equals the Rz(1) "
+                      "single-depth rectilinear run bit-for-bit");
     bool diagonalDiffers = false;
     for (std::size_t rangeIndex = 1U; rangeIndex < 3U; ++rangeIndex) {
-      diagonalDiffers =
-          diagonalDiffers ||
-          irregularWorkspace.at(0U, rangeIndex) !=
-              rectilinearWorkspace.at(rangeIndex, rangeIndex);
+      diagonalDiffers = diagonalDiffers ||
+                        irregularWorkspace.at(0U, rangeIndex) !=
+                            rectilinearWorkspace.at(rangeIndex, rangeIndex);
     }
     context.check(diagonalDiffers,
-                  label + " keeps Origin's Rz(1) depth instead of paired "
-                          "diagonal depths");
+                  label +
+                      " keeps Origin's Rz(1) depth instead of paired "
+                      "diagonal depths");
     return;
   }
 
   bool diagonalMatches = true;
   for (std::size_t rangeIndex = 0U; rangeIndex < 3U; ++rangeIndex) {
     diagonalMatches =
-        diagonalMatches &&
-        irregularWorkspace.at(0U, rangeIndex) ==
-            rectilinearWorkspace.at(rangeIndex, rangeIndex);
+        diagonalMatches && irregularWorkspace.at(0U, rangeIndex) ==
+                               rectilinearWorkspace.at(rangeIndex, rangeIndex);
   }
   context.check(diagonalMatches,
-                label + " paired irregular TL equals the rectilinear "
-                        "diagonal bit-for-bit");
+                label +
+                    " paired irregular TL equals the rectilinear "
+                    "diagonal bit-for-bit");
 }
 
 void testSolverLevelIrregularTlParity(Context& context) {

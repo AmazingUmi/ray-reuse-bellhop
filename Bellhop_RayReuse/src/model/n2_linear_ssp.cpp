@@ -19,8 +19,7 @@ N2LinearSsp::N2LinearSsp(const SoundSpeedProfile& profile) {
     const double firstN2 =
         1.0 / (points[index].soundSpeed * points[index].soundSpeed);
     const double secondN2 =
-        1.0 /
-        (points[index + 1U].soundSpeed * points[index + 1U].soundSpeed);
+        1.0 / (points[index + 1U].soundSpeed * points[index + 1U].soundSpeed);
     const double gradient = (secondN2 - firstN2) / interval;
     if (!std::isfinite(gradient)) {
       throw ValidationError("N2-linear coefficient must be finite");
@@ -39,8 +38,8 @@ std::size_t N2LinearSsp::segmentCount() const noexcept {
   return segments_.size();
 }
 
-std::size_t N2LinearSsp::locateSegment(
-    double depth, std::size_t previousSegment) const {
+std::size_t N2LinearSsp::locateSegment(double depth,
+                                       std::size_t previousSegment) const {
   if (!std::isfinite(depth)) {
     throw ValidationError("SSP query depth must be finite");
   }
@@ -80,21 +79,18 @@ SoundSpeedSample N2LinearSsp::evaluatePolynomial(
   }
   const Segment& segment = segments_[segmentIndex];
   const double offset = position.depth - segment.minimumDepth;
-  const double n2 =
-      segment.n2AtMinimumDepth + offset * segment.n2DepthGradient;
+  const double n2 = segment.n2AtMinimumDepth + offset * segment.n2DepthGradient;
   if (!std::isfinite(n2) || n2 <= 0.0) {
     throw ValidationError("interpolated N2 must be finite and positive");
   }
   const double soundSpeed = 1.0 / std::sqrt(n2);
   const double gradient =
-      -0.5 * soundSpeed * soundSpeed * soundSpeed *
-      segment.n2DepthGradient;
+      -0.5 * soundSpeed * soundSpeed * soundSpeed * segment.n2DepthGradient;
   const double curvature = 3.0 * gradient * gradient / soundSpeed;
   const double densityWeight =
       offset / (segment.maximumDepth - segment.minimumDepth);
-  const double density =
-      (1.0 - densityWeight) * segment.densityAtMinimumDepth +
-      densityWeight * segment.densityAtMaximumDepth;
+  const double density = (1.0 - densityWeight) * segment.densityAtMinimumDepth +
+                         densityWeight * segment.densityAtMaximumDepth;
   if (!std::isfinite(soundSpeed) || !std::isfinite(gradient) ||
       !std::isfinite(curvature) || !std::isfinite(density)) {
     throw ValidationError("N2-linear SSP evaluation produced an invalid value");
@@ -123,10 +119,10 @@ SoundSpeedSample N2LinearSsp::evaluateAtSegment(
   return evaluatePolynomial(position, segmentIndex);
 }
 
-SoundSpeedSample N2LinearSsp::evaluate(
-    Vec2 position, std::size_t previousSegment) const {
-  return evaluatePolynomial(
-      position, locateSegment(position.depth, previousSegment));
+SoundSpeedSample N2LinearSsp::evaluate(Vec2 position,
+                                       std::size_t previousSegment) const {
+  return evaluatePolynomial(position,
+                            locateSegment(position.depth, previousSegment));
 }
 
 }  // namespace rayreuse
