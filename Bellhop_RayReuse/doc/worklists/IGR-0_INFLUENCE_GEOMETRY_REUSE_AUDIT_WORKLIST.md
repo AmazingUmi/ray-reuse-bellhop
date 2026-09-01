@@ -1,5 +1,12 @@
 # IGR-0 — Influence Geometry Reuse Audit Worklist
 
+> **SUPERSEDED (PARTIAL) — 2026-09-01。** IGR 主方案已由用户重新决策为
+> **Cross-Frequency Influence Geometry Fusion（transient reuse via loop restructuring）**。
+> 本 Worklist 冻结的原型方向约束（Candidate 1B 首选原型、persistent cache 契约、
+> 13 项 IGR1-GATE）由 IGR-0 Revision 取代；分类与 threshold 语义结论继续有效。
+> 见 [`../reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](../reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)。
+> 本文件为历史记录，按原样保留（IGR-0 批次本身的验收状态仍以其时点为准）。
+
 > **Batch:** IGR-0
 > **Feature / Task:** Influence Geometry Reuse (IGR) Architectural Audit & Baseline Verification
 > **Status:** **`READY_FOR_REVIEW`**

@@ -1,5 +1,13 @@
 # IGR-0 — Influence Geometry Reuse Audit Report
 
+> **SUPERSEDED (PARTIAL) — 2026-09-01。** 用户已重新决策 IGR 主方案为
+> **Cross-Frequency Influence Geometry Fusion（transient reuse via loop restructuring）**。
+> 本报告的**原型方向结论被部分取代**：§4（候选排序）、§5（prototype 决策）、§6（persistent cache 契约）
+> 与 §9.2（13 项 IGR1-GATE，已改写为 gate set v2）由修订报告取代；
+> §2/§3（G/M/F/T/O 分类体系与全部 threshold 语义纠正）**继续有效**并被修订报告完整继承。
+> 修订报告：[`REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)。
+> 本报告正文按历史原样保留，不再更新。
+
 > **审计基线：** `main @ ba653229560aac53eb61eeaa5fdb2c2fd3254338`（Audit branch: `feat/igr-influence-geometry-reuse`）
 > **审计日期：** 2026-08-30（根据 Codex Re-Final Review 意见完成 Second Remediation 修订）
 > **报告状态：** **`READY_FOR_REVIEW`**（整改完成，等待独立最终验收；禁止自封 `ACCEPTED`）

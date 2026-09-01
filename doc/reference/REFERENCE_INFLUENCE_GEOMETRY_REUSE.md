@@ -1,5 +1,12 @@
 # Bellhop 场强积分与几何复用（Influence Geometry Reuse）理论基础
 
+> **SUPERSEDED (PARTIAL) — 2026-09-01（实现策略部分）。** 理论基础（精确因式分解定理、
+> G/M/F/T/O 分类）**继续有效**，并且现在正是 transient cross-frequency fusion 的论证依据。
+> §4 起的**实现策略**（CC Segment-Range Stencil 持久缓存、per-frequency replay 复杂度模型，
+> 含 L224-228 的 $T_{\text{IGR}}$ 模型）已被 fusion 方向取代：
+> 见 [`../../Bellhop_RayReuse/doc/reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)。
+> 本文档理论部分按原样保留。
+
 > **文档标识：** `REFERENCE_INFLUENCE_GEOMETRY_REUSE`
 > **前置参考：** [`REFERENCE_RAY_DYNAMIC_EQUATIONS.html`](REFERENCE_RAY_DYNAMIC_EQUATIONS.html)（射线轨迹与动态射线追踪方程推导）
 > **适用范围：** 二维海洋声学多频水声传播建模、宽带射线-波束求和方法（Beam Summation）、几何复用理论（Influence Geometry Reuse, IGR）
