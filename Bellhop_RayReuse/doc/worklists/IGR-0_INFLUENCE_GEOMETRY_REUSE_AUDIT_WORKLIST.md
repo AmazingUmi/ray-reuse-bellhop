@@ -5,11 +5,11 @@
 > 本 Worklist 冻结的原型方向约束（Candidate 1B 首选原型、persistent cache 契约、
 > 13 项 IGR1-GATE）由 IGR-0 Revision 取代；分类与 threshold 语义结论继续有效。
 > 见 [`../reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](../reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)。
-> 本文件为历史记录，按原样保留（IGR-0 批次本身的验收状态仍以其时点为准）。
+> 本文件为历史记录，按原样保留（IGR-0 批次本身的验收状态仍以其时点为准）。下列 `READY_FOR_REVIEW` / `FROZEN_FOR_IGR1`、Candidate 1B 与 cache-replay gates **不得作为当前执行权威**。
 
 > **Batch:** IGR-0
 > **Feature / Task:** Influence Geometry Reuse (IGR) Architectural Audit & Baseline Verification
-> **Status:** **`READY_FOR_REVIEW`**
+> **Historical Status:** **`READY_FOR_REVIEW`**（superseded snapshot；current authority is the linked final-remediation report）
 > **Review Baseline:** `main @ ba653229560aac53eb61eeaa5fdb2c2fd3254338`（Audit branch: `feat/igr-influence-geometry-reuse`）
 > **Working Tree Policy:** Read-only inspection on production code; no production edits; no IGR-1 implementation; no frequency interpolation; no large benchmarks.
 > **Coordinator:** Gemini 3.7 Flash
@@ -120,6 +120,8 @@
 ---
 
 ### 4.2 IGR-1 原型实施门禁契约（Frozen IGR-1 Prototype Acceptance Gates — 冻结待实现）
+
+> **SUPERSEDED.** 本节 persistent cache/replay 门禁已被 cross-frequency fusion counter、Level A-D parity、scale lifecycle 与 memory gates 取代；仅保留历史追溯。
 
 > **说明：** 以下 13 项门禁为 IGR-1 原型实现阶段的**预冻结验收标准**。本轮为只读审计，不包含代码实现，故当前状态标记为 **`FROZEN_FOR_IGR1`（待实施验证）**，严禁伪造 PASS。
 

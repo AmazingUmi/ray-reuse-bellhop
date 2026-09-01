@@ -1,5 +1,7 @@
 # IGR-0 Revision — Final Review Record（独立最终验收记录）
 
+> **HISTORICAL / SUPERSEDED — 2026-09-01。** 本记录验收的是 pre-final-remediation revision（`95a4fef`），未覆盖随后要求的 scale 生命周期、geometry/frequency counter 拆分、Level B/C workspace parity、reference 公式修正与完整 supersession。当前 verdict 见 [`IGR0_FINAL_DOCUMENTATION_REMEDIATION_FINAL_REVIEW_2026-09-01.md`](./IGR0_FINAL_DOCUMENTATION_REMEDIATION_FINAL_REVIEW_2026-09-01.md)；本文件仅保留历史证据。
+
 > **Batch：** IGR-0-REV（Cross-Frequency Influence Geometry Fusion rebaseline）
 > **验收日期：** 2026-09-01
 > **验收对象：** [`REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](../reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md) 及其 5 份配套修订文件（见下）

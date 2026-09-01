@@ -27,13 +27,13 @@ Final acceptance documentation commit: 88ba8b7
 | 单线程三模型微基准 | [`guides/GUIDE_SINGLE_THREAD_MICROBENCHMARK.md`](./guides/GUIDE_SINGLE_THREAD_MICROBENCHMARK.md) |
 | 内部发布验证 | [`guides/GUIDE_RELEASE.md`](./guides/GUIDE_RELEASE.md) |
 | 验证、矩阵与审计报告索引 | [`reports/README.md`](./reports/README.md) |
+| 当前 IGR 架构冻结：Cross-Frequency Fusion | [`reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](./reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md) |
+| IGR 理论与数值契约 | [`../../doc/reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](../../doc/reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md) |
+| IGR-1 scope 草案（未批准、未施工） | [`worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md`](./worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md) |
 | HDF5 延后决策 | [`decisions/DECISION_HDF5_SCHEMA.md`](./decisions/DECISION_HDF5_SCHEMA.md) |
 | 已完成计划和历史基准 | [`archive/README.md`](./archive/README.md) |
 
-新的候选方向统一从
-[`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入；
-Influence Geometry Reuse、frequency interpolation、BARR、SIMD、HDF5 等当前均非
-active Feature Parity task。
+当前恢复路径是：**Trajectory Reuse 已完成 → IGR 已冻结为 Cross-Frequency Influence Fusion → IGR-1 仍 pending**。新的候选方向统一从 [`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入；IGR 不是 active Feature Parity task，IGR-1 在用户批准前不得进入 CONSTRUCT。frequency interpolation、BARR、SIMD、HDF5 等也均非 active task。
 
 ## 目录语义
 

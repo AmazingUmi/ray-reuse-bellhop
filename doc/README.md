@@ -37,6 +37,12 @@
 - RayReuse 当前支持边界：
   [`../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
 - 当前工作与待决事项：[`plans/PLAN_CURRENT_WORK.md`](./plans/PLAN_CURRENT_WORK.md)
+- 当前 IGR 架构冻结（Trajectory Reuse → Cross-Frequency Influence Fusion）：
+  [`../Bellhop_RayReuse/doc/reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](../Bellhop_RayReuse/doc/reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)
+- IGR 理论与数值契约：
+  [`reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](./reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md)
+- IGR-1 scope 草案（`NOT APPROVED, NOT IN CONSTRUCTION`）：
+  [`../Bellhop_RayReuse/doc/worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md`](../Bellhop_RayReuse/doc/worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md)
 - 总体设计：
   [`architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md`](./architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)
 - 射线理论：

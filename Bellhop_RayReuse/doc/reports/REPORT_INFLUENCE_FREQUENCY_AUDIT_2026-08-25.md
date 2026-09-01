@@ -1,5 +1,7 @@
 # RayReuse / Bellhop_F2CPP Influence 频率复用审计
 
+> **HISTORICAL / SUPERSEDED (PARTIAL) — 2026-09-01。** 本报告保留 2026-08-25 的源码与性能审计证据，但**不再是当前 IGR implementation roadmap**。以下架构结论已被 [`REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](./REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md) 取代：Executive Summary 中 persistent stencil/cache 推荐；§7 的 persistent geometry cache 建议；§15/§15.1 的 `InfluenceGeometryCache` 与逐频 replay；§15.3 的 `solveFrequencyFromCache()` 集成点；§16 Step 1 的 stencil builder/replay 原型；以及 Audit Verdict 中把 stable geometry identity 作为下一实施路径的部分。当前唯一方向是 **Cross-Frequency Influence Geometry Fusion（transient reuse via loop restructuring）**；persistent geometry structures 仅为 future candidates，full receiver-depth/image materialization 继续 REJECTED。
+
 > 审计基线：`8300c89 feat(rayreuse): close RR-B4 feature sync`
 > 审计日期：2026-08-25
 > 性质：架构、数据流、公式和性能证据审计；不修改数值路径，不提出测试基线变更。
@@ -10,6 +12,8 @@
 ## 1. Executive Summary
 
 ### 1.1 核心结论
+
+> **Section status — SUPERSEDED (PARTIAL).** 下列测量、当前数据流和频率局部物理分类仍是历史证据；第 6、10 项把 persistent geometry cache / stable geometry identity 作为首要下一路线的结论已被 cross-frequency fusion 取代。
 
 1. 当前 RayReuse 的 broadband reuse 只跨频率复用了 `RayPathCache`：位置、
    slowness、real travel time、dynamic-ray 基解、step quadrature、reflection
@@ -503,6 +507,8 @@ RayReuse 已有能力。
 
 ## 7. Receiver Projection / Geometry Reuse
 
+> **Section status — SUPERSEDED (PARTIAL).** 纯几何/频率局部分类继续有效；缓存粒度建议不再是 IGR-1 roadmap。v1 以 transient fused traversal 复用这些几何量，不构建 persistent stencil/depth index。
+
 ### 7.1 当前是否逐频重做
 
 | 操作 | 严格频率无关 | RayReuse 当前缓存 | 建议粒度 | 备注 |
@@ -522,6 +528,8 @@ RayReuse 已有能力。
 | irregular receiver lookup | geometry-only | 否 | receiver-id-aware stencil | F2CPP Cartesian family支持程度不同 |
 
 ### 7.2 合理缓存层级
+
+> **Historical candidate analysis.** 下列层级只作为 future-candidate 记录；“segment→receiver-range stencil（首选）”已被取代，full pair 拒绝仍有效。
 
 1. **ray/segment metadata**：segment direction、range orientation、duplicate marker、
    caustic topology bases。内存小，但只消除少量 arithmetic。
@@ -938,6 +946,8 @@ reference frequencies 应由 factor error 和 topology event 选择，而不是�
 
 ## 15. Recommended Architecture
 
+> **Section status — SUPERSEDED.** 下列 `InfluenceGeometryCache → per-frequency replay/reconstruction` 图不是当前架构。替代架构见 2026-09-01 final-remediation report §B：frequency loop 下沉到 ray/segment/receiver traversal，几何即时被多频消费。
+
 建议的整体名称：
 
 > **Influence Factorization + Geometry Reuse + Selective Frequency Reconstruction**
@@ -965,6 +975,8 @@ flowchart TD
 ```
 
 ### 15.1 Influence Geometry Reuse（无损）
+
+> **SUPERSEDED (PARTIAL).** Persistent sparse stencil / receiver index 不再是 IGR-1 首选；仅保留为 future candidate。当前方案不 materialize replay records。
 
 - 新状态仍从 `RayPathCache` 派生，不写回 frozen cache。
 - 以 ray/segment→range sparse stencil 为第一层；保存 identity、`W` 和必要 geometry。
@@ -995,6 +1007,8 @@ assembler 始终使用 frozen/interpolated exact real delay形成
 
 ### 15.3 不建立第二套 solver
 
+> **SUPERSEDED.** “集成在 `solveFrequencyFromCache()` 内并 replay geometry stencil”无法表达跨频融合。替代方案是在 serial orchestration 层建立 multi-frequency fused entry，同时保留现有 single-frequency path 为 reference/fallback。
+
 合理接入点位于现有 `solveFrequencyFromCache()` 内：
 
 ```text
@@ -1012,6 +1026,8 @@ final scaling不另建分支。
 ## 16. Proposed Next Steps
 
 ### Step 1 — IG-0：先做 exact geometry replay 原型
+
+> **SUPERSEDED.** 下一拟议实施范围改为 IGR-1 Cartesian Cerveny coherent serial cross-frequency fused traversal；本段 stencil builder/replay 不再是 Step 1。
 
 第一项真正应实现的研究原型是当前 RayReuse `CC` 的只读
 `segment→receiver-range stencil` builder/replay，并加入 receiver-depth interval
@@ -1051,6 +1067,8 @@ case 上减少 reference 数。
 ---
 
 ## Audit Verdict
+
+> **Historical / SUPERSEDED (PARTIAL).** receiver-side geometry 是热点的判断继续有效；“先建立 geometry identity/cache 再 replay/reconstruct”的实施顺序已被 transient fusion 取代。本节不得作为当前 roadmap 使用。
 
 当前最值得无损复用的是 receiver-side geometry，不是 projector physics；最值得
 frequency interpolation 实验的是从 known `omega*tau_real` 中剥离后的 slow

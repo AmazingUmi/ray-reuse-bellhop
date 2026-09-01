@@ -6,11 +6,11 @@
 > 与 §9.2（13 项 IGR1-GATE，已改写为 gate set v2）由修订报告取代；
 > §2/§3（G/M/F/T/O 分类体系与全部 threshold 语义纠正）**继续有效**并被修订报告完整继承。
 > 修订报告：[`REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)。
-> 本报告正文按历史原样保留，不再更新。
+> 本报告正文按历史原样保留，不再更新；其 `READY_FOR_REVIEW` 仅是当时快照，**不是当前 IGR 状态**。
 
 > **审计基线：** `main @ ba653229560aac53eb61eeaa5fdb2c2fd3254338`（Audit branch: `feat/igr-influence-geometry-reuse`）
 > **审计日期：** 2026-08-30（根据 Codex Re-Final Review 意见完成 Second Remediation 修订）
-> **报告状态：** **`READY_FOR_REVIEW`**（整改完成，等待独立最终验收；禁止自封 `ACCEPTED`）
+> **历史报告状态：** **`READY_FOR_REVIEW`**（仅表示该旧审计在其时点的状态；当前权威状态见上方修订报告）
 > **性质：** 架构设计、数据流解耦、几何复用边界、所有权生命周期与数值等价性审计；**禁止修改 production code，禁止进入 IGR-1 实现，禁止 frequency interpolation，禁止大规模 benchmark**。
 > **Coordinator：** Gemini 3.7 Flash
 > **评审输入：** `Bellhop_RayReuse/doc/reviews/IGR0_CODEX_REVIEW_CHANGES_REQUIRED.md`
@@ -113,6 +113,8 @@
 ---
 
 ## 4. 几何复用（IGR）候选方案审查与分类评估
+
+> **Section status — HISTORICAL / SUPERSEDED (PARTIAL).** Candidate 分类保留为历史分析；Candidate 1B/1A/6 的 persistent-cache 排序已降为 future candidates，不是 IGR-1 实施顺序。
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -234,6 +236,8 @@ struct alignas(64) CcPointGeometryBundle {
 
 ## 5. 候选方案综合排序与 IGR-1 首发决策
 
+> **Section status — SUPERSEDED.** 本节的 Candidate 1B 首发 prototype 与 measurement-driven cache 选型流已由 cross-frequency fused traversal 取代。
+
 ### 5.1 修正后的候选方案综合排序
 
 | 综合排名 | 候选方案编号与名称 | 适用波束族 | 单声源内存基准估算 (5k rays) | 数值等价性设计 | 状态与定位 |
@@ -273,6 +277,8 @@ flowchart TD
 ---
 
 ## 6. 缓存失效条件、并发安全性与数值等价契约
+
+> **Section status — DEFERRED / HISTORICAL.** v1 不存在 persistent geometry cache，故本节 ownership/invalidation 契约不作为当前门禁；frozen `RayPathCache` fingerprint 与 per-frequency accumulation-order 契约由 final-remediation report 继承并重写。
 
 ### 6.1 缓存失效与重建触发条件（Cache Invalidation Triggers）
 
@@ -359,6 +365,8 @@ flowchart TD
 
 ### 9.2 冻结的 IGR-1 原型实施验收门禁（Frozen IGR-1 Prototype Acceptance Gates — 冻结待实现）
 
+> **Section status — SUPERSEDED.** 下列 cache build/replay 门禁仅是旧 worklist 快照；当前 IGR-1 gate proposal 见 final-remediation report §E–§I 与 `IGR-1_CC_FUSION_DESIGN_DRAFT.md`。
+
 > **说明：** 以下 13 项门禁为 IGR-1 原型实现阶段的**预冻结验收标准**。本轮为只读审计，不包含代码实现，故当前状态标记为 **`FROZEN_FOR_IGR1`（待实施验证）**，严禁伪造 PASS。
 
 | 门禁 ID | 门禁领域 | IGR-1 验收判定标准 | 状态 |
@@ -380,6 +388,8 @@ flowchart TD
 ---
 
 ## 10. Audit Verdict
+
+> **Historical snapshot only.** 下列 `READY_FOR_REVIEW` 不代表当前架构或当前 Batch verdict；persistent Candidate 1B 内容已 superseded。
 
 ```text
 ================================================================================
