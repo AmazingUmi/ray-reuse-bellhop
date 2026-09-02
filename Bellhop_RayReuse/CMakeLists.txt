@@ -118,6 +118,7 @@ add_library(
     src/ray/ray_stepper.cpp
     src/solver/broadband_nonreuse_solver.cpp
     src/solver/arrival_solver.cpp
+    src/solver/fused_ray_reuse_solver.cpp
     src/solver/eigenray_solver.cpp
     src/solver/parallel_ray_reuse_solver.cpp
     src/solver/ray_trace_product.cpp
@@ -306,6 +307,18 @@ if(BUILD_TESTING)
     bellhop_rayreuse_serial_ray_reuse_solver_tests
     rayreuse.reuse.serial_solver
     tests/component/serial_ray_reuse_solver_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_ray_reuse_solver_tests
+    rayreuse.component.fused_solver
+    tests/component/fused_ray_reuse_solver_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_cc_parity_tests
+    rayreuse.component.fused_cc_parity
+    tests/component/fused_cc_parity_test.cpp
     "component;reuse"
   )
   add_rayreuse_test(

@@ -39,8 +39,8 @@ DEFAULT_OUTPUT = (
     / "benchmarks"
     / "rayreuse_benchmark.json"
 )
-EXECUTION_MODES = ("nonreuse", "reuse", "parallel")
-SCHEMA_VERSION = 1
+EXECUTION_MODES = ("nonreuse", "reuse", "fused", "parallel")
+SCHEMA_VERSION = 2
 
 sys.path.insert(0, str(CODES_ROOT))
 
@@ -129,6 +129,39 @@ def parse_positive_integer_csv(value: str) -> tuple[int, ...]:
             "parallel worker counts must be unique"
         )
     return values
+
+
+def parse_frequency_csv(value: str) -> tuple[float, ...]:
+    parts = tuple(part.strip() for part in value.split(","))
+    if not parts or any(not part for part in parts):
+        raise argparse.ArgumentTypeError(
+            "expected a comma-separated list of frequencies in Hz"
+        )
+    try:
+        frequencies = tuple(float(part) for part in parts)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            f"frequency values must be numeric: {value!r}"
+        ) from error
+    if len(frequencies) < 2:
+        raise argparse.ArgumentTypeError(
+            "a broadband frequency override needs at least two frequencies"
+        )
+    if any(
+        not math.isfinite(frequency) or frequency <= 0.0
+        for frequency in frequencies
+    ):
+        raise argparse.ArgumentTypeError(
+            "frequency values must be finite and positive"
+        )
+    if any(
+        current >= following
+        for current, following in zip(frequencies, frequencies[1:])
+    ):
+        raise argparse.ArgumentTypeError(
+            "frequency values must be strictly increasing"
+        )
+    return frequencies
 
 
 def expand_configurations(
@@ -243,7 +276,7 @@ def parse_prt_metrics(
         "Influence seconds",
         "Scale seconds",
         "SHD seconds",
-        "Total solver and SHD seconds",
+        "Total solver and product seconds",
     )
     missing = tuple(name for name in required if name not in fields)
     if missing:
@@ -252,6 +285,7 @@ def parse_prt_metrics(
     mode_markers = {
         "nonreuse": "broadband non-reuse",
         "reuse": "broadband reuse",
+        "fused": "broadband fused reuse",
         "parallel": "broadband parallel reuse",
     }
     execution_mode = fields["execution mode"]
@@ -300,9 +334,9 @@ def parse_prt_metrics(
         "shd_seconds": _parse_nonnegative_float(
             fields["SHD seconds"], "SHD seconds"
         ),
-        "total_solver_and_shd_seconds": _parse_nonnegative_float(
-            fields["Total solver and SHD seconds"],
-            "Total solver and SHD seconds",
+        "total_solver_and_product_seconds": _parse_nonnegative_float(
+            fields["Total solver and product seconds"],
+            "Total solver and product seconds",
         ),
     }
 
@@ -321,10 +355,60 @@ def parse_prt_metrics(
         "estimated workspace bytes": "estimated_workspace_bytes",
         "estimated peak memory bytes": "estimated_peak_memory_bytes",
         "memory budget bytes": "memory_budget_bytes",
+        "Influence ray accumulations": "influence_ray_accumulations",
+        "Influence validated ray points": (
+            "influence_validated_ray_points"
+        ),
+        "Influence validated workspace values": (
+            "influence_validated_workspace_values"
+        ),
+        "Influence active ray points": "influence_active_ray_points",
+        "Influence segment candidates": "influence_segment_candidates",
+        "Influence eligible segments": "influence_eligible_segments",
+        "Influence receiver range evaluations": (
+            "influence_receiver_range_evaluations"
+        ),
+        "Influence receiver depth evaluations": (
+            "influence_receiver_depth_evaluations"
+        ),
+        "Influence image evaluations": "influence_image_evaluations",
+        "Influence window rejections": "influence_window_rejections",
+        "Influence taper rejections": "influence_taper_rejections",
+        "Influence nonzero image contributions": (
+            "influence_nonzero_image_contributions"
+        ),
+        "Influence geometry segment evaluations": (
+            "influence_geometry_segment_evaluations"
+        ),
+        "Influence geometry range evaluations": (
+            "influence_geometry_range_evaluations"
+        ),
+        "Influence geometry depth evaluations": (
+            "influence_geometry_depth_evaluations"
+        ),
+        "Influence geometry image geometry evaluations": (
+            "influence_geometry_image_geometry_evaluations"
+        ),
+        "Influence frequency range kernel evaluations": (
+            "influence_frequency_range_kernel_evaluations"
+        ),
+        "Influence frequency image kernel evaluations": (
+            "influence_frequency_image_kernel_evaluations"
+        ),
     }
     for prt_name, result_name in optional_integer_fields.items():
         if prt_name in fields:
             metrics[result_name] = _parse_nonnegative_integer(
+                fields[prt_name], prt_name
+            )
+    optional_float_fields = {
+        "Influence validation seconds": "influence_validation_seconds",
+        "Influence precompute seconds": "influence_precompute_seconds",
+        "Influence hot loop seconds": "influence_hot_loop_seconds",
+    }
+    for prt_name, result_name in optional_float_fields.items():
+        if prt_name in fields:
+            metrics[result_name] = _parse_nonnegative_float(
                 fields[prt_name], prt_name
             )
     if "frequency task count" in fields:
@@ -392,6 +476,7 @@ def validate_prt_metrics(
     expected_wall_field = {
         "nonreuse": "non-reuse wall seconds",
         "reuse": "reuse wall seconds",
+        "fused": "fused reuse wall seconds",
         "parallel": "parallel reuse wall seconds",
     }[configuration.execution_mode]
     if metrics["solver_wall_field"] != expected_wall_field:
@@ -408,6 +493,7 @@ def validate_prt_metrics(
             "peak_ray_cache_bytes",
         ),
         "reuse": ("ray_count", "ray_point_count", "ray_cache_bytes"),
+        "fused": ("ray_count", "ray_point_count", "ray_cache_bytes"),
         "parallel": (
             "ray_count",
             "ray_point_count",
@@ -501,7 +587,7 @@ def summarize_samples(samples: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "scale_seconds",
         "solver_wall_seconds",
         "shd_seconds",
-        "total_solver_and_shd_seconds",
+        "total_solver_and_product_seconds",
     )
     summary: dict[str, Any] = {"sample_count": len(samples)}
     for name in metric_names:
@@ -940,12 +1026,18 @@ def benchmark_case(
     temporary_root: Path,
     require_cross_mode_identity: bool,
     profile_frequency_tasks: bool,
+    frequencies_override: tuple[float, ...] | None = None,
 ) -> dict[str, Any]:
     if profile_name not in definition.profiles:
         raise ValueError(
             f"{definition.case_id}: profile {profile_name!r} is not defined"
         )
-    frequencies = definition.frequencies(profile_name)
+    if frequencies_override is not None:
+        frequencies = frequencies_override
+        frequency_source = "explicit --frequencies-csv override"
+    else:
+        frequencies = definition.frequencies(profile_name)
+        frequency_source = profile_name
     if len(frequencies) < 2:
         raise ValueError(
             f"{definition.case_id}/{profile_name}: benchmark profile "
@@ -1057,6 +1149,7 @@ def benchmark_case(
         "case_id": definition.case_id,
         "description": definition.description,
         "profile": profile_name,
+        "frequency_source": frequency_source,
         "frequencies_hz": frequencies,
         "frequency_count": len(frequencies),
         "design_frequency_hz": max(frequencies),
@@ -1088,6 +1181,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="standard case id; repeat for multiple cases",
     )
     parser.add_argument("--profile", default="broadband_regression")
+    parser.add_argument(
+        "--frequencies-csv",
+        type=parse_frequency_csv,
+        metavar="CSV",
+        help=(
+            "override the profile frequency grid with an explicit "
+            "strictly-increasing CSV in Hz (for example '50,250'); the "
+            "profile still selects the case's declared broadband setup"
+        ),
+    )
     parser.add_argument(
         "--modes",
         type=parse_modes,
@@ -1233,6 +1336,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         not args.no_cross_mode_shd_check
                     ),
                     profile_frequency_tasks=args.profile_frequency_tasks,
+                    frequencies_override=args.frequencies_csv,
                 )
                 for definition in selected_cases
             ]
@@ -1248,6 +1352,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "benchmark": {
                 "repeats": args.repeats,
                 "warmups": args.warmups,
+                "frequencies_csv_override": (
+                    None
+                    if args.frequencies_csv is None
+                    else format_frequency_csv(args.frequencies_csv)
+                ),
                 "configuration_order": [
                     configuration.identifier
                     for configuration in configurations

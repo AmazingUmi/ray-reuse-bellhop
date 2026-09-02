@@ -182,7 +182,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
     const SimulationCase& simulation, double frequency,
     const RayPathCache& rayCache, std::size_t sourceIndex,
     double epsilonMultiplier, double loopRange,
-    CartesianCervenySettings influenceSettings) {
+    CartesianCervenySettings influenceSettings,
+    WorkspaceDelivery delivery) {
   requireSimulationFrequency(simulation, frequency);
   if (!isTransmissionLossMode(simulation.runMode())) {
     throw ValidationError(
@@ -366,7 +367,8 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
                 *intensityWorkspace, simulation.receivers(),
                 launchFan.launchAngleStep, sourceSoundSpeed,
                 simulation.sourceGeometry());
-  if (coherentWorkspace.has_value()) {
+  if (coherentWorkspace.has_value() &&
+      delivery == WorkspaceDelivery::Scaled) {
     if (geometricNormalization) {
       scaleCoherentGeometricPressure(
           workspace, simulation.receivers(), launchFan.launchAngleStep,
@@ -388,7 +390,9 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
           .traceSeconds = 0.0,
           .projectSeconds = projectSeconds,
           .influenceSeconds = influenceSeconds,
-          .scaleSeconds = elapsedSeconds(scaleBegin, scaleEnd),
+          .scaleSeconds = delivery == WorkspaceDelivery::Raw
+                              ? 0.0
+                              : elapsedSeconds(scaleBegin, scaleEnd),
           .influenceStatistics = influenceStatistics}};
 }
 

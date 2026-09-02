@@ -31,7 +31,7 @@ from eigenray_io import parse_eigenray
 
 VERSIONS = ("origin", "f2cpp", "rayreuse")
 STAGES = ("generate", "run", "validate", "test")
-RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse", "parallel")
+RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse", "fused", "parallel")
 DECLARABLE_BEAM_FAMILY_MARKERS = (
     "Ray centered beams",
     "Geometric hat beams in Cartesian coordinates",
@@ -395,6 +395,7 @@ def validate_broadband_output(
     expected_mode_marker = {
         "nonreuse": "execution mode = broadband non-reuse",
         "reuse": "execution mode = broadband reuse",
+        "fused": "execution mode = broadband fused reuse",
         "parallel": "execution mode = broadband parallel reuse",
     }[execution_mode]
     # Frozen multi-source statistics (FP-2F worklist §1.5):
@@ -455,6 +456,7 @@ def validate_broadband_product_outputs(
     expected_mode_marker = {
         "nonreuse": "execution mode = broadband non-reuse",
         "reuse": "execution mode = broadband reuse",
+        "fused": "execution mode = broadband fused reuse",
         "parallel": "execution mode = broadband parallel reuse",
     }[execution_mode]
     # Frozen multi-source statistics (FP-2F worklist §1.5): see

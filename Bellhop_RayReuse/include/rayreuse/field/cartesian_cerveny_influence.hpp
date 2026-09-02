@@ -4,6 +4,7 @@
 #include <complex>
 #include <cstddef>
 #include <optional>
+#include <span>
 
 #include "rayreuse/field/frequency_workspace.hpp"
 #include "rayreuse/model/beam_width.hpp"
@@ -38,6 +39,18 @@ struct CartesianCervenyStatistics {
   std::size_t windowRejections{};
   std::size_t taperRejections{};
   std::size_t nonzeroImageContributions{};
+  // IGR-1 counter split: geometry-side counters count frequency-independent
+  // traversal work on shared geometry; frequency-kernel counters count
+  // per-frequency work executed on already-prepared geometry.  The legacy
+  // counters above keep their original meaning; in the current
+  // frequency-major kernel each new counter coincides in count with its
+  // legacy counterpart.
+  std::size_t geometrySegmentEvaluations{};
+  std::size_t geometryRangeEvaluations{};
+  std::size_t geometryDepthEvaluations{};
+  std::size_t geometryImageGeometryEvaluations{};
+  std::size_t frequencyRangeKernelEvaluations{};
+  std::size_t frequencyImageKernelEvaluations{};
   double validationSeconds{};
   double precomputeSeconds{};
   double hotLoopSeconds{};
@@ -127,6 +140,7 @@ class CartesianCervenyInfluence {
 
  private:
   friend class SingleFrequencySolver;
+  friend class FusedRayReuseSolver;
 
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>
   accumulatePrevalidated(
@@ -139,6 +153,23 @@ class CartesianCervenyInfluence {
       IntensityWorkspace& workspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       CartesianCervenyStatistics* statistics = nullptr) const;
+
+  // IGR-1 fused kernel (design §4): one ray, all frequencies. Reuses the
+  // constructor validation of the per-frequency path; per-frequency
+  // prevalidated checks run at entry; shared segment/range/image geometry is
+  // computed once per ray and consumed by every frequency.
+  [[nodiscard]] bool accumulateFusedPrevalidated(
+      std::span<FrequencyWorkspace> workspaces, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  template <bool CollectStatistics, std::size_t ImageCount>
+  [[nodiscard]] bool accumulateFusedImpl(
+      std::span<FrequencyWorkspace> workspaces, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      CartesianCervenyStatistics* statistics) const;
 
   template <bool CollectStatistics>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>

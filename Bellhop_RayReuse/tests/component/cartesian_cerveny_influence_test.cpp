@@ -572,6 +572,42 @@ void testStatisticsAreOptInAndCountHotPathWork(Context& context) {
                     statistics.precomputeSeconds >= 0.0 &&
                     statistics.hotLoopSeconds >= 0.0,
                 "opt-in statistics expose non-negative phase timings");
+  context.check(
+      statistics.geometrySegmentEvaluations == statistics.segmentCandidates &&
+          statistics.geometryRangeEvaluations ==
+              statistics.receiverRangeEvaluations &&
+          statistics.geometryDepthEvaluations ==
+              statistics.receiverDepthEvaluations &&
+          statistics.geometryImageGeometryEvaluations ==
+              statistics.imageEvaluations,
+      "IGR-1 geometry-side counters match their legacy counterparts in the "
+      "frequency-major kernel");
+  context.check(
+      statistics.frequencyRangeKernelEvaluations ==
+              statistics.receiverRangeEvaluations &&
+          statistics.frequencyImageKernelEvaluations ==
+              statistics.imageEvaluations,
+      "IGR-1 frequency-kernel counters match their legacy counterparts in "
+      "the frequency-major kernel");
+
+  FrequencyWorkspace unprofiledWorkspace(50.0, receivers);
+  CartesianCervenyStatistics unprofiledStatistics;
+  static_cast<void>(influence.accumulate(unprofiledWorkspace, path, state,
+                                         {0.0, 100.0}));
+  context.check(
+      unprofiledStatistics.rayAccumulations == 0U &&
+          unprofiledStatistics.segmentCandidates == 0U &&
+          unprofiledStatistics.receiverRangeEvaluations == 0U &&
+          unprofiledStatistics.receiverDepthEvaluations == 0U &&
+          unprofiledStatistics.imageEvaluations == 0U &&
+          unprofiledStatistics.geometrySegmentEvaluations == 0U &&
+          unprofiledStatistics.geometryRangeEvaluations == 0U &&
+          unprofiledStatistics.geometryDepthEvaluations == 0U &&
+          unprofiledStatistics.geometryImageGeometryEvaluations == 0U &&
+          unprofiledStatistics.frequencyRangeKernelEvaluations == 0U &&
+          unprofiledStatistics.frequencyImageKernelEvaluations == 0U &&
+          unprofiledStatistics.validationSeconds == 0.0,
+      "statistics remain zero when collection is not requested");
 }
 
 void testBranchCutAndHermitePrimitives(Context& context) {

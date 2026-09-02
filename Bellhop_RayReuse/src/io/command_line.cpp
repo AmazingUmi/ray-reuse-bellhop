@@ -124,8 +124,8 @@ CommandLineOptions parseCommandLine(
       }
       if (index + 1U >= arguments.size()) {
         throw ValidationError(
-            "--execution-mode requires 'nonreuse', 'reuse', or "
-            "'parallel'");
+            "--execution-mode requires 'nonreuse', 'reuse', 'parallel', or "
+            "'fused'");
       }
       const std::string_view value = arguments[++index];
       if (value == "nonreuse") {
@@ -134,10 +134,12 @@ CommandLineOptions parseCommandLine(
         options.executionMode = BroadbandExecutionMode::Reuse;
       } else if (value == "parallel") {
         options.executionMode = BroadbandExecutionMode::Parallel;
+      } else if (value == "fused") {
+        options.executionMode = BroadbandExecutionMode::Fused;
       } else {
         throw ValidationError(
-            "--execution-mode must be 'nonreuse', 'reuse', or "
-            "'parallel'");
+            "--execution-mode must be 'nonreuse', 'reuse', 'parallel', or "
+            "'fused'");
       }
       executionModeSpecified = true;
       options.executionModeSpecified = true;

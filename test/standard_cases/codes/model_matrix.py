@@ -424,7 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--profiles", default="single,broadband_smoke"
     )
     parser.add_argument(
-        "--modes", default=",".join(RAYREUSE_EXECUTION_MODES)
+        # Pinned explicitly: fused is out of model-matrix scope because the
+        # matrix runs every case kind, while fused is only defined for
+        # CC coherent TL broadband runs.
+        "--modes",
+        default="nonreuse,reuse,parallel",
     )
     parser.add_argument(
         "--work-root",
@@ -484,7 +488,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode not in RAYREUSE_EXECUTION_MODES for mode in modes
         ):
             raise ValueError(
-                "modes must be unique values from nonreuse,reuse,parallel"
+                "modes must be unique values from "
+                + ",".join(RAYREUSE_EXECUTION_MODES)
             )
 
         definitions = discover_cases(STANDARD_CASES_ROOT / "cases")

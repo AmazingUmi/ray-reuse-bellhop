@@ -71,6 +71,17 @@ void testExecutionMode(Context& context) {
                     parallel.outputQueueCapacitySpecified &&
                     parallel.memoryBudgetSpecified,
                 "parallel tuning option presence is tracked");
+  const CommandLineOptions fused =
+      parse({"case/root", "--frequencies-hz", "50,250", "--execution-mode",
+             "fused"});
+  context.check(fused.executionMode == BroadbandExecutionMode::Fused,
+                "fused execution mode is selected explicitly");
+  context.check(fused.executionModeSpecified,
+                "fused execution mode is tracked for product validation");
+  context.check(!fused.workerCountSpecified &&
+                    !fused.outputQueueCapacitySpecified &&
+                    !fused.memoryBudgetSpecified,
+                "fused mode keeps parallel tuning options unspecified");
 }
 
 void testFrequencyOverride(Context& context) {
@@ -103,6 +114,15 @@ void testInvalidArguments(Context& context) {
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--execution-mode", "invalid"})); },
       "unknown execution mode is rejected");
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--execution-mode"})); },
+      "missing execution mode value is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "fused",
+                                 "--workers", "4"}));
+      },
+      "fused mode rejects parallel tuning options");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--workers", "0"})); },
       "zero worker count is rejected");

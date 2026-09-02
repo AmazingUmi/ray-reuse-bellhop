@@ -16,6 +16,7 @@ from benchmark_rayreuse import (
     build_parser,
     expand_configurations,
     normalize_max_rss_kib,
+    parse_frequency_csv,
     parse_prt_metrics,
     require_cross_configuration_hashes,
     require_identical_sample_hashes,
@@ -30,11 +31,13 @@ def fixture_prt(mode: str = "parallel") -> str:
     marker = {
         "nonreuse": "broadband non-reuse",
         "reuse": "broadband reuse",
+        "fused": "broadband fused reuse",
         "parallel": "broadband parallel reuse",
     }[mode]
     wall_name = {
         "nonreuse": "non-reuse wall seconds",
         "reuse": "reuse wall seconds",
+        "fused": "fused reuse wall seconds",
         "parallel": "parallel reuse wall seconds",
     }[mode]
     return "\n".join(
@@ -57,7 +60,7 @@ def fixture_prt(mode: str = "parallel") -> str:
             "Scale seconds = 0.125",
             f"{wall_name} = 7.625",
             "SHD seconds = 0.5",
-            "Total solver and SHD seconds = 8.125",
+            "Total solver and product seconds = 8.125",
             "Bellhop RayReuse completed successfully",
         )
     )
@@ -79,7 +82,7 @@ def sample(
             "scale_seconds": 0.1,
             "solver_wall_seconds": 6.1,
             "shd_seconds": 0.2,
-            "total_solver_and_shd_seconds": 6.3,
+            "total_solver_and_product_seconds": 6.3,
         },
     }
 
@@ -95,10 +98,82 @@ class PrtParsingTests(unittest.TestCase):
         self.assertEqual(metrics["scale_seconds"], 0.125)
         self.assertEqual(metrics["solver_wall_seconds"], 7.625)
         self.assertEqual(metrics["shd_seconds"], 0.5)
-        self.assertEqual(metrics["total_solver_and_shd_seconds"], 8.125)
+        self.assertEqual(metrics["total_solver_and_product_seconds"], 8.125)
         self.assertEqual(metrics["active_frequency_limit"], 6)
         self.assertEqual(metrics["estimated_peak_memory_bytes"], 1048576)
         self.assertTrue(metrics["completed_successfully"])
+
+    def test_parses_and_validates_fused_mode(self) -> None:
+        configuration = BenchmarkConfiguration(execution_mode="fused")
+        metrics = parse_prt_metrics(fixture_prt("fused"), "fused")
+
+        self.assertEqual(
+            metrics["execution_mode_marker"], "broadband fused reuse"
+        )
+        self.assertEqual(metrics["solver_wall_field"], "fused reuse wall seconds")
+        self.assertEqual(metrics["ray_count"], 1000)
+        self.assertEqual(metrics["ray_cache_bytes"], 4096)
+
+        validate_prt_metrics(metrics, configuration, 16)
+
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            parse_prt_metrics(fixture_prt("reuse"), "fused")
+
+    def test_parses_optional_influence_counters(self) -> None:
+        counter_lines = "\n".join(
+            (
+                "Influence ray accumulations = 10000",
+                "Influence active ray points = 3367946",
+                "Influence window rejections = 1697322678",
+                "Influence taper rejections = 894589970",
+                "Influence nonzero image contributions = 406782232",
+                "Influence geometry segment evaluations = 3304654",
+                "Influence geometry range evaluations = 4972960",
+                "Influence geometry depth evaluations = 999564960",
+                "Influence geometry image geometry evaluations = 2998694880",
+                "Influence frequency range kernel evaluations = 9945920",
+                "Influence frequency image kernel evaluations = 5997389760",
+                "Influence validation seconds = 0.000150723",
+                "Influence precompute seconds = 0.133848942",
+                "Influence hot loop seconds = 9.618053271",
+            )
+        )
+        metrics = parse_prt_metrics(
+            fixture_prt("reuse") + "\n" + counter_lines, "reuse"
+        )
+
+        self.assertEqual(
+            metrics["influence_geometry_segment_evaluations"], 3304654
+        )
+        self.assertEqual(
+            metrics["influence_geometry_depth_evaluations"], 999564960
+        )
+        self.assertEqual(
+            metrics["influence_frequency_image_kernel_evaluations"],
+            5997389760,
+        )
+        self.assertEqual(metrics["influence_window_rejections"], 1697322678)
+        self.assertEqual(
+            metrics["influence_nonzero_image_contributions"], 406782232
+        )
+        self.assertEqual(
+            metrics["influence_hot_loop_seconds"], 9.618053271
+        )
+        self.assertEqual(
+            metrics["influence_precompute_seconds"], 0.133848942
+        )
+        with self.assertRaisesRegex(ValueError, "is not an integer"):
+            parse_prt_metrics(
+                (
+                    fixture_prt("reuse")
+                    + "\n"
+                    + counter_lines
+                ).replace(
+                    "Influence ray accumulations = 10000",
+                    "Influence ray accumulations = many",
+                ),
+                "reuse",
+            )
 
     def test_validates_parallel_protocol_invariants(self) -> None:
         configuration = BenchmarkConfiguration(
@@ -226,7 +301,7 @@ class RssNormalizationTests(unittest.TestCase):
 class ConfigurationTests(unittest.TestCase):
     def test_expands_workers_only_for_parallel_mode(self) -> None:
         configurations = expand_configurations(
-            ("nonreuse", "reuse", "parallel"),
+            ("nonreuse", "reuse", "fused", "parallel"),
             (4, 8),
             2,
             447,
@@ -238,6 +313,7 @@ class ConfigurationTests(unittest.TestCase):
                 [
                     "nonreuse",
                     "reuse",
+                    "fused",
                     "parallel-w4-q2-m447MiB",
                     "parallel-w8-q2-m447MiB",
                 ]
@@ -254,6 +330,23 @@ class ConfigurationTests(unittest.TestCase):
             expand_configurations(("parallel",), (), 2, None)
         with self.assertRaisesRegex(ValueError, "unknown"):
             expand_configurations(("invalid",), (8,), 2, None)
+
+
+class FrequencyOverrideTests(unittest.TestCase):
+    def test_accepts_strictly_increasing_positive_csv(self) -> None:
+        self.assertEqual(
+            parse_frequency_csv("50, 250.5,500"),
+            (50.0, 250.5, 500.0),
+        )
+
+    def test_rejects_invalid_frequency_csv_values(self) -> None:
+        for value in ("50", "50,50", "500,250", "0,250", "50,-250", "a,250"):
+            with self.subTest(value=value):
+                with self.assertRaises(SystemExit):
+                    build_parser().parse_args(
+                        ("--case", "constant_speed_direct",
+                         "--frequencies-csv", value)
+                    )
 
 
 class SummaryAndHashTests(unittest.TestCase):
@@ -357,8 +450,10 @@ class CliValidationTests(unittest.TestCase):
                 "constant_speed_direct",
                 "--profile",
                 "broadband_stress",
+                "--frequencies-csv",
+                "50,250",
                 "--modes",
-                "reuse,parallel",
+                "nonreuse,reuse,fused,parallel",
                 "--repeats",
                 "5",
                 "--warmups",
@@ -382,7 +477,10 @@ class CliValidationTests(unittest.TestCase):
         )
 
         self.assertEqual(args.cases, ["constant_speed_direct"])
-        self.assertEqual(args.modes, ("reuse", "parallel"))
+        self.assertEqual(
+            args.modes, ("nonreuse", "reuse", "fused", "parallel")
+        )
+        self.assertEqual(args.frequencies_csv, (50.0, 250.0))
         self.assertEqual(args.parallel_workers, (4, 8))
         self.assertEqual(args.repeats, 5)
         self.assertEqual(args.warmups, 2)

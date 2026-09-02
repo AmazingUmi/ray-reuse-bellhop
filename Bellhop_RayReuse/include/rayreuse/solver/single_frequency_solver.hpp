@@ -27,6 +27,15 @@ struct SingleFrequencyTimings {
   CartesianCervenyStatistics influenceStatistics;
 };
 
+// IGR-1 R05 Level-B seam (design §6). Scaled (default) is the existing
+// production behavior: the coherent post-scale runs and is timed into
+// scaleSeconds. Raw skips only the coherent scale invocation and reports
+// scaleSeconds = 0; the FrequencyWorkspace construction/move (and the
+// intensity-to-pressure conversion of geometric I/S runs, which is workspace
+// construction) still executes. Guaranteed raw only for Cartesian Cerveny
+// coherent runs.
+enum class WorkspaceDelivery { Scaled, Raw };
+
 // Per-frequency product state. Mirrors the F2CPP result shape: `workspace`
 // holds the first (shallowest) source's field and `additionalSourceWorkspaces`
 // holds sources 1..NSz-1 in the model's depth-ascending source order.
@@ -82,7 +91,8 @@ class SingleFrequencySolver {
       const SimulationCase& simulation, double frequency,
       const RayPathCache& rayCache, std::size_t sourceIndex,
       double epsilonMultiplier, double loopRange,
-      CartesianCervenySettings influenceSettings = {});
+      CartesianCervenySettings influenceSettings = {},
+      WorkspaceDelivery delivery = WorkspaceDelivery::Scaled);
 
   // First-source convenience wrapper over
   // solveFrequencyFromSourceCache(simulation, frequency, rayCache, 0, ...).
