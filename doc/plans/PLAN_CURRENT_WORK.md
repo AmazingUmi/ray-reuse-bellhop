@@ -1,6 +1,6 @@
 # 当前工作与待决事项
 
-> 更新日期：2026-09-01
+> 更新日期：2026-09-02
 
 ## 当前状态
 
@@ -10,20 +10,24 @@
 | F2CPP → RayReuse Feature Parity | `RR-B1`～`RR-B4`、`FP-1A`～`FP-2I` 全部 `ACCEPTED / CLOSED`；当前无 active Feature Parity Batch | [`REPORT_FEATURE_PARITY_FINAL.md`](../../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md) |
 | RayReuse production baseline | `Production Feature Parity: COMPLETE`；`Remaining F2CPP parity GAP: 0`；accepted production HEAD `0721fb3` | [`../../Bellhop_RayReuse/doc/status/STATUS_PROGRESS.md`](../../Bellhop_RayReuse/doc/status/STATUS_PROGRESS.md) |
 | Origin oracle | GNU Fortran/gfortran 为唯一支持工具链，继续作为科学与文件行为基准 | [`../../Bellhop_origin/doc/README.md`](../../Bellhop_origin/doc/README.md) |
-| IGR 研究方向（Influence Geometry Reuse → 跨频融合） | 用户已选定主方案：**Cross-Frequency Influence Geometry Fusion（transient reuse via loop restructuring）**；IGR-0 Final Documentation Remediation 已独立 final-review `ACCEPTED`，零 production/test 改动；IGR-1 仅有 scope 草案，**NOT APPROVED, NOT IN CONSTRUCTION** | [`REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md)、[`IGR0_FINAL_DOCUMENTATION_REMEDIATION_FINAL_REVIEW_2026-09-01.md`](../../Bellhop_RayReuse/doc/reviews/IGR0_FINAL_DOCUMENTATION_REMEDIATION_FINAL_REVIEW_2026-09-01.md)、[`IGR-1_CC_FUSION_DESIGN_DRAFT.md`](../../Bellhop_RayReuse/doc/worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md)、[`REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](../reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md) |
+| IGR-1（Cross-Frequency Cartesian Cerveny Influence Fusion） | **`ACCEPTED / CLOSED`（2026-09-02，独立 final review）**。CC coherent fused 参考路径以 `--execution-mode fused` 落地为 opt-in 实验模式；数值上与现行 reuse 全程 bitwise 一致（cache fingerprint / raw workspace / scaled workspace / SHD SHA-256 四级 gate 全 PASS）；geometry 计数精确降为 1/Nf、frequency-kernel 计数不变；**wall-time 判定 `NOT_VIABLE`**（2F/8F/16F fused 均慢于 reuse：0.70/0.96/0.93，归因见 R06 §8：几何非瓶颈、fused 布局损失内存局部性），fused 不成为默认生产路径 | [`REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md)、[`REPORT_IGR1_CC_FUSION_BATCH_ACCEPTANCE.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_BATCH_ACCEPTANCE.md)、[`IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md`](../../Bellhop_RayReuse/doc/reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md)、[`IGR-1_CC_FUSION_WORKLIST.md`](../../Bellhop_RayReuse/doc/worklists/IGR-1_CC_FUSION_WORKLIST.md) |
 
 Feature Parity baseline 已冻结。当前没有已批准、正在实施的 Feature Parity Batch，
 也不要从已关闭 Worklist、历史计划或 performance finding 中自动恢复任务。
-IGR 方向的用户决策已完成（选定 cross-frequency fusion）；IGR-1 保持
-`DESIGN DRAFT — NOT APPROVED, NOT IN CONSTRUCTION`，获批前不进入 CONSTRUCT。
+IGR-1 已关闭且其 fused 路径判定为 wall-time `NOT_VIABLE`；**IGR 整体未宣告完成**，
+任何 IGR-2 方向（其他 beam family 融合、frequency blocking、并行融合、layout-tuned
+变体等）都需要用户依据 IGR-1 实测数据明确批准后才启动。
 
 ## 待用户决定
 
 - [x] 选择新的 RayReuse research/performance 目标。已决定（2026-09-01）：
   cross-frequency influence geometry fusion（transient reuse），取代旧 IGR-0 的
-  persistent geometry cache 原型方向。修订记录与 IGR-1 草案见上表 IGR 行。
-- [ ] 批准 IGR-1（Cross-Frequency Cartesian Cerveny Influence Fusion）进入
-  DESIGN/CONSTRUCT；批准前 `IGR-1_CC_FUSION_DESIGN_DRAFT.md` 保持 NOT APPROVED。
+  persistent geometry cache 原型方向。
+- [x] 批准并执行 IGR-1（2026-09-02 全流程完成，`ACCEPTED / CLOSED`；性能结论
+  `NOT_VIABLE`，correctness 完整保持）。
+- [ ] 是否基于 IGR-1 数据进入任何后续 IGR 批次（建议排序见
+  [`REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md) §8；
+  默认建议：停止 serial-fusion 方向的 IGR 优化，wall-time 需求转向 parallel 路径）。
 - [ ] 决定远端 CI 首次运行、分支保护和公开发布前置条件；这些需要外部权限或
   产品决策，不属于本地代码未完成项。
 

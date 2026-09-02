@@ -29,11 +29,14 @@ Final acceptance documentation commit: 88ba8b7
 | 验证、矩阵与审计报告索引 | [`reports/README.md`](./reports/README.md) |
 | 当前 IGR 架构冻结：Cross-Frequency Fusion | [`reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](./reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md) |
 | IGR 理论与数值契约 | [`../../doc/reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](../../doc/reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md) |
-| IGR-1 scope 草案（未批准、未施工） | [`worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md`](./worklists/IGR-1_CC_FUSION_DESIGN_DRAFT.md) |
+| **IGR-1 收口：CC Fusion `ACCEPTED / CLOSED`（wall-time `NOT_VIABLE`，fused 为 opt-in 实验模式）** | [`reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](./reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md) |
+| IGR-1 执行 Worklist（R01–R06 全部 DONE） | [`worklists/IGR-1_CC_FUSION_WORKLIST.md`](./worklists/IGR-1_CC_FUSION_WORKLIST.md) |
+| IGR-1 冻结设计 | [`worklists/DESIGN_IGR1_CC_FUSION.md`](./worklists/DESIGN_IGR1_CC_FUSION.md) |
+| IGR-1 最终独立评审（`ACCEPTED`） | [`reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md`](./reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md) |
 | HDF5 延后决策 | [`decisions/DECISION_HDF5_SCHEMA.md`](./decisions/DECISION_HDF5_SCHEMA.md) |
 | 已完成计划和历史基准 | [`archive/README.md`](./archive/README.md) |
 
-当前恢复路径是：**Trajectory Reuse 已完成 → IGR 已冻结为 Cross-Frequency Influence Fusion → IGR-1 仍 pending**。新的候选方向统一从 [`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入；IGR 不是 active Feature Parity task，IGR-1 在用户批准前不得进入 CONSTRUCT。frequency interpolation、BARR、SIMD、HDF5 等也均非 active task。
+当前恢复路径是：**Trajectory Reuse 已完成 → IGR-0 架构冻结 → IGR-1 已 `ACCEPTED / CLOSED`（CC fused 参考路径：bitwise parity 完整保持，geometry 计数精确降为 1/Nf；wall-time 判定 `NOT_VIABLE`，`--execution-mode fused` 保留为 opt-in 实验模式，未成为默认生产路径）**。IGR 整体（其他 beam family / blocking / 并行融合）**未**由此宣告完成，是否进入 IGR-2 由用户依据 IGR-1 实测数据再决定。新的候选方向统一从 [`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入。frequency interpolation、BARR、SIMD、HDF5 等也均非 active task。
 
 ## 目录语义
 
