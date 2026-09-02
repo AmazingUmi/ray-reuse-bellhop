@@ -291,6 +291,23 @@ struct PrecomputedRayValues {
   std::vector<int> kmah;
 };
 
+// Fused-only L1 layout: at a fixed ray point, all frequency lanes are
+// contiguous. Keep p as part of this isolated layout experiment even though
+// the hot loop does not consume it; removing that payload is a separate
+// candidate.
+struct FusedPrecomputedRayValues {
+  std::size_t frequencyCount{};
+  std::vector<std::complex<double>> p;
+  std::vector<std::complex<double>> q;
+  std::vector<std::complex<double>> gamma;
+  std::vector<int> kmah;
+
+  [[nodiscard]] std::size_t index(std::size_t pointIndex,
+                                  std::size_t frequencyIndex) const noexcept {
+    return pointIndex * frequencyCount + frequencyIndex;
+  }
+};
+
 // Fused-kernel entry checks: identical conditions to validatePrevalidatedInput
 // (pressure-workspace route) with fused-prefixed diagnostics so the failing
 // layer is identifiable (design §4.2 / Obligation P5).
@@ -384,6 +401,57 @@ void validateFusedPrevalidatedInput(const FrequencyWorkspace& workspace,
     values.kmah.push_back(kmah);
   }
   return values;
+}
+
+void precomputeFusedRayValuesForFrequency(
+    const RayPath& path, const GeometrySspEvaluator& soundSpeedProfile,
+    std::complex<double> epsilon, std::size_t pointCount,
+    BeamWidthMode widthMode, std::size_t frequencyIndex,
+    FusedPrecomputedRayValues& values) {
+  std::size_t segmentIndex = 0U;
+  for (std::size_t pointIndex = 0U; pointIndex < pointCount; ++pointIndex) {
+    const RayState& point = path.points[pointIndex];
+    const SoundSpeedSample sample =
+        soundSpeedProfile.evaluate(point.position, segmentIndex);
+    segmentIndex = sample.segmentIndex;
+
+    const std::complex<double> p =
+        point.dynamicP[0U] + epsilon * point.dynamicP[1U];
+    const std::complex<double> q =
+        point.dynamicQ[0U] + epsilon * point.dynamicQ[1U];
+    const Vec2 tangent = point.soundSpeed * point.slowness;
+    const Vec2 normal{.range = tangent.depth, .depth = -tangent.range};
+    const double soundSpeedSquared = sample.soundSpeed * sample.soundSpeed;
+    const double alongGradient = dot(sample.soundSpeedGradient, tangent);
+    const double normalGradient = dot(sample.soundSpeedGradient, normal);
+    const double tangentRangeSquared = tangent.range * tangent.range;
+    const double tangentDepthSquared = tangent.depth * tangent.depth;
+
+    std::complex<double> gamma{};
+    if (q != std::complex<double>{}) {
+      gamma = 0.5 * (p / q * tangentRangeSquared +
+                     2.0 * normalGradient / soundSpeedSquared * tangent.depth *
+                         tangent.range -
+                     alongGradient / soundSpeedSquared * tangentDepthSquared);
+    }
+    requireFiniteComplex(p, "Cartesian Cerveny p");
+    requireFiniteComplex(q, "Cartesian Cerveny q");
+    requireFiniteComplex(gamma, "Cartesian Cerveny gamma");
+
+    const std::size_t flatIndex = values.index(pointIndex, frequencyIndex);
+    values.p[flatIndex] = p;
+    values.q[flatIndex] = q;
+    values.gamma[flatIndex] = gamma;
+
+    int kmah = 1;
+    if (pointIndex != 0U) {
+      const std::size_t previousFlatIndex =
+          values.index(pointIndex - 1U, frequencyIndex);
+      kmah = updateCervenyKmah(values.q[previousFlatIndex], q,
+                               values.kmah[previousFlatIndex], widthMode);
+    }
+    values.kmah[flatIndex] = kmah;
+  }
 }
 
 [[nodiscard]] CartesianCervenyImageDiagnostic evaluateImage(
@@ -1144,9 +1212,9 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     precomputeBegin = Clock::now();
   }
   std::vector<std::size_t> activePrefixPointCount(frequencyCount);
-  std::vector<PrecomputedRayValues> ray(frequencyCount);
   std::vector<double> angularFrequency(frequencyCount);
   std::vector<double> radiusMax(frequencyCount);
+  std::size_t maximumPrefixPointCount = 0U;
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
        ++frequencyIndex) {
     // Exact per-frequency active-prefix scan of accumulateImpl (the first
@@ -1160,11 +1228,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
       }
     }
     activePrefixPointCount[frequencyIndex] = prefixPointCount;
-    // Own-prefix precompute only (Obligation P3); never extended to the
-    // union prefix.
-    ray[frequencyIndex] = precomputeRayValues(
-        path, soundSpeedProfile_, epsilons[frequencyIndex], prefixPointCount,
-        widthMode_);
+    maximumPrefixPointCount =
+        std::max(maximumPrefixPointCount, prefixPointCount);
     if constexpr (CollectStatistics) {
       statistics->activeRayPoints += prefixPointCount;
     }
@@ -1173,6 +1238,25 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     radiusMax[frequencyIndex] =
         30.0 * path.points.front().soundSpeed /
         frequencyStates[frequencyIndex].frequency;
+  }
+  const std::size_t fusedValueCount =
+      maximumPrefixPointCount * frequencyCount;
+  FusedPrecomputedRayValues ray{
+      .frequencyCount = frequencyCount,
+      .p = std::vector<std::complex<double>>(fusedValueCount),
+      .q = std::vector<std::complex<double>>(fusedValueCount),
+      .gamma = std::vector<std::complex<double>>(fusedValueCount),
+      .kmah = std::vector<int>(fusedValueCount),
+  };
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    // Preserve the existing ascending-frequency, ascending-point evaluation
+    // sequence and each frequency's own prefix. Rectangular inactive tails
+    // are storage only and are never read by the fused hot-loop gates.
+    precomputeFusedRayValuesForFrequency(
+        path, soundSpeedProfile_, epsilons[frequencyIndex],
+        activePrefixPointCount[frequencyIndex], widthMode_, frequencyIndex,
+        ray);
   }
   if constexpr (CollectStatistics) {
     statistics->precomputeSeconds +=
@@ -1219,6 +1303,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
       ++statistics->geometrySegmentEvaluations;
     }
     const std::size_t leftIndex = rightIndex - 1U;
+    const std::size_t leftFlatOffset = leftIndex * frequencyCount;
+    const std::size_t rightFlatOffset = rightIndex * frequencyCount;
     const double leftRange = path.points[leftIndex].position.range;
     const double rightRange = path.points[rightIndex].position.range;
     if (rightRange > receiverRanges.back()) {
@@ -1289,10 +1375,13 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
           // frequencies the gamma guard below then rejects.
           ++statistics->frequencyRangeKernelEvaluations;
         }
+        const std::size_t leftFlatIndex =
+            leftFlatOffset + frequencyIndex;
+        const std::size_t rightFlatIndex =
+            rightFlatOffset + frequencyIndex;
         q[frequencyIndex] =
-            ray[frequencyIndex].q[leftIndex] +
-            weight * (ray[frequencyIndex].q[rightIndex] -
-                      ray[frequencyIndex].q[leftIndex]);
+            ray.q[leftFlatIndex] +
+            weight * (ray.q[rightFlatIndex] - ray.q[leftFlatIndex]);
         tau[frequencyIndex] =
             frequencyStates[frequencyIndex].points[leftIndex]
                 .complexTravelTime +
@@ -1301,9 +1390,9 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
                       frequencyStates[frequencyIndex].points[leftIndex]
                           .complexTravelTime);
         gamma[frequencyIndex] =
-            ray[frequencyIndex].gamma[leftIndex] +
-            weight * (ray[frequencyIndex].gamma[rightIndex] -
-                      ray[frequencyIndex].gamma[leftIndex]);
+            ray.gamma[leftFlatIndex] +
+            weight *
+                (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
         if (gamma[frequencyIndex].imag() > 0.0) {
           rangeEligible[frequencyIndex] = false;
           continue;
@@ -1312,9 +1401,9 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
         principal[frequencyIndex] =
             ratio * std::sqrt(soundSpeed * std::abs(epsilons[frequencyIndex]) /
                               q[frequencyIndex]);
-        int finalKmah = ray[frequencyIndex].kmah[leftIndex];
-        finalKmah = updateCervenyKmah(ray[frequencyIndex].q[leftIndex],
-                                      q[frequencyIndex], finalKmah, widthMode_);
+        int finalKmah = ray.kmah[leftFlatIndex];
+        finalKmah = updateCervenyKmah(ray.q[leftFlatIndex], q[frequencyIndex],
+                                      finalKmah, widthMode_);
         corrected[frequencyIndex] = finalKmah < 0
                                         ? -principal[frequencyIndex]
                                         : principal[frequencyIndex];
