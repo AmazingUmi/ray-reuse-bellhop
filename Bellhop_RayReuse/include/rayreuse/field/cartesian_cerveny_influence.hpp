@@ -7,6 +7,7 @@
 #include <span>
 
 #include "rayreuse/field/frequency_workspace.hpp"
+#include "rayreuse/field/fused_pressure_workspace.hpp"
 #include "rayreuse/model/beam_width.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
@@ -159,14 +160,16 @@ class CartesianCervenyInfluence {
   // prevalidated checks run at entry; shared segment/range/image geometry is
   // computed once per ray and consumed by every frequency.
   [[nodiscard]] bool accumulateFusedPrevalidated(
-      std::span<FrequencyWorkspace> workspaces, const RayPath& path,
+      FusedPressureWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::span<const std::complex<double>> epsilons,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
   [[nodiscard]] bool accumulateFusedImpl(
-      std::span<FrequencyWorkspace> workspaces, const RayPath& path,
+      FusedPressureWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::span<const std::complex<double>> epsilons,
       CartesianCervenyStatistics* statistics) const;

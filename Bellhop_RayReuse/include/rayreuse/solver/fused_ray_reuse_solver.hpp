@@ -6,6 +6,7 @@
 
 #include "rayreuse/field/cartesian_cerveny_influence.hpp"
 #include "rayreuse/field/frequency_workspace.hpp"
+#include "rayreuse/field/fused_pressure_workspace.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/solver/ray_reuse_frequency_consumer.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
@@ -15,8 +16,8 @@ namespace rayreuse {
 // Level-B parity seam (design §3.1): raw (unscaled) per-frequency workspaces
 // plus block-level timings and fused-run Influence statistics.
 struct FusedAccumulationResult {
-  // Raw accumulated fields; index == frequency index; size == Nf.
-  std::vector<FrequencyWorkspace> rawWorkspaces;
+  // Raw accumulated fields in fused [range][depth][frequency] storage.
+  FusedPressureWorkspace rawWorkspace;
   // scaleSeconds == 0; projectSeconds/influenceSeconds are block-level;
   // influenceStatistics holds the fused-run counters of design §5.
   SingleFrequencyTimings timings;

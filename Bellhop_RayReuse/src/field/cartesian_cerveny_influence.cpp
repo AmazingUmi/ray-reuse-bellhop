@@ -311,8 +311,8 @@ struct FusedPrecomputedRayValues {
 // Fused-kernel entry checks: identical conditions to validatePrevalidatedInput
 // (pressure-workspace route) with fused-prefixed diagnostics so the failing
 // layer is identifiable (design §4.2 / Obligation P5).
-void validateFusedPrevalidatedInput(const FrequencyWorkspace& workspace,
-                                    const RayPath& path,
+void validateFusedPrevalidatedInput(const FusedPressureWorkspace& workspace,
+                                    double frequency, const RayPath& path,
                                     const RayFrequencyState& frequencyState,
                                     std::complex<double> epsilon,
                                     const ReceiverGrid& receivers,
@@ -323,7 +323,7 @@ void validateFusedPrevalidatedInput(const FrequencyWorkspace& workspace,
         "fused Cartesian Cerveny geometry and frequency-state sizes must "
         "match and be non-empty");
   }
-  if (workspace.frequency() != frequencyState.frequency) {
+  if (frequency != frequencyState.frequency) {
     throw ValidationError(
         "fused Cartesian Cerveny workspace and ray frequencies must match");
   }
@@ -1131,32 +1131,36 @@ CartesianCervenyInfluence::accumulateIntensityPrevalidated(
 }
 
 bool CartesianCervenyInfluence::accumulateFusedPrevalidated(
-    std::span<FrequencyWorkspace> workspaces, const RayPath& path,
+    FusedPressureWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
     std::span<const RayFrequencyState> frequencyStates,
     std::span<const std::complex<double>> epsilons,
     CartesianCervenyStatistics* statistics) const {
   if (statistics != nullptr) {
     if (settings_.imageCount == 1U) {
-      return accumulateFusedImpl<true, 1U>(workspaces, path, frequencyStates,
-                                           epsilons, statistics);
+      return accumulateFusedImpl<true, 1U>(workspace, frequencies, path,
+                                           frequencyStates, epsilons,
+                                           statistics);
     }
     if (settings_.imageCount == 2U) {
-      return accumulateFusedImpl<true, 2U>(workspaces, path, frequencyStates,
-                                           epsilons, statistics);
+      return accumulateFusedImpl<true, 2U>(workspace, frequencies, path,
+                                           frequencyStates, epsilons,
+                                           statistics);
     }
-    return accumulateFusedImpl<true, 3U>(workspaces, path, frequencyStates,
-                                         epsilons, statistics);
+    return accumulateFusedImpl<true, 3U>(workspace, frequencies, path,
+                                         frequencyStates, epsilons,
+                                         statistics);
   }
   if (settings_.imageCount == 1U) {
-    return accumulateFusedImpl<false, 1U>(workspaces, path, frequencyStates,
-                                          epsilons, nullptr);
+    return accumulateFusedImpl<false, 1U>(workspace, frequencies, path,
+                                          frequencyStates, epsilons, nullptr);
   }
   if (settings_.imageCount == 2U) {
-    return accumulateFusedImpl<false, 2U>(workspaces, path, frequencyStates,
-                                          epsilons, nullptr);
+    return accumulateFusedImpl<false, 2U>(workspace, frequencies, path,
+                                          frequencyStates, epsilons, nullptr);
   }
-  return accumulateFusedImpl<false, 3U>(workspaces, path, frequencyStates,
-                                        epsilons, nullptr);
+  return accumulateFusedImpl<false, 3U>(workspace, frequencies, path,
+                                        frequencyStates, epsilons, nullptr);
 }
 
 // IGR-1 fused kernel (design §4, worklist §5 hierarchy).  Per fixed frequency
@@ -1169,7 +1173,8 @@ bool CartesianCervenyInfluence::accumulateFusedPrevalidated(
 // (Obligations P1-P3, P6).  Returns false on the shared early range exit.
 template <bool CollectStatistics, std::size_t ImageCount>
 bool CartesianCervenyInfluence::accumulateFusedImpl(
-    std::span<FrequencyWorkspace> workspaces, const RayPath& path,
+    FusedPressureWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
     std::span<const RayFrequencyState> frequencyStates,
     std::span<const std::complex<double>> epsilons,
     CartesianCervenyStatistics* statistics) const {
@@ -1179,11 +1184,18 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     throw ValidationError(
         "fused Cartesian Cerveny influence requires at least one frequency");
   }
-  if (workspaces.size() != frequencyCount ||
+  if (workspace.frequencyCount() != frequencyCount ||
+      frequencies.size() != frequencyCount ||
       epsilons.size() != frequencyCount) {
     throw ValidationError(
-        "fused Cartesian Cerveny influence requires workspace, "
-        "frequency-state, and epsilon spans of equal size");
+        "fused Cartesian Cerveny influence requires workspace, frequency, "
+        "frequency-state, and epsilon dimensions of equal size");
+  }
+  if (workspace.depthCount() != receivers_.receiversPerRange() ||
+      workspace.rangeCount() != receivers_.rangeCount()) {
+    throw ValidationError(
+        "fused Cartesian Cerveny workspace and receiver-grid sizes must "
+        "match");
   }
   if constexpr (CollectStatistics) {
     // One fused ray call covers Nf per-(ray, frequency) accumulations.
@@ -1196,7 +1208,7 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     }
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
          ++frequencyIndex) {
-      validateFusedPrevalidatedInput(workspaces[frequencyIndex], path,
+      validateFusedPrevalidatedInput(workspace, frequencies[frequencyIndex], path,
                                      frequencyStates[frequencyIndex],
                                      epsilons[frequencyIndex], receivers_,
                                      widthMode_);
@@ -1277,7 +1289,6 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
   const double irregularReceiverDepth = receiverDepths.front();
   const double seaSurfaceDepth = environment_.seaSurface().depth();
   const double seabedDepth = environment_.seabed().depth();
-  const std::size_t receiverRangeCount = receiverRanges.size();
   // D5: traversal upper bound = union of the per-frequency active prefixes.
   std::size_t unionPrefix = 0U;
   for (const std::size_t prefixPointCount : activePrefixPointCount) {
@@ -1426,6 +1437,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
         const double receiverDepth = irregularReceivers
                                          ? irregularReceiverDepth
                                          : receiverDepths[depthIndex];
+        std::span<std::complex<double>> pressureCell =
+            workspace.cell(rangeIndex, depthIndex);
         for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
              ++frequencyIndex) {
           imageSum[frequencyIndex] = std::complex<double>{};
@@ -1519,10 +1532,7 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
           requireFiniteComplex(frequencyContribution,
                                "Cartesian Cerveny final contribution");
 #endif
-          const std::span<std::complex<double>> pressure =
-              workspaces[frequencyIndex].pressure();
-          std::complex<double>& pressureValue =
-              pressure[depthIndex * receiverRangeCount + rangeIndex];
+          std::complex<double>& pressureValue = pressureCell[frequencyIndex];
           const std::complex<double> updatedPressure =
               pressureValue + frequencyContribution;
 #ifndef NDEBUG

@@ -100,15 +100,9 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
       simulation.environment(), simulation.receivers(), influenceSettings,
       simulation.beamWidthMode(), simulation.sourceGeometry());
 
-  // Nf long-lived workspaces, zero-initialized exactly as the reuse path
-  // constructs them.
-  std::vector<FrequencyWorkspace> workspaces;
-  workspaces.reserve(frequencyCount);
-  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
-       ++frequencyIndex) {
-    workspaces.emplace_back(frequencies[frequencyIndex],
-                            simulation.receivers());
-  }
+  // One long-lived [range][depth][frequency] pressure allocation. Ordinary
+  // per-frequency workspaces are materialized only after accumulation.
+  FusedPressureWorkspace workspace(simulation.receivers(), frequencyCount);
 
   double projectSeconds = 0.0;
   double influenceSeconds = 0.0;
@@ -156,7 +150,7 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
       epsilons[frequencyIndex] = epsilon.value;
     }
     static_cast<void>(influence.accumulateFusedPrevalidated(
-        std::span<FrequencyWorkspace>(workspaces), path,
+        workspace, std::span<const double>(frequencies), path,
         std::span<const RayFrequencyState>(frequencyStates),
         std::span<const std::complex<double>>(epsilons),
         influenceSettings.collectStatistics ? &influenceStatistics
@@ -167,7 +161,7 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
   }
 
   return FusedAccumulationResult{
-      .rawWorkspaces = std::move(workspaces),
+      .rawWorkspace = std::move(workspace),
       .timings =
           SingleFrequencyTimings{
               .traceSeconds = 0.0,
@@ -230,13 +224,17 @@ FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
   const double sourceSoundSpeed = sourceSample.soundSpeed;
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const std::size_t frequencyCount = simulation.frequencies().size();
+  const std::vector<double>& frequencies = simulation.frequencies().values();
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
        ++frequencyIndex) {
     const Clock::time_point scaleBegin = Clock::now();
+    FrequencyWorkspace frequencyWorkspace =
+        accumulated.rawWorkspace.materializeFrequency(
+            frequencyIndex, frequencies[frequencyIndex],
+            simulation.receivers());
     scaleCoherentCartesianPressure(
-        accumulated.rawWorkspaces[frequencyIndex], simulation.receivers(),
-        launchFan.launchAngleStep, sourceSoundSpeed,
-        simulation.sourceGeometry());
+        frequencyWorkspace, simulation.receivers(), launchFan.launchAngleStep,
+        sourceSoundSpeed, simulation.sourceGeometry());
     const double scaleSeconds = elapsedSeconds(scaleBegin, Clock::now());
     statistics.phaseTotals.scaleSeconds += scaleSeconds;
     // Per-frequency timings delivered to the consumer carry only that
@@ -246,8 +244,7 @@ FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
     frequencyTimings.scaleSeconds = scaleSeconds;
     std::vector<FrequencyWorkspace> sourceWorkspaces;
     sourceWorkspaces.reserve(1U);
-    sourceWorkspaces.push_back(
-        std::move(accumulated.rawWorkspaces[frequencyIndex]));
+    sourceWorkspaces.push_back(std::move(frequencyWorkspace));
     consumer(frequencyIndex, std::move(sourceWorkspaces), frequencyTimings);
   }
 

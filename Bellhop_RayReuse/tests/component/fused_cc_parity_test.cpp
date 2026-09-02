@@ -264,7 +264,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
   const rayreuse::FusedAccumulationResult fused =
       FusedRayReuseSolver::accumulateFrequencies(simulation, trace.cache, 1.0,
                                                  50.0, settings);
-  context.check(fused.rawWorkspaces.size() == frequencies.size() &&
+  context.check(fused.rawWorkspace.frequencyCount() == frequencies.size() &&
                     fused.rayCount == trace.cache.size() &&
                     fused.rayCacheBytes == trace.cache.memoryFootprintBytes(),
                 std::string(label) + " Level B result carries every frequency "
@@ -279,9 +279,12 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
                                      "contract (no scale time, block phases)");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
+    const FrequencyWorkspace fusedWorkspace =
+        fused.rawWorkspace.materializeFrequency(
+            frequencyIndex, frequencies[frequencyIndex],
+            simulation.receivers());
     const WorkspaceByteComparison levelB = memcmpPressureSpan(
-        rawReuse[frequencyIndex], fused.rawWorkspaces[frequencyIndex],
-        frequencyIndex);
+        rawReuse[frequencyIndex], fusedWorkspace, frequencyIndex);
     context.check(levelB.equal,
                   std::string(label) + " Level B raw workspace bitwise "
                                       "parity: " +

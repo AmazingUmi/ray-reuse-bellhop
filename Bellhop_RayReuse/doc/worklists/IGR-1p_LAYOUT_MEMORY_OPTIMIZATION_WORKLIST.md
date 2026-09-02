@@ -1,6 +1,6 @@
 # IGR-1p — Fused Layout & Memory Optimization Feasibility — WORKLIST
 
-> **Status:** CONSTRUCT / P04 L1 PROBE COMPLETE (candidate undecided)
+> **Status:** CONSTRUCT / L1c RETAINED
 > **Branch:** `feat/igr-influence-geometry-reuse`
 > **IGR-1p start HEAD:** `749741d9eba8559ecdd286fb7080ceabd7e0b605`
 > **Date opened:** 2026-09-02
@@ -200,8 +200,8 @@ Evidence:
 - Pending.
 
 ### P06 [ADVANCED, OPTIONAL] Block-local workspace-layout experiment
-Status: DEFERRED pending P04/P05 data
-Reviewer: PENDING if activated
+Status: RETAINED (user-authorized L1c contiguous 3D destination)
+Reviewer: PASS_FOR_SCREENING_ONLY
 
 Acceptance:
 - Activate only if P04/P05 evidence predicts sufficient remaining locality or
@@ -212,7 +212,22 @@ Acceptance:
   candidate immediately.
 
 Evidence:
-- Pending.
+- L1 saved independently as commit `1ffc1d8`; L1c remains uncommitted and
+  changes fused field ownership to one `[range][depth][frequency]` allocation
+  plus one-at-a-time ordinary workspace materialization.
+- Targeted CTest 2/2 PASS; divergent-prefix, raw/scaled memcmp, and cache
+  fingerprint gates PASS. Separate 2F CLI reuse/fused SHD byte identity PASS.
+- 16F one-warmup/one-measured screening: reuse 97.512 s, fused L1c 86.605 s;
+  candidate/reuse 0.8881; candidate/original IGR-1 fused 0.8405 (-15.95%);
+  RSS 607.438/634.203 MiB. Verdict `PROMISING` under the user-specified quick
+  screening threshold. Full retention evidence remains unrun.
+- Report: `../reports/REPORT_IGR1p_LAYOUT_EXPERIMENTS.md` §7-§13.
+- Short confirmation: three additional 16F samples per mode produced medians
+  reuse 97.554 s and fused 86.022 s (`candidate/reuse=0.8818`, 11.82%
+  same-run gain); median RSS 607.422/634.594 MiB. 8F quick 1+1 produced
+  49.822/47.465 s (`candidate/reuse=0.9527`, 4.73% gain), supporting stronger
+  benefit at higher Nf. Cross-mode SHD identity remained PASS. Verdict
+  `RETAINED`.
 
 ### P07 [ADVANCED] Batch acceptance and final attribution
 Status: TODO
@@ -245,9 +260,9 @@ Evidence:
 ## 9. Current construction gate
 
 ```text
-CONSTRUCT / P04 L1 PROBE COMPLETE
+CONSTRUCT / L1c RETAINED
 
-Result: targeted parity PASS; performance gain NOT DEMONSTRATED
-Other P03/P04/P05/P06 candidates: FORBIDDEN
-Next action: none in this turn; full retention gate remains unrun
+Result: RETAINED; targeted Levels A-D and short 16F confirmation PASS
+Other candidates and long tests: NOT STARTED
+Next action: none in this turn; await user direction
 ```
