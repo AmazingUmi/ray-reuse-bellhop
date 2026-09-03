@@ -102,6 +102,7 @@ CommandLineOptions parseCommandLine(
   bool verifyCacheSpecified = false;
   bool profileInfluenceSpecified = false;
   bool profileFrequencyTasksSpecified = false;
+  bool rangeParallelSpecified = false;
   bool workerCountSpecified = false;
   bool outputQueueCapacitySpecified = false;
   bool memoryBudgetSpecified = false;
@@ -170,6 +171,14 @@ CommandLineOptions parseCommandLine(
       profileFrequencyTasksSpecified = true;
       continue;
     }
+    if (argument == "--range-parallel") {
+      if (rangeParallelSpecified) {
+        throw ValidationError("--range-parallel may be specified only once");
+      }
+      options.rangeParallel = true;
+      rangeParallelSpecified = true;
+      continue;
+    }
     if (argument == "--workers") {
       if (workerCountSpecified) {
         throw ValidationError("--workers may be specified only once");
@@ -230,12 +239,25 @@ CommandLineOptions parseCommandLine(
   if (options.fileRoot.empty()) {
     throw ValidationError("a file root is required");
   }
-  if ((workerCountSpecified || outputQueueCapacitySpecified ||
-       memoryBudgetSpecified) &&
+  if (rangeParallelSpecified &&
+      (!executionModeSpecified ||
+       options.executionMode != BroadbandExecutionMode::Fused)) {
+    throw ValidationError(
+        "--range-parallel requires explicit --execution-mode fused");
+  }
+  if (workerCountSpecified &&
+      options.executionMode != BroadbandExecutionMode::Parallel &&
+      !(options.executionMode == BroadbandExecutionMode::Fused &&
+        options.rangeParallel)) {
+    throw ValidationError(
+        "--workers requires --execution-mode parallel or "
+        "--execution-mode fused --range-parallel");
+  }
+  if ((outputQueueCapacitySpecified || memoryBudgetSpecified) &&
       options.executionMode != BroadbandExecutionMode::Parallel) {
     throw ValidationError(
-        "--workers, --output-queue-capacity, and "
-        "--memory-budget-mib require --execution-mode parallel");
+        "--output-queue-capacity and --memory-budget-mib require "
+        "--execution-mode parallel");
   }
   if (profileFrequencyTasksSpecified &&
       options.executionMode != BroadbandExecutionMode::Parallel) {

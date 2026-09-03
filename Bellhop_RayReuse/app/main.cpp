@@ -43,6 +43,7 @@ void printUsage(std::ostream& stream) {
             "[--execution-mode <nonreuse|reuse|parallel|fused>] "
             "[--verify-cache] [--profile-influence] "
             "[--profile-frequency-tasks] "
+            "[--range-parallel] "
             "[--workers <count>] "
             "[--output-queue-capacity <count>] "
             "[--memory-budget-mib <MiB>]\n"
@@ -54,8 +55,10 @@ void printUsage(std::ostream& stream) {
          << "With --frequencies-hz, the strictly increasing list "
             "overrides the .env frequency.\n"
          << "Broadband execution defaults to nonreuse; use "
-            "--execution-mode reuse for serial trace-once or parallel "
-            "for bounded frequency concurrency.\n"
+            "--execution-mode fused for production RayReuse on supported "
+            "multi-frequency coherent Cartesian Cerveny TL cases. "
+            "The deprecated legacy reuse and parallel modes are retained "
+            "for compatibility.\n"
          << "--verify-cache hashes the complete frozen ray cache before "
             "and after projection and is intended for validation.\n"
          << "--profile-influence records detailed Influence work counts "
@@ -63,10 +66,37 @@ void printUsage(std::ostream& stream) {
          << "--profile-frequency-tasks writes existing per-frequency "
             "Project/Influence/Scale timings for parallel reuse; it is "
             "disabled by default.\n"
-         << "Parallel tuning options require --execution-mode parallel; "
-            "worker count defaults to hardware concurrency, the output "
+         << "--range-parallel explicitly enables static contiguous "
+            "receiver-range partitioning for fused mode and defaults to 4 "
+            "workers. --workers overrides that count only when "
+            "--range-parallel is present; it does not enable range "
+            "parallelism by itself. For legacy parallel mode, --workers "
+            "selects frequency workers and defaults to hardware "
+            "concurrency, the output "
             "queue defaults to 2, and a zero/unset memory budget means "
             "no explicit budget.\n";
+}
+
+void warnIfReplaceableLegacyMode(
+    const rayreuse::ParsedEnvironment& parsed,
+    const rayreuse::CommandLineOptions& options) {
+  if (!options.executionModeSpecified ||
+      !rayreuse::supportsFusedRayReuse(parsed.simulationCase)) {
+    return;
+  }
+  if (options.executionMode == rayreuse::BroadbandExecutionMode::Reuse) {
+    std::cerr
+        << "bellhop_rayreuse: warning: --execution-mode reuse is deprecated "
+           "for this supported broadband TL case; use --execution-mode "
+           "fused (retained for compatibility)\n";
+  } else if (options.executionMode ==
+             rayreuse::BroadbandExecutionMode::Parallel) {
+    std::cerr
+        << "bellhop_rayreuse: warning: --execution-mode parallel is "
+           "deprecated for this supported broadband TL case; use "
+           "--execution-mode fused --range-parallel (retained for "
+           "compatibility)\n";
+  }
 }
 
 [[nodiscard]] std::string runModeName(rayreuse::SimulationRunMode mode) {
@@ -751,6 +781,7 @@ int main(int argumentCount, char* arguments[]) {
         rayreuse::EnvironmentParser::parseFile(
             environmentPath, std::move(options.frequencyOverrideHz));
     validateProductOptions(parsed, options);
+    warnIfReplaceableLegacyMode(parsed, options);
     // Product files are mode-owned.  Remove every known product for this
     // root before solving so switching modes cannot expose stale output.
     removeProductArtifacts(fileRoot);
@@ -1137,7 +1168,14 @@ int main(int argumentCount, char* arguments[]) {
           rayreuse::FusedRayReuseSolver::solveStreaming(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange, consumer, influenceSettings,
-              options.verifyCache);
+              options.verifyCache,
+              rayreuse::FusedRayReuseExecutionSettings{
+                  .requestedRangeWorkers =
+                      !options.rangeParallel
+                          ? 1U
+                          : (options.workerCountSpecified
+                                 ? options.workerCount
+                                 : 4U)});
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
       writeSeconds +=
@@ -1145,6 +1183,12 @@ int main(int argumentCount, char* arguments[]) {
               .count();
 
       printLog << "execution mode = broadband fused reuse\n"
+               << "range parallel = "
+               << (options.rangeParallel ? "enabled\n" : "disabled\n")
+               << "requested range worker count = "
+               << statistics.requestedRangeWorkers << '\n'
+               << "effective range worker count = "
+               << statistics.effectiveRangeWorkers << '\n'
                << "Trace passes = " << statistics.tracePassCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
                << "ray point count = " << statistics.totalRayPointCount << '\n'

@@ -1,6 +1,6 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-08-30
+> 更新日期：2026-09-03
 > Accepted production HEAD：`0721fb3036ebaa26bbd72fcb20458e9118317457`
 > （`0721fb3`）
 > Final acceptance documentation commit：`88ba8b7`
@@ -11,6 +11,19 @@
 > 最后一个功能批次 FP-2I（Line Source Closure）已全流程验收通过。
 > 全仓库功能支持矩阵与对齐报告已同步封板：
 > **F2CPP → RayReuse Production Feature Parity COMPLETE（GAP = 0）**。
+
+Feature Parity 封板基线之后的当前 active performance batch 是 IGR-2。
+IGR-2 已完成 construction、Batch Acceptance 与独立 final review，状态为
+`ACCEPTED / CLOSED`：在 coherent Cartesian Cerveny、single-source、规则宽带
+TL 支持域内，fused Influence 升格为 production RayReuse 主路径，
+pressure hot layout 为 `[range][depth][frequency]`；可显式开启静态连续
+receiver-range parallelism，默认 4 workers。它不改变下述 Feature
+Parity accepted identity，也不扩展已冻结的 scientific support boundary。
+详见
+[`REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md`](../reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md)。
+此前 16F performance artifact 记录的是 `bd4816af` 加 dirty worktree 与 binary
+SHA-256，没有记录 exact dirty diff hash；因此仅作为本地 acceptance evidence，
+不声明为某个可精确重建 commit 的性能 identity。
 
 `0721fb3` 是 accepted production parity HEAD；`88ba8b7` 是最终验收文档记录
 commit，不替代 production acceptance identity。

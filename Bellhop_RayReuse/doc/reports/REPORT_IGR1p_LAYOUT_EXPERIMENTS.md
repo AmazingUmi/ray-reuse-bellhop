@@ -1,8 +1,8 @@
 # IGR-1p — L1 Data-Layout Lightweight Probe
 
 > **Date:** 2026-09-02
-> **Status:** L1c SHORT CONFIRMATION PASS / RETAINED
-> **Scope:** independent quick experiments: committed L1, then uncommitted L1c
+> **Status:** L1/L1c RETAINED; L1b/blocking/dynamic tiles NOT RETAINED; static range partition PROMISING
+> **Scope:** independent quick experiments leading to the IGR-2 retained baseline
 > **Base HEAD:** `749741d9eba8559ecdd286fb7080ceabd7e0b605`
 
 ## 1. Purpose and limitation
@@ -14,8 +14,10 @@ the frozen one-warmup/five-repeat retention benchmark and cannot establish
 statistical significance, viability, or P04 closure.
 
 P01 artifacts collected before reprioritization remain incomplete as a gate:
-the P01 report/review was not completed. No P03 mask/scratch candidate and no
-P05 blocking work was started.
+the P01 report/review was not completed. No P03 mask/scratch candidate was
+started. P05 blocking and static/dynamic receiver-range scheduling were later
+screened under the same quick-experiment policy; their evidence is recorded
+below.
 
 ## 2. Isolated implementation
 
@@ -353,4 +355,133 @@ confirmation rather than the previously frozen full benchmark matrix.
 L1c retains Levels A-D on the targeted evidence and its 16F median wall gain
 is stable and far beyond noise. The contiguous 3D fused pressure workspace is
 therefore retained. No blocking, L1b, mask/scratch/projector optimization,
-full regression, or final review was started.
+full regression, or final review had been started at that retention checkpoint.
+
+# L1b — Projected Frequency State Point-Major Layout
+
+## 14. Isolated implementation
+
+L1b was evaluated as an uncommitted single-file experiment on retained L1 and
+L1c commit `bd4816af105be1ac09aff44e5337187e7bec0c40`.
+
+The general `FrequencyProjector` and `RayFrequencyState` ownership/API were not
+changed. After the existing projector completed, the fused Influence path
+copied the four projected fields by exact assignment into point-major SoA:
+
+```text
+complexTravelTime[point * Nf + frequency]
+amplitude[point * Nf + frequency]
+reflectionPhase[point * Nf + frequency]
+active[point * Nf + frequency]
+```
+
+The transpose was inside `accumulateFusedImpl`, so its allocation/copy cost
+was included in Influence rather than Project. Validation continued to read
+the original projected states. Active-prefix scanning, left-active gating,
+tau interpolation, right-point amplitude, and reflection phase then read the
+SoA. Existing masks, L1 precompute, L1c pressure storage, projector formulas,
+and all traversal/accumulation order remained unchanged.
+
+## 15. Minimal correctness
+
+- Targeted fused parity: PASS.
+- Divergent-prefix fixture: PASS (96 divergent/cutoff-truncated rays).
+- Raw/scaled workspace memcmp and cache fingerprint checks: PASS.
+- 2F reuse/fused SHD byte-identical, SHA-256
+  `cf1f9711aefcab087bd766c395a03b935c1c9cf13980335a368035515fd126bc`.
+- Cache fingerprint before == after == `2271226459307825052`.
+- Focused reviewer verdict: `PASS_FOR_SCREENING`.
+- `git diff --check`: PASS.
+
+## 16. 16F lightweight screening
+
+Artifact: `build/igr1p-l1b-probe/benchmarks/igr1p_l1b_probe_16f.json`.
+
+Protocol: `munk_cerveny_cc` 16F, one warmup and one measured sample, reuse and
+fused, no influence profiling.
+
+| Mode | Wall (s) | Project (s) | Influence (s) | RSS (MiB) |
+|---|---:|---:|---:|---:|
+| reuse | 97.446 | 0.548 | 96.168 | 607.406 |
+| fused L1+L1c+L1b | 87.766 | 0.481 | 86.565 | 635.453 |
+
+The relevant comparison is against retained L1c, not original IGR-1:
+
+- Retained L1c 16F fused wall median: `86.022 s`.
+- L1b/L1c wall ratio: `87.766 / 86.022 = 1.0203`.
+- L1b wall is approximately `2.03%` slower than retained L1c.
+- Retained L1c Influence median: `84.826 s`.
+- L1b Influence is approximately `2.05%` slower.
+- L1b fused RSS is `635.453 MiB`, about `0.859 MiB` above the retained L1c
+  median (`634.594 MiB`).
+
+Cross-mode SHD remained byte-identical with SHA-256
+`f01ee48119549a82e79798322bf5227d8fc95054be82de955de5ccadef057c2c`.
+
+## 17. L1b verdict
+
+**NO_CLEAR_GAIN**
+
+The single screening sample is within the approximately +/-2% decision band
+and moves in the unfavorable direction. Per the quick-experiment rule, no two
+additional fused samples and no 8F probe were run. The L1b production change
+was rolled back and was not committed. Retained L1/L1c remain unchanged.
+
+# Frequency Blocking — Rejected
+
+The retained L1/L1c implementation added a temporary explicit batch size and
+screened 16F with `Bf=4,8,16`, where `Bf=16` was the unchanged retained
+baseline. Raw/scaled workspace `memcmp`, divergent-prefix behavior, cache
+fingerprint, and SHD identity passed for every candidate. Neither smaller
+block produced a stable improvement beyond the screening noise band; the
+frequency-blocking production diff was rolled back and is not present in the
+IGR-2 baseline. This deliberately leaves `Bf=Nf` in the production fused
+kernel.
+
+# Static Contiguous Receiver-Range Partition — Promising
+
+The next isolated experiment partitioned receiver ranges into deterministic
+contiguous quotient/remainder blocks. Every worker traversed frozen rays in
+the original order and wrote only its exclusive `[range][depth][frequency]`
+cells. It used no pressure atomic and no per-worker pressure copy. Targeted
+raw/scaled parity, divergent-prefix, fingerprint, and SHD byte identity gates
+passed.
+
+One-warmup/one-measured 16F screening results were:
+
+| range workers | Wall (s) | Critical-path Influence (s) | Peak RSS (MiB) | Speedup vs 1 |
+|---:|---:|---:|---:|---:|
+| 1 | 89.058 | 87.728 | 634.09 | 1.00x |
+| 2 | 45.294 | 44.054 | 637.30 | 1.97x |
+| 4 | 28.041 | 26.779 | 641.64 | 3.18x |
+| 8 | 23.462 | 21.854 | 654.28 | 3.80x |
+
+The static implementation was marked **PROMISING** and retained uncommitted
+as the construction baseline for IGR-2. These samples are screening evidence,
+not final IGR-2 acceptance statistics.
+
+# Dynamic Range Tiles — No Clear Gain
+
+A temporary dynamic atomic tile allocator screened 8, 16, and 32 tiles at
+eight workers. An initial 8-tile sample appeared 5.61% faster than the static
+sample, but a requested interleaved three-round reproduction showed:
+
+| schedule | Wall samples (s) | Wall median (s) | Influence median (s) | RSS median (MiB) |
+|---|---|---:|---:|---:|
+| static | 23.180, 23.154, 22.994 | 23.154 | 21.588 | 652.391 |
+| dynamic 8 tiles | 22.995, 23.425, 23.103 | 23.103 | 21.537 | 652.469 |
+
+`dynamic/static = 0.9978`, only a 0.22% wall difference. The earlier 5.61%
+was therefore not repeatable. Dynamic scheduling was marked
+**NO_CLEAR_GAIN**, completely rolled back, and excluded from IGR-2.
+
+# IGR-1p retained handoff
+
+- L1 commit: `1ffc1d8e0c47d8180109e529db7fd2a63fa38784`.
+- L1c commit: `bd4816af105be1ac09aff44e5337187e7bec0c40`.
+- Retained production data layouts: point-major frequency-contiguous fused
+  ray precompute and `[range][depth][frequency]` pressure.
+- Retained uncommitted experiment: static contiguous receiver-range
+  partition only.
+- Rejected production experiments absent: L1b, frequency blocking, dynamic
+  range tiles.

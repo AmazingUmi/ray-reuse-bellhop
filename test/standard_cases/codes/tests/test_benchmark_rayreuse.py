@@ -40,6 +40,13 @@ def fixture_prt(mode: str = "parallel") -> str:
         "fused": "fused reuse wall seconds",
         "parallel": "parallel reuse wall seconds",
     }[mode]
+    mode_fields = ()
+    if mode == "fused":
+        mode_fields = (
+            "range parallel = disabled",
+            "requested range worker count = 1",
+            "effective range worker count = 1",
+        )
     return "\n".join(
         (
             f"execution mode = {marker}",
@@ -54,6 +61,7 @@ def fixture_prt(mode: str = "parallel") -> str:
             "estimated workspace bytes = 131072",
             "estimated peak memory bytes = 1048576",
             "memory budget bytes = 0",
+            *mode_fields,
             "Trace seconds = 1.25",
             "Project seconds = 2.5",
             "Influence seconds = 3.75",
@@ -118,6 +126,18 @@ class PrtParsingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "does not match"):
             parse_prt_metrics(fixture_prt("reuse"), "fused")
+
+        range_configuration = BenchmarkConfiguration(
+            execution_mode="fused", fused_range_workers=8
+        )
+        range_metrics = parse_prt_metrics(
+            fixture_prt("fused")
+            .replace("range parallel = disabled", "range parallel = enabled")
+            .replace("requested range worker count = 1", "requested range worker count = 8")
+            .replace("effective range worker count = 1", "effective range worker count = 8"),
+            "fused",
+        )
+        validate_prt_metrics(range_metrics, range_configuration, 16)
 
     def test_parses_optional_influence_counters(self) -> None:
         counter_lines = "\n".join(
@@ -323,6 +343,25 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(configurations[-1].parallel_workers, 8)
         self.assertEqual(configurations[-1].memory_budget_mib, 447)
 
+    def test_expands_fused_range_workers_independently(self) -> None:
+        configurations = expand_configurations(
+            ("fused",), (8,), 2, None, (1, 2, 4, 8)
+        )
+
+        self.assertEqual(
+            [configuration.identifier for configuration in configurations],
+            [
+                "fused-range-w1",
+                "fused-range-w2",
+                "fused-range-w4",
+                "fused-range-w8",
+            ],
+        )
+        self.assertEqual(
+            [configuration.fused_range_workers for configuration in configurations],
+            [1, 2, 4, 8],
+        )
+
     def test_rejects_invalid_configuration_inputs(self) -> None:
         with self.assertRaisesRegex(ValueError, "queue"):
             expand_configurations(("parallel",), (8,), 3, None)
@@ -330,6 +369,8 @@ class ConfigurationTests(unittest.TestCase):
             expand_configurations(("parallel",), (), 2, None)
         with self.assertRaisesRegex(ValueError, "unknown"):
             expand_configurations(("invalid",), (8,), 2, None)
+        with self.assertRaisesRegex(ValueError, "require fused"):
+            expand_configurations(("reuse",), (8,), 2, None, (4,))
 
 
 class FrequencyOverrideTests(unittest.TestCase):
@@ -460,6 +501,8 @@ class CliValidationTests(unittest.TestCase):
                 "2",
                 "--parallel-workers",
                 "4,8",
+                "--fused-range-workers",
+                "1,2,4,8",
                 "--queue",
                 "1",
                 "--memory-budget-mib",
@@ -482,6 +525,7 @@ class CliValidationTests(unittest.TestCase):
         )
         self.assertEqual(args.frequencies_csv, (50.0, 250.0))
         self.assertEqual(args.parallel_workers, (4, 8))
+        self.assertEqual(args.fused_range_workers, (1, 2, 4, 8))
         self.assertEqual(args.repeats, 5)
         self.assertEqual(args.warmups, 2)
         self.assertEqual(args.output_queue_capacity, 1)

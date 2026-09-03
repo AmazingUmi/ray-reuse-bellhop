@@ -40,28 +40,41 @@ ENV 可直接写严格升序频率列表，也可由 CLI 覆盖：
 ```bash
 Bellhop_RayReuse/build/release/bellhop_rayreuse example \
   --frequencies-hz 500,1000 \
-  --execution-mode reuse \
+  --execution-mode fused \
   --verify-cache
 ```
 
 执行模式：
 
 - `nonreuse`：每频完整追踪；
-- `reuse`：trace once，串行逐频投影；
-- `parallel`：trace once，按运行时 worker 数进行外层频率并行。
+- `fused`：支持域内的 production RayReuse 主路径；ray 内完成跨频率 fused
+  Influence，pressure hot layout 为 `[range][depth][frequency]`，默认 serial；
+- `reuse`：legacy trace-once、串行逐频 compatibility path；
+- `parallel`：legacy 外层 frequency-parallel compatibility path。
 
-并行示例：
+静态 receiver-range parallel 示例：
 
 ```bash
 Bellhop_RayReuse/build/release/bellhop_rayreuse example \
   --frequencies-hz 500,1000,2000 \
-  --execution-mode parallel \
+  --execution-mode fused \
+  --range-parallel \
   --workers 8
 ```
 
-`--workers` 未指定时使用硬件并发数；没有 4T/8T 程序级上限。SHD 的
+range parallel 仅由 `--range-parallel` 显式开启；未指定 `--workers` 时默认
+请求 4 workers，effective workers clamp 到 receiver range 数。每个 worker
+独占连续 range block，输出继续 byte-identical。单独的 `--workers` 不会开启
+range parallel。
+
+legacy `parallel` 模式中，`--workers` 未指定时使用硬件并发数。SHD 的
 `--output-queue-capacity` 仅限制完成队列，不是线程上限。A/a/E 的 parallel
 worker 不直接写文件；主 consumer 按 frequency index 稳定发布。
+
+当 coherent Cartesian Cerveny、多频、single-source、rectilinear TL 可以由
+fused 执行时，显式选择 `reuse` 或 `parallel` 会收到一次 deprecation warning；
+兼容路径仍按原行为运行。`nonreuse` 保留为 reference，CLI 全局默认也保持
+`nonreuse`，避免把 fused 支持域外的产品静默改道。
 
 ## 产品生命周期与错误
 

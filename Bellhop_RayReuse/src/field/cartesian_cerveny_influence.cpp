@@ -1135,35 +1135,42 @@ bool CartesianCervenyInfluence::accumulateFusedPrevalidated(
     std::span<const double> frequencies, const RayPath& path,
     std::span<const RayFrequencyState> frequencyStates,
     std::span<const std::complex<double>> epsilons,
+    std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   if (statistics != nullptr) {
     if (settings_.imageCount == 1U) {
       return accumulateFusedImpl<true, 1U>(workspace, frequencies, path,
                                            frequencyStates, epsilons,
+                                           rangeBegin, rangeEnd,
                                            statistics);
     }
     if (settings_.imageCount == 2U) {
       return accumulateFusedImpl<true, 2U>(workspace, frequencies, path,
                                            frequencyStates, epsilons,
+                                           rangeBegin, rangeEnd,
                                            statistics);
     }
     return accumulateFusedImpl<true, 3U>(workspace, frequencies, path,
                                          frequencyStates, epsilons,
+                                         rangeBegin, rangeEnd,
                                          statistics);
   }
   if (settings_.imageCount == 1U) {
     return accumulateFusedImpl<false, 1U>(workspace, frequencies, path,
-                                          frequencyStates, epsilons, nullptr);
+                                          frequencyStates, epsilons,
+                                          rangeBegin, rangeEnd, nullptr);
   }
   if (settings_.imageCount == 2U) {
     return accumulateFusedImpl<false, 2U>(workspace, frequencies, path,
-                                          frequencyStates, epsilons, nullptr);
+                                          frequencyStates, epsilons,
+                                          rangeBegin, rangeEnd, nullptr);
   }
   return accumulateFusedImpl<false, 3U>(workspace, frequencies, path,
-                                        frequencyStates, epsilons, nullptr);
+                                        frequencyStates, epsilons, rangeBegin,
+                                        rangeEnd, nullptr);
 }
 
-// IGR-1 fused kernel (design §4, worklist §5 hierarchy).  Per fixed frequency
+// Production fused RayReuse kernel. Per fixed frequency
 // the arithmetic reproduces accumulateImpl exactly: shared segment/range/
 // image geometry is computed once per ray (frequency-independent by
 // construction, Obligation P4), while every frequency-local quantity
@@ -1177,6 +1184,7 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     std::span<const double> frequencies, const RayPath& path,
     std::span<const RayFrequencyState> frequencyStates,
     std::span<const std::complex<double>> epsilons,
+    std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   static_assert(ImageCount >= 1U && ImageCount <= 3U);
   const std::size_t frequencyCount = frequencyStates.size();
@@ -1196,6 +1204,10 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     throw ValidationError(
         "fused Cartesian Cerveny workspace and receiver-grid sizes must "
         "match");
+  }
+  if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
+    throw ValidationError(
+        "fused Cartesian Cerveny range partition is invalid");
   }
   if constexpr (CollectStatistics) {
     // One fused ray call covers Nf per-(ray, frequency) accumulations.
@@ -1356,8 +1368,13 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
       ++statistics->eligibleSegments;
     }
 
-    for (std::size_t oneBasedRange = firstUpper + 1U;
-         oneBasedRange <= secondUpper; ++oneBasedRange) {
+    const std::size_t firstPartitionRange = rangeBegin + 1U;
+    const std::size_t lastPartitionRange = rangeEnd;
+    const std::size_t firstRange =
+        std::max(firstUpper + 1U, firstPartitionRange);
+    const std::size_t lastRange = std::min(secondUpper, lastPartitionRange);
+    for (std::size_t oneBasedRange = firstRange;
+         oneBasedRange <= lastRange; ++oneBasedRange) {
       if constexpr (CollectStatistics) {
         ++statistics->receiverRangeEvaluations;
         ++statistics->geometryRangeEvaluations;

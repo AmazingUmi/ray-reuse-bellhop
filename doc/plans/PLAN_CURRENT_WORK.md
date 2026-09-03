@@ -1,6 +1,6 @@
 # 当前工作与待决事项
 
-> 更新日期：2026-09-02
+> 更新日期：2026-09-03
 
 ## 当前状态
 
@@ -10,13 +10,11 @@
 | F2CPP → RayReuse Feature Parity | `RR-B1`～`RR-B4`、`FP-1A`～`FP-2I` 全部 `ACCEPTED / CLOSED`；当前无 active Feature Parity Batch | [`REPORT_FEATURE_PARITY_FINAL.md`](../../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md) |
 | RayReuse production baseline | `Production Feature Parity: COMPLETE`；`Remaining F2CPP parity GAP: 0`；accepted production HEAD `0721fb3` | [`../../Bellhop_RayReuse/doc/status/STATUS_PROGRESS.md`](../../Bellhop_RayReuse/doc/status/STATUS_PROGRESS.md) |
 | Origin oracle | GNU Fortran/gfortran 为唯一支持工具链，继续作为科学与文件行为基准 | [`../../Bellhop_origin/doc/README.md`](../../Bellhop_origin/doc/README.md) |
-| IGR-1（Cross-Frequency Cartesian Cerveny Influence Fusion） | **`ACCEPTED / CLOSED`（2026-09-02，独立 final review）**。CC coherent fused 参考路径以 `--execution-mode fused` 落地为 opt-in 实验模式；数值上与现行 reuse 全程 bitwise 一致（cache fingerprint / raw workspace / scaled workspace / SHD SHA-256 四级 gate 全 PASS）；geometry 计数精确降为 1/Nf、frequency-kernel 计数不变；**wall-time 判定 `NOT_VIABLE`**（2F/8F/16F fused 均慢于 reuse：0.70/0.96/0.93，归因见 R06 §8：几何非瓶颈、fused 布局损失内存局部性），fused 不成为默认生产路径 | [`REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md)、[`REPORT_IGR1_CC_FUSION_BATCH_ACCEPTANCE.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_BATCH_ACCEPTANCE.md)、[`IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md`](../../Bellhop_RayReuse/doc/reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md)、[`IGR-1_CC_FUSION_WORKLIST.md`](../../Bellhop_RayReuse/doc/worklists/IGR-1_CC_FUSION_WORKLIST.md) |
+| IGR-1（Cross-Frequency Cartesian Cerveny Influence Fusion） | **`ACCEPTED / CLOSED`（2026-09-02，独立 final review）**。CC coherent fused 参考路径以 `--execution-mode fused` 落地为 opt-in 实验模式；数值上与现行 reuse 全程 bitwise 一致（cache fingerprint / raw workspace / scaled workspace / SHD SHA-256 四级 gate 全 PASS）；geometry 计数精确降为 1/Nf、frequency-kernel 计数不变；**wall-time 判定 `NOT_VIABLE`**（2F/8F/16F 的 `fused/reuse` 约为 1.425/1.038/1.077，归因见 R06 §8：几何非瓶颈、fused 布局损失内存局部性），fused 当时不成为默认生产路径 | [`REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md)、[`REPORT_IGR1_CC_FUSION_BATCH_ACCEPTANCE.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_BATCH_ACCEPTANCE.md)、[`IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md`](../../Bellhop_RayReuse/doc/reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md)、[`IGR-1_CC_FUSION_WORKLIST.md`](../../Bellhop_RayReuse/doc/worklists/IGR-1_CC_FUSION_WORKLIST.md) |
+| IGR-2（Fused Influence Productionization & Optional Range Parallelism） | **`ACCEPTED / CLOSED`（2026-09-03，独立 final review）**。L1/L1c layout 升格为支持域内 RayReuse 主路径，`[R][D][F]` 为 production pressure hot layout；静态连续 range parallel 为显式可选优化，开启时默认 4 workers。legacy `reuse`/frequency-`parallel` 兼容保留并在 fused 可替代域内 deprecated；`nonreuse` 保留 reference/global default。16F 本地 dirty-worktree evidence 的 median wall：w1 86.133s、w2 45.585s、w4 27.742s、w8 22.953s，w8 speedup 3.75x；artifact 未记录 exact dirty diff hash，不能作为可精确重建的 commit identity | [`REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md)、[`IGR2_FINAL_REVIEW_2026-09-03.md`](../../Bellhop_RayReuse/doc/reviews/IGR2_FINAL_REVIEW_2026-09-03.md) |
 
-Feature Parity baseline 已冻结。当前没有已批准、正在实施的 Feature Parity Batch，
-也不要从已关闭 Worklist、历史计划或 performance finding 中自动恢复任务。
-IGR-1 已关闭且其 fused 路径判定为 wall-time `NOT_VIABLE`；**IGR 整体未宣告完成**，
-任何 IGR-2 方向（其他 beam family 融合、frequency blocking、并行融合、layout-tuned
-变体等）都需要用户依据 IGR-1 实测数据明确批准后才启动。
+Feature Parity baseline 已冻结。IGR-2 已 `ACCEPTED / CLOSED`，当前没有
+active IGR Batch。本轮未进入 IGR-3。
 
 ## 待用户决定
 
@@ -25,9 +23,10 @@ IGR-1 已关闭且其 fused 路径判定为 wall-time `NOT_VIABLE`；**IGR 整�
   persistent geometry cache 原型方向。
 - [x] 批准并执行 IGR-1（2026-09-02 全流程完成，`ACCEPTED / CLOSED`；性能结论
   `NOT_VIABLE`，correctness 完整保持）。
-- [ ] 是否基于 IGR-1 数据进入任何后续 IGR 批次（建议排序见
-  [`REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](../../Bellhop_RayReuse/doc/reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md) §8；
-  默认建议：停止 serial-fusion 方向的 IGR 优化，wall-time 需求转向 parallel 路径）。
+- [x] 基于 IGR-1p layout 与 static range-parallel 证据进入 IGR-2；当前
+  construction 已完成，acceptance finding remediation 已完成。
+- [x] IGR-2 Batch Acceptance 与独立 final review 通过（2026-09-03）；
+  `ACCEPTED / CLOSED`，未启动 IGR-3。
 - [ ] 决定远端 CI 首次运行、分支保护和公开发布前置条件；这些需要外部权限或
   产品决策，不属于本地代码未完成项。
 

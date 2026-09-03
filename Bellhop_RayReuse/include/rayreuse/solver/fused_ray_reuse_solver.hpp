@@ -13,6 +13,17 @@
 
 namespace rayreuse {
 
+// Single source of truth for the production fused solver's scientific and
+// receiver-grid support boundary. CLI compatibility warnings use this same
+// predicate so they cannot advertise fused as a replacement for a case the
+// solver will reject.
+[[nodiscard]] bool supportsFusedRayReuse(
+    const SimulationCase& simulation);
+
+struct FusedRayReuseExecutionSettings {
+  std::size_t requestedRangeWorkers{1U};
+};
+
 // Level-B parity seam (design §3.1): raw (unscaled) per-frequency workspaces
 // plus block-level timings and fused-run Influence statistics.
 struct FusedAccumulationResult {
@@ -24,6 +35,8 @@ struct FusedAccumulationResult {
   std::size_t rayCount{};
   std::size_t totalRayPointCount{};
   std::size_t rayCacheBytes{};
+  std::size_t requestedRangeWorkers{};
+  std::size_t effectiveRangeWorkers{};
 };
 
 // Same fields and meanings as SerialRayReuseStatistics (fused-run shape, so
@@ -40,15 +53,15 @@ struct FusedRayReuseStatistics {
   std::uint64_t cacheFingerprintAfter{};
   std::vector<std::uint64_t> sourceCacheFingerprintsBefore;
   std::vector<std::uint64_t> sourceCacheFingerprintsAfter;
+  std::size_t requestedRangeWorkers{};
+  std::size_t effectiveRangeWorkers{};
 };
 
-// IGR-1 R03 experimental serial fused orchestration.  Structurally separate
-// from SerialRayReuseSolver (D10): traces the frozen fan once, projects and
-// accumulates all frequencies per ray through the fused Cartesian Cerveny
-// kernel, then scales and delivers per frequency in index order.  Scope
-// (design §2): transmission loss, Cartesian Cerveny coherent pressure,
-// rectilinear uniform-range receivers, single source, >= 2 frequencies;
-// everything else is rejected deterministically (no silent fallback).
+// Production RayReuse broadband TL orchestration for coherent Cartesian
+// Cerveny pressure. Traces the frozen fan once, projects and accumulates all
+// frequencies per ray through the fused kernel, then scales and delivers per
+// frequency in index order. Optional static range partitioning preserves the
+// serial accumulation stream for every pressure cell.
 class FusedRayReuseSolver {
  public:
   // Level-B seam: no tracing, no scaling, no cache mutation, no consumer.
@@ -56,7 +69,8 @@ class FusedRayReuseSolver {
   [[nodiscard]] static FusedAccumulationResult accumulateFrequencies(
       const SimulationCase& simulation, const RayPathCache& sourceCache,
       double epsilonMultiplier, double loopRange,
-      CartesianCervenySettings influenceSettings = {});
+      CartesianCervenySettings influenceSettings = {},
+      FusedRayReuseExecutionSettings executionSettings = {});
 
   // Production entry; mirrors SerialRayReuseSolver::solveStreaming semantics
   // (consumer invoked per frequency index after that frequency's scale).
@@ -64,7 +78,8 @@ class FusedRayReuseSolver {
       const SimulationCase& simulation, double epsilonMultiplier,
       double loopRange, const RayReuseFrequencyConsumer& consumer,
       CartesianCervenySettings influenceSettings = {},
-      bool verifyCacheFingerprint = false);
+      bool verifyCacheFingerprint = false,
+      FusedRayReuseExecutionSettings executionSettings = {});
 };
 
 }  // namespace rayreuse

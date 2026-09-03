@@ -3,8 +3,8 @@
 ## 目标与适用范围
 
 `test/standard_cases/codes/benchmark_rayreuse.py` 用同一标准算例输入比较
-`nonreuse`、`reuse` 和 `parallel`。它直接调用 Release 可执行程序，以便固定
-并记录 parallel workers、输出队列容量和内存预算。
+`nonreuse`、`reuse`、`fused` 和 `parallel`。它直接调用 Release 可执行程序，
+并记录 legacy frequency-parallel workers、输出队列容量和内存预算。
 
 跨模式的主性能指标是外部测得的 `real_seconds`。PRT 内的 Trace、Project、
 Influence、Scale、solver wall 和 SHD 时间用于定位热点；不同模式的 solver
@@ -35,6 +35,11 @@ uv run python test/standard_cases/codes/benchmark_rayreuse.py \
   --executable Bellhop_RayReuse/build/release/bellhop_rayreuse \
   --output Bellhop_RayReuse/build/benchmarks/regression.json
 ```
+
+`--parallel-workers` 只展开 legacy `parallel` 配置。`--fused-range-workers
+1,2,4,8` 则将 `fused` 展开为静态 receiver-range worker 配置，并使用
+相同的外部 wall/RSS/PRT/SHD 协议。不要把 legacy frequency-worker 与
+range-worker 数据混为一列。
 
 开发中的非正式烟测可显式增加 `--allow-dirty`。报告会保留
 `git.dirty = true`，此类结果不得作为发布性能记录。

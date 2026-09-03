@@ -2,7 +2,8 @@
 
 本目录是独立的 C++20 多频 Bellhop 实现。它已完成
 Bellhop_F2CPP 二维 production surface 的 Feature Parity，并在此基础上提供
-`nonreuse`、`reuse` 和 `parallel` broadband execution。
+`nonreuse` reference、production `fused` RayReuse，以及兼容保留的 legacy
+`reuse` / frequency-`parallel` broadband execution。
 
 ```text
 Bellhop_F2CPP → Bellhop_RayReuse
@@ -26,7 +27,9 @@ Final acceptance documentation commit: 88ba8b7
 - `RayPath`/`RayPathCache` 保存 frequency-independent frozen geometry；
 - 幅相、复走时、反射结果、Influence/Arrival/Eigenray workspace 和 writer state
   均为 frequency-local；
-- `reuse` 与 `parallel` 不把逐频声学状态写回 frozen cache；
+- 所有 RayReuse 路径都不把逐频声学状态写回 frozen cache；
+- production fused CC TL 使用 `[range][depth][frequency]` pressure hot
+  layout；可选 range workers 各自独占连续 receiver-range block；
 - F2CPP 和 Origin 只作为 reference/oracle，不参与 RayReuse production ownership；
 - support matrix 中的 evidence-bounded 组合边界仍适用，尤其不得把 Q 的已验收
   slice 外推为所有 SSP × beam × product 组合。
@@ -102,11 +105,24 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 ```
 
 - `nonreuse`：每个频率独立 trace 与 projection，作为 execution baseline；
-- `reuse`：只 trace 一次 frozen geometry，再逐频执行 acoustic projection；
-- `parallel`：共享 frozen geometry，以有界 worker/queue 并行逐频 projection，
-  并由单 writer 保持确定性发布顺序。
+- `fused`：支持域内的 production RayReuse 主路径；一次 trace 后在 ray 内跨频率
+  fused Influence，默认 serial；
+- `reuse`：legacy 逐频串行 cache-reuse compatibility path；
+- `parallel`：legacy frequency-parallel compatibility path。
 
-并行示例：
+production receiver-range parallel 示例：
+
+```bash
+Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+  --frequencies-hz 50,100,250 \
+  --execution-mode fused \
+  --range-parallel \
+  --workers 8
+```
+
+`--range-parallel` 未指定 `--workers` 时默认请求 4 workers；effective workers
+会 clamp 到 receiver range 数。单独指定 `--workers` 不会隐式开启 range
+parallel。legacy frequency-parallel 示例：
 
 ```bash
 Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
@@ -117,8 +133,8 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
   --memory-budget-mib 4096
 ```
 
-`--workers` 默认采用硬件并发数；完成队列容量只能为 1 或 2，默认 2。显式
-memory budget 限制 cache 与活动 frequency workspaces，不等同于整个进程 RSS。
+legacy `parallel` 的 `--workers` 默认采用硬件并发数；完成队列容量只能为 1 或
+2，默认 2。显式 memory budget 限制 cache 与活动 frequency workspaces，不等同于整个进程 RSS。
 RayReuse 也接受 ENV 频率记录中的严格递增列表；CLI 覆盖优先于 ENV。
 
 ## Profiling 与 benchmark

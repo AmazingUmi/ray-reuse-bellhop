@@ -11,8 +11,8 @@ Accepted production HEAD: 0721fb3
 Final acceptance documentation commit: 88ba8b7
 ```
 
-当前没有 active Feature Parity Batch。新的 research/performance 候选只有在用户
-明确批准后才进入 active work。
+IGR-2 已 `ACCEPTED / CLOSED`：已保留的 fused layout 是支持域内的
+production RayReuse 主路径，可选静态 receiver-range parallelism 已产品化。
 
 ## 当前权威入口
 
@@ -33,10 +33,17 @@ Final acceptance documentation commit: 88ba8b7
 | IGR-1 执行 Worklist（R01–R06 全部 DONE） | [`worklists/IGR-1_CC_FUSION_WORKLIST.md`](./worklists/IGR-1_CC_FUSION_WORKLIST.md) |
 | IGR-1 冻结设计 | [`worklists/DESIGN_IGR1_CC_FUSION.md`](./worklists/DESIGN_IGR1_CC_FUSION.md) |
 | IGR-1 最终独立评审（`ACCEPTED`） | [`reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md`](./reviews/IGR1_CC_FUSION_FINAL_REVIEW_2026-09-02.md) |
+| **IGR-2 冻结设计** | [`worklists/DESIGN_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION.md`](./worklists/DESIGN_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION.md) |
+| **IGR-2 closed worklist** | [`worklists/IGR-2_FUSED_INFLUENCE_PRODUCTIONIZATION_WORKLIST.md`](./worklists/IGR-2_FUSED_INFLUENCE_PRODUCTIONIZATION_WORKLIST.md) |
+| **IGR-2 final review (`ACCEPTED`)** | [`reviews/IGR2_FINAL_REVIEW_2026-09-03.md`](./reviews/IGR2_FINAL_REVIEW_2026-09-03.md) |
 | HDF5 延后决策 | [`decisions/DECISION_HDF5_SCHEMA.md`](./decisions/DECISION_HDF5_SCHEMA.md) |
 | 已完成计划和历史基准 | [`archive/README.md`](./archive/README.md) |
 
-当前恢复路径是：**Trajectory Reuse 已完成 → IGR-0 架构冻结 → IGR-1 已 `ACCEPTED / CLOSED`（CC fused 参考路径：bitwise parity 完整保持，geometry 计数精确降为 1/Nf；wall-time 判定 `NOT_VIABLE`，`--execution-mode fused` 保留为 opt-in 实验模式，未成为默认生产路径）**。IGR 整体（其他 beam family / blocking / 并行融合）**未**由此宣告完成，是否进入 IGR-2 由用户依据 IGR-1 实测数据再决定。新的候选方向统一从 [`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入。frequency interpolation、BARR、SIMD、HDF5 等也均非 active task。
+当前路径是：**Trajectory Reuse 已完成 → IGR-1 已 `ACCEPTED / CLOSED` →
+IGR-1p 保留 L1/L1c locality layout → IGR-2 已完成 fused CC TL
+与可选静态 range parallel productionization**。IGR-2 不扩展 beam/product/source/receiver 支持域；
+dynamic tiles、frequency blocking 与 L1b 均未保留。新的候选方向统一从
+[`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入。
 
 ## 目录语义
 

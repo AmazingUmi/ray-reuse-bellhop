@@ -40,6 +40,8 @@ void testSingleFrequencyCompatibility(Context& context) {
                 "Influence profiling is disabled by default");
   context.check(!options.profileFrequencyTasks,
                 "frequency-task profiling is disabled by default");
+  context.check(!options.rangeParallel,
+                "receiver-range parallelism is disabled by default");
 }
 
 void testExecutionMode(Context& context) {
@@ -71,17 +73,31 @@ void testExecutionMode(Context& context) {
                     parallel.outputQueueCapacitySpecified &&
                     parallel.memoryBudgetSpecified,
                 "parallel tuning option presence is tracked");
-  const CommandLineOptions fused =
+  const CommandLineOptions fusedSerial =
       parse({"case/root", "--frequencies-hz", "50,250", "--execution-mode",
              "fused"});
-  context.check(fused.executionMode == BroadbandExecutionMode::Fused,
+  context.check(fusedSerial.executionMode == BroadbandExecutionMode::Fused,
                 "fused execution mode is selected explicitly");
-  context.check(fused.executionModeSpecified,
+  context.check(fusedSerial.executionModeSpecified,
                 "fused execution mode is tracked for product validation");
-  context.check(!fused.workerCountSpecified &&
-                    !fused.outputQueueCapacitySpecified &&
-                    !fused.memoryBudgetSpecified,
-                "fused mode keeps parallel tuning options unspecified");
+  context.check(!fusedSerial.rangeParallel &&
+                    !fusedSerial.workerCountSpecified,
+                "fused mode remains serial without --range-parallel");
+
+  const CommandLineOptions fusedDefaultRange = parse(
+      {"case/root", "--execution-mode", "fused", "--range-parallel"});
+  context.check(fusedDefaultRange.rangeParallel &&
+                    !fusedDefaultRange.workerCountSpecified,
+                "range-parallel fused leaves the app to resolve default 4");
+
+  const CommandLineOptions fusedExplicitRange =
+      parse({"case/root", "--workers", "8", "--range-parallel",
+             "--execution-mode", "fused"});
+  context.check(fusedExplicitRange.rangeParallel &&
+                    fusedExplicitRange.workerCountSpecified &&
+                    fusedExplicitRange.workerCount == 8U,
+                "range-parallel fused accepts an order-independent worker "
+                "override");
 }
 
 void testFrequencyOverride(Context& context) {
@@ -120,9 +136,9 @@ void testInvalidArguments(Context& context) {
   context.expectThrows<ValidationError>(
       [] {
         static_cast<void>(parse({"root", "--execution-mode", "fused",
-                                 "--workers", "4"}));
+                                 "--output-queue-capacity", "1"}));
       },
-      "fused mode rejects parallel tuning options");
+      "fused mode rejects parallel output queue tuning");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--workers", "0"})); },
       "zero worker count is rejected");
@@ -142,7 +158,34 @@ void testInvalidArguments(Context& context) {
       "non-integral memory budget is rejected");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--workers", "4"})); },
-      "parallel tuning requires parallel mode");
+      "workers alone do not enable receiver-range parallelism");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "fused", "--workers", "4"}));
+      },
+      "fused workers require explicit receiver-range parallelism");
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--range-parallel"})); },
+      "range parallelism never selects fused implicitly");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "parallel",
+                                 "--range-parallel"}));
+      },
+      "legacy frequency-parallel mode rejects range parallelism");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                 "--range-parallel"}));
+      },
+      "legacy serial reuse rejects range parallelism");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "fused",
+                                 "--range-parallel", "--range-parallel"}));
+      },
+      "duplicate receiver-range parallel option is rejected");
   context.expectThrows<ValidationError>(
       [] {
         static_cast<void>(

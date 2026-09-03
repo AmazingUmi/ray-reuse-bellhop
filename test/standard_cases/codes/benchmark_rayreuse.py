@@ -57,11 +57,17 @@ from standard_cases import (
 class BenchmarkConfiguration:
     execution_mode: str
     parallel_workers: int | None = None
+    fused_range_workers: int | None = None
     output_queue_capacity: int | None = None
     memory_budget_mib: int | None = None
 
     @property
     def identifier(self) -> str:
+        if (
+            self.execution_mode == "fused"
+            and self.fused_range_workers is not None
+        ):
+            return f"fused-range-w{self.fused_range_workers}"
         if self.execution_mode != "parallel":
             return self.execution_mode
         memory = (
@@ -169,6 +175,7 @@ def expand_configurations(
     parallel_workers: Sequence[int],
     output_queue_capacity: int,
     memory_budget_mib: int | None,
+    fused_range_workers: Sequence[int] = (),
 ) -> tuple[BenchmarkConfiguration, ...]:
     if not modes:
         raise ValueError("at least one execution mode is required")
@@ -176,6 +183,12 @@ def expand_configurations(
         raise ValueError("output queue capacity must be 1 or 2")
     if memory_budget_mib is not None and memory_budget_mib <= 0:
         raise ValueError("memory budget must be positive")
+    if fused_range_workers and "fused" not in modes:
+        raise ValueError(
+            "fused range worker counts require fused execution mode"
+        )
+    if any(worker_count <= 0 for worker_count in fused_range_workers):
+        raise ValueError("fused range worker counts must be positive")
 
     configurations: list[BenchmarkConfiguration] = []
     seen_modes: set[str] = set()
@@ -185,6 +198,15 @@ def expand_configurations(
         if mode in seen_modes:
             raise ValueError(f"duplicate execution mode: {mode}")
         seen_modes.add(mode)
+        if mode == "fused" and fused_range_workers:
+            for worker_count in fused_range_workers:
+                configurations.append(
+                    BenchmarkConfiguration(
+                        execution_mode=mode,
+                        fused_range_workers=worker_count,
+                    )
+                )
+            continue
         if mode != "parallel":
             configurations.append(BenchmarkConfiguration(mode))
             continue
@@ -349,6 +371,8 @@ def parse_prt_metrics(
         "cumulative ray cache bytes": "cumulative_ray_cache_bytes",
         "peak ray cache bytes": "peak_ray_cache_bytes",
         "requested worker count": "requested_worker_count",
+        "requested range worker count": "requested_range_worker_count",
+        "effective range worker count": "effective_range_worker_count",
         "active frequency limit": "active_frequency_limit",
         "output queue capacity": "output_queue_capacity",
         "peak queued results": "peak_queued_results",
@@ -401,6 +425,13 @@ def parse_prt_metrics(
             metrics[result_name] = _parse_nonnegative_integer(
                 fields[prt_name], prt_name
             )
+    if "range parallel" in fields:
+        range_parallel = fields["range parallel"]
+        if range_parallel not in ("enabled", "disabled"):
+            raise ValueError(
+                "PRT field 'range parallel' must be enabled or disabled"
+            )
+        metrics["range_parallel"] = range_parallel == "enabled"
     optional_float_fields = {
         "Influence validation seconds": "influence_validation_seconds",
         "Influence precompute seconds": "influence_precompute_seconds",
@@ -493,7 +524,14 @@ def validate_prt_metrics(
             "peak_ray_cache_bytes",
         ),
         "reuse": ("ray_count", "ray_point_count", "ray_cache_bytes"),
-        "fused": ("ray_count", "ray_point_count", "ray_cache_bytes"),
+        "fused": (
+            "ray_count",
+            "ray_point_count",
+            "ray_cache_bytes",
+            "range_parallel",
+            "requested_range_worker_count",
+            "effective_range_worker_count",
+        ),
         "parallel": (
             "ray_count",
             "ray_point_count",
@@ -534,6 +572,29 @@ def validate_prt_metrics(
             "unexpected PRT frequency-task timings without profiling"
         )
 
+    if configuration.execution_mode == "fused":
+        expected_range_parallel = (
+            configuration.fused_range_workers is not None
+        )
+        if metrics["range_parallel"] != expected_range_parallel:
+            raise ValueError(
+                "PRT range-parallel state does not match request"
+            )
+        expected_requested_workers = configuration.fused_range_workers or 1
+        if (
+            metrics["requested_range_worker_count"]
+            != expected_requested_workers
+        ):
+            raise ValueError(
+                "PRT requested range worker count does not match request"
+            )
+        if not 1 <= metrics["effective_range_worker_count"] <= (
+            expected_requested_workers
+        ):
+            raise ValueError(
+                "PRT effective range worker count is outside valid bounds"
+            )
+        return
     if configuration.execution_mode != "parallel":
         return
     if metrics["requested_worker_count"] != configuration.parallel_workers:
@@ -856,6 +917,17 @@ def _sample_command(
             )
         if profile_frequency_tasks:
             command.append("--profile-frequency-tasks")
+    elif (
+        configuration.execution_mode == "fused"
+        and configuration.fused_range_workers is not None
+    ):
+        command.extend(
+            (
+                "--range-parallel",
+                "--workers",
+                str(configuration.fused_range_workers),
+            )
+        )
     return command
 
 
@@ -1206,6 +1278,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CSV",
     )
     parser.add_argument(
+        "--fused-range-workers",
+        type=parse_positive_integer_csv,
+        default=(),
+        metavar="CSV",
+        help=(
+            "expand fused mode into static receiver-range worker "
+            "configurations (for example '1,2,4,8'); omitted keeps the "
+            "serial fused configuration"
+        ),
+    )
+    parser.add_argument(
         "--queue",
         type=positive_integer,
         choices=(1, 2),
@@ -1308,6 +1391,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.parallel_workers,
             args.output_queue_capacity,
             args.memory_budget_mib,
+            args.fused_range_workers,
         )
         if args.profile_frequency_tasks and any(
             configuration.execution_mode != "parallel"
@@ -1372,6 +1456,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     not args.no_cross_mode_shd_check
                 ),
                 "profile_frequency_tasks": args.profile_frequency_tasks,
+                "fused_range_workers": list(args.fused_range_workers),
             },
             "cases": cases,
         }

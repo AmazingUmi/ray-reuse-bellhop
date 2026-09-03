@@ -12,6 +12,8 @@
 | [`REPORT_IGR1_R01_BASELINE.md`](./REPORT_IGR1_R01_BASELINE.md) | 2026-09-02 | IGR-1 R01 计数器拆分与 frequency-major baseline（2F/8F/16F） |
 | [`REPORT_IGR1_R05_PARITY.md`](./REPORT_IGR1_R05_PARITY.md) | 2026-09-02 | IGR-1 R05 Level A–D parity 矩阵（13 用例 + 4 fixture，全部 bitwise PASS） |
 | [`REPORT_IGR1_R06_PERFORMANCE.md`](./REPORT_IGR1_R06_PERFORMANCE.md) | 2026-09-02 | IGR-1 R06 性能与内存验收（`NOT_VIABLE` 判定与归因；32F/64F 延后） |
+| [`REPORT_IGR1p_LAYOUT_EXPERIMENTS.md`](./REPORT_IGR1p_LAYOUT_EXPERIMENTS.md) | 2026-09-02～03；L1 `1ffc1d8`，L1c `bd4816a` | IGR-1p layout 与并行筛选：L1/L1c retained，blocking/L1b/dynamic tiles 未保留，static range partition 交付 IGR-2 |
+| [`REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md`](./REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md) | 2026-09-03；construction baseline `bd4816a` | IGR-2 实现、bitwise/regression gate 与 16F static range-worker 性能验收 |
 | [`REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md`](./REPORT_INFLUENCE_FREQUENCY_AUDIT_2026-08-25.md) | 2026-08-25，`8300c89` | historical / partially superseded architecture audit；保留数据流与热点证据，不是当前 IGR implementation roadmap |
 | [`REPORT_CROSS_COMPILER_H4_2026-08-07.md`](./REPORT_CROSS_COMPILER_H4_2026-08-07.md) | 2026-08-07 | AppleClang/GCC 构建、数值和资源矩阵 |
 | [`REPORT_MODEL_MATRIX_06E390F_2026-08-01.md`](./REPORT_MODEL_MATRIX_06E390F_2026-08-01.md) | 2026-08-01，`06e390f` | 三模型 single/broadband 数值矩阵 |

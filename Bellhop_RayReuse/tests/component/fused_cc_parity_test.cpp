@@ -125,7 +125,8 @@ struct WorkspaceByteComparison {
           rayreuse::SspInterpolationKind::CLinear),
       Source{.depth = 1000.0, .amplitude = 1.0},
       ReceiverGrid({0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0},
-                   {0.0, 2500.0, 5000.0, 7500.0, 10000.0}),
+                   {0.0, 1250.0, 2500.0, 3750.0, 5000.0, 6250.0, 7500.0,
+                    8750.0, 10000.0}),
       frequencies,
       LaunchFan{.minimumAngle = -12.0 * kRadiansPerDegree,
                 .maximumAngle = 12.0 * kRadiansPerDegree,
@@ -169,7 +170,9 @@ struct WorkspaceByteComparison {
                              .powerLawExponent = 2.0,
                              .transitionFrequency = 1.0e9}})),
       Source{.depth = 50.0, .amplitude = 1.0},
-      ReceiverGrid({10.0, 55.0, 100.0}, {25.0, 50.0, 75.0}),
+      ReceiverGrid({10.0, 55.0, 100.0},
+                   {10.0, 21.25, 32.5, 43.75, 55.0, 66.25, 77.5, 88.75,
+                    100.0}),
       FrequencyGrid({100.0, 1000.0}),
       LaunchFan{.minimumAngle = -60.0 * kRadiansPerDegree,
                 .maximumAngle = 60.0 * kRadiansPerDegree,
@@ -241,7 +244,7 @@ void checkDivergentPrefixes(Context& context,
 // comparison isolates the fused-vs-reuse path, not the influence options.
 void testParityLevels(Context& context, const SimulationCase& simulation,
                       const CartesianCervenySettings& settings,
-                      const char* label) {
+                      const char* label, std::size_t workerCount = 1U) {
   const std::vector<double>& frequencies = simulation.frequencies().values();
 
   // Shared frozen fan: traced once, consumed by every level below.
@@ -262,11 +265,18 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
 
   // Level B fused side.
   const rayreuse::FusedAccumulationResult fused =
-      FusedRayReuseSolver::accumulateFrequencies(simulation, trace.cache, 1.0,
-                                                 50.0, settings);
+      FusedRayReuseSolver::accumulateFrequencies(
+          simulation, trace.cache, 1.0,
+          50.0, settings,
+          rayreuse::FusedRayReuseExecutionSettings{
+              .requestedRangeWorkers = workerCount});
   context.check(fused.rawWorkspace.frequencyCount() == frequencies.size() &&
                     fused.rayCount == trace.cache.size() &&
-                    fused.rayCacheBytes == trace.cache.memoryFootprintBytes(),
+                    fused.rayCacheBytes == trace.cache.memoryFootprintBytes() &&
+                    fused.requestedRangeWorkers == workerCount &&
+                    fused.effectiveRangeWorkers ==
+                        std::min(workerCount,
+                                 simulation.receivers().rangeCount()),
                 std::string(label) + " Level B result carries every frequency "
                                      "and the shared cache metrics");
   // Timing fields exist and follow the frozen seam contract; no timing values
@@ -308,7 +318,16 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
             streamedScaleSeconds.at(frequencyIndex) = timings.scaleSeconds;
             streamed.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
           },
-          settings, true);
+          settings, true,
+          rayreuse::FusedRayReuseExecutionSettings{
+              .requestedRangeWorkers = workerCount});
+
+  context.check(
+      fusedStatistics.requestedRangeWorkers == workerCount &&
+          fusedStatistics.effectiveRangeWorkers ==
+              std::min(workerCount, simulation.receivers().rangeCount()),
+      std::string(label) +
+          " Level C reports requested/effective range workers");
 
   context.check(
       callbackOrder.size() == frequencies.size() &&
@@ -353,6 +372,20 @@ int main() {
   // Fixture A: Munk CC coherent, default settings (imageCount = 3).
   testParityLevels(context, makeMunkSmallCase(), CartesianCervenySettings{},
                    "fixture A (munk CC, 3 images)");
+  // Receiver-range parallel gate: 16 frequencies and >= 8 real ranges, with
+  // every requested worker count used by the performance screen.
+  {
+    const SimulationCase parallelSimulation = makeMunkSmallCase(FrequencyGrid(
+        {50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0,
+         500.0, 550.0, 600.0, 650.0, 700.0, 750.0, 800.0}));
+    for (const std::size_t workerCount : {1U, 2U, 4U, 8U}) {
+      const std::string label =
+          "fixture A parallel (16F, " + std::to_string(workerCount) +
+          " workers)";
+      testParityLevels(context, parallelSimulation,
+                       CartesianCervenySettings{}, label.c_str(), workerCount);
+    }
+  }
   // Fixture A2: kernel dispatch coverage for imageCount = 2.
   testParityLevels(context, makeMunkSmallCase(),
                    CartesianCervenySettings{.imageCount = 2U},
@@ -367,7 +400,7 @@ int main() {
     checkDivergentPrefixes(context, trace.cache, simulation,
                            "fixture B (lossy halfspace)");
     testParityLevels(context, simulation, CartesianCervenySettings{},
-                     "fixture B (lossy halfspace)");
+                     "fixture B parallel (lossy halfspace, 8 workers)", 8U);
   }
   // Fixture C: WKB beam width variant on the Fixture A geometry (epsilon
   // real; alternate KMAH branch rule inside updateCervenyKmah).

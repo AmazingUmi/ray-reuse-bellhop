@@ -164,6 +164,7 @@ class CartesianCervenyInfluence {
       std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
@@ -172,6 +173,7 @@ class CartesianCervenyInfluence {
       std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) const;
 
   template <bool CollectStatistics>

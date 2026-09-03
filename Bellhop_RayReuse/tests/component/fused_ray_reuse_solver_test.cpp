@@ -29,6 +29,7 @@ using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::FrequencyWorkspace;
+using rayreuse::FusedRayReuseExecutionSettings;
 using rayreuse::FusedRayReuseSolver;
 using rayreuse::FusedRayReuseStatistics;
 using rayreuse::IntegratorSettings;
@@ -45,6 +46,7 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
 using rayreuse::ValidationError;
+using rayreuse::supportsFusedRayReuse;
 using rayreuse::test::Context;
 
 // Small in-scope fused fixture: CC coherent, Cartesian, single source,
@@ -92,6 +94,18 @@ void noOpConsumer(std::size_t, std::vector<FrequencyWorkspace>&&,
                   const SingleFrequencyTimings&) {}
 
 void testSolverScopeRejections(Context& context) {
+  context.check(supportsFusedRayReuse(makeSimulation()),
+                "the shared fused-support predicate accepts the production "
+                "fixture");
+  context.check(
+      !supportsFusedRayReuse(makeSimulation(
+          SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+          CervenyCoordinateSystem::Cartesian,
+          FrequencyGrid({50.0, 100.0}),
+          ReceiverGrid({10.0, 55.0}, {25.0, 50.0, 90.0}))),
+      "the shared fused-support predicate excludes a non-equally-spaced "
+      "rectilinear receiver grid from legacy replacement warnings");
+
   std::vector<std::string> messages;
   const auto reject = [&context,
                        &messages](SimulationCase bad, const char* label) {
@@ -124,6 +138,18 @@ void testSolverScopeRejections(Context& context) {
                         ReceiverGrid({10.0, 55.0}, {25.0, 75.0},
                                      ReceiverGridLayout::Irregular)),
          "irregular receiver grid is rejected by the fused solver");
+  reject(makeSimulation(SimulationRunMode::Coherent,
+                        BeamFamily::CervenyGaussian,
+                        CervenyCoordinateSystem::Cartesian,
+                        FrequencyGrid({50.0, 100.0}),
+                        ReceiverGrid({10.0, 55.0}, {25.0})),
+         "one receiver range is rejected by the existing CC domain");
+  reject(makeSimulation(SimulationRunMode::Coherent,
+                        BeamFamily::CervenyGaussian,
+                        CervenyCoordinateSystem::Cartesian,
+                        FrequencyGrid({50.0, 100.0}),
+                        ReceiverGrid({10.0, 55.0}, {25.0, 50.0, 90.0})),
+         "nonuniform receiver ranges are rejected by the fused solver");
   {
     SimulationCase multiSource(
         Environment(
@@ -171,6 +197,20 @@ void testSolverScopeRejections(Context& context) {
       unfrozenMessage.has_value() &&
           unfrozenMessage->starts_with("fused ray-reuse solver"),
       "an unfrozen cache is rejected by the fused Level-B seam");
+
+  const std::optional<std::string> zeroWorkerMessage =
+      capturedValidationMessage([&simulation] {
+        static_cast<void>(FusedRayReuseSolver::solveStreaming(
+            simulation, 1.0, 50.0, noOpConsumer,
+            CartesianCervenySettings{}, false,
+            FusedRayReuseExecutionSettings{.requestedRangeWorkers = 0U}));
+      });
+  context.check(zeroWorkerMessage.has_value() &&
+                    *zeroWorkerMessage ==
+                        "fused ray-reuse requested range worker count must be "
+                        "positive",
+                "the fused solver rejects a zero range-worker count");
+
 }
 
 void testFusedStreamingMatchesSerialReuse(Context& context) {
@@ -205,6 +245,8 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
                 "fused streaming consumes every frequency once");
   context.check(
       statistics.tracePassCount == 1U &&
+          statistics.requestedRangeWorkers == 1U &&
+          statistics.effectiveRangeWorkers == 1U &&
           statistics.rayCount ==
               simulation.launchFanPlan().launchAngleCount &&
           statistics.rayCacheBytes > 0U &&
@@ -246,6 +288,29 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
           statistics.phaseTotals.influenceSeconds >= 0.0 &&
           statistics.phaseTotals.scaleSeconds >= 0.0,
       "fused streaming exposes the block-level phase timings");
+}
+
+void testRangeWorkerResolution(Context& context) {
+  // Cartesian Cerveny itself requires at least two receiver ranges. Use that
+  // smallest supported grid to exercise requested > range-count clamping.
+  const SimulationCase twoRanges = makeSimulation(
+      SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+      CervenyCoordinateSystem::Cartesian, FrequencyGrid({50.0, 100.0}),
+      ReceiverGrid({25.0, 50.0, 75.0}, {10.0, 100.0}));
+  std::size_t callbackCount = 0U;
+  const FusedRayReuseStatistics clamped =
+      FusedRayReuseSolver::solveStreaming(
+          twoRanges, 1.0, 50.0,
+          [&callbackCount](std::size_t,
+                           std::vector<FrequencyWorkspace>&&,
+                           const SingleFrequencyTimings&) { ++callbackCount; },
+          CartesianCervenySettings{}, true,
+          FusedRayReuseExecutionSettings{.requestedRangeWorkers = 8U});
+  context.check(clamped.requestedRangeWorkers == 8U &&
+                    clamped.effectiveRangeWorkers == 2U &&
+                    callbackCount == twoRanges.frequencies().size(),
+                "requested range workers clamp to the receiver range count "
+                "without losing frequency delivery");
 }
 
 void testFusedCounterSemantics(Context& context) {
@@ -300,6 +365,7 @@ int main() {
   Context context;
   testSolverScopeRejections(context);
   testFusedStreamingMatchesSerialReuse(context);
+  testRangeWorkerResolution(context);
   testFusedCounterSemantics(context);
 
   if (context.failureCount() != 0) {
