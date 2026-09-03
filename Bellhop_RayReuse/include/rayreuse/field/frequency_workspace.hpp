@@ -62,6 +62,11 @@ class IntensityWorkspace {
   void clear() noexcept;
 
  private:
+  // IGR-3A design §6.2: fused intensity materialization is a bitwise lane
+  // copy into the payload; the add()-path validation and 0.0 + x
+  // reassociation must not apply, so the fused twin writes directly.
+  friend class FusedIntensityWorkspace;
+
   [[nodiscard]] std::size_t flatIndex(std::size_t depthIndex,
                                       std::size_t rangeIndex) const;
 

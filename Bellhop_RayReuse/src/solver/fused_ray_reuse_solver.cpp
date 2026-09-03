@@ -10,10 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "fused_influence_adapters.hpp"
 #include "rayreuse/error.hpp"
-#include "rayreuse/field/beam_epsilon.hpp"
 #include "rayreuse/field/frequency_projector.hpp"
-#include "rayreuse/field/pressure_scaling.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
 
 namespace rayreuse {
@@ -148,7 +147,15 @@ bool supportsFusedRayReuse(const SimulationCase& simulation) {
   return fusedScopeFailure(simulation) == FusedScopeFailure::None;
 }
 
-FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
+// Unified fused executor (design §3.1-§3.2), migrated in A02 from the former
+// CC-specialized accumulateFrequencies body by pure code motion: worker loop,
+// partition math, join/rethrow, and timing join are verbatim; the CC-specific
+// pieces are the Adapter hooks (kernel ctor, epsilon prep, fused accumulation
+// forwarding, post-scale) and the Sink policy (workspace construction, result
+// assembly) frozen in A01. The scope gate inside still limits the closed set
+// to coherent Cartesian Cerveny until the family tasks widen it.
+template <typename Adapter, typename Sink>
+typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
@@ -171,9 +178,11 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
   const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
       Vec2{.range = 0.0, .depth = source.depth}, 0U);
   const double sourceSoundSpeed = sourceSample.soundSpeed;
-  // One long-lived [range][depth][frequency] pressure allocation. Ordinary
-  // per-frequency workspaces are materialized only after accumulation.
-  FusedPressureWorkspace workspace(simulation.receivers(), frequencyCount);
+  // One long-lived [range][depth][frequency] allocation per run, selected by
+  // the sink policy. Ordinary per-frequency workspaces are materialized only
+  // after accumulation.
+  typename Sink::Workspace workspace =
+      Sink::makeWorkspace(simulation.receivers(), frequencyCount);
 
   const std::size_t rangeCount = simulation.receivers().rangeCount();
   const std::size_t activeWorkerCount =
@@ -181,15 +190,21 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
   std::vector<RangeWorkerResult> workerResults(activeWorkerCount);
   std::vector<std::exception_ptr> workerErrors(activeWorkerCount);
 
+  // Loop-invariant input set of the per-ray family prep hook (design §4).
+  const typename Adapter::PerRayContext context{
+      simulation.beamWidthMode(), sourceSoundSpeed,
+      sourceSample.soundSpeedGradient.depth,
+      launchFan.launchAngleStep, loopRange, epsilonMultiplier};
+
   const auto runWorker = [&](std::size_t workerIndex) {
     try {
       const FrequencyProjector projector(simulation.environment());
-      const CartesianCervenyInfluence influence(
-          simulation.environment(), simulation.receivers(), influenceSettings,
-          simulation.beamWidthMode(), simulation.sourceGeometry());
+      const typename Adapter::Kernel kernel =
+          Adapter::makeKernel(simulation, influenceSettings);
       RangeWorkerResult& result = workerResults[workerIndex];
       std::vector<RayFrequencyState> frequencyStates(frequencyCount);
-      std::vector<std::complex<double>> epsilons(frequencyCount);
+      typename Adapter::PerRayScratch scratch;
+      Adapter::prepareScratch(scratch, frequencyCount);
       const std::size_t quotient = rangeCount / activeWorkerCount;
       const std::size_t remainder = rangeCount % activeWorkerCount;
       const std::size_t rangeBegin =
@@ -220,20 +235,12 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
               path, frequencies[frequencyIndex], projectedSourceAmplitude);
         }
         const Clock::time_point projectEnd = Clock::now();
-        for (std::size_t frequencyIndex = 0U;
-             frequencyIndex < frequencyCount; ++frequencyIndex) {
-          const BeamEpsilon epsilon = pickBeamEpsilon(
-              simulation.beamWidthMode(), frequencies[frequencyIndex],
-              sourceSoundSpeed, sourceSample.soundSpeedGradient.depth,
-              path.launchAngle, launchFan.launchAngleStep, loopRange,
-              epsilonMultiplier);
-          epsilons[frequencyIndex] = epsilon.value;
-        }
-        static_cast<void>(influence.accumulateFusedPrevalidated(
-            workspace, std::span<const double>(frequencies), path,
-            std::span<const RayFrequencyState>(frequencyStates),
-            std::span<const std::complex<double>>(epsilons), rangeBegin,
-            rangeEnd,
+        Adapter::preparePerRay(context, scratch, path,
+                               std::span<const double>(frequencies));
+        static_cast<void>(Sink::template accumulate<Adapter>(
+            kernel, scratch, workspace, std::span<const double>(frequencies),
+            path, std::span<const RayFrequencyState>(frequencyStates),
+            rangeBegin, rangeEnd,
             influenceSettings.collectStatistics
                 ? &result.influenceStatistics
                 : nullptr));
@@ -280,20 +287,48 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
     totalRayPointCount += path.points.size();
   }
 
-  return FusedAccumulationResult{
-      .rawWorkspace = std::move(workspace),
-      .timings =
-          SingleFrequencyTimings{
-              .traceSeconds = 0.0,
-              .projectSeconds = projectSeconds,
-              .influenceSeconds = influenceSeconds,
-              .scaleSeconds = 0.0,
-              .influenceStatistics = influenceStatistics},
-      .rayCount = sourceCache.size(),
-      .totalRayPointCount = totalRayPointCount,
-      .rayCacheBytes = sourceCache.memoryFootprintBytes(),
-      .requestedRangeWorkers = executionSettings.requestedRangeWorkers,
-      .effectiveRangeWorkers = activeWorkerCount};
+  return Sink::makeResult(
+      std::move(workspace),
+      SingleFrequencyTimings{
+          .traceSeconds = 0.0,
+          .projectSeconds = projectSeconds,
+          .influenceSeconds = influenceSeconds,
+          .scaleSeconds = 0.0,
+          .influenceStatistics = influenceStatistics},
+      sourceCache.size(), totalRayPointCount,
+      sourceCache.memoryFootprintBytes(),
+      executionSettings.requestedRangeWorkers, activeWorkerCount);
+}
+
+FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
+    const SimulationCase& simulation, const RayPathCache& sourceCache,
+    double epsilonMultiplier, double loopRange,
+    CartesianCervenySettings influenceSettings,
+    FusedRayReuseExecutionSettings executionSettings) {
+  // A02 dispatcher (design §3.3): the unified executor owns validation and
+  // the worker loop; validation inside the template keeps the closed fused
+  // set at coherent Cartesian Cerveny until the family tasks widen the gate.
+  return accumulateFrequenciesImpl<CartesianCervenyFusedAdapter,
+                                   CoherentFusedSink>(
+      simulation, sourceCache, epsilonMultiplier, loopRange, influenceSettings,
+      executionSettings);
+}
+
+FusedIntensityAccumulationResult
+FusedRayReuseSolver::accumulateFrequenciesIntensity(
+    const SimulationCase& simulation, const RayPathCache& sourceCache,
+    double epsilonMultiplier, double loopRange,
+    CartesianCervenySettings influenceSettings,
+    FusedRayReuseExecutionSettings executionSettings) {
+  // A02b seam (design §3.3/§6.2): the intensity sink routes through the same
+  // executor; the unchanged scope gate still requires the coherent run mode,
+  // so a non-coherent request fails validation with today's message until
+  // the family gate widens in A02b. A coherent request that somehow reaches
+  // the accumulation hook is rejected by the CC adapter's A02b error.
+  return accumulateFrequenciesImpl<CartesianCervenyFusedAdapter,
+                                   IntensityFusedSink>(
+      simulation, sourceCache, epsilonMultiplier, loopRange, influenceSettings,
+      executionSettings);
 }
 
 FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
@@ -358,7 +393,7 @@ FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
         accumulated.rawWorkspace.materializeFrequency(
             frequencyIndex, frequencies[frequencyIndex],
             simulation.receivers());
-    scaleCoherentCartesianPressure(
+    CartesianCervenyFusedAdapter::scaleFrequency(
         frequencyWorkspace, simulation.receivers(), launchFan.launchAngleStep,
         sourceSoundSpeed, simulation.sourceGeometry());
     const double scaleSeconds = elapsedSeconds(scaleBegin, Clock::now());

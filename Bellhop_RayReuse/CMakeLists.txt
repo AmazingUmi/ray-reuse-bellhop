@@ -85,6 +85,7 @@ add_library(
     src/field/simple_gaussian_influence.cpp
     src/field/arrival_workspace.cpp
     src/field/frequency_projector.cpp
+    src/field/fused_intensity_workspace.cpp
     src/field/fused_pressure_workspace.cpp
     src/field/pressure_scaling.cpp
     src/field/ray_centered_cerveny_influence.cpp
