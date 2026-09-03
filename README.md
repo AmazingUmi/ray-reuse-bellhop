@@ -15,17 +15,26 @@ Bellhop_F2CPP → Bellhop_RayReuse
 Production Feature Parity: COMPLETE
 Remaining F2CPP parity GAP: 0
 
-Accepted production HEAD: 0721fb3
-Final acceptance documentation commit: 88ba8b7
+Feature Parity accepted production HEAD: 0721fb3
+Feature Parity final acceptance documentation commit: 88ba8b7
+IGR-2 productionization commit: e7f2705
 ```
 
-RayReuse 在已对齐的二维 production surface 上增加 `nonreuse`、`reuse` 和
-`parallel` 三种 broadband execution mode。详细结论、支持边界和运行方式见：
+RayReuse 在已对齐的二维 production surface 上提供 `nonreuse`、production
+`fused`，以及兼容保留的 legacy `reuse` / frequency-`parallel` broadband
+execution。当前已验收的 fused production 支持域是 Cartesian Cerveny TL，
+并可显式开启静态 receiver-range parallelism。详细结论、支持边界和运行方式见：
 
 - [Feature Parity Final Report](Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)
 - [RayReuse Feature Support Matrix](Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
 - [RayReuse Usage Guide](Bellhop_RayReuse/doc/guides/GUIDE_USAGE.md)
 - [当前项目工作与候选方向](doc/plans/PLAN_CURRENT_WORK.md)
+
+IGR-3 已冻结 future architecture direction，但尚未开始 construction：
+Cross-Frequency Fused + Static Range Parallelism 将作为统一 Influence execution
+architecture，依次适配 remaining TL beam-family kernels 与 Arrival contribution
+sink。该方向不表示这些扩展已经成为 current production support；权威边界见
+[IGR-3 Scope & Architecture Decision](Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
 ## 项目结构
 

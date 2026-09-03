@@ -76,6 +76,12 @@ fused 执行时，显式选择 `reuse` 或 `parallel` 会收到一次 deprecatio
 兼容路径仍按原行为运行。`nonreuse` 保留为 reference，CLI 全局默认也保持
 `nonreuse`，避免把 fused 支持域外的产品静默改道。
 
+上述内容是当前 IGR-2 production CLI。IGR-3 已批准的 future direction 是把
+Cross-Frequency Fused + Static Range Parallel Influence execution 适配到其余
+TL beam-family kernels，并在后续 IGR-3B 适配 Arrival contribution sink；它尚未
+construction/acceptance，因此不改变本指南中的当前命令、默认值或支持域。见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
+
 ## 产品生命周期与错误
 
 - 成功模式切换会清除同 root 的异类产品、旧逐频产品和 `.tmp`；

@@ -1,12 +1,15 @@
 # Influence Geometry Reuse 理论与数值契约
 
-> **状态：CURRENT — 2026-09-01。** 本文是 IGR 的当前理论参考。
-> 当前实现方向唯一冻结为 **Cross-Frequency Influence Geometry Fusion**：通过循环重排，在一次 ray / segment / receiver traversal 中即时复用几何；不先持久化 geometry 再逐频 replay。
-> IGR-1 仍为 `DESIGN DRAFT — NOT APPROVED, NOT IN CONSTRUCTION`。
+> **状态：HISTORICAL IGR-1 THEORY BASELINE — SUPERSEDED FOR FUTURE SCOPE。**
+> 本文保留 IGR-1 的理论分解、数值顺序与验收语义，不代表当前 Batch 状态或
+> IGR-3 support boundary。IGR-1/IGR-2 已 `ACCEPTED / CLOSED`；当前
+> user-frozen IGR-3 direction 以
+> [`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
+> 为准。
 
 ## 1. 适用范围与生产基准
 
-当前 IGR-1 首个拟议范围是 TL、Cartesian Cerveny、coherent pressure、rectilinear / uniform receiver ranges、single source、shared frozen fan、all-frequency fusion、serial reference path。本文描述的 exact loop hierarchy 只对该范围作冻结；其他 beam family、parallel、multisource、frequency interpolation、SIMD、GPU 均不由本文授权。
+IGR-1 当时的首个拟议范围是 TL、Cartesian Cerveny、coherent pressure、rectilinear / uniform receiver ranges、single source、shared frozen fan、all-frequency fusion、serial reference path。本文描述的 exact loop hierarchy 只对该历史范围作冻结；其他 beam family、parallel、multisource、frequency interpolation、SIMD、GPU 均不由本文授权。
 
 生产基准事实：
 
@@ -329,4 +332,5 @@ build persistent geometry cache
     → replay cache frequency by frequency
 ```
 
-本文只冻结 IGR-1 scope 和 acceptance semantics，不授权进入 CONSTRUCT。
+本文只记录 IGR-1 的历史 scope 和 acceptance semantics。IGR-3 的 future scope
+由当前 scope decision 单独冻结，不能从本文的 IGR-1 batch-local 限制推导。

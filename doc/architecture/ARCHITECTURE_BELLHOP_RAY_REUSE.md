@@ -8,6 +8,52 @@
 
 > 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [基础变量、单位与数值规范](../reference/REFERENCE_NUMERICAL_CONVENTIONS.md) 为准；本文件侧重算法和架构。
 
+## 当前实现与 IGR-3 目标架构
+
+本文后续章节保留早期分析、首版范围和历史演进依据。当前已验收的 IGR-2
+production fused implementation 仅覆盖 Cartesian Cerveny TL 支持域，pressure
+hot layout 为 `[range][depth][frequency]`，并可显式启用静态连续 range
+parallelism。
+
+IGR-3 已由用户冻结 future direction，但 construction 尚未开始：
+
+```text
+Frozen RayPathCache
+        |
+Frequency Projection
+        |
+Cross-Frequency Influence Execution
+  + Static Range Parallelism
+        |
+Beam-family kernel
+        |
+        +-------------------+
+        |                   |
+    TL Field             Arrival
+      Sink                 Sink
+ pressure/intensity   ArrivalCandidate
+                       -> AddArr lane
+```
+
+这里固定的是 execution architecture，而不是某一个 beam-family formula 或
+contribution sink：
+
+```text
+Execution architecture != Beam-family physics kernel != Contribution/output sink
+```
+
+Cartesian Cerveny TL 是 current accepted reference implementation。remaining TL
+kernels 与 Arrival sink 分别属于 IGR-3A/IGR-3B 的 approved future scope，尚不
+属于 production。`A/a` 当前使用 geometric beam contribution 和
+influence-style receiver traversal，通过 `GeometricHatInfluence` /
+`GeometricGaussianInfluence` 的 Arrival path 产生 `ArrivalCandidate`；它与 TL
+的主要区别是 sink 与 output lifecycle。
+
+`R` 是独立 ray product，不进入 IGR-3 fused Influence accumulation；`E` 不进入
+IGR-3 construction，但可能共享 geometric helper/traversal，因此是 regression
+boundary。IGR-3 不改变 `R/E` 当前产品行为。权威 handoff 见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
+
 ## 1. 文档目标与分析范围
 
 本文从功能职责和实际调用链两个角度，对仓库中的 Bellhop 源码进行模块化分类，重点回答以下问题：
@@ -1234,7 +1280,8 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
   `Production Feature Parity: COMPLETE`、`Remaining F2CPP parity GAP: 0`；
   repository-level 证据见
   [`REPORT_FEATURE_PARITY_FINAL.md`](../../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)；
-- 当前没有获批的新数值实施阶段；研究候选和外部发布决策见
+- IGR-3 scope/architecture direction 已 `USER-FROZEN / PRE-CONSTRUCTION`；
+  construction 尚未开始，next Batch 为 IGR-3A，详见
   [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md)。
 
 以下是已经落实的架构基线和首版范围决策；封板后的新增能力仍以组件支持矩阵

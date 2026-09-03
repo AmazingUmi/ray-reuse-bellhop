@@ -3,8 +3,15 @@
 > 封板日期：2026-08-20；FP-1A～FP-2B 更新：2026-08-27；FP-2C/FP-2D/FP-2E 更新：2026-08-28；FP-2F/FP-2G/FP-2H/FP-2I 最终封板：2026-08-29；最终分类措辞统一：2026-08-30
 > 适用范围：当前二维、点声源与线声源（含多 source depths）、规则网格与 Cartesian 配对不规则接收网格的 RayReuse 生产实现。
 > 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
-> Accepted production HEAD：`0721fb3`；final acceptance documentation commit：`88ba8b7`。
+> Feature Parity accepted production HEAD：`0721fb3`；final acceptance
+> documentation commit：`88ba8b7`；IGR-2 productionization commit：`e7f2705`。
 > Production Feature Parity：**COMPLETE**；Remaining F2CPP parity GAP：**0**。
+
+> **Current vs future:** 当前已验收的 IGR-2 fused production implementation
+> 仅覆盖其 Cartesian Cerveny TL 支持域，并可选用静态 receiver-range
+> parallelism。IGR-3 已冻结将同一 execution architecture 扩展到其他 TL
+> beam kernels 与 Arrival sink 的 future direction，但 construction 尚未开始；
+> 本矩阵不提前声明这些扩展已经可用。
 
 ## 状态定义
 
@@ -41,7 +48,7 @@
 | 边界 | top/bottom `V/R/A/G/F`、`.trc/.brc`、piecewise-linear `.ati/.bty`（`LS`/`LL`）、canonical curvilinear short format `C` `.ati/.bty`（仅限 V/R 材料 short format，`CS`/`CL` 显式拒绝）、flat ordinary elastic halfspace P/S、acoustic/elastic `LL` |
 | 输出生命周期 | PRT、SHD、RAY、ARR；原子单文件发布、模式切换清理、失败后不留下部分正式产品或 `.tmp` |
 | 状态所有权 | geometry/trajectory 与 raw reflection event 位于 frozen `RayPathCache`（multisource 下每 source 一个独立 frozen fan cache，source depth 为频率无关属性）；幅相、复走时、active prefix、反射结果、Arrival/Eigenray 产品均为逐频临时状态 |
-| 并行 | worker 数运行时配置；当前 A/a/E 与 TL 支持外层 frequency parallelism，frequency worker 只读共享 per-source cache vector，consumer 按频率索引串行发布 per-source workspace 序列，不共享可变 writer |
+| 并行 | worker 数运行时配置；legacy `parallel` 下 A/a/E 与 TL 支持外层 frequency parallelism，frequency worker 只读共享 per-source cache vector，consumer 按频率索引串行发布 per-source workspace 序列，不共享可变 writer；当前 IGR-2 fused Cartesian Cerveny TL 另支持显式 static contiguous range parallelism，各 worker 独占 range block，默认请求 4 workers |
 
 ## Supported RAYREUSE_EXTENSION
 
@@ -56,6 +63,21 @@
 header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频产品必须
 逐字节一致。Origin 没有明确的多频 R 产品，因此多频 R 明确拒绝。
 
+## Approved IGR-3 future direction（not current support）
+
+IGR-3 将 Cross-Frequency Fused + Static Range Parallelism 作为统一 Influence
+execution architecture。IGR-3A 适配 remaining TL beam families；IGR-3B 在
+IGR-3A 独立验收并提交后，适配 `A/a` 的 geometric contribution paths 与
+broadband Arrival layout。`A/a` 当前通过 Geometric Hat/Gaussian
+influence-style receiver traversal 产生 `ArrivalCandidate`；与 TL 的主要差异是
+contribution sink 和 output data structure，而不是与 Influence architecture
+无关。
+
+`R` ray product 不进入该 fused Influence accumulation path；`E` 也不进入
+IGR-3 construction，但因可能共享 geometric helper/traversal 而属于 regression
+boundary。该 future decision 不改变当前 `R/E` 产品行为。权威 handoff 见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
+
 ## Intentional divergence
 
 | 项目 | RayReuse 行为 |
@@ -64,7 +86,7 @@ header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频�
 | 发布安全 | writer 先写 `.tmp` 再发布；一次多频运行任一 solve/publish 失败会清理本次产品 |
 | 解析失败 | 在新产品生命周期开始前失败时保留旧有效产品，避免破坏最后一次成功结果；PRT 写入非零失败诊断 |
 | 输入校验 | 对未知 run type、beam family、sidecar、非有限值和未支持组合提前报错 |
-| 并行所有权 | 当前实现选择 frequency worker，但不把 frequency/source/receiver 任一层冻结为永久 owner，也不设置 4T/8T 程序级上限 |
+| 并行所有权 | legacy `parallel` 选择 frequency worker；当前 fused CC TL 可选 static range worker。两者都不把 frequency/source/receiver 任一层冻结为永久 owner，也不设置 4T/8T 程序级上限 |
 
 ## Non-parity boundaries
 
@@ -80,7 +102,7 @@ header frequency 和文件名一一对应；`nonreuse/reuse/parallel` 的每频�
 - HDF5 容器格式；
 - 多频 R 合并容器；
 - SIMD 向量化加速；
-- Influence Geometry Reuse 与频率插值；
+- frequency interpolation；
 - BARR 到达结构算法。
 
 这些候选不是 active task，也不是 silent fallback 的许可。未来若进入 scope，

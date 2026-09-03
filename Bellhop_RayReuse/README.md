@@ -10,8 +10,9 @@ Bellhop_F2CPP → Bellhop_RayReuse
 Production Feature Parity: COMPLETE
 Remaining F2CPP parity GAP: 0
 
-Accepted production HEAD: 0721fb3
-Final acceptance documentation commit: 88ba8b7
+Feature Parity accepted production HEAD: 0721fb3
+Feature Parity final acceptance documentation commit: 88ba8b7
+IGR-2 productionization commit: e7f2705
 ```
 
 长期维护入口：
@@ -36,6 +37,13 @@ Final acceptance documentation commit: 88ba8b7
 
 总体设计见
 [ARCHITECTURE_BELLHOP_RAY_REUSE.md](../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)。
+
+这里的 production fused 描述只指当前已验收的 IGR-2 Cartesian Cerveny TL
+支持域。IGR-3 已冻结 future direction：以 Cross-Frequency Fused + Static Range
+Parallelism 作为统一 Influence execution architecture，后续分别适配 remaining
+TL beam-family kernels 与 Arrival contribution sink；construction 尚未开始，当前
+CLI 与支持矩阵没有因此扩展。权威 handoff 见
+[IGR-3 Scope & Architecture Decision](./doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
 ## 构建与质量门
 

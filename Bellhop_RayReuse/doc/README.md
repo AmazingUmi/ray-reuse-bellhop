@@ -7,12 +7,15 @@ RayReuse 是独立的 C++20 多频轨迹复用实现。`RR-B1`～`RR-B4` 与
 Production Feature Parity: COMPLETE
 Remaining F2CPP parity GAP: 0
 
-Accepted production HEAD: 0721fb3
-Final acceptance documentation commit: 88ba8b7
+Feature Parity accepted production HEAD: 0721fb3
+Feature Parity final acceptance documentation commit: 88ba8b7
+IGR-2 productionization commit: e7f2705
 ```
 
 IGR-2 已 `ACCEPTED / CLOSED`：已保留的 fused layout 是支持域内的
 production RayReuse 主路径，可选静态 receiver-range parallelism 已产品化。
+IGR-3 scope/architecture direction 已 `USER-FROZEN / PRE-CONSTRUCTION`，但
+construction 尚未开始。
 
 ## 当前权威入口
 
@@ -27,7 +30,7 @@ production RayReuse 主路径，可选静态 receiver-range parallelism 已产�
 | 单线程三模型微基准 | [`guides/GUIDE_SINGLE_THREAD_MICROBENCHMARK.md`](./guides/GUIDE_SINGLE_THREAD_MICROBENCHMARK.md) |
 | 内部发布验证 | [`guides/GUIDE_RELEASE.md`](./guides/GUIDE_RELEASE.md) |
 | 验证、矩阵与审计报告索引 | [`reports/README.md`](./reports/README.md) |
-| 当前 IGR 架构冻结：Cross-Frequency Fusion | [`reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](./reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md) |
+| IGR-0/IGR-1 历史 Cross-Frequency Fusion foundation | [`reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md`](./reports/REPORT_IGR0_REVISION_CROSS_FREQUENCY_FUSION_2026-09-01.md) |
 | IGR 理论与数值契约 | [`../../doc/reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](../../doc/reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md) |
 | **IGR-1 收口：CC Fusion `ACCEPTED / CLOSED`（wall-time `NOT_VIABLE`，fused 为 opt-in 实验模式）** | [`reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md`](./reports/REPORT_IGR1_CC_FUSION_IMPLEMENTATION.md) |
 | IGR-1 执行 Worklist（R01–R06 全部 DONE） | [`worklists/IGR-1_CC_FUSION_WORKLIST.md`](./worklists/IGR-1_CC_FUSION_WORKLIST.md) |
@@ -36,6 +39,7 @@ production RayReuse 主路径，可选静态 receiver-range parallelism 已产�
 | **IGR-2 冻结设计** | [`worklists/DESIGN_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION.md`](./worklists/DESIGN_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION.md) |
 | **IGR-2 closed worklist** | [`worklists/IGR-2_FUSED_INFLUENCE_PRODUCTIONIZATION_WORKLIST.md`](./worklists/IGR-2_FUSED_INFLUENCE_PRODUCTIONIZATION_WORKLIST.md) |
 | **IGR-2 final review (`ACCEPTED`)** | [`reviews/IGR2_FINAL_REVIEW_2026-09-03.md`](./reviews/IGR2_FINAL_REVIEW_2026-09-03.md) |
+| **IGR-3 用户冻结 scope/architecture handoff（非 design/worklist）** | [`worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](./worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md) |
 | HDF5 延后决策 | [`decisions/DECISION_HDF5_SCHEMA.md`](./decisions/DECISION_HDF5_SCHEMA.md) |
 | 已完成计划和历史基准 | [`archive/README.md`](./archive/README.md) |
 
@@ -44,6 +48,8 @@ IGR-1p 保留 L1/L1c locality layout → IGR-2 已完成 fused CC TL
 与可选静态 range parallel productionization**。IGR-2 不扩展 beam/product/source/receiver 支持域；
 dynamic tiles、frequency blocking 与 L1b 均未保留。新的候选方向统一从
 [`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入。
+IGR-3A 是 documentation preflight 后的 next Batch；IGR-3A 独立验收并提交后
+才可进入 IGR-3B。这里的 future direction 不构成 current production feature claim。
 
 ## 目录语义
 

@@ -1,19 +1,20 @@
 # Bellhop RayReuse 当前进度
 
 > 更新日期：2026-09-03
-> Accepted production HEAD：`0721fb3036ebaa26bbd72fcb20458e9118317457`
+> Feature Parity accepted production HEAD：`0721fb3036ebaa26bbd72fcb20458e9118317457`
 > （`0721fb3`）
 > Final acceptance documentation commit：`88ba8b7`
 > Production Feature Parity：**COMPLETE**
 > Remaining F2CPP parity GAP：**0**
+> IGR-2 productionization commit：`e7f27054360c53397e54c25bcbcdbb9bffbf1a9b`
 > 当前状态：`Bellhop_F2CPP → Bellhop_RayReuse` Production Feature Parity 序列
 > 全部完成（RR-B1～RR-B4、FP-1A～FP-2I 全部 `ACCEPTED / CLOSED`）。
 > 最后一个功能批次 FP-2I（Line Source Closure）已全流程验收通过。
 > 全仓库功能支持矩阵与对齐报告已同步封板：
 > **F2CPP → RayReuse Production Feature Parity COMPLETE（GAP = 0）**。
 
-Feature Parity 封板基线之后的当前 active performance batch 是 IGR-2。
-IGR-2 已完成 construction、Batch Acceptance 与独立 final review，状态为
+Feature Parity 封板基线之后，IGR-2 已完成 construction、Batch Acceptance 与
+独立 final review，状态为
 `ACCEPTED / CLOSED`：在 coherent Cartesian Cerveny、single-source、规则宽带
 TL 支持域内，fused Influence 升格为 production RayReuse 主路径，
 pressure hot layout 为 `[range][depth][frequency]`；可显式开启静态连续
@@ -25,8 +26,24 @@ Parity accepted identity，也不扩展已冻结的 scientific support boundary�
 SHA-256，没有记录 exact dirty diff hash；因此仅作为本地 acceptance evidence，
 不声明为某个可精确重建 commit 的性能 identity。
 
+当前 production implementation 与已批准的 future scope 必须区分：
+
+```text
+Current accepted production (IGR-2):
+    Cartesian Cerveny fused TL + optional static range parallelism
+
+Approved IGR-3 direction (USER-FROZEN / PRE-CONSTRUCTION):
+    unified Cross-Frequency Fused + Static Range Parallel Influence execution
+    extended to remaining TL beam kernels and, in IGR-3B, the Arrival sink
+```
+
+IGR-3 construction 尚未开始。documentation preflight 完成后的下一 Batch 是
+IGR-3A；IGR-3B 只能在 IGR-3A 独立验收并提交后开始。权威 scope handoff 见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
+
 `0721fb3` 是 accepted production parity HEAD；`88ba8b7` 是最终验收文档记录
-commit，不替代 production acceptance identity。
+commit，不替代 Feature Parity production acceptance identity。IGR-2 的后续
+productionization 位于上述 `e7f2705` commit。
 
 ## 最终整体验收入口
 
