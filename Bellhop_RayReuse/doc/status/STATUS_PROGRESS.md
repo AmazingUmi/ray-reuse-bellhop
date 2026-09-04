@@ -1,49 +1,53 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-09-03
+> 更新日期：2026-09-04
 > Feature Parity accepted production HEAD：`0721fb3036ebaa26bbd72fcb20458e9118317457`
 > （`0721fb3`）
 > Final acceptance documentation commit：`88ba8b7`
 > Production Feature Parity：**COMPLETE**
 > Remaining F2CPP parity GAP：**0**
 > IGR-2 productionization commit：`e7f27054360c53397e54c25bcbcdbb9bffbf1a9b`
+> IGR-3A fused TL adaptation commit：`dda1c2c`
+> IGR-3B fused Arrival closure commit：`0050f59`
+> IGR-3 unified architecture：**ACCEPTED / CLOSED**
 > 当前状态：`Bellhop_F2CPP → Bellhop_RayReuse` Production Feature Parity 序列
 > 全部完成（RR-B1～RR-B4、FP-1A～FP-2I 全部 `ACCEPTED / CLOSED`）。
 > 最后一个功能批次 FP-2I（Line Source Closure）已全流程验收通过。
 > 全仓库功能支持矩阵与对齐报告已同步封板：
 > **F2CPP → RayReuse Production Feature Parity COMPLETE（GAP = 0）**。
 
-Feature Parity 封板基线之后，IGR-2 已完成 construction、Batch Acceptance 与
-独立 final review，状态为
-`ACCEPTED / CLOSED`：在 coherent Cartesian Cerveny、single-source、规则宽带
-TL 支持域内，fused Influence 升格为 production RayReuse 主路径，
-pressure hot layout 为 `[range][depth][frequency]`；可显式开启静态连续
-receiver-range parallelism，默认 4 workers。它不改变下述 Feature
-Parity accepted identity，也不扩展已冻结的 scientific support boundary。
+Feature Parity 封板基线之后，IGR-1～IGR-3 均已完成 construction、Batch
+Acceptance 与独立 final review，状态为 `ACCEPTED / CLOSED`。IGR-3A 将统一
+fused executor 扩展到当前合法 TL beam families；IGR-3B 将同一 executor
+扩展到规则接收网格上的 `G/g/B × A/a`，采用 source-local
+`[range][depth][frequency]` broadband Arrival lanes、静态连续 range
+parallelism 与 per-frequency source-streamed writer。TL 与 Arrival fused 路径
+均不改变 Feature Parity accepted identity，也不扩大 scientific support
+matrix；`R/E` 仍不进入 fused Influence execution。
 详见
 [`REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md`](../reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md)。
 此前 16F performance artifact 记录的是 `bd4816af` 加 dirty worktree 与 binary
 SHA-256，没有记录 exact dirty diff hash；因此仅作为本地 acceptance evidence，
 不声明为某个可精确重建 commit 的性能 identity。
 
-当前 production implementation 与已批准的 future scope 必须区分：
+当前 production implementation：
 
 ```text
-Current accepted production (IGR-2):
-    Cartesian Cerveny fused TL + optional static range parallelism
-
-Approved IGR-3 direction (USER-FROZEN / PRE-CONSTRUCTION):
-    unified Cross-Frequency Fused + Static Range Parallel Influence execution
-    extended to remaining TL beam kernels and, in IGR-3B, the Arrival sink
+Current accepted production (IGR-3 CLOSED):
+    one Cross-Frequency Fused + Static Range Parallel Influence executor
+      + legal TL beam-family sinks (IGR-3A)
+      + G/g/B Arrival sink and [R][D][F] broadband lanes (IGR-3B)
 ```
 
-IGR-3 construction 尚未开始。documentation preflight 完成后的下一 Batch 是
-IGR-3A；IGR-3B 只能在 IGR-3A 独立验收并提交后开始。权威 scope handoff 见
-[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
+IGR-3A 已提交于 `dda1c2c`，IGR-3B 已提交于 `0050f59`；两者均经独立 final
+review 验收并关闭。权威 scope/closure 见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
+与 [`IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md`](../worklists/IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md)。
 
 `0721fb3` 是 accepted production parity HEAD；`88ba8b7` 是最终验收文档记录
 commit，不替代 Feature Parity production acceptance identity。IGR-2 的后续
-productionization 位于上述 `e7f2705` commit。
+productionization 位于上述 `e7f2705` commit；IGR-3 的 accepted implementation
+位于 `dda1c2c` 与 `0050f59`。
 
 ## 最终整体验收入口
 
@@ -85,6 +89,11 @@ productionization 位于上述 `e7f2705` commit。
 - Origin / F2CPP production 代码零修改（0 diff）；
 - `RayPathCache` schema 与 `contentFingerprint()` 算法零改动。
 
+IGR-3 closure 在 clean Release/Werror build 上通过 50/50 CTest；Arrival
+三实现回归 9/9、`validate_i8_arrivals.py` 36 comparisons 全部通过。`G/g/B ×
+A/a` 的 legacy reuse、fused w1 与 fused w4 ARR 逐字节一致，cache fingerprint
+前后不变。
+
 ## 冻结状态边界
 
 `RayPathCache` 只保存频率无关的 geometry、trajectory、quadrature 与 raw
@@ -95,12 +104,15 @@ reflection event。以下内容不得写回 cache：
 - pressure 或 intensity workspace；
 - `ArrivalWorkspace`、ArrivalCandidate、Eigenray hits 或 writer 状态。
 
-多频 worker 只生成 frequency-local product；writer consumer 按频率索引顺序
-串行调用。当前结构避免 nested parallelism，但不规定未来永远由 frequency
-层拥有并行。
+legacy frequency workers 只生成 frequency-local product；fused executor 的
+static range workers 在一个 source-local `[R][D][F]` workspace 上独占连续
+range block。TL consumer 仍按频率索引顺序调用；fused Arrival 由每频 writer
+按 source 顺序消费 frequency view。当前结构避免 nested parallelism。
 
 ## 结论
 
 **Bellhop_F2CPP → Bellhop_RayReuse Production Feature Parity COMPLETE**。
 所有 Feature Parity 批次（FP-1A～FP-2I）均已完成独立 Final Review 并标记为 `ACCEPTED / CLOSED`。
 当前仓库生产支持面已完全覆盖 F2CPP production 范围，剩余真实 GAP 数量为 **0**。
+IGR-1～IGR-3 也均已独立验收并关闭；当前 unified fused Influence architecture
+与 TL/Arrival 支持域以本状态页和支持矩阵为准。

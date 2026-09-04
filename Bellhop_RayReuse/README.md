@@ -13,6 +13,8 @@ Remaining F2CPP parity GAP: 0
 Feature Parity accepted production HEAD: 0721fb3
 Feature Parity final acceptance documentation commit: 88ba8b7
 IGR-2 productionization commit: e7f2705
+IGR-3A fused TL adaptation commit: dda1c2c
+IGR-3B fused Arrival closure commit: 0050f59
 ```
 
 长期维护入口：
@@ -29,7 +31,8 @@ IGR-2 productionization commit: e7f2705
 - 幅相、复走时、反射结果、Influence/Arrival/Eigenray workspace 和 writer state
   均为 frequency-local；
 - 所有 RayReuse 路径都不把逐频声学状态写回 frozen cache；
-- production fused TL 的 coherent pressure 与 I/S intensity payload 均使用
+- production fused TL 的 coherent pressure 与 I/S intensity payload，以及
+  fused Arrival 的 ordered variable-length lanes，均使用逻辑
   `[range][depth][frequency]` hot layout；可选 range workers 各自独占连续
   receiver-range block；
 - F2CPP 和 Origin 只作为 reference/oracle，不参与 RayReuse production ownership；
@@ -39,15 +42,16 @@ IGR-2 productionization commit: e7f2705
 总体设计见
 [ARCHITECTURE_BELLHOP_RAY_REUSE.md](../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)。
 
-这里的 production fused 描述指当前实现的 fused TL 支持域（IGR-3A）：多频
+production fused TL 支持域（IGR-3A）为多频
 （≥2 频率）单 source、规则 receiver grid 的 TL 运行，run-mode 覆盖等于各
 beam family 的合法产品 run mode——Cerveny Gaussian（`CC/IC/SC`、`CR/IR/SR`）、
 geometric hat（`CG/IG/SG`、`Cg/Ig/Sg`）与 geometric Gaussian（`CB/IB/SB`）
 支持 coherent/incoherent/semi-coherent，simple Gaussian 仅其唯一合法模式
-coherent（`CS`）；fused eligibility 始终是合法 beam×run-mode support matrix
-的子集（例如 fused 只支持规则 receiver grid）。IGR-3 已冻结 future
-direction：IGR-3B 适配 Arrival contribution sink，尚未 construction。权威
-handoff 见
+coherent（`CS`）。IGR-3B 已增加多频、规则 receiver grid 的
+Geometric Hat Cartesian/ray-centered 与 Geometric Gaussian `A/a`
+（`G/g/B`）fused execution，允许 multisource 并按 source 流式生成每频 ARR；
+fused eligibility 始终是合法 beam×run-mode support matrix 的子集。IGR-3A
+与 IGR-3B 均已 `ACCEPTED / CLOSED`。权威 closure 见
 [IGR-3 Scope & Architecture Decision](./doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
 ## 构建与质量门
@@ -118,8 +122,8 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 ```
 
 - `nonreuse`：每个频率独立 trace 与 projection，作为 execution baseline；
-- `fused`：支持域内的 production RayReuse 主路径；一次 trace 后在 ray 内跨频率
-  fused Influence，默认 serial；
+- `fused`：支持域内的 production RayReuse 主路径；TL 与 `G/g/B × A/a`
+  均在 ray 内跨频率 fused Influence，默认 serial；
 - `reuse`：legacy 逐频串行 cache-reuse compatibility path；
 - `parallel`：legacy frequency-parallel compatibility path。
 

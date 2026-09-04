@@ -1,10 +1,13 @@
 # IGR-3 Scope & Architecture Decision
 
-Status: **USER-FROZEN / PRE-CONSTRUCTION**
+Status: **ACCEPTED / CLOSED (2026-09-04)**
 
-This document is the authoritative handoff of user-approved IGR-3 direction. It
-is not the IGR-3 design and is not a construction worklist. No IGR-3 production
-capability is implied until the corresponding batch is independently accepted.
+This document records the authoritative user-approved IGR-3 direction and its
+closure. IGR-3A and IGR-3B were independently accepted and committed as
+`dda1c2c` and `0050f59`; the
+[`IGR-3A worklist`](IGR-3A_TL_BEAM_FAMILY_ADAPTATION_WORKLIST.md) and
+[`IGR-3B worklist`](IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md) remain the
+execution evidence.
 
 ## 1. Fixed execution direction
 
@@ -45,7 +48,7 @@ Arrival retain distinct contribution and output lifecycles.
 
 ## 3. IGR-3A — Remaining TL Beam Family Adaptation
 
-IGR-3A adapts the fixed execution architecture to:
+IGR-3A adapted the fixed execution architecture to:
 
 - Ray-Centered Cerveny TL;
 - Geometric Gaussian TL;
@@ -57,18 +60,17 @@ IGR-3A does not redefine its scientific formula.
 
 ## 4. IGR-3B — Arrival Fused Influence and Broadband Arrival Layout
 
-After IGR-3A acceptance, IGR-3B adapts the current `A/a` geometric contribution
+After IGR-3A acceptance, IGR-3B adapted the current `A/a` geometric contribution
 paths:
 
 - Geometric Gaussian (`B`);
 - Cartesian Geometric Hat (`G`);
 - Ray-Centered Geometric Hat (`g`).
 
-The frozen objectives are cross-frequency fused Arrival contribution, static
-range parallelism, a broadband Arrival hot data structure, and an optimized
-writer/materialization lifecycle. The lifecycle direction is source-streamed,
-frequency-view writer delivery; this decision does not freeze a class name or
-container implementation.
+The accepted implementation provides cross-frequency fused Arrival
+contribution, static range parallelism, a source-local `[R][D][F]` broadband
+Arrival layout, shared AddArr semantics, and source-streamed frequency-view
+writer delivery with transactional publication.
 
 `A/a` uses geometric beam contribution and influence-style receiver traversal.
 The current `GeometricHatInfluence` and `GeometricGaussianInfluence` Arrival
@@ -80,7 +82,8 @@ TL sink       -> pressure / intensity
 Arrival sink  -> ArrivalCandidate -> AddArr-compatible arrival lane
 ```
 
-IGR-3B must preserve Origin-compatible `AddArr` encounter order.
+IGR-3B preserves Origin-compatible `AddArr` encounter order and ARR byte
+identity with legacy reuse.
 
 ## 5. R/E boundary
 
@@ -104,8 +107,12 @@ IGR-3A
   -> commit
 ```
 
-Documentation preflight precedes IGR-3A. Construction has not started, and
-IGR-3B must not begin before IGR-3A is independently accepted and committed.
+The required sequence was documentation preflight, IGR-3A independent
+acceptance and commit, then IGR-3B construction and independent acceptance.
+
+The sequence completed as required: IGR-3A was accepted and committed first,
+then IGR-3B was constructed, independently accepted, and committed. IGR-3 is
+closed; this document authorizes no subsequent batch.
 
 ## 7. Non-goals
 
