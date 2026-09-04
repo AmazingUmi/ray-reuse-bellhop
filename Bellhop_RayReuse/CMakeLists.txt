@@ -83,7 +83,9 @@ add_library(
     src/field/geometric_gaussian_influence.cpp
     src/field/geometric_hat_influence.cpp
     src/field/simple_gaussian_influence.cpp
+    src/field/arrival_accumulator.cpp
     src/field/arrival_workspace.cpp
+    src/field/broadband_arrival_workspace.cpp
     src/field/frequency_projector.cpp
     src/field/fused_intensity_workspace.cpp
     src/field/fused_pressure_workspace.cpp
@@ -223,6 +225,12 @@ if(BUILD_TESTING)
     component
   )
   add_rayreuse_test(
+    bellhop_rayreuse_broadband_arrival_workspace_tests
+    rayreuse.component.broadband_arrival_workspace
+    tests/component/broadband_arrival_workspace_test.cpp
+    component
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_arrival_eigenray_solver_tests
     rayreuse.component.arrival_eigenray_solver
     tests/component/arrival_eigenray_solver_test.cpp
@@ -346,6 +354,12 @@ if(BUILD_TESTING)
     rayreuse.component.fused_geometric_gaussian_parity
     tests/component/fused_geometric_gaussian_parity_test.cpp
     "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_arrival_parity_tests
+    rayreuse.component.fused_arrival_parity
+    tests/component/fused_arrival_parity_test.cpp
+    "component;reuse;arrival"
   )
   add_rayreuse_test(
     bellhop_rayreuse_fused_simple_gaussian_parity_tests

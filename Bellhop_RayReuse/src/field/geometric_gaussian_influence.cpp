@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/broadband_arrival_workspace.hpp"
 #include "rayreuse/field/fused_intensity_workspace.hpp"
 #include "rayreuse/field/fused_pressure_workspace.hpp"
 
@@ -755,8 +756,8 @@ bool GeometricGaussianInfluence::accumulateFusedPrevalidated(
   // accepted for adapter-shape uniformity (design §3.4 documents the
   // zero-counter envelope for non-CC families).
   static_cast<void>(statistics);
-  return accumulateFusedImpl<false>(workspace, frequencies, path,
-                                    frequencyStates, rangeBegin, rangeEnd);
+  return accumulateFusedImpl<false, false>(
+      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd);
 }
 
 bool GeometricGaussianInfluence::accumulateFusedIntensityPrevalidated(
@@ -766,19 +767,31 @@ bool GeometricGaussianInfluence::accumulateFusedIntensityPrevalidated(
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   static_cast<void>(statistics);
-  return accumulateFusedImpl<true>(workspace, frequencies, path,
-                                   frequencyStates, rangeBegin, rangeEnd);
+  return accumulateFusedImpl<true, false>(
+      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd);
+}
+
+bool GeometricGaussianInfluence::accumulateFusedArrivalsPrevalidated(
+    BroadbandArrivalWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    ArrivalAccumulationStatistics& statistics) const {
+  return accumulateFusedImpl<false, true>(
+      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
+      &statistics);
 }
 
 // IGR-3A A05 fused kernel (design §5/§8): entry validation, then the single
 // legacy Cartesian traversal. The coherent and intensity twins share one
 // traversal with a per-lane payload branch at the store, mirroring the
 // legacy single-traversal accumulateField split.
-template <bool IntensityPayload, typename Workspace>
+template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
 bool GeometricGaussianInfluence::accumulateFusedImpl(
     Workspace& workspace, std::span<const double> frequencies,
     const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
-    std::size_t rangeBegin, std::size_t rangeEnd) const {
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    ArrivalAccumulationStatistics* arrivalStatistics) const {
   validateFusedGaussianInput(workspace, frequencies, path, frequencyStates,
                              receivers_, fusedLaunchAngleStep_);
   if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
@@ -808,6 +821,28 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
           : 1.0 / std::sqrt(2.0 * std::numbers::pi);
   requireFinite(q0, "geometric Gaussian q0");
   requireFinite(sourceRatio, "geometric Gaussian source ratio");
+
+  std::vector<std::int32_t> top;
+  std::vector<std::int32_t> bottom;
+  if constexpr (ArrivalPayload) {
+    top.assign(unionPrefix, 0);
+    bottom.assign(unionPrefix, 0);
+    for (const auto& event : path.events) {
+      const std::size_t reflected = event.reflectedRayPointIndex;
+      if (reflected != event.rayPointIndex + 1U ||
+          reflected >= path.points.size()) {
+        throw ValidationError(
+            "geometric Gaussian reflection event has invalid indices");
+      }
+      if (reflected >= unionPrefix) continue;
+      ++(event.boundary == ReflectionBoundary::SeaSurface ? top[reflected]
+                                                           : bottom[reflected]);
+    }
+    for (std::size_t index = 1U; index < unionPrefix; ++index) {
+      top[index] += top[index - 1U];
+      bottom[index] += bottom[index - 1U];
+    }
+  }
 
   const std::vector<double>& ranges = receivers_.ranges();
   const auto firstReceiver = std::find_if(
@@ -977,7 +1012,22 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
             requireFinite(phaseAtReceiver, "geometric Gaussian caustic phase");
             requireFiniteComplex(delay, "geometric Gaussian delay");
 
-            if constexpr (IntensityPayload) {
+            if constexpr (ArrivalPayload) {
+              workspace.addCandidate(
+                  frequencyIndex,
+                  ArrivalCandidate{
+                      .amplitude = amplitudeConstant * gaussianWeight,
+                      .phaseRadians = phaseAtReceiver,
+                      .delaySeconds = delay,
+                      .sourceDeclinationDegrees =
+                          path.launchAngle * (180.0 / std::numbers::pi),
+                      .receiverDeclinationDegrees =
+                          std::atan2(tangent.depth, tangent.range) *
+                          (180.0 / std::numbers::pi),
+                      .topBounceCount = top[rightIndex],
+                      .bottomBounceCount = bottom[rightIndex]},
+                  depthIndex, receiverIndex, *arrivalStatistics);
+            } else if constexpr (IntensityPayload) {
               // Legacy intensity branch: the attenuated real constant is
               // squared, the Gaussian weight applied once, with the extra
               // sqrt(2 pi) factor of the family (design §8; the store-time

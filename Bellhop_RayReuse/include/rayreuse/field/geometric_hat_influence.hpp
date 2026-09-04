@@ -16,7 +16,9 @@ namespace rayreuse {
 
 class FusedPressureWorkspace;
 class FusedIntensityWorkspace;
+class BroadbandArrivalWorkspace;
 struct CartesianCervenyStatistics;
+struct ArrivalAccumulationStatistics;
 
 struct GeometricHatDiagnosticRequest {
   std::size_t receiverRangeIndex{};
@@ -111,23 +113,33 @@ class GeometricHatInfluence {
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
-  template <bool IntensityPayload, typename Workspace>
+  [[nodiscard]] bool accumulateFusedArrivalsPrevalidated(
+      BroadbandArrivalWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics& statistics) const;
+
+  template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
   [[nodiscard]] bool accumulateFusedImpl(
       Workspace& workspace, std::span<const double> frequencies,
       const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
-      std::size_t rangeBegin, std::size_t rangeEnd) const;
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics* arrivalStatistics = nullptr) const;
 
-  template <bool IntensityPayload, typename Workspace>
+  template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
   [[nodiscard]] bool accumulateFusedCartesian(
       Workspace& workspace, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
-      std::size_t rangeBegin, std::size_t rangeEnd) const;
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics* arrivalStatistics) const;
 
-  template <bool IntensityPayload, typename Workspace>
+  template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
   [[nodiscard]] bool accumulateFusedRayCentered(
       Workspace& workspace, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
-      std::size_t rangeBegin, std::size_t rangeEnd) const;
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics* arrivalStatistics) const;
 
   // IGR-3A A04 fused-run state (design §4/§5): the frozen adapter interface
   // carries no launch-angle spacing to the fused kernel entries (the Hat

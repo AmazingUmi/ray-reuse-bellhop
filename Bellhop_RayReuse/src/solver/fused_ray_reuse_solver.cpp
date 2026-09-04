@@ -8,6 +8,7 @@
 #include <optional>
 #include <span>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,7 @@ struct RangeWorkerResult {
   double projectSeconds{};
   double influenceSeconds{};
   CartesianCervenyStatistics influenceStatistics;
+  ArrivalAccumulationStatistics arrivalStatistics;
 };
 
 enum class FusedScopeFailure {
@@ -143,12 +145,13 @@ void validateFusedScope(const SimulationCase& simulation) {
 }
 
 void validateFusedSourceCache(const SimulationCase& simulation,
-                              const RayPathCache& sourceCache) {
+                              const RayPathCache& sourceCache,
+                              std::size_t sourceIndex) {
   if (!sourceCache.frozen()) {
     throw ValidationError(
         "fused ray-reuse solver requires a frozen ray cache");
   }
-  const Source& source = simulation.sources().front();
+  const Source& source = simulation.sources().at(sourceIndex);
   if (sourceCache.size() > 0U && !sourceCache.at(0U).points.empty() &&
       sourceCache.at(0U).points.front().position.depth != source.depth) {
     // Structural pairing check, same pattern as
@@ -156,6 +159,50 @@ void validateFusedSourceCache(const SimulationCase& simulation,
     throw ValidationError(
         "fused ray-reuse solver requires a ray cache traced from the "
         "requested source");
+  }
+}
+
+void validateFusedArrivalScope(const SimulationCase& simulation,
+                               std::size_t sourceIndex) {
+  if (simulation.runMode() != SimulationRunMode::AsciiArrivals &&
+      simulation.runMode() != SimulationRunMode::BinaryArrivals) {
+    throw ValidationError(
+        "fused arrival accumulation requires ASCII or binary arrivals mode");
+  }
+  if (simulation.beamFamily() != BeamFamily::GeometricHat &&
+      simulation.beamFamily() != BeamFamily::GeometricGaussian) {
+    throw ValidationError(
+        "fused arrival accumulation supports only geometric hat and "
+        "geometric Gaussian beam families");
+  }
+  if (sourceIndex >= simulation.sourceCount()) {
+    throw ValidationError("fused arrival source index is out of range");
+  }
+  if (simulation.frequencies().size() < 2U) {
+    throw ValidationError(
+        "fused arrival accumulation requires at least two frequencies");
+  }
+  if (simulation.receivers().isIrregular()) {
+    throw ValidationError(
+        "fused arrival accumulation requires a rectilinear receiver grid");
+  }
+  const std::vector<double>& ranges = simulation.receivers().ranges();
+  if (ranges.size() < 2U) {
+    throw ValidationError(
+        "fused arrival accumulation requires at least two receiver ranges");
+  }
+  const double rangeDelta = ranges[1U] - ranges[0U];
+  for (std::size_t index = 2U; index < ranges.size(); ++index) {
+    const double expected =
+        ranges.front() + static_cast<double>(index) * rangeDelta;
+    const double tolerance =
+        32.0 * std::numeric_limits<double>::epsilon() *
+        std::max({1.0, std::abs(expected), std::abs(ranges[index])});
+    if (std::abs(ranges[index] - expected) > tolerance) {
+      throw ValidationError(
+          "fused arrival accumulation requires equally spaced receiver "
+          "ranges");
+    }
   }
 }
 
@@ -181,15 +228,20 @@ typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
-    FusedRayReuseExecutionSettings executionSettings) {
-  validateFusedScope(simulation);
-  validateFusedSourceCache(simulation, sourceCache);
+    FusedRayReuseExecutionSettings executionSettings,
+    std::size_t sourceIndex) {
+  if constexpr (std::is_same_v<Sink, ArrivalFusedSink>) {
+    validateFusedArrivalScope(simulation, sourceIndex);
+  } else {
+    validateFusedScope(simulation);
+  }
+  validateFusedSourceCache(simulation, sourceCache, sourceIndex);
   if (executionSettings.requestedRangeWorkers == 0U) {
     throw ValidationError(
         "fused ray-reuse requested range worker count must be positive");
   }
 
-  const Source& source = simulation.sources().front();
+  const Source& source = simulation.sources().at(sourceIndex);
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const std::vector<double>& frequencies = simulation.frequencies().values();
   const std::size_t frequencyCount = frequencies.size();
@@ -204,7 +256,8 @@ typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
   // the sink policy. Ordinary per-frequency workspaces are materialized only
   // after accumulation.
   typename Sink::Workspace workspace =
-      Sink::makeWorkspace(simulation.receivers(), frequencyCount);
+      Sink::makeWorkspace(simulation.receivers(),
+                          std::span<const double>(frequencies));
 
   const std::size_t rangeCount = simulation.receivers().rangeCount();
   const std::size_t activeWorkerCount =
@@ -265,7 +318,8 @@ typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
             rangeBegin, rangeEnd,
             influenceSettings.collectStatistics
                 ? &result.influenceStatistics
-                : nullptr));
+                : nullptr,
+            &result.arrivalStatistics));
         const Clock::time_point influenceEnd = Clock::now();
         result.projectSeconds += elapsedSeconds(projectBegin, projectEnd);
         result.influenceSeconds += elapsedSeconds(projectEnd, influenceEnd);
@@ -297,12 +351,15 @@ typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
   double projectSeconds = 0.0;
   double influenceSeconds = 0.0;
   CartesianCervenyStatistics influenceStatistics;
+  ArrivalAccumulationStatistics arrivalStatistics;
   for (const RangeWorkerResult& workerResult : workerResults) {
     projectSeconds = std::max(projectSeconds, workerResult.projectSeconds);
     influenceSeconds =
         std::max(influenceSeconds, workerResult.influenceSeconds);
     accumulateCartesianCervenyStatistics(
         influenceStatistics, workerResult.influenceStatistics);
+    mergeArrivalAccumulationStatistics(arrivalStatistics,
+                                       workerResult.arrivalStatistics);
   }
   std::size_t totalRayPointCount = 0U;
   for (const RayPath& path : sourceCache.paths()) {
@@ -319,7 +376,8 @@ typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
           .influenceStatistics = influenceStatistics},
       sourceCache.size(), totalRayPointCount,
       sourceCache.memoryFootprintBytes(),
-      executionSettings.requestedRangeWorkers, activeWorkerCount);
+      executionSettings.requestedRangeWorkers, activeWorkerCount,
+      arrivalStatistics);
 }
 
 FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
@@ -418,6 +476,100 @@ FusedRayReuseSolver::accumulateFrequenciesIntensity(
                                    IntensityFusedSink>(
       simulation, sourceCache, epsilonMultiplier, loopRange, influenceSettings,
       executionSettings);
+}
+
+FusedArrivalAccumulationResult
+FusedRayReuseSolver::accumulateArrivalFrequencies(
+    const SimulationCase& simulation, const RayPathCache& sourceCache,
+    std::size_t sourceIndex, CartesianCervenySettings influenceSettings,
+    FusedRayReuseExecutionSettings executionSettings) {
+  if (simulation.beamFamily() == BeamFamily::GeometricHat) {
+    return accumulateFrequenciesImpl<GeometricHatFusedAdapter,
+                                     ArrivalFusedSink>(
+        simulation, sourceCache, 1.0, 0.0, influenceSettings,
+        executionSettings, sourceIndex);
+  }
+  return accumulateFrequenciesImpl<GeometricGaussianFusedAdapter,
+                                   ArrivalFusedSink>(
+      simulation, sourceCache, 1.0, 0.0, influenceSettings,
+      executionSettings, sourceIndex);
+}
+
+ArrivalSolverStatistics FusedRayReuseSolver::solveArrivalStreaming(
+    const SimulationCase& simulation,
+    const FusedArrivalSourceConsumer& consumer,
+    CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
+    FusedRayReuseExecutionSettings executionSettings) {
+  if (!consumer) {
+    throw ValidationError("fused arrival source consumer must be callable");
+  }
+  validateFusedArrivalScope(simulation, 0U);
+
+  ArrivalSolverStatistics statistics;
+  statistics.frequencyCount = simulation.frequencies().size();
+  statistics.cacheFingerprintVerified = verifyCacheFingerprint;
+  if (verifyCacheFingerprint) {
+    statistics.sourceCacheFingerprintsBefore.reserve(simulation.sourceCount());
+    statistics.sourceCacheFingerprintsAfter.reserve(simulation.sourceCount());
+  }
+
+  for (std::size_t sourceIndex = 0U;
+       sourceIndex < simulation.sourceCount(); ++sourceIndex) {
+    // Deliberately source-local: neither frozen caches nor all-frequency
+    // arrival lanes accumulate across sources.
+    const RayFanTraceResult trace =
+        SingleFrequencySolver::traceSourceFan(simulation, sourceIndex);
+    statistics.traceSeconds += trace.traceSeconds;
+    statistics.rayCount += trace.cache.size();
+    statistics.totalRayPointCount += trace.totalRayPointCount;
+    statistics.peakRayCacheBytes =
+        std::max(statistics.peakRayCacheBytes,
+                 trace.cache.memoryFootprintBytes());
+
+    std::uint64_t fingerprintBefore = 0U;
+    if (verifyCacheFingerprint) {
+      fingerprintBefore = trace.cache.contentFingerprint();
+      statistics.sourceCacheFingerprintsBefore.push_back(fingerprintBefore);
+    }
+
+    FusedArrivalAccumulationResult accumulated =
+        accumulateArrivalFrequencies(simulation, trace.cache, sourceIndex,
+                                     influenceSettings, executionSettings);
+    statistics.projectSeconds += accumulated.timings.projectSeconds;
+    statistics.influenceSeconds += accumulated.timings.influenceSeconds;
+    statistics.projectedRayCount +=
+        accumulated.rayCount * simulation.frequencies().size();
+    statistics.candidateCount +=
+        accumulated.arrivalStatistics.candidateCount;
+    statistics.saturatedCellCount +=
+        accumulated.arrivalStatistics.saturatedCellCount;
+    statistics.peakArrivalWorkspaceBytes =
+        std::max(statistics.peakArrivalWorkspaceBytes,
+                 accumulated.rawWorkspace.storageStatistics()
+                     .memoryFootprintBytes);
+
+    const Clock::time_point consumeBegin = Clock::now();
+    consumer(sourceIndex, accumulated.rawWorkspace);
+    statistics.consumeSeconds += elapsedSeconds(consumeBegin, Clock::now());
+
+    if (verifyCacheFingerprint) {
+      const std::uint64_t fingerprintAfter =
+          trace.cache.contentFingerprint();
+      statistics.sourceCacheFingerprintsAfter.push_back(fingerprintAfter);
+      if (fingerprintAfter != fingerprintBefore) {
+        throw ValidationError(
+            "fused arrival projection modified the frozen ray cache");
+      }
+    }
+  }
+
+  if (verifyCacheFingerprint) {
+    statistics.cacheFingerprintBefore =
+        statistics.sourceCacheFingerprintsBefore.front();
+    statistics.cacheFingerprintAfter =
+        statistics.sourceCacheFingerprintsAfter.front();
+  }
+  return statistics;
 }
 
 FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(

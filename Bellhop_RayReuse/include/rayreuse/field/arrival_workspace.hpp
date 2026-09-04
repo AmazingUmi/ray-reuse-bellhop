@@ -5,6 +5,7 @@
 #include <span>
 #include <vector>
 
+#include "rayreuse/field/arrival_accumulator.hpp"
 #include "rayreuse/field/arrival.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 
@@ -47,13 +48,7 @@ class ArrivalWorkspace {
   std::size_t rangeCount_;
   ArrivalCapacityPlan capacity_;
   std::vector<std::vector<Arrival>> cells_;
-  std::size_t candidateCount_{};
-  std::size_t appendCount_{};
-  std::size_t mergeCount_{};
-  std::size_t cuspGuardCount_{};
-  std::size_t weakestReplacementCount_{};
-  std::size_t capacityDiscardCount_{};
-  std::size_t saturatedCellCount_{};
+  ArrivalAccumulationStatistics statistics_;
 };
 
 }  // namespace rayreuse

@@ -61,7 +61,10 @@ void printUsage(std::ostream& stream) {
             "geometric Gaussian, and simple Gaussian. Fused runs coherent "
             "TL for every supported family and incoherent/semi-coherent TL "
             "where legal for the family; fused eligibility is a subset of "
-            "each family's legal support matrix. The deprecated legacy "
+            "each family's legal support matrix. Multi-frequency ASCII and "
+            "binary arrivals also support fused geometric hat (both "
+            "coordinate systems) and geometric Gaussian execution, including "
+            "multiple sources. The deprecated legacy "
             "reuse and parallel modes are retained for compatibility.\n"
          << "--verify-cache hashes the complete frozen ray cache before "
             "and after projection and is intended for validation.\n"
@@ -364,22 +367,45 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
         "Cerveny TL");
   }
   if (mode == rayreuse::SimulationRunMode::AsciiArrivals ||
-      mode == rayreuse::SimulationRunMode::BinaryArrivals ||
-      mode == rayreuse::SimulationRunMode::Eigenray) {
+      mode == rayreuse::SimulationRunMode::BinaryArrivals) {
     if (options.profileInfluence || options.profileFrequencyTasks ||
         unsupportedParallelTuning) {
       throw rayreuse::ValidationError(
           "Influence profiling and parallel tuning options are not supported "
           "for arrival/eigenray products");
     }
-    // The arrivals/eigenray dispatch chains end in an else -> parallel solve;
-    // fused must be rejected here so it cannot silently run the parallel
-    // arrivals/eigenray solver (design §2 R2/R3).
+    if (options.executionModeSpecified &&
+        options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
+      if (parsed.simulationCase.frequencies().size() < 2U) {
+        throw rayreuse::ValidationError(
+            "--execution-mode fused requires a multi-frequency arrival run");
+      }
+      if (parsed.simulationCase.beamFamily() !=
+              rayreuse::BeamFamily::GeometricHat &&
+          parsed.simulationCase.beamFamily() !=
+              rayreuse::BeamFamily::GeometricGaussian) {
+        throw rayreuse::ValidationError(
+            "--execution-mode fused arrivals require geometric hat or "
+            "geometric Gaussian beams");
+      }
+      if (parsed.simulationCase.receivers().isIrregular()) {
+        throw rayreuse::ValidationError(
+            "--execution-mode fused arrivals require a rectilinear receiver "
+            "grid");
+      }
+    }
+  }
+  if (mode == rayreuse::SimulationRunMode::Eigenray) {
+    if (options.profileInfluence || options.profileFrequencyTasks ||
+        unsupportedParallelTuning) {
+      throw rayreuse::ValidationError(
+          "Influence profiling and parallel tuning options are not supported "
+          "for arrival/eigenray products");
+    }
     if (options.executionModeSpecified &&
         options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
       throw rayreuse::ValidationError(
-          "--execution-mode fused is not defined for arrival/eigenray "
-          "products");
+          "--execution-mode fused is not defined for eigenray products");
     }
   }
 }
@@ -903,8 +929,10 @@ int main(int argumentCount, char* arguments[]) {
                                               "cache fingerprint");
             }
           };
-      const std::size_t workers = resolvedWorkerCount(options.workerCount);
       rayreuse::ArrivalSolverStatistics statistics;
+      std::size_t fusedRequestedRangeWorkers = 0U;
+      std::size_t fusedEffectiveRangeWorkers = 0U;
+      double fusedWriterSeconds = 0.0;
       if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
         statistics = rayreuse::ArrivalSolver::solveNonReuse(
             parsed.simulationCase, consumer, options.verifyCache);
@@ -912,7 +940,64 @@ int main(int argumentCount, char* arguments[]) {
                  rayreuse::BroadbandExecutionMode::Reuse) {
         statistics = rayreuse::ArrivalSolver::solve(
             parsed.simulationCase, consumer, options.verifyCache);
+      } else if (options.executionMode ==
+                 rayreuse::BroadbandExecutionMode::Fused) {
+        std::vector<std::filesystem::path> outputPaths;
+        outputPaths.reserve(parsed.simulationCase.frequencies().size());
+        for (std::size_t frequencyIndex = 0U;
+             frequencyIndex < parsed.simulationCase.frequencies().size();
+             ++frequencyIndex) {
+          outputPaths.push_back(productPath(
+              fileRoot, frequencyIndex,
+              parsed.simulationCase.frequencies().size(),
+              parsed.simulationCase.frequencies().values()[frequencyIndex],
+              extension));
+        }
+
+        const Clock::time_point writerSetupBegin = Clock::now();
+        rayreuse::BroadbandArrivalWriterSet writers(
+            outputPaths, parsed.title, parsed.simulationCase, encoding);
+        fusedWriterSeconds +=
+            std::chrono::duration<double>(Clock::now() - writerSetupBegin)
+                .count();
+        const rayreuse::FusedArrivalSourceConsumer fusedConsumer =
+            [&](std::size_t sourceIndex,
+                const rayreuse::BroadbandArrivalWorkspace& workspace) {
+              const Clock::time_point appendBegin = Clock::now();
+              writers.appendSource(sourceIndex, workspace);
+              fusedWriterSeconds +=
+                  std::chrono::duration<double>(Clock::now() - appendBegin)
+                      .count();
+            };
+        fusedRequestedRangeWorkers =
+            !options.rangeParallel
+                ? 1U
+                : (options.workerCountSpecified ? options.workerCount : 4U);
+        fusedEffectiveRangeWorkers = std::min(
+            fusedRequestedRangeWorkers,
+            parsed.simulationCase.receivers().rangeCount());
+        statistics = rayreuse::FusedRayReuseSolver::solveArrivalStreaming(
+            parsed.simulationCase, fusedConsumer, influenceSettings,
+            options.verifyCache,
+            rayreuse::FusedRayReuseExecutionSettings{
+                .requestedRangeWorkers = fusedRequestedRangeWorkers});
+        const Clock::time_point finalizeBegin = Clock::now();
+        writers.finalize();
+        fusedWriterSeconds +=
+            std::chrono::duration<double>(Clock::now() - finalizeBegin)
+                .count();
+
+        for (std::size_t frequencyIndex = 0U;
+             frequencyIndex < outputPaths.size(); ++frequencyIndex) {
+          printLog << "frequency product index = " << frequencyIndex
+                   << " frequency Hz = "
+                   << parsed.simulationCase.frequencies().values()
+                          [frequencyIndex]
+                   << '\n'
+                   << "product = " << outputPaths[frequencyIndex] << '\n';
+        }
       } else {
+        const std::size_t workers = resolvedWorkerCount(options.workerCount);
         statistics = rayreuse::ArrivalSolver::solveParallel(
             parsed.simulationCase, consumer, workers, options.verifyCache);
       }
@@ -925,6 +1010,24 @@ int main(int argumentCount, char* arguments[]) {
                << '\n'
                << "arrival consume seconds = " << statistics.consumeSeconds
                << '\n';
+      if (options.executionMode ==
+          rayreuse::BroadbandExecutionMode::Fused) {
+        printLog << "range parallel = "
+                 << (options.rangeParallel ? "enabled\n" : "disabled\n")
+                 << "requested range worker count = "
+                 << fusedRequestedRangeWorkers << '\n'
+                 << "effective range worker count = "
+                 << fusedEffectiveRangeWorkers << '\n'
+                 << "Trace seconds = " << statistics.traceSeconds << '\n'
+                 << "Project seconds = " << statistics.projectSeconds << '\n'
+                 << "Influence seconds = " << statistics.influenceSeconds
+                 << '\n'
+                 << "peak ray cache bytes = "
+                 << statistics.peakRayCacheBytes << '\n'
+                 << "peak arrival workspace bytes = "
+                 << statistics.peakArrivalWorkspaceBytes << '\n'
+                 << "ARR writer seconds = " << fusedWriterSeconds << '\n';
+      }
       if (statistics.cacheFingerprintVerified) {
         printLog << "cache fingerprint verification = enabled\n"
                  << "solver cache fingerprint before = "

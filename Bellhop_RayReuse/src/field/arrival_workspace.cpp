@@ -12,8 +12,6 @@
 
 namespace rayreuse {
 namespace {
-constexpr double kArrivalPhaseTolerance = static_cast<double>(0.05F);
-
 std::size_t checkedMultiply(std::size_t left, std::size_t right,
                             const char* label) {
   if (left != 0U && right > std::numeric_limits<std::size_t>::max() / left) {
@@ -29,30 +27,6 @@ void requireOriginInt32(std::size_t value, const char* label) {
   }
 }
 
-Arrival storedFromCandidate(const ArrivalCandidate& candidate) {
-  return Arrival{static_cast<float>(candidate.amplitude),
-                 static_cast<float>(candidate.phaseRadians),
-                 static_cast<std::complex<float>>(candidate.delaySeconds),
-                 static_cast<float>(candidate.sourceDeclinationDegrees),
-                 static_cast<float>(candidate.receiverDeclinationDegrees),
-                 candidate.topBounceCount,
-                 candidate.bottomBounceCount};
-}
-
-void validateCandidate(const ArrivalCandidate& candidate) {
-  if (!std::isfinite(candidate.amplitude) ||
-      !std::isfinite(candidate.phaseRadians) ||
-      !std::isfinite(candidate.delaySeconds.real()) ||
-      !std::isfinite(candidate.delaySeconds.imag()) ||
-      !std::isfinite(candidate.sourceDeclinationDegrees) ||
-      !std::isfinite(candidate.receiverDeclinationDegrees)) {
-    throw ValidationError("arrival candidate fields must all be finite");
-  }
-  if (candidate.topBounceCount < 0 || candidate.bottomBounceCount < 0) {
-    throw ValidationError(
-        "arrival candidate bounce counts must be non-negative");
-  }
-}
 }  // namespace
 
 ArrivalCapacityPlan planArrivalCapacity(
@@ -141,78 +115,31 @@ void ArrivalWorkspace::addCandidate(double frequency,
   if (frequency != frequency_)
     throw ValidationError(
         "arrival candidate frequency does not match the workspace");
-  validateCandidate(candidate);
+  validateArrivalCandidate(candidate);
   auto& cell = cells_.at(flatIndex(depthIndex, rangeIndex));
-  const std::size_t count = cell.size();
-  bool groups = false;
-  if (count != 0U) {
-    const Arrival& last = cell.back();
-    const auto delayDifference =
-        candidate.delaySeconds -
-        static_cast<std::complex<double>>(last.delaySeconds);
-    groups = omega() * std::abs(delayDifference) < kArrivalPhaseTolerance &&
-             std::abs(static_cast<double>(last.phaseRadians) -
-                      candidate.phaseRadians) < kArrivalPhaseTolerance;
-  }
-  ++candidateCount_;
-  if (groups) {
-    Arrival& record = cell.back();
-    const float candidateAmplitude = static_cast<float>(candidate.amplitude);
-    const float ampTot = record.amplitude + candidateAmplitude;
-    if (std::abs(ampTot) <= std::numeric_limits<float>::epsilon()) {
-      ++cuspGuardCount_;
-      return;
-    }
-    ++mergeCount_;
-    const float w1 = record.amplitude / ampTot;
-    const float w2 = candidateAmplitude / ampTot;
-    record.delaySeconds =
-        w1 * record.delaySeconds +
-        w2 * static_cast<std::complex<float>>(candidate.delaySeconds);
-    record.amplitude = ampTot;
-    record.sourceDeclinationDegrees =
-        w1 * record.sourceDeclinationDegrees +
-        w2 * static_cast<float>(candidate.sourceDeclinationDegrees);
-    record.receiverDeclinationDegrees =
-        w1 * record.receiverDeclinationDegrees +
-        w2 * static_cast<float>(candidate.receiverDeclinationDegrees);
-    return;
-  }
-  if (count >= capacity_.arrivalsPerCell) {
-    std::size_t minimumIndex = 0U;
-    for (std::size_t i = 1U; i < count; ++i)
-      if (cell[i].amplitude < cell[minimumIndex].amplitude) minimumIndex = i;
-    if (candidate.amplitude > cell[minimumIndex].amplitude) {
-      cell[minimumIndex] = storedFromCandidate(candidate);
-      ++weakestReplacementCount_;
-    } else
-      ++capacityDiscardCount_;
-    return;
-  }
-  cell.push_back(storedFromCandidate(candidate));
-  ++appendCount_;
-  if (cell.size() == capacity_.arrivalsPerCell) ++saturatedCellCount_;
+  addArrivalCandidate(cell, capacity_.arrivalsPerCell, omega(), candidate,
+                      statistics_);
 }
 
 std::size_t ArrivalWorkspace::candidateCount() const noexcept {
-  return candidateCount_;
+  return statistics_.candidateCount;
 }
 std::size_t ArrivalWorkspace::appendCount() const noexcept {
-  return appendCount_;
+  return statistics_.appendCount;
 }
 std::size_t ArrivalWorkspace::mergeCount() const noexcept {
-  return mergeCount_;
+  return statistics_.mergeCount;
 }
 std::size_t ArrivalWorkspace::cuspGuardCount() const noexcept {
-  return cuspGuardCount_;
+  return statistics_.cuspGuardCount;
 }
 std::size_t ArrivalWorkspace::weakestReplacementCount() const noexcept {
-  return weakestReplacementCount_;
+  return statistics_.weakestReplacementCount;
 }
 std::size_t ArrivalWorkspace::capacityDiscardCount() const noexcept {
-  return capacityDiscardCount_;
+  return statistics_.capacityDiscardCount;
 }
 std::size_t ArrivalWorkspace::saturatedCellCount() const noexcept {
-  return saturatedCellCount_;
+  return statistics_.saturatedCellCount;
 }
 }  // namespace rayreuse

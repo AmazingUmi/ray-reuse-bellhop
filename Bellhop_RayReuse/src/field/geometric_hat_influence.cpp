@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/broadband_arrival_workspace.hpp"
 #include "rayreuse/field/fused_intensity_workspace.hpp"
 #include "rayreuse/field/fused_pressure_workspace.hpp"
 
@@ -879,8 +880,8 @@ bool GeometricHatInfluence::accumulateFusedPrevalidated(
   // accepted for adapter-shape uniformity (design §3.4 documents the
   // zero-counter envelope for non-CC families).
   static_cast<void>(statistics);
-  return accumulateFusedImpl<false>(workspace, frequencies, path,
-                                    frequencyStates, rangeBegin, rangeEnd);
+  return accumulateFusedImpl<false, false>(
+      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd);
 }
 
 bool GeometricHatInfluence::accumulateFusedIntensityPrevalidated(
@@ -890,30 +891,44 @@ bool GeometricHatInfluence::accumulateFusedIntensityPrevalidated(
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   static_cast<void>(statistics);
-  return accumulateFusedImpl<true>(workspace, frequencies, path,
-                                   frequencyStates, rangeBegin, rangeEnd);
+  return accumulateFusedImpl<true, false>(
+      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd);
+}
+
+bool GeometricHatInfluence::accumulateFusedArrivalsPrevalidated(
+    BroadbandArrivalWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    ArrivalAccumulationStatistics& statistics) const {
+  return accumulateFusedImpl<false, true>(
+      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
+      &statistics);
 }
 
 // IGR-3A A04 fused kernel (design §5/§8): entry validation plus the
 // once-per-ray coordinate routing of the legacy accumulateField split. The
 // coherent and intensity twins share one traversal with a per-lane payload
 // branch at the store, mirroring the legacy single-traversal field paths.
-template <bool IntensityPayload, typename Workspace>
+template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
 bool GeometricHatInfluence::accumulateFusedImpl(
     Workspace& workspace, std::span<const double> frequencies,
     const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
-    std::size_t rangeBegin, std::size_t rangeEnd) const {
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    ArrivalAccumulationStatistics* arrivalStatistics) const {
   validateFusedHatInput(workspace, frequencies, path, frequencyStates,
                         receivers_, fusedLaunchAngleStep_);
   if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
     throw ValidationError("fused geometric hat range partition is invalid");
   }
   if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
-    return accumulateFusedRayCentered<IntensityPayload>(
-        workspace, path, frequencyStates, rangeBegin, rangeEnd);
+    return accumulateFusedRayCentered<IntensityPayload, ArrivalPayload>(
+        workspace, path, frequencyStates, rangeBegin, rangeEnd,
+        arrivalStatistics);
   }
-  return accumulateFusedCartesian<IntensityPayload>(
-      workspace, path, frequencyStates, rangeBegin, rangeEnd);
+  return accumulateFusedCartesian<IntensityPayload, ArrivalPayload>(
+      workspace, path, frequencyStates, rangeBegin, rangeEnd,
+      arrivalStatistics);
 }
 
 // Production fused Hat Cartesian traversal (IGR-3A A04, design §8): loop
@@ -931,11 +946,12 @@ bool GeometricHatInfluence::accumulateFusedImpl(
 // Cursor receiver runs are intersected with the worker's partition
 // [rangeBegin, rangeEnd); the cursor anchors themselves keep their legacy
 // values so later segments see identical cursor positions.
-template <bool IntensityPayload, typename Workspace>
+template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
 bool GeometricHatInfluence::accumulateFusedCartesian(
     Workspace& workspace, const RayPath& path,
     std::span<const RayFrequencyState> frequencyStates,
-    std::size_t rangeBegin, std::size_t rangeEnd) const {
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    ArrivalAccumulationStatistics* arrivalStatistics) const {
   const std::size_t frequencyCount = frequencyStates.size();
   std::vector<std::size_t> activePrefixPointCount(frequencyCount);
   std::vector<double> angularFrequency(frequencyCount);
@@ -958,6 +974,9 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
+  const PrefixBounceCounts bounces =
+      ArrivalPayload ? prefixBounceCounts(path, unionPrefix)
+                     : PrefixBounceCounts{};
 
   const std::vector<double>& ranges = receivers_.ranges();
   const auto firstReceiver = std::find_if(
@@ -1055,7 +1074,22 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
                           "geometric hat amplitude constant");
             requireFinite(phaseAtReceiver, "geometric hat caustic phase");
             requireFiniteComplex(delay, "geometric hat delay");
-            if constexpr (IntensityPayload) {
+            if constexpr (ArrivalPayload) {
+              workspace.addCandidate(
+                  frequencyIndex,
+                  ArrivalCandidate{
+                      .amplitude = amplitudeConstant * hatWeight,
+                      .phaseRadians = phaseAtReceiver,
+                      .delaySeconds = delay,
+                      .sourceDeclinationDegrees =
+                          path.launchAngle * (180.0 / std::numbers::pi),
+                      .receiverDeclinationDegrees =
+                          std::atan2(tangent.depth, tangent.range) *
+                          (180.0 / std::numbers::pi),
+                      .topBounceCount = bounces.top[rightIndex],
+                      .bottomBounceCount = bounces.bottom[rightIndex]},
+                  depthIndex, receiverIndex, *arrivalStatistics);
+            } else if constexpr (IntensityPayload) {
               // Legacy intensity branch: the attenuated real constant is
               // squared and the hat weight applied exactly once — this is
               // not Cerveny image ABS-squared (design §8).
@@ -1137,11 +1171,12 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
 // masks. Receiver runs are intersected with [rangeBegin, rangeEnd); the run
 // anchors keep their legacy values so interpolation weights are unchanged
 // by the clamp.
-template <bool IntensityPayload, typename Workspace>
+template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
 bool GeometricHatInfluence::accumulateFusedRayCentered(
     Workspace& workspace, const RayPath& path,
     std::span<const RayFrequencyState> frequencyStates,
-    std::size_t rangeBegin, std::size_t rangeEnd) const {
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    ArrivalAccumulationStatistics* arrivalStatistics) const {
   const std::size_t frequencyCount = frequencyStates.size();
   std::vector<std::size_t> activePrefixPointCount(frequencyCount);
   std::vector<double> angularFrequency(frequencyCount);
@@ -1162,6 +1197,9 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
+  const PrefixBounceCounts bounces =
+      ArrivalPayload ? prefixBounceCounts(path, unionPrefix)
+                     : PrefixBounceCounts{};
 
   // Normals and the amplitude base prefix depend only on the ray path and
   // are computed once over the UNION prefix, never per lane.
@@ -1276,7 +1314,23 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
                         "geometric hat amplitude constant");
           requireFinite(phaseAtReceiver, "geometric hat caustic phase");
           requireFiniteComplex(delay, "geometric hat delay");
-          if constexpr (IntensityPayload) {
+          if constexpr (ArrivalPayload) {
+            workspace.addCandidate(
+                frequencyIndex,
+                ArrivalCandidate{
+                    .amplitude = amplitudeConstant * hatWeight,
+                    .phaseRadians = phaseAtReceiver,
+                    .delaySeconds = delay,
+                    .sourceDeclinationDegrees =
+                        path.launchAngle * (180.0 / std::numbers::pi),
+                    .receiverDeclinationDegrees =
+                        std::atan2(path.points[rightIndex].slowness.depth,
+                                   path.points[rightIndex].slowness.range) *
+                        (180.0 / std::numbers::pi),
+                    .topBounceCount = bounces.top[rightIndex],
+                    .bottomBounceCount = bounces.bottom[rightIndex]},
+                depthIndex, rangeIndex, *arrivalStatistics);
+          } else if constexpr (IntensityPayload) {
             const double attenuatedConstant =
                 amplitudeConstant *
                 std::exp(

@@ -16,7 +16,9 @@ namespace rayreuse {
 
 class FusedPressureWorkspace;
 class FusedIntensityWorkspace;
+class BroadbandArrivalWorkspace;
 struct CartesianCervenyStatistics;
+struct ArrivalAccumulationStatistics;
 
 enum class GeometricGaussianWidthBranch {
   Geometric,
@@ -113,11 +115,19 @@ class GeometricGaussianInfluence {
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
-  template <bool IntensityPayload, typename Workspace>
+  [[nodiscard]] bool accumulateFusedArrivalsPrevalidated(
+      BroadbandArrivalWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics& statistics) const;
+
+  template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
   [[nodiscard]] bool accumulateFusedImpl(
       Workspace& workspace, std::span<const double> frequencies,
       const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
-      std::size_t rangeBegin, std::size_t rangeEnd) const;
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics* arrivalStatistics = nullptr) const;
 
   // IGR-3A A05 fused-run state (design §4/§5, A04 Hat precedent): the frozen
   // adapter interface carries no launch-angle spacing to the fused kernel

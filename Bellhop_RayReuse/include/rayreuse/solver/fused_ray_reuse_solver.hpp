@@ -2,14 +2,17 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "rayreuse/field/cartesian_cerveny_influence.hpp"
+#include "rayreuse/field/broadband_arrival_workspace.hpp"
 #include "rayreuse/field/frequency_workspace.hpp"
 #include "rayreuse/field/fused_intensity_workspace.hpp"
 #include "rayreuse/field/fused_pressure_workspace.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/solver/ray_reuse_frequency_consumer.hpp"
+#include "rayreuse/solver/arrival_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 
 namespace rayreuse {
@@ -54,6 +57,20 @@ struct FusedIntensityAccumulationResult {
   std::size_t effectiveRangeWorkers{};
 };
 
+// B03 raw source-local Arrival seam. The executor writes directly into the
+// broadband [range][depth][frequency] lanes; no legacy workspace is
+// materialized.
+struct FusedArrivalAccumulationResult {
+  BroadbandArrivalWorkspace rawWorkspace;
+  SingleFrequencyTimings timings;
+  ArrivalAccumulationStatistics arrivalStatistics;
+  std::size_t rayCount{};
+  std::size_t totalRayPointCount{};
+  std::size_t rayCacheBytes{};
+  std::size_t requestedRangeWorkers{};
+  std::size_t effectiveRangeWorkers{};
+};
+
 // Same fields and meanings as SerialRayReuseStatistics (fused-run shape, so
 // the PRT writer / fingerprint reporting stay reuse-compatible).
 struct FusedRayReuseStatistics {
@@ -71,6 +88,12 @@ struct FusedRayReuseStatistics {
   std::size_t requestedRangeWorkers{};
   std::size_t effectiveRangeWorkers{};
 };
+
+// Called once per source, in SimulationCase::sources() order. The broadband
+// workspace is source-local and valid only for the duration of the callback;
+// consumers should append its zero-copy frequency views synchronously.
+using FusedArrivalSourceConsumer = std::function<void(
+    std::size_t sourceIndex, const BroadbandArrivalWorkspace& workspace)>;
 
 // Production RayReuse broadband TL orchestration for coherent Cartesian
 // Cerveny pressure. Traces the frozen fan once, projects and accumulates all
@@ -99,6 +122,26 @@ class FusedRayReuseSolver {
       CartesianCervenySettings influenceSettings = {},
       FusedRayReuseExecutionSettings executionSettings = {});
 
+  // One frozen source cache -> all-frequency Arrival lanes. This source-aware
+  // seam is intentionally independent of the TL single-source eligibility
+  // predicate so B05 can stream a multi-source run one source at a time.
+  [[nodiscard]] static FusedArrivalAccumulationResult
+  accumulateArrivalFrequencies(
+      const SimulationCase& simulation, const RayPathCache& sourceCache,
+      std::size_t sourceIndex,
+      CartesianCervenySettings influenceSettings = {},
+      FusedRayReuseExecutionSettings executionSettings = {});
+
+  // Trace one source, accumulate all frequencies into one broadband
+  // workspace, consume it, then release both workspace and cache before
+  // advancing to the next source.
+  [[nodiscard]] static ArrivalSolverStatistics solveArrivalStreaming(
+      const SimulationCase& simulation,
+      const FusedArrivalSourceConsumer& consumer,
+      CartesianCervenySettings influenceSettings = {},
+      bool verifyCacheFingerprint = false,
+      FusedRayReuseExecutionSettings executionSettings = {});
+
   // Production entry; mirrors SerialRayReuseSolver::solveStreaming semantics
   // (consumer invoked per frequency index after that frequency's scale).
   [[nodiscard]] static FusedRayReuseStatistics solveStreaming(
@@ -120,7 +163,8 @@ class FusedRayReuseSolver {
       const SimulationCase& simulation, const RayPathCache& sourceCache,
       double epsilonMultiplier, double loopRange,
       CartesianCervenySettings influenceSettings,
-      FusedRayReuseExecutionSettings executionSettings);
+      FusedRayReuseExecutionSettings executionSettings,
+      std::size_t sourceIndex = 0U);
 };
 
 }  // namespace rayreuse

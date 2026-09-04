@@ -14,7 +14,9 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/arrival_accumulator.hpp"
 #include "rayreuse/field/beam_epsilon.hpp"
+#include "rayreuse/field/broadband_arrival_workspace.hpp"
 #include "rayreuse/field/cartesian_cerveny_influence.hpp"
 #include "rayreuse/field/frequency_workspace.hpp"
 #include "rayreuse/field/fused_intensity_workspace.hpp"
@@ -370,6 +372,19 @@ struct GeometricHatFusedAdapter {
                                              launchAngleStep, sourceSoundSpeed,
                                              sourceGeometry);
   }
+
+  [[nodiscard]] static bool accumulateFusedArrivals(
+      const Kernel& kernel, const PerRayScratch& scratch,
+      BroadbandArrivalWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics& statistics) {
+    static_cast<void>(scratch);
+    return kernel.accumulateFusedArrivalsPrevalidated(
+        workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
+        statistics);
+  }
 };
 
 // Geometric Gaussian adapter (IGR-3A A05, design §4). makeKernel mirrors the
@@ -480,6 +495,19 @@ struct GeometricGaussianFusedAdapter {
     return scaleGeometricIntensityToPressure(workspace, receivers,
                                              launchAngleStep, sourceSoundSpeed,
                                              sourceGeometry);
+  }
+
+  [[nodiscard]] static bool accumulateFusedArrivals(
+      const Kernel& kernel, const PerRayScratch& scratch,
+      BroadbandArrivalWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      ArrivalAccumulationStatistics& statistics) {
+    static_cast<void>(scratch);
+    return kernel.accumulateFusedArrivalsPrevalidated(
+        workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
+        statistics);
   }
 };
 
@@ -593,8 +621,8 @@ struct CoherentFusedSink {
   using Result = FusedAccumulationResult;
 
   [[nodiscard]] static Workspace makeWorkspace(
-      const ReceiverGrid& receivers, std::size_t frequencyCount) {
-    return Workspace(receivers, frequencyCount);
+      const ReceiverGrid& receivers, std::span<const double> frequencies) {
+    return Workspace(receivers, frequencies.size());
   }
 
   template <typename Adapter>
@@ -604,7 +632,9 @@ struct CoherentFusedSink {
       std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
-      CartesianCervenyStatistics* statistics) {
+      CartesianCervenyStatistics* statistics,
+      ArrivalAccumulationStatistics* arrivalStatistics) {
+    static_cast<void>(arrivalStatistics);
     return Adapter::accumulateFused(kernel, scratch, workspace, frequencies,
                                     path, frequencyStates, rangeBegin,
                                     rangeEnd, statistics);
@@ -614,7 +644,9 @@ struct CoherentFusedSink {
       Workspace&& rawWorkspace, const SingleFrequencyTimings& timings,
       std::size_t rayCount, std::size_t totalRayPointCount,
       std::size_t rayCacheBytes, std::size_t requestedRangeWorkers,
-      std::size_t effectiveRangeWorkers) {
+      std::size_t effectiveRangeWorkers,
+      const ArrivalAccumulationStatistics& arrivalStatistics) {
+    static_cast<void>(arrivalStatistics);
     return Result{
         .rawWorkspace = std::move(rawWorkspace),
         .timings = timings,
@@ -631,8 +663,8 @@ struct IntensityFusedSink {
   using Result = FusedIntensityAccumulationResult;
 
   [[nodiscard]] static Workspace makeWorkspace(
-      const ReceiverGrid& receivers, std::size_t frequencyCount) {
-    return Workspace(receivers, frequencyCount);
+      const ReceiverGrid& receivers, std::span<const double> frequencies) {
+    return Workspace(receivers, frequencies.size());
   }
 
   template <typename Adapter>
@@ -642,7 +674,9 @@ struct IntensityFusedSink {
       std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
-      CartesianCervenyStatistics* statistics) {
+      CartesianCervenyStatistics* statistics,
+      ArrivalAccumulationStatistics* arrivalStatistics) {
+    static_cast<void>(arrivalStatistics);
     return Adapter::accumulateFusedIntensity(kernel, scratch, workspace,
                                              frequencies, path,
                                              frequencyStates, rangeBegin,
@@ -653,7 +687,9 @@ struct IntensityFusedSink {
       Workspace&& rawWorkspace, const SingleFrequencyTimings& timings,
       std::size_t rayCount, std::size_t totalRayPointCount,
       std::size_t rayCacheBytes, std::size_t requestedRangeWorkers,
-      std::size_t effectiveRangeWorkers) {
+      std::size_t effectiveRangeWorkers,
+      const ArrivalAccumulationStatistics& arrivalStatistics) {
+    static_cast<void>(arrivalStatistics);
     return Result{
         .rawIntensityWorkspace = std::move(rawWorkspace),
         .timings = timings,
@@ -662,6 +698,47 @@ struct IntensityFusedSink {
         .rayCacheBytes = rayCacheBytes,
         .requestedRangeWorkers = requestedRangeWorkers,
         .effectiveRangeWorkers = effectiveRangeWorkers};
+  }
+};
+
+struct ArrivalFusedSink {
+  using Workspace = BroadbandArrivalWorkspace;
+  using Result = FusedArrivalAccumulationResult;
+
+  [[nodiscard]] static Workspace makeWorkspace(
+      const ReceiverGrid& receivers, std::span<const double> frequencies) {
+    return Workspace(frequencies, receivers);
+  }
+
+  template <typename Adapter>
+  [[nodiscard]] static bool accumulate(
+      const typename Adapter::Kernel& kernel,
+      const typename Adapter::PerRayScratch& scratch, Workspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics,
+      ArrivalAccumulationStatistics* arrivalStatistics) {
+    static_cast<void>(statistics);
+    return Adapter::accumulateFusedArrivals(
+        kernel, scratch, workspace, frequencies, path, frequencyStates,
+        rangeBegin, rangeEnd, *arrivalStatistics);
+  }
+
+  [[nodiscard]] static Result makeResult(
+      Workspace&& rawWorkspace, const SingleFrequencyTimings& timings,
+      std::size_t rayCount, std::size_t totalRayPointCount,
+      std::size_t rayCacheBytes, std::size_t requestedRangeWorkers,
+      std::size_t effectiveRangeWorkers,
+      const ArrivalAccumulationStatistics& arrivalStatistics) {
+    return Result{.rawWorkspace = std::move(rawWorkspace),
+                  .timings = timings,
+                  .arrivalStatistics = arrivalStatistics,
+                  .rayCount = rayCount,
+                  .totalRayPointCount = totalRayPointCount,
+                  .rayCacheBytes = rayCacheBytes,
+                  .requestedRangeWorkers = requestedRangeWorkers,
+                  .effectiveRangeWorkers = effectiveRangeWorkers};
   }
 };
 
