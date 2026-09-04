@@ -15,6 +15,8 @@
 
 namespace rayreuse {
 
+class FusedIntensityWorkspace;
+
 enum class CervenyImageKind {
   True,
   Surface,
@@ -173,6 +175,29 @@ class CartesianCervenyInfluence {
   template <bool CollectStatistics, std::size_t ImageCount>
   [[nodiscard]] bool accumulateFusedImpl(
       FusedPressureWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics) const;
+
+  // IGR-3A A02b fused intensity twin (design §5/§6.2/§8): identical
+  // traversal, union active prefix, per-frequency masks, and encounter order
+  // as accumulateFusedPrevalidated; the payload store forms the coherent
+  // image sum per frequency lane and then adds ABS(contribution)^2
+  // (abs-then-multiply; std::norm is forbidden) into the real lane,
+  // reproducing the legacy per-frequency intensity branch.
+  [[nodiscard]] bool accumulateFusedIntensityPrevalidated(
+      FusedIntensityWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  template <bool CollectStatistics, std::size_t ImageCount>
+  [[nodiscard]] bool accumulateFusedIntensityImpl(
+      FusedIntensityWorkspace& workspace,
       std::span<const double> frequencies, const RayPath& path,
       std::span<const RayFrequencyState> frequencyStates,
       std::span<const std::complex<double>> epsilons,

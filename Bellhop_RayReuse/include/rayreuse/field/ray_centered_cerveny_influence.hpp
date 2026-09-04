@@ -3,6 +3,7 @@
 #include <complex>
 #include <cstddef>
 #include <optional>
+#include <span>
 
 #include "rayreuse/field/cartesian_cerveny_influence.hpp"
 #include "rayreuse/field/frequency_workspace.hpp"
@@ -11,6 +12,8 @@
 #include "rayreuse/ray/ray_path.hpp"
 
 namespace rayreuse {
+
+class FusedIntensityWorkspace;
 
 struct RayCenteredCervenyDiagnosticRequest {
   std::size_t receiverRangeIndex{};
@@ -58,12 +61,47 @@ class RayCenteredCervenyInfluence {
           std::nullopt) const;
 
  private:
+  // IGR-3A unified-executor adapter (design §4): its accumulateFused /
+  // accumulateFusedIntensity hooks forward to the private fused kernel
+  // entries below.
+  friend struct RayCenteredCervenyFusedAdapter;
+
   [[nodiscard]] std::optional<RayCenteredCervenyDiagnostic> accumulateImpl(
       FrequencyWorkspace* pressureWorkspace,
       IntensityWorkspace* intensityWorkspace, const RayPath& path,
       const RayFrequencyState& frequencyState, std::complex<double> epsilon,
       std::optional<RayCenteredCervenyDiagnosticRequest> diagnosticRequest)
       const;
+
+  // IGR-3A A03 fused kernel entries (design §5): one ray, all frequency
+  // lanes, receiver cells [rangeBegin, rangeEnd). The coherent and intensity
+  // twins share one traversal (accumulateFusedImpl below) with a per-lane
+  // payload branch at the store, mirroring the legacy single-traversal
+  // accumulateImpl. Entry-kind validation matches the public per-frequency
+  // entries (coherent requires Coherent, intensity requires I/S).
+  [[nodiscard]] bool accumulateFusedPrevalidated(
+      FusedPressureWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  [[nodiscard]] bool accumulateFusedIntensityPrevalidated(
+      FusedIntensityWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  template <bool IntensityPayload, typename Workspace>
+  [[nodiscard]] bool accumulateFusedImpl(
+      Workspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics) const;
 
   Environment environment_;
   ReceiverGrid receivers_;

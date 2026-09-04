@@ -49,6 +49,7 @@ import numpy as np
 from case_model import CaseDefinition, discover_cases
 from standard_cases import (
     format_frequency_csv,
+    stage_companion_files,
     validate_broadband_output,
 )
 
@@ -1027,6 +1028,10 @@ def _run_isolated_sample(
         ),
         encoding="utf-8",
     )
+    # Companion boundary files (.ati/.bty) must sit next to the env with the
+    # same file root, exactly as the standard_cases runner stages them;
+    # geometry cases (e.g. the hat boundary pair) fail to launch otherwise.
+    stage_companion_files(definition, run_directory, file_root)
     environment_sha256 = sha256_file(environment_path)
 
     request_path = run_directory / "sample_request.json"

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/fused_intensity_workspace.hpp"
 
 namespace rayreuse {
 namespace {
@@ -310,8 +311,11 @@ struct FusedPrecomputedRayValues {
 
 // Fused-kernel entry checks: identical conditions to validatePrevalidatedInput
 // (pressure-workspace route) with fused-prefixed diagnostics so the failing
-// layer is identifiable (design §4.2 / Obligation P5).
-void validateFusedPrevalidatedInput(const FusedPressureWorkspace& workspace,
+// layer is identifiable (design §4.2 / Obligation P5). Templated over the
+// fused workspace kind in A02b: both payloads expose the same
+// depth/range-count checks and identical conditions apply (design §6.2).
+template <typename FusedWorkspace>
+void validateFusedPrevalidatedInput(const FusedWorkspace& workspace,
                                     double frequency, const RayPath& path,
                                     const RayFrequencyState& frequencyState,
                                     std::complex<double> epsilon,
@@ -1170,6 +1174,43 @@ bool CartesianCervenyInfluence::accumulateFusedPrevalidated(
                                         rangeEnd, nullptr);
 }
 
+bool CartesianCervenyInfluence::accumulateFusedIntensityPrevalidated(
+    FusedIntensityWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    CartesianCervenyStatistics* statistics) const {
+  if (statistics != nullptr) {
+    if (settings_.imageCount == 1U) {
+      return accumulateFusedIntensityImpl<true, 1U>(
+          workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
+          rangeEnd, statistics);
+    }
+    if (settings_.imageCount == 2U) {
+      return accumulateFusedIntensityImpl<true, 2U>(
+          workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
+          rangeEnd, statistics);
+    }
+    return accumulateFusedIntensityImpl<true, 3U>(
+        workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
+        rangeEnd, statistics);
+  }
+  if (settings_.imageCount == 1U) {
+    return accumulateFusedIntensityImpl<false, 1U>(
+        workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
+        rangeEnd, nullptr);
+  }
+  if (settings_.imageCount == 2U) {
+    return accumulateFusedIntensityImpl<false, 2U>(
+        workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
+        rangeEnd, nullptr);
+  }
+  return accumulateFusedIntensityImpl<false, 3U>(
+      workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
+      rangeEnd, nullptr);
+}
+
 // Production fused RayReuse kernel. Per fixed frequency
 // the arithmetic reproduces accumulateImpl exactly: shared segment/range/
 // image geometry is computed once per ray (frequency-independent by
@@ -1558,6 +1599,420 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
               "Cartesian Cerveny accumulated workspace pressure");
 #endif
           pressureValue = updatedPressure;
+        }
+      }
+    }
+  }
+  if constexpr (CollectStatistics) {
+    statistics->hotLoopSeconds += elapsedSeconds(hotLoopBegin, Clock::now());
+  }
+  return true;
+}
+
+// Production fused RayReuse intensity kernel (IGR-3A A02b, new construction,
+// design §5/§6.2/§8). The traversal, union active prefix, per-frequency
+// active/gamma masks, range partition clamp, encounter order, and every
+// frequency-local expression are EXACTLY those of accumulateFusedImpl above
+// (verified line by line); the only divergence is the payload store: instead
+// of the complex pressure add, each eligible frequency lane forms the same
+// coherent image sum, computes contribution = corrected * imageSum with
+// identical arithmetic, and stores ABS(contribution)^2 — abs then multiply,
+// std::norm forbidden (legacy accumulateImpl intensity branch,
+// cartesian_cerveny_influence.cpp:947-973) — with the legacy
+// IntensityWorkspace::add read-add-assign semantics applied directly to the
+// fused cell lane, so the sequence of real additions into any single
+// (cell, frequency lane) is identical to legacy reuse (design §8).
+template <bool CollectStatistics, std::size_t ImageCount>
+bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
+    FusedIntensityWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    CartesianCervenyStatistics* statistics) const {
+  static_assert(ImageCount >= 1U && ImageCount <= 3U);
+  const std::size_t frequencyCount = frequencyStates.size();
+  if (frequencyCount == 0U) {
+    throw ValidationError(
+        "fused Cartesian Cerveny influence requires at least one frequency");
+  }
+  if (workspace.frequencyCount() != frequencyCount ||
+      frequencies.size() != frequencyCount ||
+      epsilons.size() != frequencyCount) {
+    throw ValidationError(
+        "fused Cartesian Cerveny influence requires workspace, frequency, "
+        "frequency-state, and epsilon dimensions of equal size");
+  }
+  if (workspace.depthCount() != receivers_.receiversPerRange() ||
+      workspace.rangeCount() != receivers_.rangeCount()) {
+    throw ValidationError(
+        "fused Cartesian Cerveny workspace and receiver-grid sizes must "
+        "match");
+  }
+  if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
+    throw ValidationError(
+        "fused Cartesian Cerveny range partition is invalid");
+  }
+  if constexpr (CollectStatistics) {
+    // One fused ray call covers Nf per-(ray, frequency) accumulations.
+    statistics->rayAccumulations += frequencyCount;
+  }
+  {
+    Clock::time_point validationBegin{};
+    if constexpr (CollectStatistics) {
+      validationBegin = Clock::now();
+    }
+    for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+         ++frequencyIndex) {
+      validateFusedPrevalidatedInput(workspace, frequencies[frequencyIndex], path,
+                                     frequencyStates[frequencyIndex],
+                                     epsilons[frequencyIndex], receivers_,
+                                     widthMode_);
+    }
+    if constexpr (CollectStatistics) {
+      statistics->validationSeconds +=
+          elapsedSeconds(validationBegin, Clock::now());
+    }
+  }
+
+  Clock::time_point precomputeBegin{};
+  if constexpr (CollectStatistics) {
+    precomputeBegin = Clock::now();
+  }
+  std::vector<std::size_t> activePrefixPointCount(frequencyCount);
+  std::vector<double> angularFrequency(frequencyCount);
+  std::vector<double> radiusMax(frequencyCount);
+  std::size_t maximumPrefixPointCount = 0U;
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    // Exact per-frequency active-prefix scan of accumulateImpl (the first
+    // inactive point is retained).
+    std::size_t prefixPointCount = path.points.size();
+    for (std::size_t index = 0U;
+         index < frequencyStates[frequencyIndex].points.size(); ++index) {
+      if (!frequencyStates[frequencyIndex].points[index].active) {
+        prefixPointCount = index + 1U;
+        break;
+      }
+    }
+    activePrefixPointCount[frequencyIndex] = prefixPointCount;
+    maximumPrefixPointCount =
+        std::max(maximumPrefixPointCount, prefixPointCount);
+    if constexpr (CollectStatistics) {
+      statistics->activeRayPoints += prefixPointCount;
+    }
+    angularFrequency[frequencyIndex] =
+        2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
+    radiusMax[frequencyIndex] =
+        30.0 * path.points.front().soundSpeed /
+        frequencyStates[frequencyIndex].frequency;
+  }
+  const std::size_t fusedValueCount =
+      maximumPrefixPointCount * frequencyCount;
+  FusedPrecomputedRayValues ray{
+      .frequencyCount = frequencyCount,
+      .p = std::vector<std::complex<double>>(fusedValueCount),
+      .q = std::vector<std::complex<double>>(fusedValueCount),
+      .gamma = std::vector<std::complex<double>>(fusedValueCount),
+      .kmah = std::vector<int>(fusedValueCount),
+  };
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    // Preserve the existing ascending-frequency, ascending-point evaluation
+    // sequence and each frequency's own prefix. Rectangular inactive tails
+    // are storage only and are never read by the fused hot-loop gates.
+    precomputeFusedRayValuesForFrequency(
+        path, soundSpeedProfile_, epsilons[frequencyIndex],
+        activePrefixPointCount[frequencyIndex], widthMode_, frequencyIndex,
+        ray);
+  }
+  if constexpr (CollectStatistics) {
+    statistics->precomputeSeconds +=
+        elapsedSeconds(precomputeBegin, Clock::now());
+  }
+  const double beamWindowSquared = static_cast<double>(settings_.beamWindow) *
+                                   static_cast<double>(settings_.beamWindow);
+  const double ratio = sourceGeometry_ == SourceGeometry::Line
+                           ? 1.0
+                           : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  const std::vector<double>& receiverRanges = receivers_.ranges();
+  const std::vector<double>& receiverDepths = receivers_.depths();
+  const std::size_t receiversPerRange = receivers_.receiversPerRange();
+  // Irregular CC runs evaluate every range at the first depth (the Origin/F2CPP
+  // legacy behavior preserved by the per-frequency kernel); retained verbatim.
+  // Fused scope rejects irregular grids upstream anyway.
+  const bool irregularReceivers = receivers_.isIrregular();
+  const double irregularReceiverDepth = receiverDepths.front();
+  const double seaSurfaceDepth = environment_.seaSurface().depth();
+  const double seabedDepth = environment_.seabed().depth();
+  // D5: traversal upper bound = union of the per-frequency active prefixes.
+  std::size_t unionPrefix = 0U;
+  for (const std::size_t prefixPointCount : activePrefixPointCount) {
+    unionPrefix = std::max(unionPrefix, prefixPointCount);
+  }
+  // O(Nf) kernel-local scratch, rewritten per segment/range/depth (design §7).
+  std::vector<bool> activeMask(frequencyCount, false);
+  std::vector<bool> rangeEligible(frequencyCount, false);
+  std::vector<std::complex<double>> q(frequencyCount);
+  std::vector<std::complex<double>> tau(frequencyCount);
+  std::vector<std::complex<double>> gamma(frequencyCount);
+  std::vector<std::complex<double>> principal(frequencyCount);
+  std::vector<std::complex<double>> corrected(frequencyCount);
+  std::vector<std::complex<double>> imageSum(frequencyCount);
+  Clock::time_point hotLoopBegin{};
+  if constexpr (CollectStatistics) {
+    hotLoopBegin = Clock::now();
+  }
+
+  for (std::size_t rightIndex = 2U; rightIndex < unionPrefix; ++rightIndex) {
+    if constexpr (CollectStatistics) {
+      ++statistics->segmentCandidates;
+      ++statistics->geometrySegmentEvaluations;
+    }
+    const std::size_t leftIndex = rightIndex - 1U;
+    const std::size_t leftFlatOffset = leftIndex * frequencyCount;
+    const std::size_t rightFlatOffset = rightIndex * frequencyCount;
+    const double leftRange = path.points[leftIndex].position.range;
+    const double rightRange = path.points[rightIndex].position.range;
+    if (rightRange > receiverRanges.back()) {
+      if constexpr (CollectStatistics) {
+        statistics->hotLoopSeconds +=
+            elapsedSeconds(hotLoopBegin, Clock::now());
+      }
+      return false;
+    }
+    if (std::abs(rightRange - leftRange) <
+        1000.0 * floatingSpacing(rightRange)) {
+      continue;
+    }
+    bool anyActive = false;
+    for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+         ++frequencyIndex) {
+      // Loop-bound + left-endpoint gate, exactly the per-frequency kernel's
+      // segment conditions for that frequency (a false left endpoint
+      // suppresses the geometry suffix; segments beyond a frequency's prefix
+      // are gated out as the per-frequency loop bound gated them).
+      activeMask[frequencyIndex] =
+          rightIndex < activePrefixPointCount[frequencyIndex] &&
+          frequencyStates[frequencyIndex].points[leftIndex].active;
+      anyActive = anyActive || activeMask[frequencyIndex];
+    }
+    if (!anyActive) {
+      continue;
+    }
+
+    const std::size_t firstUpper =
+        fortranUpperRangeIndex(leftRange, receiverRanges, receiverRangeDelta_);
+    const std::size_t secondUpper =
+        fortranUpperRangeIndex(rightRange, receiverRanges, receiverRangeDelta_);
+    if (firstUpper >= secondUpper) {
+      continue;
+    }
+    if constexpr (CollectStatistics) {
+      ++statistics->eligibleSegments;
+    }
+
+    const std::size_t firstPartitionRange = rangeBegin + 1U;
+    const std::size_t lastPartitionRange = rangeEnd;
+    const std::size_t firstRange =
+        std::max(firstUpper + 1U, firstPartitionRange);
+    const std::size_t lastRange = std::min(secondUpper, lastPartitionRange);
+    for (std::size_t oneBasedRange = firstRange;
+         oneBasedRange <= lastRange; ++oneBasedRange) {
+      if constexpr (CollectStatistics) {
+        ++statistics->receiverRangeEvaluations;
+        ++statistics->geometryRangeEvaluations;
+      }
+      const std::size_t rangeIndex = oneBasedRange - 1U;
+      const double weight =
+          (receiverRanges[rangeIndex] - leftRange) / (rightRange - leftRange);
+      const Vec2 position = path.points[leftIndex].position +
+                            weight * (path.points[rightIndex].position -
+                                      path.points[leftIndex].position);
+      const Vec2 slowness = path.points[leftIndex].slowness +
+                            weight * (path.points[rightIndex].slowness -
+                                      path.points[leftIndex].slowness);
+      const double soundSpeed = path.points[leftIndex].soundSpeed +
+                                weight * (path.points[rightIndex].soundSpeed -
+                                          path.points[leftIndex].soundSpeed);
+      bool anyEligible = false;
+      for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+           ++frequencyIndex) {
+        rangeEligible[frequencyIndex] = activeMask[frequencyIndex];
+        if (!rangeEligible[frequencyIndex]) {
+          continue;
+        }
+        if constexpr (CollectStatistics) {
+          // Counted for every active frequency at this range, including
+          // frequencies the gamma guard below then rejects.
+          ++statistics->frequencyRangeKernelEvaluations;
+        }
+        const std::size_t leftFlatIndex =
+            leftFlatOffset + frequencyIndex;
+        const std::size_t rightFlatIndex =
+            rightFlatOffset + frequencyIndex;
+        q[frequencyIndex] =
+            ray.q[leftFlatIndex] +
+            weight * (ray.q[rightFlatIndex] - ray.q[leftFlatIndex]);
+        tau[frequencyIndex] =
+            frequencyStates[frequencyIndex].points[leftIndex]
+                .complexTravelTime +
+            weight * (frequencyStates[frequencyIndex].points[rightIndex]
+                          .complexTravelTime -
+                      frequencyStates[frequencyIndex].points[leftIndex]
+                          .complexTravelTime);
+        gamma[frequencyIndex] =
+            ray.gamma[leftFlatIndex] +
+            weight *
+                (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
+        if (gamma[frequencyIndex].imag() > 0.0) {
+          rangeEligible[frequencyIndex] = false;
+          continue;
+        }
+
+        principal[frequencyIndex] =
+            ratio * std::sqrt(soundSpeed * std::abs(epsilons[frequencyIndex]) /
+                              q[frequencyIndex]);
+        int finalKmah = ray.kmah[leftFlatIndex];
+        finalKmah = updateCervenyKmah(ray.q[leftFlatIndex], q[frequencyIndex],
+                                      finalKmah, widthMode_);
+        corrected[frequencyIndex] = finalKmah < 0
+                                        ? -principal[frequencyIndex]
+                                        : principal[frequencyIndex];
+        requireFiniteComplex(principal[frequencyIndex],
+                             "Cartesian Cerveny principal constant");
+        requireFiniteComplex(corrected[frequencyIndex],
+                             "Cartesian Cerveny corrected constant");
+        anyEligible = true;
+      }
+      if (!anyEligible) {
+        continue;
+      }
+
+      for (std::size_t depthIndex = 0U; depthIndex < receiversPerRange;
+           ++depthIndex) {
+        if constexpr (CollectStatistics) {
+          ++statistics->receiverDepthEvaluations;
+          ++statistics->geometryDepthEvaluations;
+        }
+        const double receiverDepth = irregularReceivers
+                                         ? irregularReceiverDepth
+                                         : receiverDepths[depthIndex];
+        std::span<double> intensityCell = workspace.cell(rangeIndex, depthIndex);
+        for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+             ++frequencyIndex) {
+          imageSum[frequencyIndex] = std::complex<double>{};
+        }
+        // Runtime image loop (kind order True -> Surface -> Bottom).
+        for (std::size_t imageIndex = 0U; imageIndex < ImageCount;
+             ++imageIndex) {
+          double deltaDepth = 0.0;
+          double polarity = 1.0;
+          if (imageIndex == 0U) {
+            deltaDepth = receiverDepth - position.depth;
+          } else if (imageIndex == 1U) {
+            deltaDepth =
+                -receiverDepth + 2.0 * seaSurfaceDepth - position.depth;
+            polarity = -1.0;
+          } else {
+            deltaDepth = -receiverDepth + 2.0 * seabedDepth - position.depth;
+          }
+          if constexpr (CollectStatistics) {
+            ++statistics->geometryImageGeometryEvaluations;
+          }
+          const double deltaSquared = deltaDepth * deltaDepth;
+          for (std::size_t frequencyIndex = 0U;
+               frequencyIndex < frequencyCount; ++frequencyIndex) {
+            if (!rangeEligible[frequencyIndex]) {
+              continue;
+            }
+            if constexpr (CollectStatistics) {
+              ++statistics->imageEvaluations;
+              ++statistics->frequencyImageKernelEvaluations;
+            }
+            const double windowMetric =
+                -angularFrequency[frequencyIndex] *
+                gamma[frequencyIndex].imag() * deltaSquared;
+#ifndef NDEBUG
+            requireFinite(windowMetric, "Cartesian Cerveny window metric");
+#endif
+            if (windowMetric >= beamWindowSquared) {
+              if constexpr (CollectStatistics) {
+                ++statistics->windowRejections;
+              }
+              // Obligation P1: the zero add is unconditional (the
+              // per-frequency kernel adds the returned zero contribution).
+              imageSum[frequencyIndex] += std::complex<double>{};
+              continue;
+            }
+            const double taper = cervenyHermiteTaperUnchecked(
+                deltaDepth, radiusMax[frequencyIndex],
+                2.0 * radiusMax[frequencyIndex]);
+            if (taper == 0.0) {
+              if constexpr (CollectStatistics) {
+                ++statistics->taperRejections;
+              }
+              imageSum[frequencyIndex] += std::complex<double>{};
+              continue;
+            }
+            const std::complex<double> phaseArgument =
+                angularFrequency[frequencyIndex] *
+                    (tau[frequencyIndex] +
+                     slowness.depth * deltaDepth +
+                     gamma[frequencyIndex] * deltaSquared) -
+                frequencyStates[frequencyIndex]
+                    .points[rightIndex]
+                    .reflectionPhase;
+            const std::complex<double> contribution =
+                polarity *
+                frequencyStates[frequencyIndex].points[rightIndex].amplitude *
+                taper * negativeImaginaryExponential(phaseArgument);
+#ifndef NDEBUG
+            requireFiniteComplex(contribution,
+                                 "Cartesian Cerveny image contribution");
+#endif
+            if constexpr (CollectStatistics) {
+              if (contribution != std::complex<double>{}) {
+                ++statistics->nonzeroImageContributions;
+              }
+            }
+            imageSum[frequencyIndex] += contribution;
+          }
+        }
+        for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+             ++frequencyIndex) {
+          if (!rangeEligible[frequencyIndex]) {
+            continue;
+          }
+          // Obligation P6: exactly one intensity add per (ray, range, depth,
+          // eligible frequency), read-add-assign like the legacy kernel. The
+          // image sum and the contribution are formed with the coherent
+          // kernel's exact arithmetic; only the store diverges (ABS^2).
+          const std::complex<double> frequencyContribution =
+              corrected[frequencyIndex] * imageSum[frequencyIndex];
+#ifndef NDEBUG
+          requireFiniteComplex(frequencyContribution,
+                               "Cartesian Cerveny final contribution");
+#endif
+          // Origin coherently sums the true/surface/bottom images for one
+          // beam, forms ABS(z)**2, and only then adds power from different
+          // beams. std::norm is intentionally avoided because its rounding
+          // and overflow path differs from ABS followed by multiplication.
+          const double magnitude = std::abs(frequencyContribution);
+          const double intensityIncrement = magnitude * magnitude;
+          if (!std::isfinite(magnitude) || !std::isfinite(intensityIncrement) ||
+              intensityIncrement < 0.0) {
+            throw ValidationError(
+                "Cartesian Cerveny intensity increment must be finite and "
+                "non-negative");
+          }
+          double& intensityValue = intensityCell[frequencyIndex];
+          const double updatedIntensity =
+              intensityValue + intensityIncrement;
+          if (!std::isfinite(updatedIntensity)) {
+            throw ValidationError("accumulated intensity must remain finite");
+          }
+          intensityValue = updatedIntensity;
         }
       }
     }

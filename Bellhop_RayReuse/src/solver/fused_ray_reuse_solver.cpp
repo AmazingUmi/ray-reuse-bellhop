@@ -5,6 +5,7 @@
 #include <cmath>
 #include <exception>
 #include <limits>
+#include <optional>
 #include <span>
 #include <thread>
 #include <utility>
@@ -34,9 +35,18 @@ struct RangeWorkerResult {
 enum class FusedScopeFailure {
   None,
   NotTransmissionLoss,
-  NotCoherent,
-  NotCervenyGaussian,
-  NotCartesian,
+  // Run mode is not legal for the beam family (design §9 family legality:
+  // fused eligibility is always a subset of the legal beam x run-mode
+  // support matrix). Live since A06 for the coherent-only SimpleGaussian
+  // family: every Cerveny/Hat/Gaussian TL mode is legal, so only Simple
+  // Gaussian outside coherent can ever reach it — and SimulationCase
+  // construction already rejects that combination
+  // (simulation_case.cpp:404-409, the legal-matrix enforcement upstream of
+  // every solver layer), which keeps this gate arm defense in depth. The
+  // reachable enforcement of the same law is the intensity public entry,
+  // which rejects the family before any adapter can be selected.
+  RunModeIllegalForFamily,
+  UnsupportedBeamFamily,
   NotSingleSource,
   TooFewFrequencies,
   IrregularReceivers,
@@ -49,15 +59,26 @@ enum class FusedScopeFailure {
   if (!isTransmissionLossMode(simulation.runMode())) {
     return FusedScopeFailure::NotTransmissionLoss;
   }
-  if (simulation.runMode() != SimulationRunMode::Coherent) {
-    return FusedScopeFailure::NotCoherent;
+  // Both Cerveny coordinate systems are in fused scope since A03, the
+  // Geometric Hat family (both coordinates) since A04, the Geometric
+  // Gaussian family (Cartesian only) since A05, and the Simple Gaussian
+  // family (coherent only) since A06 (design §9);
+  // SimulationCase construction validates the closed coordinate enum, so
+  // the coordinate dimension needs no rejection — the Hat kernel owns the
+  // internal traversal selection.
+  if (simulation.beamFamily() != BeamFamily::CervenyGaussian &&
+      simulation.beamFamily() != BeamFamily::GeometricHat &&
+      simulation.beamFamily() != BeamFamily::GeometricGaussian &&
+      simulation.beamFamily() != BeamFamily::SimpleGaussian) {
+    return FusedScopeFailure::UnsupportedBeamFamily;
   }
-  if (simulation.beamFamily() != BeamFamily::CervenyGaussian) {
-    return FusedScopeFailure::NotCervenyGaussian;
-  }
-  if (simulation.cervenyCoordinateSystem() !=
-      CervenyCoordinateSystem::Cartesian) {
-    return FusedScopeFailure::NotCartesian;
+  // Family legality (design §9): Simple Gaussian's ONLY legal TL run mode
+  // is coherent. SimulationCase construction rejects every non-coherent
+  // Simple Gaussian run, so publicly this arm is defense in depth; the
+  // intensity public entry carries the reachable enforcement.
+  if (simulation.beamFamily() == BeamFamily::SimpleGaussian &&
+      simulation.runMode() != SimulationRunMode::Coherent) {
+    return FusedScopeFailure::RunModeIllegalForFamily;
   }
   if (simulation.sourceCount() != 1U) {
     return FusedScopeFailure::NotSingleSource;
@@ -95,17 +116,14 @@ void validateFusedScope(const SimulationCase& simulation) {
     case FusedScopeFailure::NotTransmissionLoss:
       throw ValidationError(
           "fused ray-reuse solver requires a transmission-loss run mode");
-    case FusedScopeFailure::NotCoherent:
+    case FusedScopeFailure::RunModeIllegalForFamily:
       throw ValidationError(
-          "fused ray-reuse solver requires the coherent run mode; incoherent "
-          "and semi-coherent TL are not supported by the fused ray-reuse "
-          "solver");
-    case FusedScopeFailure::NotCervenyGaussian:
+          "fused ray-reuse solver requires a run mode that is legal for the "
+          "beam family");
+    case FusedScopeFailure::UnsupportedBeamFamily:
       throw ValidationError(
-          "fused ray-reuse solver requires the Cerveny Gaussian beam family");
-    case FusedScopeFailure::NotCartesian:
-      throw ValidationError(
-          "fused ray-reuse solver requires Cartesian Cerveny coordinates");
+          "fused ray-reuse solver requires the Cerveny Gaussian, geometric "
+          "hat, geometric Gaussian, or simple Gaussian beam family");
     case FusedScopeFailure::NotSingleSource:
       throw ValidationError(
           "fused ray-reuse solver requires exactly one source");
@@ -152,8 +170,12 @@ bool supportsFusedRayReuse(const SimulationCase& simulation) {
 // partition math, join/rethrow, and timing join are verbatim; the CC-specific
 // pieces are the Adapter hooks (kernel ctor, epsilon prep, fused accumulation
 // forwarding, post-scale) and the Sink policy (workspace construction, result
-// assembly) frozen in A01. The scope gate inside still limits the closed set
-// to coherent Cartesian Cerveny until the family tasks widen it.
+// assembly) frozen in A01. Since A02b the scope gate accepts every TL run
+// mode of Cerveny; since A03 both Cerveny coordinate systems dispatch here
+// (Cartesian and Ray-Centered adapters); since A04 the Geometric Hat family
+// (both coordinates, one adapter — the kernel owns the traversal selection)
+// and since A05 the Geometric Gaussian family (Cartesian) join the fused
+// set; the remaining family tasks widen the beam-family dimension further.
 template <typename Adapter, typename Sink>
 typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
@@ -305,9 +327,43 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
     FusedRayReuseExecutionSettings executionSettings) {
-  // A02 dispatcher (design §3.3): the unified executor owns validation and
-  // the worker loop; validation inside the template keeps the closed fused
-  // set at coherent Cartesian Cerveny until the family tasks widen the gate.
+  // A02/A03/A04/A05/A06 dispatchers (design §3.3): the unified executor owns
+  // validation and the worker loop; the scope gate covers all TL run modes
+  // of Cerveny (both coordinate systems), Geometric Hat, and Geometric
+  // Gaussian, plus the coherent-only Simple Gaussian family (design §9);
+  // the beam family selects the compile-time adapter, and within the
+  // Cerveny family the coordinate system does (the closed enums are
+  // validated by SimulationCase construction — the Hat kernel owns its
+  // internal coordinate routing). The sink policy selects the complex
+  // pressure payload.
+  if (simulation.beamFamily() == BeamFamily::GeometricHat) {
+    return accumulateFrequenciesImpl<GeometricHatFusedAdapter,
+                                     CoherentFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
+  if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
+    return accumulateFrequenciesImpl<GeometricGaussianFusedAdapter,
+                                     CoherentFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
+  if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
+    // SimulationCase construction guarantees the coherent run mode here
+    // (the family gate's family-legality arm is the defense-in-depth
+    // backstop), so the coherent sink is the family's only instantiation.
+    return accumulateFrequenciesImpl<SimpleGaussianFusedAdapter,
+                                     CoherentFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
+  if (simulation.cervenyCoordinateSystem() ==
+      CervenyCoordinateSystem::RayCentered) {
+    return accumulateFrequenciesImpl<RayCenteredCervenyFusedAdapter,
+                                     CoherentFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
   return accumulateFrequenciesImpl<CartesianCervenyFusedAdapter,
                                    CoherentFusedSink>(
       simulation, sourceCache, epsilonMultiplier, loopRange, influenceSettings,
@@ -320,11 +376,44 @@ FusedRayReuseSolver::accumulateFrequenciesIntensity(
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
     FusedRayReuseExecutionSettings executionSettings) {
-  // A02b seam (design §3.3/§6.2): the intensity sink routes through the same
-  // executor; the unchanged scope gate still requires the coherent run mode,
-  // so a non-coherent request fails validation with today's message until
-  // the family gate widens in A02b. A coherent request that somehow reaches
-  // the accumulation hook is rejected by the CC adapter's A02b error.
+  // Family legality, reachable enforcement (design §9, live since A06): the
+  // intensity sink exists only for families with legal incoherent /
+  // semi-coherent modes. Simple Gaussian is coherent-only — its adapter
+  // defines no intensity hooks (compile-time absence, design §4), so this
+  // entry rejects the family BEFORE any adapter can be selected; without
+  // this check the dispatch below would silently fall through to the
+  // Cerveny adapters. SimulationCase construction rejects every
+  // non-coherent Simple Gaussian run (simulation_case.cpp:404-409), so a
+  // constructible Simple Gaussian case is always coherent and the gate's
+  // RunModeIllegalForFamily arm cannot fire on this path — this entry-level
+  // check states the same law where it is observable.
+  if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
+    throw ValidationError(
+        "fused ray-reuse solver requires a run mode that is legal for the "
+        "beam family");
+  }
+  // A02b/A03/A04/A05 sink dispatch (design §3.3/§6.2): the intensity sink
+  // routes through the same executor and the family-selected kernel; the raw
+  // payload is the double-lane FusedIntensityWorkspace of the result.
+  if (simulation.beamFamily() == BeamFamily::GeometricHat) {
+    return accumulateFrequenciesImpl<GeometricHatFusedAdapter,
+                                     IntensityFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
+  if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
+    return accumulateFrequenciesImpl<GeometricGaussianFusedAdapter,
+                                     IntensityFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
+  if (simulation.cervenyCoordinateSystem() ==
+      CervenyCoordinateSystem::RayCentered) {
+    return accumulateFrequenciesImpl<RayCenteredCervenyFusedAdapter,
+                                     IntensityFusedSink>(
+        simulation, sourceCache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
   return accumulateFrequenciesImpl<CartesianCervenyFusedAdapter,
                                    IntensityFusedSink>(
       simulation, sourceCache, epsilonMultiplier, loopRange, influenceSettings,
@@ -363,17 +452,39 @@ FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
         statistics.sourceCacheFingerprintsBefore.front();
   }
 
-  FusedAccumulationResult accumulated = accumulateFrequencies(
-      simulation, trace.cache, epsilonMultiplier, loopRange, influenceSettings,
-      executionSettings);
-  statistics.requestedRangeWorkers = accumulated.requestedRangeWorkers;
-  statistics.effectiveRangeWorkers = accumulated.effectiveRangeWorkers;
-  statistics.phaseTotals.projectSeconds += accumulated.timings.projectSeconds;
-  statistics.phaseTotals.influenceSeconds +=
-      accumulated.timings.influenceSeconds;
-  accumulateCartesianCervenyStatistics(
-      statistics.phaseTotals.influenceStatistics,
-      accumulated.timings.influenceStatistics);
+  // The run mode selects the sink once per run (design §3.3/§6.2): coherent
+  // keeps the existing pressure chain; incoherent/semi-coherent accumulate
+  // real intensity lanes through accumulateFrequenciesIntensity and convert
+  // to pressure representation per frequency before delivery, so the consumer
+  // receives a FrequencyWorkspace in every mode (legacy continuity:
+  // single_frequency_solver.cpp:356-369).
+  const bool coherentRunMode =
+      simulation.runMode() == SimulationRunMode::Coherent;
+  std::optional<FusedAccumulationResult> accumulated;
+  std::optional<FusedIntensityAccumulationResult> accumulatedIntensity;
+  if (coherentRunMode) {
+    accumulated = accumulateFrequencies(
+        simulation, trace.cache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  } else {
+    accumulatedIntensity = accumulateFrequenciesIntensity(
+        simulation, trace.cache, epsilonMultiplier, loopRange,
+        influenceSettings, executionSettings);
+  }
+  const auto absorbAccumulationStatistics = [&](const auto& result) {
+    statistics.requestedRangeWorkers = result.requestedRangeWorkers;
+    statistics.effectiveRangeWorkers = result.effectiveRangeWorkers;
+    statistics.phaseTotals.projectSeconds += result.timings.projectSeconds;
+    statistics.phaseTotals.influenceSeconds += result.timings.influenceSeconds;
+    accumulateCartesianCervenyStatistics(
+        statistics.phaseTotals.influenceStatistics,
+        result.timings.influenceStatistics);
+  };
+  if (coherentRunMode) {
+    absorbAccumulationStatistics(*accumulated);
+  } else {
+    absorbAccumulationStatistics(*accumulatedIntensity);
+  }
 
   // Scale phase: per frequency in index order, with the source sound speed
   // computed exactly as solveFrequencyFromSourceCache computes it.
@@ -389,13 +500,89 @@ FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
        ++frequencyIndex) {
     const Clock::time_point scaleBegin = Clock::now();
-    FrequencyWorkspace frequencyWorkspace =
-        accumulated.rawWorkspace.materializeFrequency(
-            frequencyIndex, frequencies[frequencyIndex],
-            simulation.receivers());
-    CartesianCervenyFusedAdapter::scaleFrequency(
-        frequencyWorkspace, simulation.receivers(), launchFan.launchAngleStep,
-        sourceSoundSpeed, simulation.sourceGeometry());
+    FrequencyWorkspace frequencyWorkspace = [&] {
+      const bool hatFamily =
+          simulation.beamFamily() == BeamFamily::GeometricHat;
+      const bool gaussianFamily =
+          simulation.beamFamily() == BeamFamily::GeometricGaussian;
+      const bool simpleGaussianFamily =
+          simulation.beamFamily() == BeamFamily::SimpleGaussian;
+      const bool rayCenteredRun =
+          simulation.cervenyCoordinateSystem() ==
+          CervenyCoordinateSystem::RayCentered;
+      if (coherentRunMode) {
+        FrequencyWorkspace coherentWorkspace =
+            accumulated->rawWorkspace.materializeFrequency(
+                frequencyIndex, frequencies[frequencyIndex],
+                simulation.receivers());
+        // Adapter::scaleFrequency (design §6.1) with the family-selected
+        // adapter; both Cerveny adapters apply the same family-based
+        // scaleCoherentCartesianPressure call, the Hat adapter (either
+        // coordinate), the Geometric Gaussian adapter, and the coherent-only
+        // Simple Gaussian adapter (A06) apply
+        // scaleCoherentGeometricPressure, with identical arguments.
+        if (hatFamily) {
+          GeometricHatFusedAdapter::scaleFrequency(
+              coherentWorkspace, simulation.receivers(),
+              launchFan.launchAngleStep, sourceSoundSpeed,
+              simulation.sourceGeometry());
+        } else if (gaussianFamily) {
+          GeometricGaussianFusedAdapter::scaleFrequency(
+              coherentWorkspace, simulation.receivers(),
+              launchFan.launchAngleStep, sourceSoundSpeed,
+              simulation.sourceGeometry());
+        } else if (simpleGaussianFamily) {
+          SimpleGaussianFusedAdapter::scaleFrequency(
+              coherentWorkspace, simulation.receivers(),
+              launchFan.launchAngleStep, sourceSoundSpeed,
+              simulation.sourceGeometry());
+        } else if (rayCenteredRun) {
+          RayCenteredCervenyFusedAdapter::scaleFrequency(
+              coherentWorkspace, simulation.receivers(),
+              launchFan.launchAngleStep, sourceSoundSpeed,
+              simulation.sourceGeometry());
+        } else {
+          CartesianCervenyFusedAdapter::scaleFrequency(
+              coherentWorkspace, simulation.receivers(),
+              launchFan.launchAngleStep, sourceSoundSpeed,
+              simulation.sourceGeometry());
+        }
+        return coherentWorkspace;
+      }
+      // I/S sink chain (design §6.2): bitwise double-lane materialization,
+      // then the family intensity-to-pressure conversion — the same calls
+      // and arguments as the legacy reuse post-scale
+      // (single_frequency_solver.cpp:356-369), selected by beam family:
+      // Cerveny in both coordinate systems, Geometric Hat in both,
+      // Geometric Gaussian.
+      const IntensityWorkspace intensityWorkspace =
+          accumulatedIntensity->rawIntensityWorkspace
+              .materializeIntensityFrequency(
+                  frequencyIndex, frequencies[frequencyIndex],
+                  simulation.receivers());
+      if (hatFamily) {
+        return GeometricHatFusedAdapter::scaleIntensityFrequency(
+            intensityWorkspace, simulation.receivers(),
+            launchFan.launchAngleStep, sourceSoundSpeed,
+            simulation.sourceGeometry());
+      }
+      if (gaussianFamily) {
+        return GeometricGaussianFusedAdapter::scaleIntensityFrequency(
+            intensityWorkspace, simulation.receivers(),
+            launchFan.launchAngleStep, sourceSoundSpeed,
+            simulation.sourceGeometry());
+      }
+      if (rayCenteredRun) {
+        return RayCenteredCervenyFusedAdapter::scaleIntensityFrequency(
+            intensityWorkspace, simulation.receivers(),
+            launchFan.launchAngleStep, sourceSoundSpeed,
+            simulation.sourceGeometry());
+      }
+      return CartesianCervenyFusedAdapter::scaleIntensityFrequency(
+          intensityWorkspace, simulation.receivers(),
+          launchFan.launchAngleStep, sourceSoundSpeed,
+          simulation.sourceGeometry());
+    }();
     const double scaleSeconds = elapsedSeconds(scaleBegin, Clock::now());
     statistics.phaseTotals.scaleSeconds += scaleSeconds;
     // Per-frequency timings delivered to the consumer carry only that

@@ -56,9 +56,13 @@ void printUsage(std::ostream& stream) {
             "overrides the .env frequency.\n"
          << "Broadband execution defaults to nonreuse; use "
             "--execution-mode fused for production RayReuse on supported "
-            "multi-frequency coherent Cartesian Cerveny TL cases. "
-            "The deprecated legacy reuse and parallel modes are retained "
-            "for compatibility.\n"
+            "multi-frequency TL cases with regular receiver grids: Cerveny "
+            "Gaussian and geometric hat in both coordinate systems, "
+            "geometric Gaussian, and simple Gaussian. Fused runs coherent "
+            "TL for every supported family and incoherent/semi-coherent TL "
+            "where legal for the family; fused eligibility is a subset of "
+            "each family's legal support matrix. The deprecated legacy "
+            "reuse and parallel modes are retained for compatibility.\n"
          << "--verify-cache hashes the complete frozen ray cache before "
             "and after projection and is intended for validation.\n"
          << "--profile-influence records detailed Influence work counts "
@@ -322,13 +326,24 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
   }
   if (rayreuse::isTransmissionLossMode(mode) &&
       options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
+    // Fused TL covers every run mode of the Cerveny family in both
+    // coordinate systems (coherent, incoherent, semi-coherent; IGR-3A
+    // A02b/A03 design §9), of the geometric hat family in both coordinate
+    // systems since A04, of the Cartesian geometric Gaussian family since
+    // A05, and of the simple Gaussian family in its only legal mode,
+    // coherent, since A06 (non-coherent simple Gaussian runs are rejected
+    // earlier, at SimulationCase construction).
     if (parsed.simulationCase.beamFamily() !=
-            rayreuse::BeamFamily::CervenyGaussian ||
-        parsed.simulationCase.cervenyCoordinateSystem() !=
-            rayreuse::CervenyCoordinateSystem::Cartesian ||
-        mode != rayreuse::SimulationRunMode::Coherent) {
+            rayreuse::BeamFamily::CervenyGaussian &&
+        parsed.simulationCase.beamFamily() !=
+            rayreuse::BeamFamily::GeometricHat &&
+        parsed.simulationCase.beamFamily() !=
+            rayreuse::BeamFamily::GeometricGaussian &&
+        parsed.simulationCase.beamFamily() !=
+            rayreuse::BeamFamily::SimpleGaussian) {
       throw rayreuse::ValidationError(
-          "--execution-mode fused requires coherent Cartesian Cerveny TL");
+          "--execution-mode fused requires Cerveny Gaussian, geometric hat, "
+          "geometric Gaussian, or simple Gaussian TL");
     }
     if (parsed.simulationCase.sourceCount() != 1U) {
       throw rayreuse::ValidationError(

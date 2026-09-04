@@ -39,3 +39,8 @@ prt_forbidden_markers = [
 
 [profiles.single]
 frequencies_hz = [100.0]
+
+[profiles.broadband_regression]
+start_hz = 100.0
+stop_hz = 250.0
+count = 16

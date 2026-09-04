@@ -87,11 +87,11 @@ class FusedRayReuseSolver {
       CartesianCervenySettings influenceSettings = {},
       FusedRayReuseExecutionSettings executionSettings = {});
 
-  // IGR-3A A01 interface freeze (design §3.3/§6.2): intensity twin of
-  // accumulateFrequencies for the incoherent/semi-coherent fused sink. The
-  // fused scope gate is unchanged and still requires the coherent run mode,
-  // so a non-coherent request fails validation with today's message until
-  // the family gate widens in A02b.
+  // IGR-3A A02b (design §3.3/§6.2): intensity twin of accumulateFrequencies
+  // for the incoherent/semi-coherent fused sink. The fused scope gate covers
+  // every TL run mode of Cartesian Cerveny; callers select the sink to match
+  // the run mode (solveStreaming does), and the raw payload is the
+  // double-lane FusedIntensityWorkspace of the returned result.
   [[nodiscard]] static FusedIntensityAccumulationResult
   accumulateFrequenciesIntensity(
       const SimulationCase& simulation, const RayPathCache& sourceCache,

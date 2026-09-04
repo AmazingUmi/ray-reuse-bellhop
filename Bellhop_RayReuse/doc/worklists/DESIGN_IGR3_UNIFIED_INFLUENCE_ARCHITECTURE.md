@@ -1,7 +1,12 @@
 # IGR-3 Design — Unified Fused Influence Execution Architecture
 
-> **Status:** FROZEN DESIGN (pre-construction; construction authority only after
-> independent design-review PASS)
+> **Status:** FROZEN DESIGN — IGR-3A ACCEPTED (2026-09-04, closing
+> record in the
+> [`IGR-3A worklist`](IGR-3A_TL_BEAM_FAMILY_ADAPTATION_WORKLIST.md)):
+> the frozen sections below are unchanged and remain the architecture
+> authority. IGR-3A construction completed A01-A09 with per-task review
+> records in the worklist (authoritative); Final Review returned ACCEPTED
+> after one remediated LOW doc-level finding. IGR-3B has NOT started.
 > **Branch:** `feat/igr-influence-geometry-reuse`
 > **Baseline:** HEAD `38137a4`, clean tree
 > **Date frozen:** 2026-09-03

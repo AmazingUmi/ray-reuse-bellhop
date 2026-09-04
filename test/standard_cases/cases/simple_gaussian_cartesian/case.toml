@@ -42,3 +42,8 @@ frequencies_hz = [1000.0]
 
 [profiles.broadband_smoke]
 frequencies_hz = [1000.0, 2000.0]
+
+[profiles.broadband_regression]
+start_hz = 1000.0
+stop_hz = 2500.0
+count = 16

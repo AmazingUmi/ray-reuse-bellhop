@@ -29,8 +29,9 @@ IGR-2 productionization commit: e7f2705
 - 幅相、复走时、反射结果、Influence/Arrival/Eigenray workspace 和 writer state
   均为 frequency-local；
 - 所有 RayReuse 路径都不把逐频声学状态写回 frozen cache；
-- production fused CC TL 使用 `[range][depth][frequency]` pressure hot
-  layout；可选 range workers 各自独占连续 receiver-range block；
+- production fused TL 的 coherent pressure 与 I/S intensity payload 均使用
+  `[range][depth][frequency]` hot layout；可选 range workers 各自独占连续
+  receiver-range block；
 - F2CPP 和 Origin 只作为 reference/oracle，不参与 RayReuse production ownership；
 - support matrix 中的 evidence-bounded 组合边界仍适用，尤其不得把 Q 的已验收
   slice 外推为所有 SSP × beam × product 组合。
@@ -38,11 +39,15 @@ IGR-2 productionization commit: e7f2705
 总体设计见
 [ARCHITECTURE_BELLHOP_RAY_REUSE.md](../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)。
 
-这里的 production fused 描述只指当前已验收的 IGR-2 Cartesian Cerveny TL
-支持域。IGR-3 已冻结 future direction：以 Cross-Frequency Fused + Static Range
-Parallelism 作为统一 Influence execution architecture，后续分别适配 remaining
-TL beam-family kernels 与 Arrival contribution sink；construction 尚未开始，当前
-CLI 与支持矩阵没有因此扩展。权威 handoff 见
+这里的 production fused 描述指当前实现的 fused TL 支持域（IGR-3A）：多频
+（≥2 频率）单 source、规则 receiver grid 的 TL 运行，run-mode 覆盖等于各
+beam family 的合法产品 run mode——Cerveny Gaussian（`CC/IC/SC`、`CR/IR/SR`）、
+geometric hat（`CG/IG/SG`、`Cg/Ig/Sg`）与 geometric Gaussian（`CB/IB/SB`）
+支持 coherent/incoherent/semi-coherent，simple Gaussian 仅其唯一合法模式
+coherent（`CS`）；fused eligibility 始终是合法 beam×run-mode support matrix
+的子集（例如 fused 只支持规则 receiver grid）。IGR-3 已冻结 future
+direction：IGR-3B 适配 Arrival contribution sink，尚未 construction。权威
+handoff 见
 [IGR-3 Scope & Architecture Decision](./doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
 ## 构建与质量门
@@ -157,7 +162,12 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
 ```
 
 parallel 逐频任务计时可用 `--profile-frequency-tasks`。这两个选项只用于诊断，
-不能与未启用诊断的正式 wall-clock 样本混用。
+不能与未启用诊断的正式 wall-clock 样本混用。`--profile-influence` 在 TL 上只对
+Cartesian Cerveny 定义（所有执行模式，其余 beam family 直接报错）；fused 运行
+中只有 Cartesian Cerveny 填充 Influence 计数，各 family 的统计 envelope 与
+fused PRT 模式行见
+[Feature Support Matrix](./doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+的 fused 支持域小节。
 
 可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
 max RSS 和产品哈希门，并记录提交、机器、工具链、workers、频率与原始样本。

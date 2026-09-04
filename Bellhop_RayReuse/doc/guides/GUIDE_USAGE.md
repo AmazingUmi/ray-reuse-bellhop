@@ -48,7 +48,8 @@ Bellhop_RayReuse/build/release/bellhop_rayreuse example \
 
 - `nonreuse`：每频完整追踪；
 - `fused`：支持域内的 production RayReuse 主路径；ray 内完成跨频率 fused
-  Influence，pressure hot layout 为 `[range][depth][frequency]`，默认 serial；
+  Influence，coherent pressure 与 I/S intensity payload 均为
+  `[range][depth][frequency]` hot layout，默认 serial；
 - `reuse`：legacy trace-once、串行逐频 compatibility path；
 - `parallel`：legacy 外层 frequency-parallel compatibility path。
 
@@ -71,15 +72,21 @@ legacy `parallel` 模式中，`--workers` 未指定时使用硬件并发数。SH
 `--output-queue-capacity` 仅限制完成队列，不是线程上限。A/a/E 的 parallel
 worker 不直接写文件；主 consumer 按 frequency index 稳定发布。
 
-当 coherent Cartesian Cerveny、多频、single-source、rectilinear TL 可以由
-fused 执行时，显式选择 `reuse` 或 `parallel` 会收到一次 deprecation warning；
-兼容路径仍按原行为运行。`nonreuse` 保留为 reference，CLI 全局默认也保持
-`nonreuse`，避免把 fused 支持域外的产品静默改道。
+当 fused 支持域内的多频、single-source、规则网格 TL 可以由 fused 执行时，
+显式选择 `reuse` 或 `parallel` 会收到一次 deprecation warning；兼容路径仍按
+原行为运行。`nonreuse` 保留为 reference，CLI 全局默认也保持 `nonreuse`，
+避免把 fused 支持域外的产品静默改道。
 
-上述内容是当前 IGR-2 production CLI。IGR-3 已批准的 future direction 是把
-Cross-Frequency Fused + Static Range Parallel Influence execution 适配到其余
-TL beam-family kernels，并在后续 IGR-3B 适配 Arrival contribution sink；它尚未
-construction/acceptance，因此不改变本指南中的当前命令、默认值或支持域。见
+fused 支持域（IGR-3A）：多频（≥2 频率）、单 source、规则 receiver grid、
+≥2 个等间距 receiver ranges 的 TL 运行，且 run mode 对所选 beam family
+合法。fused eligibility 始终是各 beam family 合法 beam×run-mode support
+matrix 的子集：fused 只支持规则 receiver grid（Cartesian GeoHat 与 Cartesian
+GeoGaussian 的 legacy 路径支持 paired irregular receivers，fused 不提供）；
+simple Gaussian 非 coherent 组合在产品层本身拒绝（非 fused 限制）；`R/E/A/a`
+产品不进入 fused。family × run mode 覆盖与支持边界以
+[`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+的 fused 支持域小节为准。IGR-3B 的 Arrival contribution sink 适配尚未
+construction，不改变本指南中的当前命令、默认值或支持域。见
 [`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
 ## 产品生命周期与错误

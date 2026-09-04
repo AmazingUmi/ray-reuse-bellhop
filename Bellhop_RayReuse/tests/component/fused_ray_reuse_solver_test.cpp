@@ -97,6 +97,154 @@ void testSolverScopeRejections(Context& context) {
   context.check(supportsFusedRayReuse(makeSimulation()),
                 "the shared fused-support predicate accepts the production "
                 "fixture");
+  // IGR-3A A02b (intended behavior change): Cartesian Cerveny fused
+  // eligibility covers every TL run mode of the family — incoherent and
+  // semi-coherent are accepted, not rejected.
+  context.check(
+      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Incoherent)) &&
+          supportsFusedRayReuse(
+              makeSimulation(SimulationRunMode::SemiCoherent)),
+      "the shared fused-support predicate accepts CC incoherent and "
+      "semi-coherent TL");
+  // IGR-3A A03 (intended behavior change): Ray-Centered Cerveny fused
+  // eligibility covers every TL run mode of the family in both coordinate
+  // systems (design §9).
+  context.check(
+      supportsFusedRayReuse(makeSimulation(
+          SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+          CervenyCoordinateSystem::RayCentered)) &&
+          supportsFusedRayReuse(
+              makeSimulation(SimulationRunMode::Incoherent,
+                             BeamFamily::CervenyGaussian,
+                             CervenyCoordinateSystem::RayCentered)) &&
+          supportsFusedRayReuse(
+              makeSimulation(SimulationRunMode::SemiCoherent,
+                             BeamFamily::CervenyGaussian,
+                             CervenyCoordinateSystem::RayCentered)),
+      "the shared fused-support predicate accepts Ray-Centered Cerveny "
+      "coherent, incoherent, and semi-coherent TL");
+  // End-to-end wiring for one Ray-Centered mode (numerical parity itself is
+  // gated in rayreuse.component.fused_rc_parity): the fused streaming path
+  // must deliver every frequency through the RC adapter chain.
+  {
+    const SimulationCase rayCenteredSimulation = makeSimulation(
+        SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
+        CervenyCoordinateSystem::RayCentered);
+    std::size_t rayCenteredCallbackCount = 0U;
+    const FusedRayReuseStatistics rayCenteredStatistics =
+        FusedRayReuseSolver::solveStreaming(
+            rayCenteredSimulation, 1.0, 50.0,
+            [&rayCenteredCallbackCount, &context](
+                std::size_t,
+                std::vector<FrequencyWorkspace>&& sourceWorkspaces,
+                const SingleFrequencyTimings&) {
+              ++rayCenteredCallbackCount;
+              context.check(sourceWorkspaces.size() == 1U,
+                            "ray-centered fused streaming delivers one source "
+                            "workspace per frequency");
+            },
+            CartesianCervenySettings{}, true);
+    context.check(
+        rayCenteredCallbackCount ==
+                rayCenteredSimulation.frequencies().size() &&
+            rayCenteredStatistics.cacheFingerprintVerified &&
+            rayCenteredStatistics.cacheFingerprintBefore ==
+                rayCenteredStatistics.cacheFingerprintAfter,
+        "ray-centered fused streaming delivers every frequency and leaves "
+        "the frozen cache unchanged");
+  }
+  // IGR-3A A04 (intended behavior change): Geometric Hat fused eligibility
+  // covers every TL run mode of the family in BOTH coordinate systems
+  // (design §9) — one adapter; the kernel owns the internal Cartesian /
+  // ray-centered traversal selection.
+  context.check(
+      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Coherent,
+                                           BeamFamily::GeometricHat)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::Incoherent, BeamFamily::GeometricHat)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::SemiCoherent, BeamFamily::GeometricHat)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+              CervenyCoordinateSystem::RayCentered)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::Incoherent, BeamFamily::GeometricHat,
+              CervenyCoordinateSystem::RayCentered)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::SemiCoherent, BeamFamily::GeometricHat,
+              CervenyCoordinateSystem::RayCentered)),
+      "the shared fused-support predicate accepts geometric hat coherent, "
+      "incoherent, and semi-coherent TL in both coordinate systems");
+  // End-to-end wiring for one Hat mode per coordinate (numerical parity
+  // itself is gated in rayreuse.component.fused_hat_parity).
+  for (const CervenyCoordinateSystem hatCoordinates :
+       {CervenyCoordinateSystem::Cartesian,
+        CervenyCoordinateSystem::RayCentered}) {
+    const SimulationCase hatSimulation = makeSimulation(
+        SimulationRunMode::Coherent, BeamFamily::GeometricHat,
+        hatCoordinates);
+    std::size_t hatCallbackCount = 0U;
+    const FusedRayReuseStatistics hatStatistics =
+        FusedRayReuseSolver::solveStreaming(
+            hatSimulation, 1.0, 50.0,
+            [&hatCallbackCount, &context](
+                std::size_t,
+                std::vector<FrequencyWorkspace>&& sourceWorkspaces,
+                const SingleFrequencyTimings&) {
+              ++hatCallbackCount;
+              context.check(sourceWorkspaces.size() == 1U,
+                            "geometric hat fused streaming delivers one "
+                            "source workspace per frequency");
+            },
+            CartesianCervenySettings{}, true);
+    context.check(
+        hatCallbackCount == hatSimulation.frequencies().size() &&
+            hatStatistics.cacheFingerprintVerified &&
+            hatStatistics.cacheFingerprintBefore ==
+                hatStatistics.cacheFingerprintAfter,
+        "geometric hat fused streaming delivers every frequency and leaves "
+        "the frozen cache unchanged");
+  }
+  // IGR-3A A05 (intended behavior change): Geometric Gaussian fused
+  // eligibility covers every TL run mode of the family (Cartesian only —
+  // the family has no ray-centered variant; design §9).
+  context.check(
+      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Coherent,
+                                           BeamFamily::GeometricGaussian)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::Incoherent, BeamFamily::GeometricGaussian)) &&
+          supportsFusedRayReuse(makeSimulation(
+              SimulationRunMode::SemiCoherent,
+              BeamFamily::GeometricGaussian)),
+      "the shared fused-support predicate accepts geometric Gaussian "
+      "coherent, incoherent, and semi-coherent TL");
+  // End-to-end wiring for one Gaussian mode (numerical parity itself is
+  // gated in rayreuse.component.fused_geometric_gaussian_parity).
+  {
+    const SimulationCase gaussianSimulation = makeSimulation(
+        SimulationRunMode::Coherent, BeamFamily::GeometricGaussian);
+    std::size_t gaussianCallbackCount = 0U;
+    const FusedRayReuseStatistics gaussianStatistics =
+        FusedRayReuseSolver::solveStreaming(
+            gaussianSimulation, 1.0, 50.0,
+            [&gaussianCallbackCount, &context](
+                std::size_t,
+                std::vector<FrequencyWorkspace>&& sourceWorkspaces,
+                const SingleFrequencyTimings&) {
+              ++gaussianCallbackCount;
+              context.check(sourceWorkspaces.size() == 1U,
+                            "geometric Gaussian fused streaming delivers one "
+                            "source workspace per frequency");
+            },
+            CartesianCervenySettings{}, true);
+    context.check(
+        gaussianCallbackCount == gaussianSimulation.frequencies().size() &&
+            gaussianStatistics.cacheFingerprintVerified &&
+            gaussianStatistics.cacheFingerprintBefore ==
+                gaussianStatistics.cacheFingerprintAfter,
+        "geometric Gaussian fused streaming delivers every frequency and "
+        "leaves the frozen cache unchanged");
+  }
   context.check(
       !supportsFusedRayReuse(makeSimulation(
           SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
@@ -118,14 +266,88 @@ void testSolverScopeRejections(Context& context) {
     messages.push_back(message.value_or(std::string("no throw for ") + label));
   };
 
-  reject(makeSimulation(SimulationRunMode::Incoherent),
-         "non-coherent run mode is rejected by the fused solver");
-  reject(makeSimulation(SimulationRunMode::Coherent, BeamFamily::GeometricHat),
-         "non-Cerveny beam family is rejected by the fused solver");
-  reject(makeSimulation(SimulationRunMode::Coherent,
-                        BeamFamily::CervenyGaussian,
-                        CervenyCoordinateSystem::RayCentered),
-         "ray-centered Cerveny is rejected by the fused solver");
+  // IGR-3A A06 (intended behavior change): Simple Gaussian joins the fused
+  // family set in its ONLY legal product mode, coherent (design §9 — the
+  // coherent-only matrix is product law, not a fused restriction).
+  // Non-coherent Simple Gaussian runs are rejected upstream at SimulationCase
+  // construction (simulation_case.cpp:404-409), so no SG+I/S case exists for
+  // supportsFusedRayReuse to see; the constructibility assertion below pins
+  // that legal-matrix fact.
+  context.check(
+      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Coherent,
+                                           BeamFamily::SimpleGaussian)),
+      "the shared fused-support predicate accepts simple Gaussian coherent "
+      "TL");
+  for (const SimulationRunMode illegalMode :
+       {SimulationRunMode::Incoherent, SimulationRunMode::SemiCoherent}) {
+    const std::optional<std::string> constructionMessage =
+        capturedValidationMessage([illegalMode] {
+          static_cast<void>(makeSimulation(illegalMode,
+                                           BeamFamily::SimpleGaussian));
+        });
+    context.check(
+        constructionMessage.has_value() &&
+            *constructionMessage ==
+                "simple Gaussian beams require coherent point-source TL on a "
+                "rectilinear receiver grid",
+        "SimulationCase construction rejects simple Gaussian incoherent and "
+        "semi-coherent runs (the legal matrix upstream of the fused gate)");
+  }
+  // The intensity public entry is the reachable fused enforcement of the
+  // same law: it must reject the coherent-only family BEFORE any adapter
+  // dispatch (the Simple Gaussian adapter defines no intensity hooks —
+  // compile-time absence) with the run-mode family-legality message.
+  {
+    const SimulationCase simpleGaussianSimulation = makeSimulation(
+        SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
+    rayreuse::RayPathCache anyCache;
+    const std::optional<std::string> intensityMessage =
+        capturedValidationMessage([&simpleGaussianSimulation, &anyCache] {
+          static_cast<void>(FusedRayReuseSolver::accumulateFrequenciesIntensity(
+              simpleGaussianSimulation, anyCache, 1.0, 50.0));
+        });
+    context.check(
+        intensityMessage.has_value() &&
+            *intensityMessage ==
+                "fused ray-reuse solver requires a run mode that is legal "
+                "for the beam family",
+        "the fused intensity entry rejects the coherent-only simple Gaussian "
+        "family with the family-legality message");
+  }
+  // End-to-end wiring (numerical parity itself is gated in
+  // rayreuse.component.fused_simple_gaussian_parity): the fused streaming
+  // path must deliver every frequency through the Simple Gaussian adapter
+  // chain.
+  {
+    const SimulationCase simpleGaussianSimulation = makeSimulation(
+        SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
+    std::size_t simpleGaussianCallbackCount = 0U;
+    const FusedRayReuseStatistics simpleGaussianStatistics =
+        FusedRayReuseSolver::solveStreaming(
+            simpleGaussianSimulation, 1.0, 50.0,
+            [&simpleGaussianCallbackCount, &context](
+                std::size_t,
+                std::vector<FrequencyWorkspace>&& sourceWorkspaces,
+                const SingleFrequencyTimings&) {
+              ++simpleGaussianCallbackCount;
+              context.check(sourceWorkspaces.size() == 1U,
+                            "simple Gaussian fused streaming delivers one "
+                            "source workspace per frequency");
+            },
+            CartesianCervenySettings{}, true);
+    context.check(
+        simpleGaussianCallbackCount ==
+                simpleGaussianSimulation.frequencies().size() &&
+            simpleGaussianStatistics.cacheFingerprintVerified &&
+            simpleGaussianStatistics.cacheFingerprintBefore ==
+                simpleGaussianStatistics.cacheFingerprintAfter,
+        "simple Gaussian fused streaming delivers every frequency and leaves "
+        "the frozen cache unchanged");
+  }
+  // Non-TL products stay outside fused scope (A07: unchanged message; the
+  // CLI layer rejects R/arrival/eigenray products before the solver).
+  reject(makeSimulation(SimulationRunMode::RayTrace),
+         "non-TL run mode is rejected by the fused solver");
   reject(makeSimulation(SimulationRunMode::Coherent,
                         BeamFamily::CervenyGaussian,
                         CervenyCoordinateSystem::Cartesian,

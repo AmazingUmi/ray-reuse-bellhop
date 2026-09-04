@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/fused_intensity_workspace.hpp"
+#include "rayreuse/field/fused_pressure_workspace.hpp"
 
 namespace rayreuse {
 namespace {
@@ -359,6 +361,88 @@ PrefixBounceCounts prefixBounceCounts(const RayPath& path,
     result.bottom[index] += result.bottom[index - 1U];
   }
   return result;
+}
+
+// Fused-kernel entry checks (IGR-3A A04, design §5): the per-ray conditions
+// of the legacy validateField (validate + workspace metadata + contiguous
+// active prefix + ray-state finiteness) with fused-prefixed diagnostics so
+// the failing layer is identifiable. The legacy per-call whole-workspace
+// payload rescan is deliberately not restored (CC A02 precedent: the
+// store-time finite checks preserve the accumulation contract, and the
+// prevalidated fused route never rescans the workspace). Templated over the
+// fused workspace kind (both payloads expose the same dimension checks).
+template <typename FusedWorkspace>
+void validateFusedHatInput(const FusedWorkspace& workspace,
+                           std::span<const double> frequencies,
+                           const RayPath& path,
+                           std::span<const RayFrequencyState> frequencyStates,
+                           const ReceiverGrid& receivers,
+                           double launchSpacing) {
+  const std::size_t frequencyCount = frequencyStates.size();
+  if (frequencyCount == 0U) {
+    throw ValidationError(
+        "fused geometric hat influence requires at least one frequency");
+  }
+  if (workspace.frequencyCount() != frequencyCount ||
+      frequencies.size() != frequencyCount) {
+    throw ValidationError(
+        "fused geometric hat influence requires workspace, frequency, and "
+        "frequency-state dimensions of equal size");
+  }
+  if (workspace.depthCount() != receivers.receiversPerRange() ||
+      workspace.rangeCount() != receivers.rangeCount()) {
+    throw ValidationError(
+        "fused geometric hat workspace and receiver-grid sizes must match");
+  }
+  if (!std::isfinite(launchSpacing) || launchSpacing <= 0.0) {
+    throw ValidationError(
+        "geometric hat launch-angle spacing must be positive and finite");
+  }
+  if (path.points.size() < 2U) {
+    throw ValidationError(
+        "fused geometric hat geometry and frequency point counts must match");
+  }
+  if (receivers.depthCount() == 0U || receivers.rangeCount() == 0U) {
+    throw ValidationError("geometric hat requires non-empty receivers");
+  }
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    const RayFrequencyState& state = frequencyStates[frequencyIndex];
+    if (frequencies[frequencyIndex] != state.frequency) {
+      throw ValidationError(
+          "fused geometric hat workspace and ray frequencies must match");
+    }
+    if (path.points.size() != state.points.size()) {
+      throw ValidationError(
+          "fused geometric hat geometry and frequency point counts must "
+          "match");
+    }
+    if (state.points.front().active == false) {
+      throw ValidationError("geometric hat source point must be active");
+    }
+    bool inactiveSeen = false;
+    for (const RayFrequencyPoint& point : state.points) {
+      if (inactiveSeen && point.active) {
+        throw ValidationError(
+            "geometric hat active prefix must be contiguous");
+      }
+      inactiveSeen = inactiveSeen || !point.active;
+      if (!std::isfinite(point.amplitude) || point.amplitude < 0.0 ||
+          !std::isfinite(point.reflectionPhase) ||
+          !std::isfinite(point.complexTravelTime.real()) ||
+          !std::isfinite(point.complexTravelTime.imag())) {
+        throw ValidationError("geometric hat frequency point is invalid");
+      }
+    }
+  }
+  for (const RayState& point : path.points) {
+    if (!isFinite(point.position) || !isFinite(point.slowness) ||
+        !std::isfinite(point.dynamicQ[0U]) ||
+        !std::isfinite(point.soundSpeed) || point.soundSpeed <= 0.0 ||
+        !std::isfinite(point.realTravelTime)) {
+      throw ValidationError("geometric hat ray path contains an invalid state");
+    }
+  }
 }
 
 }  // namespace
@@ -779,6 +863,492 @@ GeometricHatInfluence::accumulateRayCenteredField(
     }
   }
   return diagnostic;
+}
+
+void GeometricHatInfluence::setFusedLaunchAngleStep(double launchAngleStep) {
+  fusedLaunchAngleStep_ = launchAngleStep;
+}
+
+bool GeometricHatInfluence::accumulateFusedPrevalidated(
+    FusedPressureWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    CartesianCervenyStatistics* statistics) const {
+  // The legacy Hat kernels produce no influence counters; the pointer is
+  // accepted for adapter-shape uniformity (design §3.4 documents the
+  // zero-counter envelope for non-CC families).
+  static_cast<void>(statistics);
+  return accumulateFusedImpl<false>(workspace, frequencies, path,
+                                    frequencyStates, rangeBegin, rangeEnd);
+}
+
+bool GeometricHatInfluence::accumulateFusedIntensityPrevalidated(
+    FusedIntensityWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    CartesianCervenyStatistics* statistics) const {
+  static_cast<void>(statistics);
+  return accumulateFusedImpl<true>(workspace, frequencies, path,
+                                   frequencyStates, rangeBegin, rangeEnd);
+}
+
+// IGR-3A A04 fused kernel (design §5/§8): entry validation plus the
+// once-per-ray coordinate routing of the legacy accumulateField split. The
+// coherent and intensity twins share one traversal with a per-lane payload
+// branch at the store, mirroring the legacy single-traversal field paths.
+template <bool IntensityPayload, typename Workspace>
+bool GeometricHatInfluence::accumulateFusedImpl(
+    Workspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd) const {
+  validateFusedHatInput(workspace, frequencies, path, frequencyStates,
+                        receivers_, fusedLaunchAngleStep_);
+  if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
+    throw ValidationError("fused geometric hat range partition is invalid");
+  }
+  if (coordinates_ == CervenyCoordinateSystem::RayCentered) {
+    return accumulateFusedRayCentered<IntensityPayload>(
+        workspace, path, frequencyStates, rangeBegin, rangeEnd);
+  }
+  return accumulateFusedCartesian<IntensityPayload>(
+      workspace, path, frequencyStates, rangeBegin, rangeEnd);
+}
+
+// Production fused Hat Cartesian traversal (IGR-3A A04, design §8): loop
+// skeleton = legacy accumulateField — segment -> monotone range cursor ->
+// ascending depths. Everything the legacy loop derives from the ray path
+// alone (initial receiver index, cursor movement, segment geometry, caustic
+// phase accumulation, interpolation/normal offsets, q, beamRadius, hat
+// weight, amplitude base) is frequency-independent and computed once,
+// shared by every lane; each lane reproduces its own legacy loop exactly:
+// its active prefix bounds the segments it stores on (the cursor and phase
+// evolution are pure functions of the path, so the union-prefix traversal
+// presents each lane the identical state at every segment index it reaches
+// in legacy), and delay, amplitude, and phase (reflectionPhase + caustic
+// pi/2) are evaluated per lane with the legacy expressions verbatim.
+// Cursor receiver runs are intersected with the worker's partition
+// [rangeBegin, rangeEnd); the cursor anchors themselves keep their legacy
+// values so later segments see identical cursor positions.
+template <bool IntensityPayload, typename Workspace>
+bool GeometricHatInfluence::accumulateFusedCartesian(
+    Workspace& workspace, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd) const {
+  const std::size_t frequencyCount = frequencyStates.size();
+  std::vector<std::size_t> activePrefixPointCount(frequencyCount);
+  std::vector<double> angularFrequency(frequencyCount);
+  std::size_t unionPrefix = 0U;
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    // Exact per-frequency active-prefix scan of the legacy kernel (the
+    // first inactive point is retained).
+    activePrefixPointCount[frequencyIndex] =
+        activeCount(frequencyStates[frequencyIndex]);
+    unionPrefix =
+        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    angularFrequency[frequencyIndex] =
+        2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
+  }
+  const double q0 = path.points.front().soundSpeed / fusedLaunchAngleStep_;
+  const double sourceRatio =
+      sourceGeometry_ == SourceGeometry::Line
+          ? 1.0
+          : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  requireFinite(q0, "geometric hat q0");
+  requireFinite(sourceRatio, "geometric hat source ratio");
+
+  const std::vector<double>& ranges = receivers_.ranges();
+  const auto firstReceiver = std::find_if(
+      ranges.begin(), ranges.end(),
+      [&](double range) { return range > path.points.front().position.range; });
+  std::size_t receiverIndex{};
+  if (firstReceiver == ranges.end()) {
+    if (path.points.front().slowness.range >= 0.0) {
+      return true;
+    }
+    receiverIndex = ranges.size() - 1U;
+  } else {
+    receiverIndex = static_cast<std::size_t>(firstReceiver - ranges.begin());
+    if (path.points.front().slowness.range < 0.0 && receiverIndex > 0U) {
+      --receiverIndex;
+    }
+  }
+
+  double previousRange = path.points.front().position.range;
+  double phase = 0.0;
+  double previousQ = path.points.front().dynamicQ[0U];
+  for (std::size_t rightIndex = 1U; rightIndex < unionPrefix; ++rightIndex) {
+    const std::size_t leftIndex = rightIndex - 1U;
+    const Vec2 segment =
+        path.points[rightIndex].position - path.points[leftIndex].position;
+    const double segmentLength = norm(segment);
+    if (segmentLength <
+        1000.0 * spacing(path.points[rightIndex].position.range)) {
+      continue;
+    }
+    const Vec2 tangent = segment / segmentLength;
+    const Vec2 normal{.range = -tangent.depth, .depth = tangent.range};
+    const double rightRange = path.points[rightIndex].position.range;
+    const double leftQ = path.points[leftIndex].dynamicQ[0U];
+    if (crosses(previousQ, leftQ)) {
+      phase += std::numbers::pi / 2.0;
+    }
+    previousQ = leftQ;
+
+    for (;;) {
+      const double receiverRange = ranges[receiverIndex];
+      if (receiverRange >= std::min(previousRange, rightRange) &&
+          receiverRange < std::max(previousRange, rightRange) &&
+          receiverIndex >= rangeBegin && receiverIndex < rangeEnd) {
+        // Origin InfluenceGeoHatCart pairs each irregular receiver range
+        // with Pos%Rz(ir); rectilinear grids keep the shared depth rows.
+        for (std::size_t depthIndex = 0U;
+             depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
+          const Vec2 receiver{
+              .range = receiverRange,
+              .depth = receivers_.depthAt(depthIndex, receiverIndex)};
+          const Vec2 offset = receiver - path.points[leftIndex].position;
+          const double interpolationWeight =
+              fortranDotProduct2D(offset, tangent) / segmentLength;
+          const double normalOffset =
+              std::abs(fortranDotProduct2D(offset, normal));
+          const double q =
+              leftQ + interpolationWeight *
+                          (path.points[rightIndex].dynamicQ[0U] - leftQ);
+          const double beamRadius = std::abs(q / q0);
+          if (normalOffset >= beamRadius) {
+            continue;
+          }
+          const double hatWeight = (beamRadius - normalOffset) / beamRadius;
+          // Shared prefix of the legacy amplitude constant; the lane's own
+          // amplitude multiplication preserves the legacy association
+          // (sourceRatio * sqrt(...) ) * amplitude.
+          const double amplitudeBase =
+              sourceRatio *
+              std::sqrt(path.points[rightIndex].soundSpeed / std::abs(q));
+          const bool receiverCausticCross = crosses(previousQ, q);
+          requireFinite(q, "geometric hat interpolated q");
+          requireFinite(hatWeight, "geometric hat weight");
+          for (std::size_t frequencyIndex = 0U;
+               frequencyIndex < frequencyCount; ++frequencyIndex) {
+            // That frequency's own legacy loop bound.
+            if (rightIndex >= activePrefixPointCount[frequencyIndex]) {
+              continue;
+            }
+            const RayFrequencyState& state =
+                frequencyStates[frequencyIndex];
+            const std::complex<double> delay =
+                state.points[leftIndex].complexTravelTime +
+                interpolationWeight *
+                    (state.points[rightIndex].complexTravelTime -
+                     state.points[leftIndex].complexTravelTime);
+            const double amplitudeConstant =
+                amplitudeBase * state.points[rightIndex].amplitude;
+            double phaseAtReceiver =
+                state.points[leftIndex].reflectionPhase + phase;
+            if (receiverCausticCross) {
+              phaseAtReceiver += std::numbers::pi / 2.0;
+            }
+            requireFinite(amplitudeConstant,
+                          "geometric hat amplitude constant");
+            requireFinite(phaseAtReceiver, "geometric hat caustic phase");
+            requireFiniteComplex(delay, "geometric hat delay");
+            if constexpr (IntensityPayload) {
+              // Legacy intensity branch: the attenuated real constant is
+              // squared and the hat weight applied exactly once — this is
+              // not Cerveny image ABS-squared (design §8).
+              const double attenuatedConstant =
+                  amplitudeConstant *
+                  std::exp(
+                      (angularFrequency[frequencyIndex] * delay).imag());
+              const double power = attenuatedConstant * attenuatedConstant;
+              const double intensityIncrement = power * hatWeight;
+              if (!std::isfinite(intensityIncrement) ||
+                  intensityIncrement < 0.0) {
+                throw ValidationError(
+                    "geometric hat intensity increment must be finite and "
+                    "non-negative");
+              }
+              double& intensityValue =
+                  workspace.cell(receiverIndex, depthIndex)[frequencyIndex];
+              const double updatedIntensity =
+                  intensityValue + intensityIncrement;
+              if (!std::isfinite(updatedIntensity)) {
+                throw ValidationError(
+                    "accumulated intensity must remain finite");
+              }
+              intensityValue = updatedIntensity;
+            } else {
+              const double amplitude = amplitudeConstant * hatWeight;
+              const std::complex<double> phaseArgument =
+                  angularFrequency[frequencyIndex] * delay - phaseAtReceiver;
+              const std::complex<double> pressureIncrement =
+                  amplitude * negativeImaginaryExponential(phaseArgument);
+              requireFiniteComplex(pressureIncrement,
+                                   "geometric hat pressure increment");
+              std::complex<double>& pressureValue =
+                  workspace.cell(receiverIndex, depthIndex)[frequencyIndex];
+              const std::complex<double> updatedPressure =
+                  pressureValue + pressureIncrement;
+              requireFiniteComplex(updatedPressure,
+                                   "geometric hat accumulated pressure");
+              pressureValue = updatedPressure;
+            }
+          }
+        }
+      }
+
+      if (ranges[receiverIndex] < rightRange) {
+        if (receiverIndex + 1U >= ranges.size()) {
+          break;
+        }
+        const std::size_t next = receiverIndex + 1U;
+        if (ranges[next] >= rightRange) {
+          break;
+        }
+        receiverIndex = next;
+      } else {
+        if (receiverIndex == 0U) {
+          break;
+        }
+        const std::size_t next = receiverIndex - 1U;
+        if (ranges[next] <= rightRange) {
+          break;
+        }
+        receiverIndex = next;
+      }
+    }
+    previousRange = rightRange;
+  }
+  return true;
+}
+
+// Production fused Hat ray-centered traversal (IGR-3A A04, design §8): loop
+// skeleton = legacy accumulateRayCenteredField — depth-major depth ->
+// segment -> receiver runs (ascending forward / descending reversed). The
+// per-depth persistent caustic phase and previous-Q state and the receiver
+// anchors are frequency-independent functions of the path, so they are
+// evolved ONCE per depth over the union prefix: every lane's legacy
+// evolution is identical at each step index it reaches (its own prefix only
+// bounds where it stops). Frequency-local: scaled amplitudes, delay,
+// phaseAtReceiver (per-lane reflectionPhase), and the per-lane segment
+// masks. Receiver runs are intersected with [rangeBegin, rangeEnd); the run
+// anchors keep their legacy values so interpolation weights are unchanged
+// by the clamp.
+template <bool IntensityPayload, typename Workspace>
+bool GeometricHatInfluence::accumulateFusedRayCentered(
+    Workspace& workspace, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd) const {
+  const std::size_t frequencyCount = frequencyStates.size();
+  std::vector<std::size_t> activePrefixPointCount(frequencyCount);
+  std::vector<double> angularFrequency(frequencyCount);
+  std::size_t unionPrefix = 0U;
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    activePrefixPointCount[frequencyIndex] =
+        activeCount(frequencyStates[frequencyIndex]);
+    unionPrefix =
+        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    angularFrequency[frequencyIndex] =
+        2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
+  }
+  const double q0 = path.points.front().soundSpeed / fusedLaunchAngleStep_;
+  const double sourceRatio =
+      sourceGeometry_ == SourceGeometry::Line
+          ? 1.0
+          : std::sqrt(std::abs(std::cos(path.launchAngle)));
+  requireFinite(q0, "geometric hat q0");
+  requireFinite(sourceRatio, "geometric hat source ratio");
+
+  // Normals and the amplitude base prefix depend only on the ray path and
+  // are computed once over the UNION prefix, never per lane.
+  std::vector<Vec2> normals;
+  std::vector<double> scaledBase;
+  normals.reserve(unionPrefix);
+  scaledBase.reserve(unionPrefix);
+  for (std::size_t index = 0U; index < unionPrefix; ++index) {
+    const Vec2 tangent =
+        path.points[index].soundSpeed * path.points[index].slowness;
+    normals.push_back(Vec2{.range = tangent.depth, .depth = -tangent.range});
+    scaledBase.push_back(sourceRatio *
+                         std::sqrt(path.points[index].soundSpeed));
+  }
+
+  for (std::size_t depthIndex = 0U; depthIndex < receivers_.depthCount();
+       ++depthIndex) {
+    const double receiverDepth = receivers_.depths()[depthIndex];
+    double phase = 0.0;
+    double previousQ = path.points.front().dynamicQ[0U];
+    double previousNormalOffset = 0.0;
+    double previousProjectedRange = 0.0;
+    std::size_t previousReceiverIndex1Based = 1U;
+    if (std::abs(normals.front().depth) < 1.0e-6) {
+      previousNormalOffset = 1.0e10;
+      previousProjectedRange = 1.0e10;
+    } else {
+      previousNormalOffset =
+          (receiverDepth - path.points.front().position.depth) /
+          normals.front().depth;
+      previousProjectedRange = path.points.front().position.range +
+                               previousNormalOffset * normals.front().range;
+      previousReceiverIndex1Based = clampedReceiverIndex1Based(
+          previousProjectedRange, receivers_, receiverRangeDelta_);
+    }
+
+    for (std::size_t rightIndex = 1U; rightIndex < unionPrefix; ++rightIndex) {
+      if (std::abs(normals[rightIndex].depth) < 1.0e-10) {
+        continue;
+      }
+      const double normalOffset =
+          (receiverDepth - path.points[rightIndex].position.depth) /
+          normals[rightIndex].depth;
+      const double projectedRange = path.points[rightIndex].position.range +
+                                    normalOffset * normals[rightIndex].range;
+      const std::size_t receiverIndex1Based = clampedReceiverIndex1Based(
+          projectedRange, receivers_, receiverRangeDelta_);
+      const bool duplicatePoint =
+          std::abs(path.points[rightIndex].position.range -
+                   path.points[rightIndex - 1U].position.range) <
+          1000.0 * spacing(path.points[rightIndex].position.range);
+      if (duplicatePoint ||
+          previousReceiverIndex1Based == receiverIndex1Based) {
+        previousProjectedRange = projectedRange;
+        previousNormalOffset = normalOffset;
+        previousReceiverIndex1Based = receiverIndex1Based;
+        continue;
+      }
+
+      const double leftQ = path.points[rightIndex - 1U].dynamicQ[0U];
+      if (crosses(previousQ, leftQ)) {
+        phase += std::numbers::pi / 2.0;
+      }
+      previousQ = leftQ;
+
+      const auto evaluateFusedReceiver = [&](std::size_t oneBasedRange) {
+        const std::size_t rangeIndex = oneBasedRange - 1U;
+        const double interpolationWeight =
+            (receivers_.ranges()[rangeIndex] - previousProjectedRange) /
+            (projectedRange - previousProjectedRange);
+        const double interpolatedNormal = std::abs(
+            previousNormalOffset +
+            interpolationWeight * (normalOffset - previousNormalOffset));
+        const double q =
+            leftQ + interpolationWeight *
+                        (path.points[rightIndex].dynamicQ[0U] - leftQ);
+        const double beamRadius = std::abs(q) / q0;
+        if (interpolatedNormal >= beamRadius) {
+          return;
+        }
+        const double hatWeight =
+            (beamRadius - interpolatedNormal) / beamRadius;
+        const double sqrtAbsQ = std::sqrt(std::abs(q));
+        const bool receiverCausticCross = crosses(previousQ, q);
+        requireFinite(q, "geometric hat interpolated q");
+        requireFinite(hatWeight, "geometric hat weight");
+        for (std::size_t frequencyIndex = 0U;
+             frequencyIndex < frequencyCount; ++frequencyIndex) {
+          // That frequency's own legacy loop bound.
+          if (rightIndex >= activePrefixPointCount[frequencyIndex]) {
+            continue;
+          }
+          const RayFrequencyState& state =
+              frequencyStates[frequencyIndex];
+          const std::complex<double> delay =
+              state.points[rightIndex - 1U].complexTravelTime +
+              interpolationWeight *
+                  (state.points[rightIndex].complexTravelTime -
+                   state.points[rightIndex - 1U].complexTravelTime);
+          // (sourceRatio * sqrt(c)) * amplitude, then divided by
+          // sqrt(|q|) — the legacy scaledAmplitudes association.
+          const double amplitudeConstant =
+              (scaledBase[rightIndex] *
+               state.points[rightIndex].amplitude) /
+              sqrtAbsQ;
+          double phaseAtReceiver =
+              state.points[rightIndex - 1U].reflectionPhase + phase;
+          if (receiverCausticCross) {
+            phaseAtReceiver += std::numbers::pi / 2.0;
+          }
+          requireFinite(amplitudeConstant,
+                        "geometric hat amplitude constant");
+          requireFinite(phaseAtReceiver, "geometric hat caustic phase");
+          requireFiniteComplex(delay, "geometric hat delay");
+          if constexpr (IntensityPayload) {
+            const double attenuatedConstant =
+                amplitudeConstant *
+                std::exp(
+                    (angularFrequency[frequencyIndex] * delay).imag());
+            const double power = attenuatedConstant * attenuatedConstant;
+            const double intensityIncrement = power * hatWeight;
+            if (!std::isfinite(intensityIncrement) ||
+                intensityIncrement < 0.0) {
+              throw ValidationError(
+                  "geometric hat intensity increment must be finite and "
+                  "non-negative");
+            }
+            double& intensityValue =
+                workspace.cell(rangeIndex, depthIndex)[frequencyIndex];
+            const double updatedIntensity =
+                intensityValue + intensityIncrement;
+            if (!std::isfinite(updatedIntensity)) {
+              throw ValidationError(
+                  "accumulated intensity must remain finite");
+            }
+            intensityValue = updatedIntensity;
+          } else {
+            const double amplitude = amplitudeConstant * hatWeight;
+            const std::complex<double> phaseArgument =
+                angularFrequency[frequencyIndex] * delay - phaseAtReceiver;
+            const std::complex<double> pressureIncrement =
+                amplitude * negativeImaginaryExponential(phaseArgument);
+            requireFiniteComplex(pressureIncrement,
+                                 "geometric hat pressure increment");
+            std::complex<double>& pressureValue =
+                workspace.cell(rangeIndex, depthIndex)[frequencyIndex];
+            const std::complex<double> updatedPressure =
+                pressureValue + pressureIncrement;
+            requireFiniteComplex(updatedPressure,
+                                 "geometric hat accumulated pressure");
+            pressureValue = updatedPressure;
+          }
+        }
+      };
+
+      // Receiver run of every lane (shared anchors), intersected with the
+      // worker's partition [rangeBegin, rangeEnd) in 1-based indices; the
+      // legacy ascending/descending order is preserved.
+      if (receiverIndex1Based > previousReceiverIndex1Based) {
+        const std::size_t firstOneBased =
+            std::max(previousReceiverIndex1Based + 1U, rangeBegin + 1U);
+        const std::size_t lastOneBased =
+            std::min(receiverIndex1Based, rangeEnd);
+        for (std::size_t oneBasedRange = firstOneBased;
+             oneBasedRange <= lastOneBased; ++oneBasedRange) {
+          evaluateFusedReceiver(oneBasedRange);
+        }
+      } else {
+        const std::size_t firstOneBased =
+            std::max(receiverIndex1Based + 1U, rangeBegin + 1U);
+        const std::size_t lastOneBased =
+            std::min(previousReceiverIndex1Based, rangeEnd);
+        if (lastOneBased >= firstOneBased) {
+          for (std::size_t oneBasedRange = lastOneBased;; --oneBasedRange) {
+            evaluateFusedReceiver(oneBasedRange);
+            if (oneBasedRange == firstOneBased) {
+              break;
+            }
+          }
+        }
+      }
+      previousProjectedRange = projectedRange;
+      previousNormalOffset = normalOffset;
+      previousReceiverIndex1Based = receiverIndex1Based;
+    }
+  }
+  return true;
 }
 
 void GeometricHatInfluence::accumulateArrivals(ArrivalWorkspace& workspace,

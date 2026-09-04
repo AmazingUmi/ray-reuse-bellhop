@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "rayreuse/error.hpp"
+#include "rayreuse/field/fused_intensity_workspace.hpp"
+#include "rayreuse/field/fused_pressure_workspace.hpp"
 
 namespace rayreuse {
 namespace {
@@ -147,6 +149,93 @@ void validateField(const ReceiverGrid& receivers,
            receivers.receiversPerRange())) {
     throw ValidationError(
         "geometric Gaussian diagnostic receiver index is out of range");
+  }
+}
+
+// Fused-kernel entry checks (IGR-3A A05, design §5; A04 Hat precedent): the
+// per-ray conditions of the legacy validateField (validate + contiguous
+// active prefix + ray-state finiteness) with fused-prefixed diagnostics so
+// the failing layer is identifiable; the fused workspace replaces the legacy
+// per-frequency workspace metadata checks. The legacy per-call
+// whole-workspace payload rescan is deliberately not restored (CC A02 / Hat
+// A04 precedent: the store-time finite checks preserve the accumulation
+// contract). Templated over the fused workspace kind (both payloads expose
+// the same dimension checks).
+template <typename FusedWorkspace>
+void validateFusedGaussianInput(const FusedWorkspace& workspace,
+                                std::span<const double> frequencies,
+                                const RayPath& path,
+                                std::span<const RayFrequencyState>
+                                    frequencyStates,
+                                const ReceiverGrid& receivers,
+                                double launchSpacing) {
+  const std::size_t frequencyCount = frequencyStates.size();
+  if (frequencyCount == 0U) {
+    throw ValidationError(
+        "fused geometric Gaussian influence requires at least one frequency");
+  }
+  if (workspace.frequencyCount() != frequencyCount ||
+      frequencies.size() != frequencyCount) {
+    throw ValidationError(
+        "fused geometric Gaussian influence requires workspace, frequency, "
+        "and frequency-state dimensions of equal size");
+  }
+  if (workspace.depthCount() != receivers.receiversPerRange() ||
+      workspace.rangeCount() != receivers.rangeCount()) {
+    throw ValidationError(
+        "fused geometric Gaussian workspace and receiver-grid sizes must "
+        "match");
+  }
+  if (!std::isfinite(launchSpacing) || launchSpacing <= 0.0) {
+    throw ValidationError(
+        "geometric Gaussian launch-angle spacing must be positive and finite");
+  }
+  if (path.points.size() < 2U) {
+    throw ValidationError(
+        "fused geometric Gaussian geometry and frequency point counts must "
+        "match");
+  }
+  if (receivers.depthCount() == 0U || receivers.rangeCount() == 0U) {
+    throw ValidationError("geometric Gaussian requires non-empty receivers");
+  }
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    const RayFrequencyState& state = frequencyStates[frequencyIndex];
+    if (frequencies[frequencyIndex] != state.frequency) {
+      throw ValidationError(
+          "fused geometric Gaussian workspace and ray frequencies must match");
+    }
+    if (path.points.size() != state.points.size()) {
+      throw ValidationError(
+          "fused geometric Gaussian geometry and frequency point counts must "
+          "match");
+    }
+    if (state.points.front().active == false) {
+      throw ValidationError("geometric Gaussian source point must be active");
+    }
+    bool inactiveSeen = false;
+    for (const RayFrequencyPoint& point : state.points) {
+      if (inactiveSeen && point.active) {
+        throw ValidationError(
+            "geometric Gaussian active prefix must be contiguous");
+      }
+      inactiveSeen = inactiveSeen || !point.active;
+      if (!std::isfinite(point.amplitude) || point.amplitude < 0.0 ||
+          !std::isfinite(point.reflectionPhase) ||
+          !std::isfinite(point.complexTravelTime.real()) ||
+          !std::isfinite(point.complexTravelTime.imag())) {
+        throw ValidationError("geometric Gaussian frequency point is invalid");
+      }
+    }
+  }
+  for (const RayState& point : path.points) {
+    if (!isFinite(point.position) || !isFinite(point.slowness) ||
+        !std::isfinite(point.dynamicQ[0U]) ||
+        !std::isfinite(point.soundSpeed) || point.soundSpeed <= 0.0 ||
+        !std::isfinite(point.realTravelTime)) {
+      throw ValidationError(
+          "geometric Gaussian ray path contains an invalid state");
+    }
   }
 }
 }  // namespace
@@ -649,6 +738,316 @@ void GeometricGaussianInfluence::collectEigenrayHits(
     }
     previousRange = rightRange;
   }
+}
+
+void GeometricGaussianInfluence::setFusedLaunchAngleStep(
+    double launchAngleStep) {
+  fusedLaunchAngleStep_ = launchAngleStep;
+}
+
+bool GeometricGaussianInfluence::accumulateFusedPrevalidated(
+    FusedPressureWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    CartesianCervenyStatistics* statistics) const {
+  // The legacy Gaussian kernel produces no influence counters; the pointer is
+  // accepted for adapter-shape uniformity (design §3.4 documents the
+  // zero-counter envelope for non-CC families).
+  static_cast<void>(statistics);
+  return accumulateFusedImpl<false>(workspace, frequencies, path,
+                                    frequencyStates, rangeBegin, rangeEnd);
+}
+
+bool GeometricGaussianInfluence::accumulateFusedIntensityPrevalidated(
+    FusedIntensityWorkspace& workspace,
+    std::span<const double> frequencies, const RayPath& path,
+    std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd,
+    CartesianCervenyStatistics* statistics) const {
+  static_cast<void>(statistics);
+  return accumulateFusedImpl<true>(workspace, frequencies, path,
+                                   frequencyStates, rangeBegin, rangeEnd);
+}
+
+// IGR-3A A05 fused kernel (design §5/§8): entry validation, then the single
+// legacy Cartesian traversal. The coherent and intensity twins share one
+// traversal with a per-lane payload branch at the store, mirroring the
+// legacy single-traversal accumulateField split.
+template <bool IntensityPayload, typename Workspace>
+bool GeometricGaussianInfluence::accumulateFusedImpl(
+    Workspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::size_t rangeBegin, std::size_t rangeEnd) const {
+  validateFusedGaussianInput(workspace, frequencies, path, frequencyStates,
+                             receivers_, fusedLaunchAngleStep_);
+  if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
+    throw ValidationError("fused geometric Gaussian range partition is invalid");
+  }
+
+  const std::size_t frequencyCount = frequencyStates.size();
+  std::vector<std::size_t> activePrefixPointCount(frequencyCount);
+  std::vector<double> angularFrequency(frequencyCount);
+  std::size_t unionPrefix = 0U;
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+       ++frequencyIndex) {
+    // Exact per-frequency active-prefix scan of the legacy kernel (the
+    // first inactive point is retained).
+    activePrefixPointCount[frequencyIndex] =
+        activeCount(frequencyStates[frequencyIndex]);
+    unionPrefix =
+        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    angularFrequency[frequencyIndex] =
+        2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
+  }
+  const double q0 = path.points.front().soundSpeed / fusedLaunchAngleStep_;
+  const double sourceRatio =
+      sourceGeometry_ == SourceGeometry::Point
+          ? std::sqrt(std::abs(std::cos(path.launchAngle))) /
+                std::sqrt(2.0 * std::numbers::pi)
+          : 1.0 / std::sqrt(2.0 * std::numbers::pi);
+  requireFinite(q0, "geometric Gaussian q0");
+  requireFinite(sourceRatio, "geometric Gaussian source ratio");
+
+  const std::vector<double>& ranges = receivers_.ranges();
+  const auto firstReceiver = std::find_if(
+      ranges.begin(), ranges.end(),
+      [&](double range) { return range > path.points.front().position.range; });
+  std::size_t receiverIndex{};
+  if (firstReceiver == ranges.end()) {
+    if (path.points.front().slowness.range >= 0.0) {
+      return true;
+    }
+    receiverIndex = ranges.size() - 1U;
+  } else {
+    receiverIndex = static_cast<std::size_t>(firstReceiver - ranges.begin());
+    if (path.points.front().slowness.range < 0.0 && receiverIndex > 0U) {
+      --receiverIndex;
+    }
+  }
+
+  // Per-lane segment-level width state, recomputed every segment exactly
+  // where the legacy per-frequency loop computes it (design §8: the beam
+  // width sigma1 is frequency-local — wavelength and near-field branches —
+  // so receiver eligibility windows and depth prefilters are evaluated per
+  // frequency exactly as legacy, NOT lifted to frequency-independent
+  // geometry). Allocated once per ray; the entries are pure functions of
+  // (segment, lane).
+  std::vector<double> wavelengthSigma(frequencyCount);
+  std::vector<double> nearFieldSigma(frequencyCount);
+  std::vector<double> broadeningSigma(frequencyCount);
+  std::vector<double> segmentSigma(frequencyCount);
+  std::vector<double> minimumDepth(frequencyCount);
+  std::vector<double> maximumDepth(frequencyCount);
+
+  double previousRange = path.points.front().position.range;
+  double phase = 0.0;
+  double previousQ = path.points.front().dynamicQ[0U];
+  for (std::size_t rightIndex = 1U; rightIndex < unionPrefix; ++rightIndex) {
+    const std::size_t leftIndex = rightIndex - 1U;
+    const Vec2 segment =
+        path.points[rightIndex].position - path.points[leftIndex].position;
+    const double segmentLength = norm(segment);
+    if (segmentLength <
+        1000.0 * spacing(path.points[rightIndex].position.range)) {
+      continue;
+    }
+    const Vec2 tangent = segment / segmentLength;
+    const Vec2 normal{.range = -tangent.depth, .depth = tangent.range};
+    const double rightRange = path.points[rightIndex].position.range;
+    const double leftQ = path.points[leftIndex].dynamicQ[0U];
+    if (crosses(previousQ, leftQ)) {
+      phase += std::numbers::pi / 2.0;
+    }
+    previousQ = leftQ;
+
+    // Shared frequency-independent q term of the legacy segment sigma.
+    const double segmentQTerm =
+        std::max(std::abs(path.points[leftIndex].dynamicQ[0U]),
+                 std::abs(path.points[rightIndex].dynamicQ[0U])) /
+        q0 / std::abs(tangent.range);
+    const bool depthWindowed = std::abs(tangent.range) > 0.5;
+    const double segmentMinimumDepth =
+        std::min(path.points[leftIndex].position.depth,
+                 path.points[rightIndex].position.depth);
+    const double segmentMaximumDepth =
+        std::max(path.points[leftIndex].position.depth,
+                 path.points[rightIndex].position.depth);
+    for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+         ++frequencyIndex) {
+      const RayFrequencyState& state = frequencyStates[frequencyIndex];
+      const double wavelength =
+          path.points[leftIndex].soundSpeed / state.frequency;
+      wavelengthSigma[frequencyIndex] = std::numbers::pi * wavelength;
+      // Same association as the legacy segment and receiver expressions:
+      // (kNearFieldFactor * frequency) * Re(tau_right).
+      nearFieldSigma[frequencyIndex] =
+          kNearFieldFactor * state.frequency *
+          state.points[rightIndex].complexTravelTime.real();
+      broadeningSigma[frequencyIndex] =
+          std::min(nearFieldSigma[frequencyIndex],
+                   wavelengthSigma[frequencyIndex]);
+      segmentSigma[frequencyIndex] =
+          std::max(segmentQTerm, broadeningSigma[frequencyIndex]);
+      const double segmentRadius =
+          kBeamWindow * segmentSigma[frequencyIndex];
+      minimumDepth[frequencyIndex] =
+          depthWindowed ? segmentMinimumDepth - segmentRadius
+                        : -std::numeric_limits<double>::infinity();
+      maximumDepth[frequencyIndex] =
+          depthWindowed ? segmentMaximumDepth + segmentRadius
+                        : std::numeric_limits<double>::infinity();
+    }
+
+    for (;;) {
+      const double receiverRange = ranges[receiverIndex];
+      if (receiverRange >= std::min(previousRange, rightRange) &&
+          receiverRange < std::max(previousRange, rightRange) &&
+          receiverIndex >= rangeBegin && receiverIndex < rangeEnd) {
+        // Origin InfluenceGeoGaussianCart pairs each irregular receiver
+        // range with Pos%Rz(ir); rectilinear grids keep the shared depth
+        // rows.
+        for (std::size_t depthIndex = 0U;
+             depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
+          const double receiverDepth =
+              receivers_.depthAt(depthIndex, receiverIndex);
+          const Vec2 receiver{
+              .range = receiverRange, .depth = receiverDepth};
+          const Vec2 offset = receiver - path.points[leftIndex].position;
+          const double interpolationWeight =
+              fortranDotProduct2D(offset, tangent) / segmentLength;
+          const double normalOffset =
+              std::abs(fortranDotProduct2D(offset, normal));
+          const double qInterpolated =
+              leftQ + interpolationWeight *
+                          (path.points[rightIndex].dynamicQ[0U] - leftQ);
+          const double geometricSigma = std::abs(qInterpolated / q0);
+          const bool receiverCausticCross = crosses(previousQ, qInterpolated);
+          for (std::size_t frequencyIndex = 0U;
+               frequencyIndex < frequencyCount; ++frequencyIndex) {
+            // That frequency's own legacy loop bound.
+            if (rightIndex >= activePrefixPointCount[frequencyIndex]) {
+              continue;
+            }
+            // Legacy per-frequency depth prefilter (segment sigma window).
+            if (receiverDepth < minimumDepth[frequencyIndex] ||
+                receiverDepth > maximumDepth[frequencyIndex]) {
+              continue;
+            }
+            // Legacy per-frequency eligibility window: sigma1 is
+            // frequency-local, evaluated exactly at the legacy point.
+            const double sigma1 =
+                std::max(geometricSigma, broadeningSigma[frequencyIndex]);
+            if (normalOffset >= kBeamWindow * sigma1) {
+              continue;
+            }
+            const RayFrequencyState& state =
+                frequencyStates[frequencyIndex];
+            const std::complex<double> delay =
+                state.points[leftIndex].complexTravelTime +
+                interpolationWeight *
+                    (state.points[rightIndex].complexTravelTime -
+                     state.points[leftIndex].complexTravelTime);
+            const double amplitudeConstant =
+                sourceRatio *
+                std::sqrt(path.points[rightIndex].soundSpeed /
+                          (q0 * sigma1)) *
+                state.points[rightIndex].amplitude;
+            const double normalizedOffset = normalOffset / sigma1;
+            const double gaussianWeight =
+                std::sqrt(geometricSigma / sigma1) *
+                std::exp(-0.5 * normalizedOffset * normalizedOffset);
+            double phaseAtReceiver =
+                state.points[leftIndex].reflectionPhase + phase;
+            if (receiverCausticCross) {
+              phaseAtReceiver += std::numbers::pi / 2.0;
+            }
+
+            requireFinite(qInterpolated,
+                          "geometric Gaussian interpolated q");
+            requireFinite(geometricSigma, "geometric Gaussian geometric sigma");
+            requireFinite(nearFieldSigma[frequencyIndex],
+                          "geometric Gaussian near-field sigma");
+            requireFinite(wavelengthSigma[frequencyIndex],
+                          "geometric Gaussian wavelength sigma");
+            requireFinite(sigma1, "geometric Gaussian sigma1");
+            requireFinite(gaussianWeight, "geometric Gaussian weight");
+            requireFinite(amplitudeConstant,
+                          "geometric Gaussian amplitude constant");
+            requireFinite(phaseAtReceiver, "geometric Gaussian caustic phase");
+            requireFiniteComplex(delay, "geometric Gaussian delay");
+
+            if constexpr (IntensityPayload) {
+              // Legacy intensity branch: the attenuated real constant is
+              // squared, the Gaussian weight applied once, with the extra
+              // sqrt(2 pi) factor of the family (design §8; the store-time
+              // checks reproduce IntensityWorkspace::add's contract with
+              // the legacy message verbatim).
+              const double attenuatedConstant =
+                  amplitudeConstant *
+                  std::exp(
+                      (angularFrequency[frequencyIndex] * delay).imag());
+              const double power = attenuatedConstant * attenuatedConstant;
+              const double intensityIncrement =
+                  std::sqrt(2.0 * std::numbers::pi) * power * gaussianWeight;
+              if (!std::isfinite(intensityIncrement) ||
+                  intensityIncrement < 0.0) {
+                throw ValidationError(
+                    "geometric Gaussian intensity increment must be finite "
+                    "and non-negative");
+              }
+              double& intensityValue =
+                  workspace.cell(receiverIndex, depthIndex)[frequencyIndex];
+              const double updatedIntensity =
+                  intensityValue + intensityIncrement;
+              if (!std::isfinite(updatedIntensity)) {
+                throw ValidationError(
+                    "accumulated intensity must remain finite");
+              }
+              intensityValue = updatedIntensity;
+            } else {
+              const double amplitude = amplitudeConstant * gaussianWeight;
+              const std::complex<double> phaseArgument =
+                  angularFrequency[frequencyIndex] * delay - phaseAtReceiver;
+              const std::complex<double> pressureIncrement =
+                  amplitude * negativeImaginaryExponential(phaseArgument);
+              requireFiniteComplex(pressureIncrement,
+                                   "geometric Gaussian pressure increment");
+              std::complex<double>& pressureValue =
+                  workspace.cell(receiverIndex, depthIndex)[frequencyIndex];
+              const std::complex<double> updatedPressure =
+                  pressureValue + pressureIncrement;
+              requireFiniteComplex(updatedPressure,
+                                   "geometric Gaussian accumulated pressure");
+              pressureValue = updatedPressure;
+            }
+          }
+        }
+      }
+
+      if (rightRange > ranges[receiverIndex]) {
+        if (receiverIndex + 1U >= ranges.size()) {
+          break;
+        }
+        const std::size_t next = receiverIndex + 1U;
+        if (ranges[next] >= rightRange) {
+          break;
+        }
+        receiverIndex = next;
+      } else {
+        if (receiverIndex == 0U) {
+          break;
+        }
+        const std::size_t next = receiverIndex - 1U;
+        if (ranges[next] <= rightRange) {
+          break;
+        }
+        receiverIndex = next;
+      }
+    }
+    previousRange = rightRange;
+  }
+  return true;
 }
 
 }  // namespace rayreuse

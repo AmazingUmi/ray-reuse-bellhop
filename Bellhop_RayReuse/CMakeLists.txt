@@ -324,6 +324,36 @@ if(BUILD_TESTING)
     "component;reuse"
   )
   add_rayreuse_test(
+    bellhop_rayreuse_fused_cc_intensity_parity_tests
+    rayreuse.component.fused_cc_intensity_parity
+    tests/component/fused_cc_intensity_parity_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_rc_parity_tests
+    rayreuse.component.fused_rc_parity
+    tests/component/fused_rc_parity_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_hat_parity_tests
+    rayreuse.component.fused_hat_parity
+    tests/component/fused_hat_parity_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_geometric_gaussian_parity_tests
+    rayreuse.component.fused_geometric_gaussian_parity
+    tests/component/fused_geometric_gaussian_parity_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
+    bellhop_rayreuse_fused_simple_gaussian_parity_tests
+    rayreuse.component.fused_simple_gaussian_parity
+    tests/component/fused_simple_gaussian_parity_test.cpp
+    "component;reuse"
+  )
+  add_rayreuse_test(
     bellhop_rayreuse_parallel_ray_reuse_solver_tests
     rayreuse.parallel.solver
     tests/component/parallel_ray_reuse_solver_test.cpp

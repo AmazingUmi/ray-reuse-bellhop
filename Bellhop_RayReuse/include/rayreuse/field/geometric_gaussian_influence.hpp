@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <functional>
 #include <optional>
+#include <span>
 
 #include "rayreuse/field/arrival_workspace.hpp"
 #include "rayreuse/field/eigenray_hit.hpp"
@@ -12,6 +13,10 @@
 #include "rayreuse/ray/ray_path.hpp"
 
 namespace rayreuse {
+
+class FusedPressureWorkspace;
+class FusedIntensityWorkspace;
+struct CartesianCervenyStatistics;
 
 enum class GeometricGaussianWidthBranch {
   Geometric,
@@ -77,6 +82,11 @@ class GeometricGaussianInfluence {
                            double launchAngleSpacingRadians) const;
 
  private:
+  // IGR-3A unified-executor adapter (design §4): its accumulateFused /
+  // accumulateFusedIntensity hooks forward to the private fused kernel
+  // entries below (Cartesian only — the family has no ray-centered variant).
+  friend struct GeometricGaussianFusedAdapter;
+
   [[nodiscard]] std::optional<GeometricGaussianDiagnostic> accumulateField(
       FrequencyWorkspace* pressureWorkspace,
       IntensityWorkspace* intensityWorkspace, const RayPath& path,
@@ -84,8 +94,43 @@ class GeometricGaussianInfluence {
       std::optional<GeometricGaussianDiagnosticRequest> diagnosticRequest)
       const;
 
+  // IGR-3A A05 fused kernel entries (design §5, no epsilon channel): one
+  // ray, all frequency lanes, receiver cells [rangeBegin, rangeEnd). The
+  // coherent and intensity twins share one traversal with a per-lane payload
+  // branch at the store, mirroring the legacy single-traversal
+  // accumulateField.
+  [[nodiscard]] bool accumulateFusedPrevalidated(
+      FusedPressureWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  [[nodiscard]] bool accumulateFusedIntensityPrevalidated(
+      FusedIntensityWorkspace& workspace,
+      std::span<const double> frequencies, const RayPath& path,
+      std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd,
+      CartesianCervenyStatistics* statistics = nullptr) const;
+
+  template <bool IntensityPayload, typename Workspace>
+  [[nodiscard]] bool accumulateFusedImpl(
+      Workspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::size_t rangeBegin, std::size_t rangeEnd) const;
+
+  // IGR-3A A05 fused-run state (design §4/§5, A04 Hat precedent): the frozen
+  // adapter interface carries no launch-angle spacing to the fused kernel
+  // entries (the family has no epsilon channel to hide it in), so the adapter
+  // installs the run's launch-fan angle step once after constructing the
+  // kernel with the verbatim single-frequency arguments. The public
+  // per-frequency entries keep receiving the spacing per call and never read
+  // this field.
+  void setFusedLaunchAngleStep(double launchAngleStep);
+
   ReceiverGrid receivers_;
   SourceGeometry sourceGeometry_{SourceGeometry::Point};
+  double fusedLaunchAngleStep_{};
 };
 
 }  // namespace rayreuse
