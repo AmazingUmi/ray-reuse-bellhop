@@ -1,53 +1,60 @@
 # AGENTS.md
 
-## 1. 项目原则
+## 1. Project Principles
 
-本仓库用于 Bellhop 功能复刻、数值一致性验证、性能优化和 RayReuse 宽带射线复用研究。
+本仓库用于 Bellhop 功能复刻、数值一致性验证、RayReuse 宽带复用与性能研究。
 
 优先级：
 
-1. 用户明确目标；
-2. Origin/F2CPP 科学语义与文件兼容；
-3. RayReuse 正确性与 frozen-cache 契约；
-4. 性能、内存与并发；
-5. 最小充分测试与文档。
+1. 用户目标；
+2. 科学/数值正确性；
+3. Origin / F2CPP 兼容；
+4. RayReuse cache / ownership / frequency-local 契约；
+5. 功能、性能与内存目标；
+6. 最小充分测试与文档。
 
-默认采用 **最小充分工程**：
+默认原则：
 
-* 不主动扩大 scope；
+* 目标优先，不扩大 scope；
 * 不做无关重构；
-* 不建设无收益的测试、抽象或基础设施；
-* 先检查真实代码、测试、算例和 Git 状态，再下结论。
+* 不为增加测试覆盖率阻塞核心施工；
+* 先检查真实代码、测试、Worklist 和 Git 状态；
+* 已批准的工作应连续执行，不主动暂停等待确认。
 
 ---
 
-## 2. 目录边界
+## 2. Repository Boundaries
 
-| 路径                     | 职责                            |
-| ---------------------- | ----------------------------- |
-| `Bellhop_origin/`      | Fortran 首要科学 oracle           |
-| `Bellhop_F2CPP/`       | C++20 单频 production reference |
-| `Bellhop_RayReuse/`    | 多频轨迹复用 production             |
-| `test/standard_cases/` | 三实现共享算例与 oracle               |
-| `test/PlotRead/`       | SHD 读取/绘图                     |
-| `demo/`                | 展示与横向比较                       |
-| `test/legacy/`         | 历史材料                          |
+| Path                   | Role                           |
+| ---------------------- | ------------------------------ |
+| `Bellhop_origin/`      | Fortran scientific oracle      |
+| `Bellhop_F2CPP/`       | C++ single-frequency reference |
+| `Bellhop_RayReuse/`    | RayReuse production / research |
+| `test/standard_cases/` | shared cases / oracle          |
 
-默认约束：
+默认：
 
-* Feature Parity 施工只修改 `Bellhop_RayReuse/` 与必要的共享测试/文档；
-* `Bellhop_origin/`、`Bellhop_F2CPP/` 默认只读；
-* 不触碰无关用户配置；
-* 不执行破坏性 Git 操作；
-* 未获授权不 push。
+* production 修改集中在 `Bellhop_RayReuse/`；
+* `Bellhop_origin/`、`Bellhop_F2CPP/` 只读；
+* 必要时可修改共享测试和文档；
+* 不修改无关文件；
+* 未授权不 push；
+* 不执行破坏性 Git 操作。
 
 ---
 
-# 3. Feature Batch 状态机
+## 3. Batch Workflow
 
-Feature Parity 必须 **一个 Batch 一个 Batch 串行执行**。
+所有非平凡研发任务按 Batch 执行，例如：
 
-标准状态机：
+```text
+FP-*    feature parity
+IGR-*   influence geometry reuse
+PERF-*  performance
+EXP-*   experiment
+```
+
+标准流程：
 
 ```text
 DESIGN
@@ -56,172 +63,156 @@ DESIGN
 → CHECKPOINT
 → BATCH ACCEPTANCE
 → FINAL REVIEW
-     │
-     ├─ ACCEPTED
-     │    → 当前 Batch CLOSED
-     │    → 自动进入下一已批准 Batch
-     │
-     └─ CHANGES_REQUIRED
-          → REMEDIATION
-          → RE-VALIDATION
-          → FINAL REVIEW
-          → 循环直到 ACCEPTED
+```
+
+若 Final Review：
+
+```text
+ACCEPTED
+→ Batch CLOSED
+→ 自动进入下一已批准 Batch
+
+CHANGES_REQUIRED
+→ REMEDIATION
+→ RE-VALIDATION
+→ FINAL REVIEW
 ```
 
 硬规则：
 
-```text
-当前 Batch 未 ACCEPTED
-→ 禁止进入下一 Batch
+* 当前 Batch 未 ACCEPTED，不进入下一 Batch；
+* 下一 Batch 已批准时，ACCEPTED 后自动继续；
+* task / checkpoint 完成后也默认继续；
+* 不因阶段完成主动暂停等待用户确认。
 
-当前 Batch ACCEPTED
-→ 若后续 Batch 已由用户整体批准
-→ 自动进入下一 Batch DESIGN
-```
+仅以下情况停止：
 
-禁止：
-
-* 并行设计多个 Feature Batch；
-* 当前 Batch 尚未验收就提前施工下一 Batch；
-* 用后一 Batch 修复前一 Batch 的问题；
-* 将多个 Batch 合并成一个 Worklist 或一次验收。
+* 用户明确要求暂停；
+* 出现真实 blocker；
+* 需要新的授权；
+* 后续工作未获批准；
+* frozen design 的核心假设失效。
 
 ---
 
-# 4. Agent 职责
+## 4. Agents
 
-## coordinator
+模型选择原则：
 
-主 Agent，负责：
+scout / worker
+→ 优先使用低成本、高性价比模型
 
-* 当前 Batch 状态；
-* 风险分类；
-* 调度子 Agent；
-* Worklist 更新；
-* checkpoint；
-* Batch Acceptance；
-* findings 路由；
-* 复验调度；
-* Batch 状态转换；
-* Git scope。
+reviewer
+→ 默认使用中高等级模型；高风险数值/架构审查使用高级模型
 
-coordinator 不应自己承担复杂设计、复杂施工或最终自验。
+architect / advanced-worker / final-reviewer
+→ 必须优先使用高级推理模型
 
----
+若无法按照上述原则选择subagent所模型，则可继承主agent的模型选择，以继续任务。
 
-## scout
-
-低成本只读搜索。
-
-仅用于：
-
-* 文件定位；
-* symbol/call chain；
-* F2CPP/Origin reference；
-* 已有 tests/oracle；
-* 历史实现定位。
-
-输出只保留事实。
-
-禁止设计、施工和验收。
-
----
-
-## architect
-
-每个非平凡 Batch 在 DESIGN 阶段默认调用一次。
+### coordinator
 
 负责：
 
+* Batch 状态；
 * scope；
+* Agent 调度；
+* Worklist；
+* checkpoint；
+* Batch Acceptance；
+* remediation；
+* Git scope；
+* 自动推进。
+
+有明确下一步时继续执行，不主动暂停。
+
+### scout
+
+只读定位：
+
+* files / symbols；
+* call chain；
+* Origin / F2CPP reference；
+* tests / oracle。
+
+只输出事实。
+
+### architect
+
+非平凡 Batch DESIGN 阶段使用。
+
+负责：
+
 * architecture；
-* scientific/numerical semantics；
-* ownership/lifetime；
-* migration strategy；
+* scientific semantics；
+* ownership / lifetime；
+* data / memory / concurrency model；
 * Worklist；
 * acceptance gates。
 
 默认不修改 production。
 
-只有以下情况重新调用：
+只有设计失效或 scope 显著变化时重新调用。
 
-* 原设计假设失效；
-* scope 显著变化；
-* 出现 architecture blocker。
+### worker
 
----
+处理 `[SIMPLE]` / `[STANDARD]`：
 
-## worker
+* parser / CLI / writer；
+* wiring；
+* manifest / docs；
+* 机械迁移；
+* 普通测试；
+* 低风险优化。
 
-负责 `[SIMPLE]` / `[STANDARD]`：
+遇到数值、cache、ownership、concurrency 等问题时升级。
 
-* parser；
-* CLI；
-* writer；
-* manifest/case；
-* 普通 model wiring；
-* 明确机械迁移；
-* 普通 tests；
-* docs。
+### advanced-worker
 
-遇到以下问题必须升级：
-
-```text
-scientific semantics
-numerical algorithm
-ownership/lifetime
-cache consistency
-concurrency
-complex regression
-```
-
----
-
-## advanced-worker
-
-负责 `[ADVANCED]`，也是 **验收 finding 的默认修复 Agent**。
-
-适用：
+处理 `[ADVANCED]`：
 
 * 数值算法；
-* complex geometry；
-* source/receiver schema；
-* ownership/lifetime；
+* influence / geometry；
+* dynamic ray；
 * cache；
-* concurrency；
+* ownership / lifetime；
 * multi-frequency state；
-* writer/product ownership；
-* 难以定位的 regression；
-* final-reviewer/reviewer 发现的非平凡问题。
+* concurrency；
+* fused execution；
+* memory / performance hot path；
+* complex regression；
+* 非平凡 remediation。
 
-必须给出：
+输出：
 
 ```text
-tests / oracle / benchmark
+changes
+evidence
+remaining risk
+blocker
 ```
 
-作为修复证据。
+### reviewer
 
----
-
-## reviewer
-
-独立窄范围只读审查。
-
-检查：
-
-1. 当前 task acceptance；
-2. 当前 task diff；
-3. 对应 F2CPP/Origin reference；
-4. targeted tests/oracle。
-
-规则：
+独立只读审查。
 
 ```text
 SIMPLE    → 默认不用
 STANDARD  → 按需
-ADVANCED  → 必须
+ADVANCED  → 风险驱动
 ```
+
+以下必须独立 review：
+
+* scientific / numerical semantics；
+* frozen cache；
+* ownership；
+* concurrency；
+* frequency state；
+* output compatibility；
+* 可能改变结果的性能优化。
+
+纯 loop restructuring、buffer reuse、allocation reduction 等可集中到 checkpoint review。
 
 输出：
 
@@ -231,33 +222,9 @@ PASS
 
 或 actionable findings。
 
-如果 reviewer 发现问题：
-
-```text
-finding
-→ remediation
-→ reviewer 再验
-```
-
-直到 `PASS`。
-
----
-
-## final-reviewer
+### final-reviewer
 
 每个 Batch 最终独立验收。
-
-检查：
-
-* frozen Worklist；
-* 最终 scope；
-* 高风险 production diff；
-* checkpoint findings；
-* Batch Acceptance；
-* tests/oracle；
-* cache/ownership；
-* Git hygiene；
-* 文档声明是否超过证据。
 
 结论只能：
 
@@ -266,91 +233,60 @@ ACCEPTED
 CHANGES_REQUIRED
 ```
 
-若 `CHANGES_REQUIRED`，修复后必须再次调用 final-reviewer。
-
-**不得由 coordinator、worker 或 advanced-worker 自行关闭 Final Review finding。**
+Final Review finding 必须修复后再次交 final-reviewer。
 
 ---
 
-# 5. 风险等级
+## 5. Risk Levels
 
-## `[SIMPLE]`
+### `[SIMPLE]`
 
-例如：
-
-* 文档；
-* manifest；
-* 明确配置；
-* 很小的机械修改。
-
-流程：
+文档、配置、manifest、机械小改。
 
 ```text
 worker/coordinator
-→ targeted validation
+→ minimal validation
 ```
 
----
+### `[STANDARD]`
 
-## `[STANDARD]`
-
-例如：
-
-* parser/model wiring；
-* CLI；
-* writer；
-* standard case；
-* 普通 runtime path。
-
-流程：
+parser、CLI、writer、普通 runtime wiring、低风险优化。
 
 ```text
 worker
-→ targeted tests
-→ reviewer（按需）
+→ targeted validation
+→ reviewer if needed
 ```
 
----
+### `[ADVANCED]`
 
-## `[ADVANCED]`
-
-例如：
-
-* 数值算法；
-* source/receiver schema；
-* ownership/lifetime；
-* frozen cache；
-* concurrency；
-* dynamic ray；
-* complex regression；
-* 高风险性能路径。
-
-流程：
+数值算法、cache、ownership、concurrency、multi-frequency、geometry、fused execution、高风险性能路径。
 
 ```text
 advanced-worker
-→ targeted tests/oracle
-→ reviewer
+→ targeted evidence
+→ reviewer by risk
 ```
 
 ---
 
-# 6. Worklist
+## 6. Worklist
 
-每个非平凡 Batch 建立独立：
+每个非平凡 Batch 使用：
 
 ```text
 Bellhop_RayReuse/doc/worklists/<BATCH>_WORKLIST.md
 ```
 
-Worklist 是当前 Batch 的执行期权威状态源。
-
-格式保持简洁：
+最小格式：
 
 ```md
 ### A01 [ADVANCED]
 Status: TODO | ACTIVE | DONE
 Reviewer: N/A | PASS
+
+Goal:
+- ...
 
 Acceptance:
 - ...
@@ -359,289 +295,183 @@ Evidence:
 - ...
 ```
 
-仅记录：
+Worklist 只记录：
 
 * scope；
 * frozen decisions；
-* dependencies；
+* task；
 * acceptance；
 * evidence；
-* blockers/findings。
+* blocker / finding。
 
-不要复制大量聊天历史。
+不要复制聊天历史或长日志。
 
 ---
 
-# 7. 上下文与 Token 预算
+## 7. Context / Token Budget
 
 默认读取顺序：
 
 ```text
 AGENTS.md
-→ 当前 Batch Worklist
+→ current Worklist
 → git status
-→ 当前 task diff
-→ 必要源码/tests
+→ current diff
+→ necessary source/tests
 ```
 
-禁止默认：
+不要默认：
 
-* 重读整个 repository；
-* 重述项目完整历史；
-* 每个 task 都跑 full regression；
-* 输出完整 diff/log。
+* 扫描整个仓库；
+* 重述完整历史；
+* 每 task 跑 full regression；
+* 输出完整 diff / log；
+* 让多个 Agent 重复分析同一问题。
 
-Agent 输出预算：
+---
+
+## 8. Validation Strategy
+
+原则：
 
 ```text
-scout          → facts
-worker         → changes + tests + blocker
-advanced-worker→ changes + evidence + blocker
-reviewer       → PASS/findings
-final-reviewer → verdict + critical findings
+测试服务于风险和目标，而不是测试数量。
+```
+
+Task 阶段只运行：
+
+* targeted tests；
+* targeted oracle；
+* targeted regression；
+* 必要 parity。
+
+不要机械执行 full suite。
+
+Batch Acceptance 集中执行完整验证，并按 Batch 需要加入：
+
+* Origin / F2CPP parity；
+* execution parity；
+* byte identity；
+* cache fingerprint；
+* worker-count parity；
+* benchmark；
+* memory evidence。
+
+性能任务优先顺序：
+
+```text
+实现目标
+→ correctness
+→ targeted evidence
+→ benchmark / memory
+→ full acceptance
 ```
 
 ---
 
-# 8. 测试策略
+## 9. RayReuse Core Contracts
 
-## Task / Checkpoint
-
-只运行当前任务需要的：
-
-```text
-component tests
-targeted standard case
-targeted oracle
-targeted regression
-```
-
-不要每个 task 都机械执行：
-
-```text
-full CTest
-full pytest
-full standard-case matrix
-```
-
----
-
-## Batch Acceptance
-
-完整验证集中执行一次。
-
-通常：
-
-```bash
-uv run ctest --test-dir Bellhop_RayReuse/build/<batch-clean> --output-on-failure
-uv run pytest
-uv run make -C test/standard_cases test-unit
-```
-
-再加当前 Batch 必需的：
-
-```text
-Origin oracle
-F2CPP parity
-execution parity
-cache fingerprint
-representative frozen regression
-```
-
-coordinator 必须亲自抽验关键 gate，不能只引用 worker 报告。
-
----
-
-# 9. RayReuse 核心契约
-
-默认保持：
+### Frozen geometry
 
 ```text
 RayPath / RayPathCache
-→ frequency-independent frozen geometry
-
-amplitude
-phase
-complex travel time
-reflection result
-Arrival/Eigenray state
-→ frequency-local
+→ frequency-independent
+→ read-only after trace
 ```
 
-未经 architect 明确批准，不得：
+禁止把 frequency-local 或 worker-local mutable state 写回 frozen cache。
 
-* 把 frequency-local state 写回 frozen cache；
-* 引入 global current frequency；
-* 引入不可控 shared mutable state；
-* 随意改变 cache ownership；
-* 将 F2CPP transient 单频状态直接永久化到 RayReuse cache。
+### Frequency-local
+
+默认包括：
+
+* amplitude；
+* phase；
+* attenuation；
+* complex travel time；
+* reflection result；
+* active prefix；
+* influence state；
+* Arrival / Eigenray state。
+
+```text
+FrequencyProjector:
+RayPath + frequency
+→ RayFrequencyState
+```
+
+### Fused execution
+
+允许共享：
+
+* frozen geometry；
+* geometry traversal；
+* read-only candidate structure。
+
+必须保持：
+
+* 每频 acoustic state 独立；
+* 每频 eligibility 独立；
+* output semantics 独立；
+* frozen geometry 不变。
+
+### Parallelism / Memory
+
+原则：
+
+```text
+shared read-only data
++ worker-local mutable workspace
++ deterministic output
+```
+
+避免不必要的：
+
+```text
+O(Ns × Nf × geometry)
+```
+
+复制。
 
 ---
 
-# 10. Finding / Remediation 规则
+## 10. Findings / Remediation
 
-这是强制闭环。
+以下必须进入 remediation：
 
-任何：
+* reviewer finding；
+* Final Review `CHANGES_REQUIRED`；
+* Batch Acceptance failure；
+* oracle / regression mismatch；
+* performance / memory blocker。
 
-```text
-reviewer finding
-final-reviewer CHANGES_REQUIRED
-Batch Acceptance failure
-```
+复杂 production 问题优先 advanced-worker。
 
-都必须进入 remediation。
-
-## 默认修复分配
-
-**优先使用 `advanced-worker`。**
-
-以下情况必须使用 advanced-worker：
-
-* production code；
-* scientific/numerical semantics；
-* architecture/schema；
-* ownership/lifetime；
-* cache；
-* concurrency；
-* writer/product dimension；
-* parser/runtime 行为存在歧义；
-* regression 原因不明确；
-* 跨模块问题。
-
-只有问题明显属于：
-
-```text
-typo
-简单文档修正
-manifest/allow-list
-明确的机械小修改
-Git hygiene
-```
-
-才可使用：
-
-```text
-worker
-```
-
-禁止因为节省额度而将实际 ADVANCED remediation 降级给 worker。
-
----
-
-## 修复后必须复验
-
-修复完成后：
+修复后：
 
 ```text
 remediation
-→ targeted tests/oracle
-→ 原验收角色再次检查
+→ targeted validation
+→ original reviewer re-check
 ```
 
-如果是：
-
-```text
-reviewer finding
-```
-
-则：
-
-```text
-reviewer 再验
-```
-
-如果是：
-
-```text
-final-reviewer CHANGES_REQUIRED
-```
-
-则：
-
-```text
-final-reviewer 再验
-```
-
-如果再次发现问题：
-
-```text
-advanced-worker/worker 修复
-→ 再验
-```
-
-循环直到：
-
-```text
-PASS / ACCEPTED
-```
-
-**不得通过“已修复”报告直接跳过重新验收。**
+不得用“已修复”直接关闭 finding。
 
 ---
 
-# 11. Batch Acceptance 与进入下一 Batch
-
-当前 Batch 只有在以下条件全部满足后才能：
-
-```text
-ACCEPTED
-```
-
-条件：
-
-* Worklist 完成；
-* Batch Acceptance PASS；
-* 所有 checkpoint reviewer PASS；
-* final-reviewer ACCEPTED；
-* 所有 remediation 已复验；
-* 无未关闭 HIGH/BLOCKER；
-* 文档 scope 与 oracle evidence 一致；
-* Git scope 干净。
-
-达到：
-
-```text
-ACCEPTED
-```
-
-后：
-
-```text
-当前 Batch CLOSED
-```
-
-若用户已批准连续处理下一 Batch：
-
-```text
-自动进入下一 Batch DESIGN
-```
-
-**不需要再次等待用户批准。**
-
----
-
-# 12. Git 规则
-
-每个 Batch diff 必须独立可识别。
+## 11. Git Rules
 
 检查：
 
 ```text
+git status
 git diff --check
-reference implementation untouched
-no unrelated user files
+reference implementations untouched
+no unrelated files
 no generated products
 ```
 
-推荐每个 ACCEPTED Batch 形成独立 commit，但：
-
-```text
-下一 Batch 启动条件 = ACCEPTED
-不是 COMMITTED
-```
-
-如果未提交就进入下一 Batch，coordinator 必须保证两个 Batch diff 和 Worklist 可明确区分。
+推荐一个 ACCEPTED Batch 一个 commit。
 
 禁止默认：
 
@@ -650,23 +480,30 @@ git add .
 git add -A
 ```
 
-未获授权不得 push。
+未授权不得：
+
+* push；
+* force push；
+* reset --hard；
+* clean -fd；
+* 修改 Origin / F2CPP。
 
 ---
 
-# 13. 完成定义
+## 12. Definition of Done
 
-一个 Feature Batch 完成需要：
+Batch 完成要求：
 
-* feature 在声明范围端到端可运行；
-* F2CPP/Origin evidence 通过；
-* 相关 regression 通过；
-* frozen-cache/ownership 契约满足；
-* 文档不 overclaim；
+* 声明目标已实现；
+* scientific / numerical semantics 正确；
+* 必要 parity / regression 通过；
+* cache / ownership / frequency-local 契约正确；
+* concurrency / memory 行为合理；
+* performance claim 有证据；
+* findings 已闭环；
 * Batch Acceptance PASS；
 * final-reviewer ACCEPTED；
-* findings 全部修复并重新验收；
-* 无未关闭 HIGH/BLOCKER。
+* 文档不 overclaim。
 
 完成状态：
 
@@ -674,8 +511,12 @@ git add -A
 <BATCH> ACCEPTED
 ```
 
-若已有后续批准 Batch：
+随后：
 
 ```text
-自动进入下一 Batch DESIGN
+下一 Batch 已批准
+→ 自动继续
+
+没有已批准 Batch
+→ STOP
 ```
