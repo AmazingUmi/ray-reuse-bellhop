@@ -45,6 +45,7 @@ using rayreuse::LaunchFan;
 using rayreuse::ParallelRayReuseSettings;
 using rayreuse::ParallelRayReuseSolver;
 using rayreuse::ParallelRayReuseStatistics;
+using rayreuse::RayFanTraceResult;
 using rayreuse::RayPathCache;
 using rayreuse::ReceiverGrid;
 using rayreuse::SerialRayReuseResult;
@@ -497,33 +498,37 @@ void testDualSourceRayProduct(Context& context) {
   const SimulationCase dual =
       makeCase(dualSources(), SimulationRunMode::RayTrace,
                BeamFamily::GeometricHat, {50.0}, false, 3U);
-  const std::vector<RayPathCache> caches = traceRayProducts(dual);
+  const std::vector<RayFanTraceResult> traces = traceRayProducts(dual);
   context.check(
-      caches.size() == 2U && caches[0U].frozen() && caches[1U].frozen(),
+      traces.size() == 2U && traces[0U].cache.frozen() &&
+          traces[1U].cache.frozen(),
       "R product traces one frozen fan per source");
-  context.check(caches[0U].at(0U).points.front().position.depth == 30.0 &&
-                    caches[1U].at(0U).points.front().position.depth == 70.0,
-                "R per-source caches start at their own source depth");
-  context.check(caches[0U].size() == dual.launchFanPlan().launchAngleCount &&
-                    caches[1U].size() == dual.launchFanPlan().launchAngleCount,
-                "R per-source caches carry the full shared fan");
+  context.check(
+      traces[0U].cache.at(0U).points.front().position.depth == 30.0 &&
+          traces[1U].cache.at(0U).points.front().position.depth == 70.0,
+      "R per-source caches start at their own source depth");
+  context.check(
+      traces[0U].cache.size() == dual.launchFanPlan().launchAngleCount &&
+          traces[1U].cache.size() ==
+              dual.launchFanPlan().launchAngleCount,
+      "R per-source caches carry the full shared fan");
 
   for (std::size_t sourceIndex = 0U; sourceIndex < 2U; ++sourceIndex) {
     const SimulationCase single = makeCase(
         {Source{.depth = dual.sources()[sourceIndex].depth, .amplitude = 1.0}},
         SimulationRunMode::RayTrace, BeamFamily::GeometricHat, {50.0}, false,
         3U);
-    const RayPathCache singleCache = traceRayProduct(single);
-    context.check(caches[sourceIndex].contentFingerprint() ==
-                      singleCache.contentFingerprint(),
+    const RayFanTraceResult singleTrace = traceRayProduct(single);
+    context.check(traces[sourceIndex].cache.contentFingerprint() ==
+                      singleTrace.cache.contentFingerprint(),
                   "R per-source cache matches a single-source R trace");
   }
 
   const SimulationCase single = makeCase(
       {Source{.depth = 30.0, .amplitude = 1.0}}, SimulationRunMode::RayTrace,
       BeamFamily::GeometricHat, {50.0}, false, 3U);
-  context.check(traceRayProduct(single).contentFingerprint() ==
-                    traceRayProducts(single).front().contentFingerprint(),
+  context.check(traceRayProduct(single).cache.contentFingerprint() ==
+                    traceRayProducts(single).front().cache.contentFingerprint(),
                 "NSz == 1 legacy R entry matches the per-source product");
 }
 

@@ -8,6 +8,7 @@
 #include "rayreuse/cache/ray_path_cache.hpp"
 #include "rayreuse/field/arrival_workspace.hpp"
 #include "rayreuse/model/simulation_case.hpp"
+#include "rayreuse/solver/single_frequency_solver.hpp"
 
 namespace rayreuse {
 
@@ -27,6 +28,12 @@ struct ArrivalSolverStatistics {
   double influenceSeconds{};
   double consumeSeconds{};
   bool cacheFingerprintVerified{};
+  // Trace-worker statistics of the shared seam (Worklist PERF-TRACE-PAR-1
+  // A01): one per-source group for reuse/parallel runs, Nfreq appended
+  // groups for non-reuse runs that re-trace per frequency.
+  std::size_t requestedTraceWorkerCount{1U};
+  std::size_t effectiveTraceWorkerCount{1U};
+  std::vector<std::vector<double>> traceWorkerSecondsBySource;
   // First-source fingerprints (identical to the per-source vectors at
   // index 0); retained so single-source output is unchanged.
   std::uint64_t cacheFingerprintBefore{};
@@ -48,14 +55,16 @@ class ArrivalSolver {
  public:
   [[nodiscard]] static ArrivalSolverStatistics solve(
       const SimulationCase& simulation,
-      const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache = false);
+      const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache = false,
+      RayFanTraceSettings traceSettings = {});
   [[nodiscard]] static ArrivalSolverStatistics solveNonReuse(
       const SimulationCase& simulation,
-      const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache = false);
+      const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache = false,
+      RayFanTraceSettings traceSettings = {});
   [[nodiscard]] static ArrivalSolverStatistics solveParallel(
       const SimulationCase& simulation,
       const FrozenFrequencyArrivalConsumer& consumer, std::size_t workerCount,
-      bool verifyCache = false);
+      bool verifyCache = false, RayFanTraceSettings traceSettings = {});
 };
 
 }  // namespace rayreuse

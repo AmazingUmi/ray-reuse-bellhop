@@ -29,7 +29,8 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
 SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, const RayReuseFrequencyConsumer& consumer,
-    CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint) {
+    CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
+    RayFanTraceSettings traceSettings) {
   if (!consumer) {
     throw ValidationError(
         "serial ray-reuse frequency consumer must be callable");
@@ -42,7 +43,7 @@ SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
   // "(source, frozen fan)", reused across every frequency. The cache vector
   // is owned by this orchestration layer and only handed out as const.
   const std::vector<RayFanTraceResult> sourceTraces =
-      SingleFrequencySolver::traceAllSourceFans(simulation);
+      SingleFrequencySolver::traceAllSourceFans(simulation, traceSettings);
 
   statistics.tracePassCount = sourceTraces.size();
   for (const RayFanTraceResult& trace : sourceTraces) {
@@ -50,6 +51,9 @@ SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
     statistics.totalRayPointCount += trace.totalRayPointCount;
     statistics.rayCacheBytes += trace.cache.memoryFootprintBytes();
     statistics.phaseTotals.traceSeconds += trace.traceSeconds;
+    statistics.requestedTraceWorkerCount = trace.requestedWorkerCount;
+    statistics.effectiveTraceWorkerCount = trace.effectiveWorkerCount;
+    statistics.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
   }
   statistics.cacheFingerprintVerified = verifyCacheFingerprint;
   if (verifyCacheFingerprint) {
@@ -102,7 +106,7 @@ SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
 SerialRayReuseResult SerialRayReuseSolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, CartesianCervenySettings influenceSettings,
-    bool verifyCacheFingerprint) {
+    bool verifyCacheFingerprint, RayFanTraceSettings traceSettings) {
   SerialRayReuseResult result;
   result.frequencyResults.reserve(simulation.frequencies().size());
 
@@ -113,7 +117,7 @@ SerialRayReuseResult SerialRayReuseSolver::solve(
         result.frequencyResults.push_back(SerialRayReuseFrequencyResult{
             .workspaces = std::move(workspaces), .timings = timings});
       },
-      influenceSettings, verifyCacheFingerprint);
+      influenceSettings, verifyCacheFingerprint, traceSettings);
   return result;
 }
 

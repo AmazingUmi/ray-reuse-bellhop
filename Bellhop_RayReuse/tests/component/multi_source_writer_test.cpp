@@ -742,8 +742,13 @@ void writeDualSourceRayTrace(Context& context,
       makeCase(dualSources(), receivers, {100.0}, SimulationRunMode::RayTrace);
   const SimulationCase single =
       makeSingleSourceCase(receivers, {100.0}, SimulationRunMode::RayTrace);
-  const std::vector<RayPathCache> caches = traceRayProducts(dual);
-  const RayPathCache singleCache = traceRayProduct(single);
+  const std::vector<rayreuse::RayFanTraceResult> dualTraces =
+      traceRayProducts(dual);
+  std::vector<RayPathCache> caches;
+  for (const rayreuse::RayFanTraceResult& trace : dualTraces) {
+    caches.push_back(trace.cache);
+  }
+  const RayPathCache singleCache = traceRayProduct(single).cache;
   context.check(caches.size() == 2U, "R dual-source trace yields two fans");
   {
     RayWriter writer(dualPath, "Dual R fixture", dual, 100.0);
@@ -790,7 +795,12 @@ void testRayWriterPerSourceValidation(Context& context) {
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0});
   const SimulationCase dual =
       makeCase(dualSources(), receivers, {100.0}, SimulationRunMode::RayTrace);
-  const std::vector<RayPathCache> caches = traceRayProducts(dual);
+  const std::vector<rayreuse::RayFanTraceResult> dualTraces =
+      traceRayProducts(dual);
+  std::vector<RayPathCache> caches;
+  for (const rayreuse::RayFanTraceResult& trace : dualTraces) {
+    caches.push_back(trace.cache);
+  }
   const std::filesystem::path path = directory.path() / "order.ray";
   {
     RayWriter writer(path, "Order", dual, 100.0);
@@ -816,7 +826,7 @@ void testRayWriterSingleSourceByteIdentity(Context& context) {
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0});
   const SimulationCase single =
       makeSingleSourceCase(receivers, {100.0}, SimulationRunMode::RayTrace);
-  const RayPathCache cache = traceRayProduct(single);
+  const RayPathCache cache = traceRayProduct(single).cache;
   const std::filesystem::path appendPath = directory.path() / "append.ray";
   const std::filesystem::path appendSourcePath =
       directory.path() / "append_source.ray";

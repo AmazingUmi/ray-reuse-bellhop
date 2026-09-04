@@ -16,6 +16,9 @@ struct ParallelRayReuseSettings {
   std::size_t outputQueueCapacity{2U};
   // Zero disables the explicit memory-budget limit.
   std::size_t memoryBudgetBytes{};
+  // Shared-seam trace settings (Worklist PERF-TRACE-PAR-1 A01); orthogonal
+  // to the frequency worker count above.
+  RayFanTraceSettings traceSettings{};
 };
 
 struct ParallelRayReuseStatistics {
@@ -47,6 +50,9 @@ struct ParallelRayReuseStatistics {
   // Per-source fingerprints, one entry per SimulationCase::sources() entry.
   std::vector<std::uint64_t> sourceCacheFingerprintsBefore;
   std::vector<std::uint64_t> sourceCacheFingerprintsAfter;
+  std::size_t requestedTraceWorkerCount{1U};
+  std::size_t effectiveTraceWorkerCount{1U};
+  std::vector<std::vector<double>> traceWorkerSecondsBySource;
 };
 
 class ParallelRayReuseSolver {

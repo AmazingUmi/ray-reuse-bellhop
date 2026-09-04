@@ -56,6 +56,24 @@ void testExecutionMode(Context& context) {
                 "cache fingerprint verification is selected explicitly");
   context.check(options.profileInfluence,
                 "Influence profiling is selected explicitly");
+  const CommandLineOptions traceParallel =
+      parse({"root", "--execution-mode", "reuse", "--trace-workers", "8"});
+  context.check(traceParallel.traceWorkerCountSpecified &&
+                    traceParallel.traceWorkerCount == 8U,
+                "reuse trace worker count is parsed");
+  const CommandLineOptions traceWorkers =
+      parse({"root", "--trace-workers", "2"});
+  context.check(traceWorkers.traceWorkerCountSpecified &&
+                    traceWorkers.traceWorkerCount == 2U,
+                "trace worker count is product- and mode-independent");
+  const CommandLineOptions orthogonalWorkers = parse(
+      {"root", "--execution-mode", "parallel", "--workers", "8",
+       "--trace-workers", "8"});
+  context.check(orthogonalWorkers.executionMode ==
+                    BroadbandExecutionMode::Parallel &&
+                    orthogonalWorkers.workerCount == 8U &&
+                    orthogonalWorkers.traceWorkerCount == 8U,
+                "trace workers stay orthogonal to frequency workers");
   const CommandLineOptions parallel =
       parse({"root", "--execution-mode", "parallel", "--workers", "8",
              "--output-queue-capacity", "2", "--memory-budget-mib", "4096",
@@ -142,6 +160,9 @@ void testInvalidArguments(Context& context) {
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--workers", "0"})); },
       "zero worker count is rejected");
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--trace-workers", "0"})); },
+      "zero trace worker count is rejected");
   context.expectThrows<ValidationError>(
       [] {
         static_cast<void>(parse({"root", "--output-queue-capacity", "-1"}));

@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "rayreuse/cache/ray_path_cache.hpp"
 #include "rayreuse/model/simulation_case.hpp"
+#include "rayreuse/solver/single_frequency_solver.hpp"
 
 namespace rayreuse {
 
@@ -12,13 +12,14 @@ namespace rayreuse {
 // the resulting frequency-independent geometry.
 // First-source legacy entry point; with NSz > 1 it traces sources().front()
 // (the shallowest source).
-[[nodiscard]] RayPathCache traceRayProduct(const SimulationCase& simulation);
+[[nodiscard]] RayFanTraceResult traceRayProduct(
+    const SimulationCase& simulation, RayFanTraceSettings settings = {});
 
 // Traces every source's launch fan into NSz independent frozen caches, one
 // entry per SimulationCase::sources() entry (depth ascending). R stays a
 // single-frequency product; the per-source caches are the R product payload
 // (per-source writer blocks are assembled by the ray writer).
-[[nodiscard]] std::vector<RayPathCache> traceRayProducts(
-    const SimulationCase& simulation);
+[[nodiscard]] std::vector<RayFanTraceResult> traceRayProducts(
+    const SimulationCase& simulation, RayFanTraceSettings settings = {});
 
 }  // namespace rayreuse

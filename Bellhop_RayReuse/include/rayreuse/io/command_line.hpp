@@ -27,6 +27,8 @@ struct CommandLineOptions {
   bool profileInfluence{};
   bool profileFrequencyTasks{};
   bool rangeParallel{};
+  std::size_t traceWorkerCount{1U};
+  bool traceWorkerCountSpecified{};
   std::size_t workerCount{};
   std::size_t outputQueueCapacity{2U};
   std::size_t memoryBudgetMiB{};

@@ -161,7 +161,8 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
   // One frozen cache per source (Worklist FP-2F §1.2), owned by this
   // orchestration layer; frequency workers only read the vector as const.
   const std::vector<RayFanTraceResult> sourceTraces =
-      SingleFrequencySolver::traceAllSourceFans(simulation);
+      SingleFrequencySolver::traceAllSourceFans(simulation,
+                                                settings.traceSettings);
   const std::size_t sourceCount = sourceTraces.size();
   std::size_t totalRayCount = 0U;
   std::size_t totalRayPointCount = 0U;
@@ -198,6 +199,14 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
       activeFrequencyLimit, effectiveQueueCapacity);
   statistics.memoryBudgetBytes = settings.memoryBudgetBytes;
   statistics.phaseTotals.traceSeconds = traceSeconds;
+  // Trace-worker statistics, recorded from the assembled per-source traces
+  // with the serial-reuse semantics (Worklist PERF-TRACE-PAR-1 A01).
+  statistics.traceWorkerSecondsBySource.reserve(sourceCount);
+  for (const RayFanTraceResult& trace : sourceTraces) {
+    statistics.requestedTraceWorkerCount = trace.requestedWorkerCount;
+    statistics.effectiveTraceWorkerCount = trace.effectiveWorkerCount;
+    statistics.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
+  }
   statistics.frequencyTimings.resize(frequencyCount);
   statistics.cacheFingerprintVerified = verifyCacheFingerprint;
   if (verifyCacheFingerprint) {

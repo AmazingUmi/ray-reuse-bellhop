@@ -28,7 +28,8 @@ void accumulateTimings(SingleFrequencyTimings& total,
 
 BroadbandNonReuseResult BroadbandNonReuseSolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
-    double loopRange, CartesianCervenySettings influenceSettings) {
+    double loopRange, CartesianCervenySettings influenceSettings,
+    RayFanTraceSettings traceSettings) {
   BroadbandNonReuseResult result;
   result.frequencyResults.reserve(simulation.frequencies().size());
 
@@ -37,7 +38,8 @@ BroadbandNonReuseResult BroadbandNonReuseSolver::solve(
     SingleFrequencyResult frequencyResult =
         SingleFrequencySolver::solveAtFrequency(simulation, frequency,
                                                 epsilonMultiplier, loopRange,
-                                                influenceSettings);
+                                                influenceSettings,
+                                                traceSettings);
 
     // solveAtFrequency traces every source's fan once (Worklist FP-2F §1.5:
     // non-reuse trace passes = Nfreq x NSz).

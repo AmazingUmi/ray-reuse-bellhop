@@ -517,14 +517,18 @@ ArrivalSolverStatistics FusedRayReuseSolver::solveArrivalStreaming(
        sourceIndex < simulation.sourceCount(); ++sourceIndex) {
     // Deliberately source-local: neither frozen caches nor all-frequency
     // arrival lanes accumulate across sources.
-    const RayFanTraceResult trace =
-        SingleFrequencySolver::traceSourceFan(simulation, sourceIndex);
+    const RayFanTraceResult trace = SingleFrequencySolver::traceSourceFan(
+        simulation, sourceIndex, executionSettings.traceSettings,
+        RayFanTraceProduct::Arrival);
     statistics.traceSeconds += trace.traceSeconds;
     statistics.rayCount += trace.cache.size();
     statistics.totalRayPointCount += trace.totalRayPointCount;
     statistics.peakRayCacheBytes =
         std::max(statistics.peakRayCacheBytes,
                  trace.cache.memoryFootprintBytes());
+    statistics.requestedTraceWorkerCount = trace.requestedWorkerCount;
+    statistics.effectiveTraceWorkerCount = trace.effectiveWorkerCount;
+    statistics.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
 
     std::uint64_t fingerprintBefore = 0U;
     if (verifyCacheFingerprint) {
@@ -587,14 +591,17 @@ FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
   const Clock::time_point wallBegin = Clock::now();
   // One frozen trace pass over the validated single source; the cache is
   // owned here and handed out as const only (V2-GATE-09, D8).
-  const RayFanTraceResult trace =
-      SingleFrequencySolver::traceSourceFan(simulation, 0U);
+  const RayFanTraceResult trace = SingleFrequencySolver::traceSourceFan(
+      simulation, 0U, executionSettings.traceSettings);
 
   statistics.tracePassCount = 1U;
   statistics.rayCount = trace.cache.size();
   statistics.totalRayPointCount = trace.totalRayPointCount;
   statistics.rayCacheBytes = trace.cache.memoryFootprintBytes();
   statistics.phaseTotals.traceSeconds += trace.traceSeconds;
+  statistics.requestedTraceWorkerCount = trace.requestedWorkerCount;
+  statistics.effectiveTraceWorkerCount = trace.effectiveWorkerCount;
+  statistics.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
   statistics.cacheFingerprintVerified = verifyCacheFingerprint;
   if (verifyCacheFingerprint) {
     statistics.sourceCacheFingerprintsBefore.reserve(1U);

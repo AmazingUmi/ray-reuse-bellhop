@@ -16,7 +16,7 @@
 #include "rayreuse/field/frequency_projector.hpp"
 #include "rayreuse/field/geometric_gaussian_influence.hpp"
 #include "rayreuse/field/geometric_hat_influence.hpp"
-#include "rayreuse/ray/geometry_tracer.hpp"
+#include "rayreuse/solver/single_frequency_solver.hpp"
 
 namespace rayreuse {
 namespace {
@@ -34,55 +34,58 @@ std::size_t checkedAdd(std::size_t a, std::size_t b, const char* label) {
   return a + b;
 }
 
-// Traces one source's launch fan into an independent frozen cache. The
-// diagnostic carries the source and launch indices (F2CPP eigenray-solver
-// error semantics).
-RayPathCache traceSourceCache(const SimulationCase& simulation,
-                              std::size_t sourceIndex) {
-  const LaunchFanPlan& fan = simulation.launchFanPlan();
-  const Source& source = simulation.sources().at(sourceIndex);
-  GeometryTracer tracer(simulation);
-  RayPathCache cache;
-  cache.reserve(fan.launchAngleCount);
-  for (std::size_t launchIndex = 0U; launchIndex < fan.launchAngles.size();
-       ++launchIndex) {
-    RayPath path = tracer.trace(source, fan.launchAngles[launchIndex]);
-    if (path.terminationReason != RayTerminationReason::ExitedDomain)
-      throw ValidationError(
-          "eigenray solve encountered an abnormal ray termination at "
-          "source " +
-          std::to_string(sourceIndex) + ", launch " +
-          std::to_string(launchIndex));
-    cache.append(std::move(path));
-  }
-  cache.freeze();
-  return cache;
-}
-
+// Shared production trace seam (Worklist PERF-TRACE-PAR-1 A01): every
+// per-source fan, its worker statistics, and the eigenray-specific
+// abnormal-termination diagnostic come from
+// SingleFrequencySolver::traceSourceFan. The batch owns one RayFanTraceResult
+// per source; `caches` below moves the frozen geometry out of them so the
+// const consumer surface keeps its flat RayPathCache vector.
 struct EigenrayTraceBatch {
+  std::vector<RayFanTraceResult> traces;
   std::vector<RayPathCache> caches;
   std::size_t totalRayPointCount{};
   double traceSeconds{};
   std::size_t peakRayCacheBytes{};
 };
 
-EigenrayTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
+EigenrayTraceBatch traceAllSourceCaches(const SimulationCase& simulation,
+                                        RayFanTraceSettings traceSettings) {
   EigenrayTraceBatch batch;
+  batch.traces.reserve(simulation.sourceCount());
   batch.caches.reserve(simulation.sourceCount());
   const auto traceBegin = Clock::now();
   for (std::size_t sourceIndex = 0U; sourceIndex < simulation.sourceCount();
        ++sourceIndex) {
-    RayPathCache cache = traceSourceCache(simulation, sourceIndex);
-    for (const RayPath& path : cache.paths()) {
+    RayFanTraceResult trace = SingleFrequencySolver::traceSourceFan(
+        simulation, sourceIndex, traceSettings, RayFanTraceProduct::Eigenray);
+    for (const RayPath& path : trace.cache.paths()) {
       batch.totalRayPointCount = checkedAdd(
           batch.totalRayPointCount, path.points.size(), "eigenray point count");
     }
     batch.peakRayCacheBytes =
-        std::max(batch.peakRayCacheBytes, cache.memoryFootprintBytes());
-    batch.caches.push_back(std::move(cache));
+        std::max(batch.peakRayCacheBytes, trace.cache.memoryFootprintBytes());
+    batch.traces.push_back(std::move(trace));
   }
   batch.traceSeconds = elapsed(traceBegin, Clock::now());
+  for (RayFanTraceResult& trace : batch.traces) {
+    batch.caches.push_back(std::move(trace.cache));
+  }
   return batch;
+}
+
+// Records the trace-worker statistics of one trace batch; non-reuse runs call
+// this once per frequency batch and keep the first requested/effective pair.
+void recordTraceWorkerStatistics(EigenraySolverStatistics& stats,
+                                 const EigenrayTraceBatch& batch) {
+  if (stats.traceWorkerSecondsBySource.empty()) {
+    stats.requestedTraceWorkerCount =
+        batch.traces.front().requestedWorkerCount;
+    stats.effectiveTraceWorkerCount =
+        batch.traces.front().effectiveWorkerCount;
+  }
+  for (const RayFanTraceResult& trace : batch.traces) {
+    stats.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
+  }
 }
 
 EigenraySourceHits collectHits(const SimulationCase& simulation,
@@ -151,7 +154,8 @@ void verifySourceFingerprints(
 
 EigenraySolverStatistics EigenraySolver::solve(
     const SimulationCase& simulation,
-    const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache) {
+    const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache,
+    RayFanTraceSettings traceSettings) {
   validateEigenraySimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -163,10 +167,11 @@ EigenraySolverStatistics EigenraySolver::solve(
   // One frozen cache per source (Worklist FP-2F §1.2), reused across every
   // frequency; the cache vector is owned by this solver and consumed as
   // const.
-  const EigenrayTraceBatch batch = traceAllSourceCaches(simulation);
+  EigenrayTraceBatch batch = traceAllSourceCaches(simulation, traceSettings);
   const std::vector<RayPathCache>& caches = batch.caches;
   EigenraySolverStatistics stats;
   stats.traceSeconds = batch.traceSeconds;
+  recordTraceWorkerStatistics(stats, batch);
   std::size_t rayCount = 0U;
   for (const RayPathCache& cache : caches) rayCount += cache.size();
   stats.rayCount = rayCount;
@@ -251,7 +256,8 @@ EigenraySolverStatistics EigenraySolver::solve(
 
 EigenraySolverStatistics EigenraySolver::solveNonReuse(
     const SimulationCase& simulation,
-    const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache) {
+    const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache,
+    RayFanTraceSettings traceSettings) {
   validateEigenraySimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -264,7 +270,9 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
   for (std::size_t fi = 0U; fi < simulation.frequencies().size(); ++fi) {
     // Non-reuse: every frequency re-traces every source's fan
     // (Worklist FP-2F §1.5: Nfreq x NSz trace passes).
-    const EigenrayTraceBatch batch = traceAllSourceCaches(simulation);
+    const EigenrayTraceBatch batch =
+        traceAllSourceCaches(simulation, traceSettings);
+    recordTraceWorkerStatistics(stats, batch);
     const std::vector<RayPathCache>& caches = batch.caches;
     std::vector<std::uint64_t> fingerprintsBefore;
     if (verifyCache) {
@@ -323,7 +331,7 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
 EigenraySolverStatistics EigenraySolver::solveParallel(
     const SimulationCase& simulation,
     const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount,
-    bool verifyCache) {
+    bool verifyCache, RayFanTraceSettings traceSettings) {
   validateEigenraySimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -334,7 +342,7 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
         "eigenray solver supports only geometric beam families");
   if (workerCount == 0U)
     throw ValidationError("eigenray worker count must be positive");
-  const EigenrayTraceBatch batch = traceAllSourceCaches(simulation);
+  EigenrayTraceBatch batch = traceAllSourceCaches(simulation, traceSettings);
   const std::vector<RayPathCache>& caches = batch.caches;
   const std::vector<std::uint64_t> fingerprintsBefore = [&]() {
     std::vector<std::uint64_t> fingerprints;
@@ -378,6 +386,7 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
   stats.totalRayPointCount = batch.totalRayPointCount;
   stats.peakRayCacheBytes = batch.peakRayCacheBytes;
   stats.traceSeconds = batch.traceSeconds;
+  recordTraceWorkerStatistics(stats, batch);
   stats.cacheFingerprintVerified = verifyCache;
   stats.sourceCacheFingerprintsBefore = fingerprintsBefore;
   if (verifyCache) stats.cacheFingerprintBefore = fingerprintsBefore.front();

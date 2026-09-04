@@ -37,6 +37,9 @@ struct SerialRayReuseStatistics {
   // Per-source fingerprints, one entry per SimulationCase::sources() entry.
   std::vector<std::uint64_t> sourceCacheFingerprintsBefore;
   std::vector<std::uint64_t> sourceCacheFingerprintsAfter;
+  std::size_t requestedTraceWorkerCount{1U};
+  std::size_t effectiveTraceWorkerCount{1U};
+  std::vector<std::vector<double>> traceWorkerSecondsBySource;
 };
 
 struct SerialRayReuseResult {
@@ -53,12 +56,14 @@ class SerialRayReuseSolver {
       const SimulationCase& simulation, double epsilonMultiplier,
       double loopRange, const RayReuseFrequencyConsumer& consumer,
       CartesianCervenySettings influenceSettings = {},
-      bool verifyCacheFingerprint = false);
+      bool verifyCacheFingerprint = false,
+      RayFanTraceSettings traceSettings = {});
 
   [[nodiscard]] static SerialRayReuseResult solve(
       const SimulationCase& simulation, double epsilonMultiplier,
       double loopRange, CartesianCervenySettings influenceSettings = {},
-      bool verifyCacheFingerprint = false);
+      bool verifyCacheFingerprint = false,
+      RayFanTraceSettings traceSettings = {});
 };
 
 }  // namespace rayreuse

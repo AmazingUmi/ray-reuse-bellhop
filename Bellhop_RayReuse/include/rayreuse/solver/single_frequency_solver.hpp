@@ -47,6 +47,9 @@ struct SingleFrequencyResult {
   // Peak per-source frozen cache bytes (F2CPP reports the max over sources).
   std::size_t rayCacheBytes{};
   SingleFrequencyTimings timings;
+  std::size_t requestedTraceWorkerCount{1U};
+  std::size_t effectiveTraceWorkerCount{1U};
+  std::vector<std::vector<double>> traceWorkerSecondsBySource;
 
   [[nodiscard]] std::size_t sourceCount() const noexcept;
   [[nodiscard]] const FrequencyWorkspace& sourceWorkspace(
@@ -57,6 +60,22 @@ struct RayFanTraceResult {
   RayPathCache cache;
   std::size_t totalRayPointCount{};
   double traceSeconds{};
+  std::size_t requestedWorkerCount{1U};
+  std::size_t effectiveWorkerCount{1U};
+  std::vector<double> workerSeconds;
+};
+
+struct RayFanTraceSettings {
+  std::size_t workerCount{1U};
+};
+
+// Selects only the established product-specific abnormal-termination text;
+// the numerical trace and ordered cache assembly are shared by every product.
+enum class RayFanTraceProduct {
+  TransmissionLoss,
+  Arrival,
+  Eigenray,
+  RayTrace,
 };
 
 class SingleFrequencySolver {
@@ -65,21 +84,24 @@ class SingleFrequencySolver {
   // traces sources().front() (the shallowest source) until the product side
   // migrates to the per-source entries.
   [[nodiscard]] static RayFanTraceResult traceRayFan(
-      const SimulationCase& simulation);
+      const SimulationCase& simulation, RayFanTraceSettings settings = {});
 
   // Traces one source's launch fan into an independent frozen cache. The
   // shared launch-angle set comes from SimulationCase::launchFanPlan() (F2CPP
   // plans one fan outside the source loop). Trace failures are reported with
   // the F2CPP-aligned diagnostic carrying the source index.
   [[nodiscard]] static RayFanTraceResult traceSourceFan(
-      const SimulationCase& simulation, std::size_t sourceIndex);
+      const SimulationCase& simulation, std::size_t sourceIndex,
+      RayFanTraceSettings settings = {},
+      RayFanTraceProduct product = RayFanTraceProduct::TransmissionLoss);
 
   // Traces every source into NSz independent frozen caches, one entry per
   // SimulationCase::sources() entry (depth-ascending). The returned vector is
   // the solver-side owner of the per-source frozen geometry; each cache is
   // individually frozen and individually fingerprinted.
   [[nodiscard]] static std::vector<RayFanTraceResult> traceAllSourceFans(
-      const SimulationCase& simulation);
+      const SimulationCase& simulation, RayFanTraceSettings settings = {},
+      RayFanTraceProduct product = RayFanTraceProduct::TransmissionLoss);
 
   // Projects one source's frozen fan at `frequency`. Every source-dependent
   // input (source sound speed sample, Lloyd/semi-coherent source term, epsilon
@@ -104,7 +126,8 @@ class SingleFrequencySolver {
 
   [[nodiscard]] static SingleFrequencyResult solve(
       const SimulationCase& simulation, double epsilonMultiplier,
-      double loopRange, CartesianCervenySettings influenceSettings = {});
+      double loopRange, CartesianCervenySettings influenceSettings = {},
+      RayFanTraceSettings traceSettings = {});
 
   // Traces every source's fan once (NSz trace passes) and returns the
   // per-source workspace sequence for `frequency` (first source in
@@ -112,7 +135,8 @@ class SingleFrequencySolver {
   [[nodiscard]] static SingleFrequencyResult solveAtFrequency(
       const SimulationCase& simulation, double frequency,
       double epsilonMultiplier, double loopRange,
-      CartesianCervenySettings influenceSettings = {});
+      CartesianCervenySettings influenceSettings = {},
+      RayFanTraceSettings traceSettings = {});
 };
 
 }  // namespace rayreuse

@@ -468,6 +468,59 @@ void testSingleSourcePerSourceTraceEquivalence(Context& context) {
               legacy.cache.contentFingerprint() &&
           perSource[0U].totalRayPointCount == legacy.totalRayPointCount,
       "NSz==1 per-source trace reproduces the legacy single-source fan");
+
+  for (const std::size_t workerCount : {1U, 2U, 4U, 8U}) {
+    const rayreuse::RayFanTraceResult parallel =
+        SingleFrequencySolver::traceRayFan(
+            simulation,
+            rayreuse::RayFanTraceSettings{.workerCount = workerCount});
+    context.check(
+        parallel.cache.size() == legacy.cache.size() &&
+            parallel.totalRayPointCount == legacy.totalRayPointCount &&
+            parallel.cache.contentFingerprint() ==
+                legacy.cache.contentFingerprint() &&
+            parallel.requestedWorkerCount == workerCount &&
+            parallel.effectiveWorkerCount == workerCount &&
+            parallel.workerSeconds.size() == workerCount,
+        "static trace workers preserve ordered frozen geometry");
+  }
+}
+
+void testTraceWorkerClampAndZero(Context& context) {
+  const SimulationCase simulation = makeSimulation(1000U);
+  const rayreuse::RayFanTraceResult legacy =
+      SingleFrequencySolver::traceRayFan(simulation);
+  const rayreuse::RayFanTraceResult clamped = SingleFrequencySolver::traceRayFan(
+      simulation, rayreuse::RayFanTraceSettings{.workerCount = 1000U});
+  context.check(
+      clamped.requestedWorkerCount == 1000U &&
+          clamped.effectiveWorkerCount == legacy.cache.size() &&
+          clamped.workerSeconds.size() == legacy.cache.size() &&
+          clamped.cache.size() == legacy.cache.size() &&
+          clamped.totalRayPointCount == legacy.totalRayPointCount &&
+          clamped.cache.contentFingerprint() ==
+              legacy.cache.contentFingerprint(),
+      "trace worker counts clamp to the launch count with identical frozen "
+      "geometry");
+  context.expectThrows<ValidationError>(
+      [&] {
+        static_cast<void>(SingleFrequencySolver::traceRayFan(
+            simulation, rayreuse::RayFanTraceSettings{.workerCount = 0U}));
+      },
+      "zero trace worker count is rejected");
+}
+
+std::string captureTraceDiagnostic(
+    const SimulationCase& simulation, std::size_t sourceIndex,
+    rayreuse::RayFanTraceSettings settings,
+    rayreuse::RayFanTraceProduct product) {
+  try {
+    static_cast<void>(SingleFrequencySolver::traceSourceFan(
+        simulation, sourceIndex, settings, product));
+  } catch (const ValidationError& error) {
+    return error.what();
+  }
+  return {};
 }
 
 void testPerSourceTraceDiagnostics(Context& context) {
@@ -500,6 +553,35 @@ void testPerSourceTraceDiagnostics(Context& context) {
                     diagnostic.back() == ')',
                 "per-source trace failures carry the F2CPP-aligned "
                 "source-index diagnostic");
+  // PERF-TRACE-PAR-1 A02: after joining every worker the parallel path
+  // rethrows the lowest-launch-index failure, byte-identical to the serial
+  // diagnostic, and each product keeps its established termination text.
+  context.check(
+      captureTraceDiagnostic(
+          pointLimited, 1U, rayreuse::RayFanTraceSettings{.workerCount = 4U},
+          rayreuse::RayFanTraceProduct::TransmissionLoss) == diagnostic,
+      "four trace workers rethrow the serial lowest-launch-index diagnostic");
+  context.check(
+      captureTraceDiagnostic(
+          pointLimited, 1U, rayreuse::RayFanTraceSettings{.workerCount = 4U},
+          rayreuse::RayFanTraceProduct::Arrival) ==
+          "arrival solve encountered an abnormal ray termination at source "
+          "1, launch 0",
+      "arrival product keeps its established termination text");
+  context.check(
+      captureTraceDiagnostic(
+          pointLimited, 1U, rayreuse::RayFanTraceSettings{.workerCount = 4U},
+          rayreuse::RayFanTraceProduct::Eigenray) ==
+          "eigenray solve encountered an abnormal ray termination at source "
+          "1, launch 0",
+      "eigenray product keeps its established termination text");
+  context.check(
+      captureTraceDiagnostic(
+          pointLimited, 1U, rayreuse::RayFanTraceSettings{.workerCount = 4U},
+          rayreuse::RayFanTraceProduct::RayTrace) ==
+          "R trace encountered a ray that did not exit the spatial domain "
+          "normally (source index 1, launch index 0)",
+      "ray-trace product keeps its established termination text");
 }
 
 void testSourceBeamPatternScalesAllCoherenceModes(Context& context) {
@@ -1017,6 +1099,7 @@ int main() {
   testBeamWidthDoesNotChangeFrozenGeometry(context);
   testPerSourceTraceProducesIndependentFrozenCaches(context);
   testSingleSourcePerSourceTraceEquivalence(context);
+  testTraceWorkerClampAndZero(context);
   testPerSourceTraceDiagnostics(context);
   testSourceBeamPatternScalesAllCoherenceModes(context);
   testGeometricHatCoherenceAndDirectionalPattern(context);

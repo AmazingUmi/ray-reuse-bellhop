@@ -165,7 +165,7 @@ void testRayFile(Context& context) {
   const double angle = 30.0 * 3.141592653589793 / 180.0;
   const SimulationCase simulation = makeSimulation(
       {1000.0}, true, SimulationRunMode::RayTrace, angle, angle, 1U);
-  const RayPathCache cache = traceRayProduct(simulation);
+  const RayPathCache cache = traceRayProduct(simulation).cache;
   const std::filesystem::path output =
       std::filesystem::temp_directory_path() / "rayreuse_rrb2_writer.ray";
   std::error_code ignored;

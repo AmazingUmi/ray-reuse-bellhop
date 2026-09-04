@@ -18,7 +18,6 @@
 #include "rayreuse/field/frequency_projector.hpp"
 #include "rayreuse/field/geometric_gaussian_influence.hpp"
 #include "rayreuse/field/geometric_hat_influence.hpp"
-#include "rayreuse/ray/geometry_tracer.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 
 namespace rayreuse {
@@ -47,54 +46,60 @@ std::size_t workspaceBytes(const ArrivalWorkspace& workspace) {
   return bytes;
 }
 
-// Traces one source's launch fan into an independent frozen cache. The
-// diagnostic carries the source and launch indices (F2CPP arrival-solver
-// error semantics).
-RayPathCache traceSourceCache(const SimulationCase& simulation,
-                              std::size_t sourceIndex) {
-  const LaunchFanPlan& fan = simulation.launchFanPlan();
-  const Source& source = simulation.sources().at(sourceIndex);
-  GeometryTracer tracer(simulation);
-  RayPathCache cache;
-  cache.reserve(fan.launchAngleCount);
-  for (std::size_t launchIndex = 0U; launchIndex < fan.launchAngles.size();
-       ++launchIndex) {
-    RayPath path = tracer.trace(source, fan.launchAngles[launchIndex]);
-    if (path.terminationReason != RayTerminationReason::ExitedDomain)
-      throw ValidationError(
-          "arrival solve encountered an abnormal ray termination at source " +
-          std::to_string(sourceIndex) + ", launch " +
-          std::to_string(launchIndex));
-    cache.append(std::move(path));
-  }
-  cache.freeze();
-  return cache;
-}
-
+// Shared production trace seam (Worklist PERF-TRACE-PAR-1 A01): every
+// per-source fan, its worker statistics, and the arrival-specific
+// abnormal-termination diagnostic come from
+// SingleFrequencySolver::traceSourceFan. The batch owns one RayFanTraceResult
+// per source; `caches` below moves the frozen geometry out of them so the
+// const consumer surface keeps its flat RayPathCache vector.
 struct ArrivalTraceBatch {
+  std::vector<RayFanTraceResult> traces;
   std::vector<RayPathCache> caches;
   std::size_t totalRayPointCount{};
   double traceSeconds{};
   std::size_t peakRayCacheBytes{};
 };
 
-ArrivalTraceBatch traceAllSourceCaches(const SimulationCase& simulation) {
+ArrivalTraceBatch traceAllSourceCaches(const SimulationCase& simulation,
+                                       RayFanTraceSettings traceSettings) {
   ArrivalTraceBatch batch;
+  batch.traces.reserve(simulation.sourceCount());
   batch.caches.reserve(simulation.sourceCount());
   const auto traceBegin = Clock::now();
   for (std::size_t sourceIndex = 0U; sourceIndex < simulation.sourceCount();
        ++sourceIndex) {
-    RayPathCache cache = traceSourceCache(simulation, sourceIndex);
-    for (const RayPath& path : cache.paths()) {
+    RayFanTraceResult trace = SingleFrequencySolver::traceSourceFan(
+        simulation, sourceIndex, traceSettings, RayFanTraceProduct::Arrival);
+    for (const RayPath& path : trace.cache.paths()) {
       batch.totalRayPointCount = checkedAdd(
           batch.totalRayPointCount, path.points.size(), "arrival point count");
     }
     batch.peakRayCacheBytes =
-        std::max(batch.peakRayCacheBytes, cache.memoryFootprintBytes());
-    batch.caches.push_back(std::move(cache));
+        std::max(batch.peakRayCacheBytes, trace.cache.memoryFootprintBytes());
+    batch.traces.push_back(std::move(trace));
   }
   batch.traceSeconds = elapsed(traceBegin, Clock::now());
+  for (RayFanTraceResult& trace : batch.traces) {
+    batch.caches.push_back(std::move(trace.cache));
+  }
   return batch;
+}
+
+// Records the trace-worker statistics of one trace batch. Non-reuse runs call
+// this once per frequency batch (worker second groups accumulate in order);
+// the requested/effective counts are identical across batches, so only the
+// first assignment is kept.
+void recordTraceWorkerStatistics(ArrivalSolverStatistics& stats,
+                                 const ArrivalTraceBatch& batch) {
+  if (stats.traceWorkerSecondsBySource.empty()) {
+    stats.requestedTraceWorkerCount =
+        batch.traces.front().requestedWorkerCount;
+    stats.effectiveTraceWorkerCount =
+        batch.traces.front().effectiveWorkerCount;
+  }
+  for (const RayFanTraceResult& trace : batch.traces) {
+    stats.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
+  }
 }
 
 ArrivalWorkspace projectArrivals(const SimulationCase& simulation,
@@ -166,7 +171,8 @@ void verifySourceFingerprints(
 
 ArrivalSolverStatistics ArrivalSolver::solve(
     const SimulationCase& simulation,
-    const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache) {
+    const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache,
+    RayFanTraceSettings traceSettings) {
   validateArrivalSimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -178,10 +184,11 @@ ArrivalSolverStatistics ArrivalSolver::solve(
   // One frozen cache per source (Worklist FP-2F §1.2), reused across every
   // frequency; the cache vector is owned by this solver and consumed as
   // const.
-  const ArrivalTraceBatch batch = traceAllSourceCaches(simulation);
+  ArrivalTraceBatch batch = traceAllSourceCaches(simulation, traceSettings);
   const std::vector<RayPathCache>& caches = batch.caches;
   ArrivalSolverStatistics stats;
   stats.traceSeconds = batch.traceSeconds;
+  recordTraceWorkerStatistics(stats, batch);
   std::size_t rayCount = 0U;
   for (const RayPathCache& cache : caches) rayCount += cache.size();
   stats.rayCount = rayCount;
@@ -259,7 +266,8 @@ ArrivalSolverStatistics ArrivalSolver::solve(
 
 ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
     const SimulationCase& simulation,
-    const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache) {
+    const FrozenFrequencyArrivalConsumer& consumer, bool verifyCache,
+    RayFanTraceSettings traceSettings) {
   validateArrivalSimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -273,7 +281,9 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
     // Non-reuse: every frequency re-traces every source's fan
     // (Worklist FP-2F §1.5: Nfreq x NSz trace passes).
     const auto traceBegin = Clock::now();
-    const ArrivalTraceBatch batch = traceAllSourceCaches(simulation);
+    ArrivalTraceBatch batch =
+        traceAllSourceCaches(simulation, traceSettings);
+    recordTraceWorkerStatistics(stats, batch);
     const std::vector<RayPathCache>& caches = batch.caches;
     std::vector<std::uint64_t> fingerprintsBefore;
     if (verifyCache) {
@@ -334,7 +344,7 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
 ArrivalSolverStatistics ArrivalSolver::solveParallel(
     const SimulationCase& simulation,
     const FrozenFrequencyArrivalConsumer& consumer, std::size_t workerCount,
-    bool verifyCache) {
+    bool verifyCache, RayFanTraceSettings traceSettings) {
   validateArrivalSimulation(simulation);
   const BeamFamily beamFamily = simulation.beamFamily();
   if (!consumer)
@@ -345,7 +355,7 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
         "arrival solver supports only geometric beam families");
   if (workerCount == 0U)
     throw ValidationError("arrival worker count must be positive");
-  const ArrivalTraceBatch batch = traceAllSourceCaches(simulation);
+  ArrivalTraceBatch batch = traceAllSourceCaches(simulation, traceSettings);
   const std::vector<RayPathCache>& caches = batch.caches;
   const std::vector<std::uint64_t> fingerprintsBefore = [&]() {
     std::vector<std::uint64_t> fingerprints;
@@ -393,6 +403,7 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
   stats.totalRayPointCount = batch.totalRayPointCount;
   stats.peakRayCacheBytes = batch.peakRayCacheBytes;
   stats.traceSeconds = batch.traceSeconds;
+  recordTraceWorkerStatistics(stats, batch);
   stats.cacheFingerprintVerified = verifyCache;
   stats.sourceCacheFingerprintsBefore = fingerprintsBefore;
   if (verifyCache) stats.cacheFingerprintBefore = fingerprintsBefore.front();

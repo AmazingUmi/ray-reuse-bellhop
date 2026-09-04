@@ -103,6 +103,7 @@ CommandLineOptions parseCommandLine(
   bool profileInfluenceSpecified = false;
   bool profileFrequencyTasksSpecified = false;
   bool rangeParallelSpecified = false;
+  bool traceWorkerCountSpecified = false;
   bool workerCountSpecified = false;
   bool outputQueueCapacitySpecified = false;
   bool memoryBudgetSpecified = false;
@@ -177,6 +178,19 @@ CommandLineOptions parseCommandLine(
       }
       options.rangeParallel = true;
       rangeParallelSpecified = true;
+      continue;
+    }
+    if (argument == "--trace-workers") {
+      if (traceWorkerCountSpecified) {
+        throw ValidationError("--trace-workers may be specified only once");
+      }
+      if (index + 1U >= arguments.size()) {
+        throw ValidationError("--trace-workers requires a positive integer");
+      }
+      options.traceWorkerCount =
+          parsePositiveSize(arguments[++index], "--trace-workers");
+      options.traceWorkerCountSpecified = true;
+      traceWorkerCountSpecified = true;
       continue;
     }
     if (argument == "--workers") {

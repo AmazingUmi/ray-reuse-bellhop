@@ -26,6 +26,9 @@ namespace rayreuse {
 
 struct FusedRayReuseExecutionSettings {
   std::size_t requestedRangeWorkers{1U};
+  // Shared-seam trace settings (Worklist PERF-TRACE-PAR-1 A01); orthogonal
+  // to the receiver-range worker count above.
+  RayFanTraceSettings traceSettings{};
 };
 
 // Level-B parity seam (design §3.1): raw (unscaled) per-frequency workspaces
@@ -87,6 +90,9 @@ struct FusedRayReuseStatistics {
   std::vector<std::uint64_t> sourceCacheFingerprintsAfter;
   std::size_t requestedRangeWorkers{};
   std::size_t effectiveRangeWorkers{};
+  std::size_t requestedTraceWorkerCount{1U};
+  std::size_t effectiveTraceWorkerCount{1U};
+  std::vector<std::vector<double>> traceWorkerSecondsBySource;
 };
 
 // Called once per source, in SimulationCase::sources() order. The broadband

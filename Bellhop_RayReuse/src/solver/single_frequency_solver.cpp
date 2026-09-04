@@ -4,9 +4,11 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <exception>
 #include <numbers>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -50,6 +52,41 @@ void accumulateFrequencyTimings(SingleFrequencyTimings& total,
   total.scaleSeconds += value.scaleSeconds;
   accumulateCartesianCervenyStatistics(total.influenceStatistics,
                                        value.influenceStatistics);
+}
+
+// Product-specific abnormal-termination texts (Worklist PERF-TRACE-PAR-1
+// A01): the shared seam traces every product identically, so only this
+// diagnostic selects on the product. TransmissionLoss carries the angle and
+// reason; Arrival/Eigenray/RayTrace keep their established index-only texts.
+[[nodiscard]] std::string terminationDiagnostic(
+    RayFanTraceProduct product, std::size_t sourceIndex,
+    std::size_t launchIndex, double launchAngle,
+    RayTerminationReason reason) {
+  switch (product) {
+    case RayFanTraceProduct::TransmissionLoss:
+      return "single-frequency solve encountered a ray that did not "
+             "exit the spatial domain normally (source index " +
+             std::to_string(sourceIndex) + ", launch index " +
+             std::to_string(launchIndex) + ", angle " +
+             std::to_string(launchAngle) + ", reason " +
+             std::to_string(static_cast<int>(reason)) + ")";
+    case RayFanTraceProduct::Arrival:
+      return "arrival solve encountered an abnormal ray termination at "
+             "source " +
+             std::to_string(sourceIndex) + ", launch " +
+             std::to_string(launchIndex);
+    case RayFanTraceProduct::Eigenray:
+      return "eigenray solve encountered an abnormal ray termination at "
+             "source " +
+             std::to_string(sourceIndex) + ", launch " +
+             std::to_string(launchIndex);
+    case RayFanTraceProduct::RayTrace:
+      return "R trace encountered a ray that did not exit the spatial "
+             "domain normally (source index " +
+             std::to_string(sourceIndex) + ", launch index " +
+             std::to_string(launchIndex) + ")";
+  }
+  throw ValidationError("unknown trace product for a termination diagnostic");
 }
 
 }  // namespace
@@ -97,68 +134,147 @@ double semiCoherentProjectedSourceAmplitude(double baseAmplitude,
 
 SingleFrequencyResult SingleFrequencySolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
-    double loopRange, CartesianCervenySettings influenceSettings) {
+    double loopRange, CartesianCervenySettings influenceSettings,
+    RayFanTraceSettings traceSettings) {
   if (simulation.frequencies().size() != 1U) {
     throw ValidationError(
         "single-frequency solve requires exactly one frequency");
   }
   return solveAtFrequency(simulation, simulation.frequencies().values().front(),
-                          epsilonMultiplier, loopRange, influenceSettings);
+                          epsilonMultiplier, loopRange, influenceSettings,
+                          traceSettings);
 }
 
 RayFanTraceResult SingleFrequencySolver::traceRayFan(
-    const SimulationCase& simulation) {
-  return traceSourceFan(simulation, 0U);
+    const SimulationCase& simulation, RayFanTraceSettings settings) {
+  return traceSourceFan(simulation, 0U, settings);
 }
 
 RayFanTraceResult SingleFrequencySolver::traceSourceFan(
-    const SimulationCase& simulation, std::size_t sourceIndex) {
+    const SimulationCase& simulation, std::size_t sourceIndex,
+    RayFanTraceSettings settings, RayFanTraceProduct product) {
   if (sourceIndex >= simulation.sourceCount()) {
     throw ValidationError("source index is out of range");
   }
+  if (settings.workerCount == 0U) {
+    throw ValidationError("trace worker count must be positive");
+  }
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const Source& source = simulation.sources()[sourceIndex];
-  GeometryTracer tracer(simulation);
-  RayPathCache rayCache;
-  rayCache.reserve(launchFan.launchAngleCount);
-
   const Clock::time_point traceBegin = Clock::now();
-  std::size_t totalRayPointCount = 0U;
-  for (std::size_t launchIndex = 0U;
-       launchIndex < launchFan.launchAngles.size(); ++launchIndex) {
-    const double launchAngle = launchFan.launchAngles[launchIndex];
-    RayPath path = tracer.trace(source, launchAngle);
-    if (path.terminationReason != RayTerminationReason::ExitedDomain) {
-      // F2CPP diagnostic format (source index, launch index, angle, reason).
-      // RayReuse RayPath carries no terminationDetail field, so the optional
-      // F2CPP ", detail: ..." tail has no counterpart here.
-      throw ValidationError(
-          "single-frequency solve encountered a ray that did not "
-          "exit the spatial domain normally (source index " +
-          std::to_string(sourceIndex) + ", launch index " +
-          std::to_string(launchIndex) + ", angle " +
-          std::to_string(launchAngle) + ", reason " +
-          std::to_string(static_cast<int>(path.terminationReason)) + ")");
+  const auto traceRange = [&](GeometryTracer& tracer, std::size_t begin,
+                              std::size_t end, std::vector<RayPath>& paths,
+                              std::size_t& pointCount) {
+    for (std::size_t launchIndex = begin; launchIndex < end; ++launchIndex) {
+      const double launchAngle = launchFan.launchAngles[launchIndex];
+      RayPath path = tracer.trace(source, launchAngle);
+      if (path.terminationReason != RayTerminationReason::ExitedDomain) {
+        throw ValidationError(terminationDiagnostic(
+            product, sourceIndex, launchIndex, launchAngle,
+            path.terminationReason));
+      }
+      pointCount += path.points.size();
+      paths.push_back(std::move(path));
     }
-    totalRayPointCount += path.points.size();
-    rayCache.append(std::move(path));
-  }
-  rayCache.freeze();
-  const Clock::time_point traceEnd = Clock::now();
+  };
 
-  return RayFanTraceResult{
-      .cache = std::move(rayCache),
-      .totalRayPointCount = totalRayPointCount,
-      .traceSeconds = elapsedSeconds(traceBegin, traceEnd)};
+  if (settings.workerCount == 1U) {
+    // Serial fast path (default; Worklist PERF-TRACE-PAR-1 A01): identical
+    // accumulation order and one freeze, with the same statistics shape as
+    // the parallel path.
+    GeometryTracer tracer(simulation);
+    RayPathCache cache;
+    cache.reserve(launchFan.launchAngles.size());
+    std::size_t pointCount = 0U;
+    for (std::size_t launchIndex = 0U;
+         launchIndex < launchFan.launchAngles.size(); ++launchIndex) {
+      const double launchAngle = launchFan.launchAngles[launchIndex];
+      RayPath path = tracer.trace(source, launchAngle);
+      if (path.terminationReason != RayTerminationReason::ExitedDomain) {
+        throw ValidationError(terminationDiagnostic(
+            product, sourceIndex, launchIndex, launchAngle,
+            path.terminationReason));
+      }
+      pointCount += path.points.size();
+      cache.append(std::move(path));
+    }
+    cache.freeze();
+    const double traceSeconds = elapsedSeconds(traceBegin, Clock::now());
+    return {.cache = std::move(cache),
+            .totalRayPointCount = pointCount,
+            .traceSeconds = traceSeconds,
+            .requestedWorkerCount = 1U,
+            .effectiveWorkerCount = 1U,
+            .workerSeconds = {traceSeconds}};
+  }
+  const std::size_t launchCount = launchFan.launchAngles.size();
+  if (launchCount == 0U) {
+    // Unreachable through SimulationCase (the launch planner rejects empty
+    // fans); guards the partition division below against size_t UB.
+    throw ValidationError("trace fan must contain at least one launch angle");
+  }
+  const std::size_t workerCount = std::min(settings.workerCount, launchCount);
+  struct WorkerResult {
+    std::vector<RayPath> paths;
+    std::size_t pointCount{};
+    double seconds{};
+    std::exception_ptr failure;
+  };
+  std::vector<WorkerResult> results(workerCount);
+  std::vector<std::jthread> workers;
+  workers.reserve(workerCount);
+  const std::size_t quotient = launchCount / workerCount;
+  const std::size_t remainder = launchCount % workerCount;
+  for (std::size_t workerIndex = 0U; workerIndex < workerCount;
+       ++workerIndex) {
+    const std::size_t begin =
+        workerIndex * quotient + std::min(workerIndex, remainder);
+    const std::size_t count = quotient + (workerIndex < remainder ? 1U : 0U);
+    workers.emplace_back([&, workerIndex, begin, end = begin + count] {
+      const Clock::time_point workerBegin = Clock::now();
+      WorkerResult& result = results[workerIndex];
+      try {
+        GeometryTracer tracer(simulation);
+        result.paths.reserve(end - begin);
+        traceRange(tracer, begin, end, result.paths, result.pointCount);
+      } catch (...) {
+        result.failure = std::current_exception();
+      }
+      result.seconds = elapsedSeconds(workerBegin, Clock::now());
+    });
+  }
+  workers.clear();
+  for (const WorkerResult& result : results) {
+    if (result.failure) std::rethrow_exception(result.failure);
+  }
+  RayPathCache cache;
+  cache.reserve(launchCount);
+  std::size_t pointCount = 0U;
+  std::vector<double> workerSeconds;
+  workerSeconds.reserve(workerCount);
+  for (WorkerResult& result : results) {
+    pointCount += result.pointCount;
+    workerSeconds.push_back(result.seconds);
+    for (RayPath& path : result.paths) cache.append(std::move(path));
+  }
+  cache.freeze();
+  return {.cache = std::move(cache),
+          .totalRayPointCount = pointCount,
+          .traceSeconds = elapsedSeconds(traceBegin, Clock::now()),
+          .requestedWorkerCount = settings.workerCount,
+          .effectiveWorkerCount = workerCount,
+          .workerSeconds = std::move(workerSeconds)};
 }
 
 std::vector<RayFanTraceResult> SingleFrequencySolver::traceAllSourceFans(
-    const SimulationCase& simulation) {
+    const SimulationCase& simulation, RayFanTraceSettings settings,
+    RayFanTraceProduct product) {
   std::vector<RayFanTraceResult> sourceTraces;
   sourceTraces.reserve(simulation.sourceCount());
   for (std::size_t sourceIndex = 0U; sourceIndex < simulation.sourceCount();
        ++sourceIndex) {
-    sourceTraces.push_back(traceSourceFan(simulation, sourceIndex));
+    sourceTraces.push_back(
+        traceSourceFan(simulation, sourceIndex, settings, product));
   }
   return sourceTraces;
 }
@@ -408,12 +524,13 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromCache(
 SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
     const SimulationCase& simulation, double frequency,
     double epsilonMultiplier, double loopRange,
-    CartesianCervenySettings influenceSettings) {
+    CartesianCervenySettings influenceSettings,
+    RayFanTraceSettings traceSettings) {
   requireSimulationFrequency(simulation, frequency);
   // F2CPP structure: trace each source's fan independently, then project each
   // frozen per-source cache with that source's source-term inputs.
   const std::vector<RayFanTraceResult> sourceTraces =
-      traceAllSourceFans(simulation);
+      traceAllSourceFans(simulation, traceSettings);
   std::vector<FrequencyWorkspace> sourceWorkspaces;
   sourceWorkspaces.reserve(sourceTraces.size());
   SingleFrequencyTimings totalTimings;
@@ -437,13 +554,23 @@ SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
   for (std::size_t index = 1U; index < sourceWorkspaces.size(); ++index) {
     additionalSourceWorkspaces.push_back(std::move(sourceWorkspaces[index]));
   }
+  std::vector<std::vector<double>> traceWorkerSecondsBySource;
+  traceWorkerSecondsBySource.reserve(sourceTraces.size());
+  for (const RayFanTraceResult& trace : sourceTraces) {
+    traceWorkerSecondsBySource.push_back(trace.workerSeconds);
+  }
   return SingleFrequencyResult{
       .workspace = std::move(sourceWorkspaces.front()),
       .additionalSourceWorkspaces = std::move(additionalSourceWorkspaces),
       .rayCount = rayCount,
       .totalRayPointCount = totalRayPointCount,
       .rayCacheBytes = peakRayCacheBytes,
-      .timings = totalTimings};
+      .timings = totalTimings,
+      .requestedTraceWorkerCount =
+          sourceTraces.front().requestedWorkerCount,
+      .effectiveTraceWorkerCount =
+          sourceTraces.front().effectiveWorkerCount,
+      .traceWorkerSecondsBySource = std::move(traceWorkerSecondsBySource)};
 }
 
 }  // namespace rayreuse

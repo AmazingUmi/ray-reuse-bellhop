@@ -44,6 +44,7 @@ void printUsage(std::ostream& stream) {
             "[--verify-cache] [--profile-influence] "
             "[--profile-frequency-tasks] "
             "[--range-parallel] "
+            "[--trace-workers <count>] "
             "[--workers <count>] "
             "[--output-queue-capacity <count>] "
             "[--memory-budget-mib <MiB>]\n"
@@ -776,6 +777,43 @@ void writePerSourceCacheFingerprints(
   }
 }
 
+// Trace-worker PRT lines (Worklist PERF-TRACE-PAR-1 A01), emitted only when
+// --trace-workers is present. Non-reuse products re-trace per frequency, so
+// their flat second groups are labeled with the frequency task and source
+// indices; every other product reports one group per source like reuse.
+void writeTraceWorkerCounts(std::ostream& stream,
+                            std::size_t requestedTraceWorkerCount,
+                            std::size_t effectiveTraceWorkerCount) {
+  stream << "requested trace worker count = " << requestedTraceWorkerCount
+         << '\n'
+         << "effective trace worker count = " << effectiveTraceWorkerCount
+         << '\n';
+}
+
+void writeTraceWorkerSeconds(
+    std::ostream& stream,
+    const std::vector<std::vector<double>>& traceWorkerSeconds,
+    std::size_t sourceCount, bool frequencyTaskGroups) {
+  for (std::size_t group = 0U; group < traceWorkerSeconds.size(); ++group) {
+    const std::vector<double>& workerSeconds = traceWorkerSeconds[group];
+    const std::size_t frequencyTask =
+        frequencyTaskGroups && sourceCount > 0U ? group / sourceCount : 0U;
+    const std::size_t sourceIndex =
+        frequencyTaskGroups && sourceCount > 0U ? group % sourceCount : group;
+    for (std::size_t workerIndex = 0U; workerIndex < workerSeconds.size();
+         ++workerIndex) {
+      if (frequencyTaskGroups) {
+        stream << "frequency task " << frequencyTask << " source "
+               << sourceIndex << " trace worker " << workerIndex
+               << " seconds = " << workerSeconds[workerIndex] << '\n';
+      } else {
+        stream << "source " << sourceIndex << " trace worker " << workerIndex
+               << " seconds = " << workerSeconds[workerIndex] << '\n';
+      }
+    }
+  }
+}
+
 }  // namespace
 
 int main(int argumentCount, char* arguments[]) {
@@ -831,6 +869,11 @@ int main(int argumentCount, char* arguments[]) {
     rayreuse::CartesianCervenySettings influenceSettings =
         parsed.beam.influence;
     influenceSettings.collectStatistics = options.profileInfluence;
+    // Shared-seam trace settings (Worklist PERF-TRACE-PAR-1 A01): every
+    // product consumes the same value; the default of 1 keeps the serial
+    // fast path and byte-identical output.
+    const rayreuse::RayFanTraceSettings traceSettings{
+        .workerCount = options.traceWorkerCount};
 
     const Clock::time_point solveBegin = Clock::now();
     const rayreuse::SimulationRunMode runMode = parsed.simulationCase.runMode();
@@ -839,16 +882,16 @@ int main(int argumentCount, char* arguments[]) {
           parsed.simulationCase.frequencies().values().front();
       // One frozen per-source cache per SimulationCase::sources() entry; the
       // R product carries every source's fan in depth-ascending order.
-      const std::vector<rayreuse::RayPathCache> caches =
-          rayreuse::traceRayProducts(parsed.simulationCase);
+      const std::vector<rayreuse::RayFanTraceResult> sourceTraces =
+          rayreuse::traceRayProducts(parsed.simulationCase, traceSettings);
       std::vector<std::uint64_t> fingerprintsBefore;
-      fingerprintsBefore.reserve(caches.size());
+      fingerprintsBefore.reserve(sourceTraces.size());
       std::size_t rayCount = 0U;
       std::size_t rayCacheBytes = 0U;
-      for (const rayreuse::RayPathCache& cache : caches) {
-        fingerprintsBefore.push_back(cache.contentFingerprint());
-        rayCount += cache.size();
-        rayCacheBytes += cache.memoryFootprintBytes();
+      for (const rayreuse::RayFanTraceResult& trace : sourceTraces) {
+        fingerprintsBefore.push_back(trace.cache.contentFingerprint());
+        rayCount += trace.cache.size();
+        rayCacheBytes += trace.cache.memoryFootprintBytes();
       }
       const std::filesystem::path output =
           productPath(fileRoot, 0U, 1U, frequency, ".ray");
@@ -856,15 +899,15 @@ int main(int argumentCount, char* arguments[]) {
                                  frequency);
       // One fan block per source in SimulationCase::sources() order (depth
       // ascending) with the `1 1 NSz` ray-file header (Origin WriteRay).
-      for (std::size_t sourceIndex = 0U; sourceIndex < caches.size();
+      for (std::size_t sourceIndex = 0U; sourceIndex < sourceTraces.size();
            ++sourceIndex) {
-        writer.appendSource(sourceIndex, caches[sourceIndex]);
+        writer.appendSource(sourceIndex, sourceTraces[sourceIndex].cache);
       }
       writer.finalize();
       std::vector<std::uint64_t> fingerprintsAfter;
-      fingerprintsAfter.reserve(caches.size());
-      for (const rayreuse::RayPathCache& cache : caches) {
-        fingerprintsAfter.push_back(cache.contentFingerprint());
+      fingerprintsAfter.reserve(sourceTraces.size());
+      for (const rayreuse::RayFanTraceResult& trace : sourceTraces) {
+        fingerprintsAfter.push_back(trace.cache.contentFingerprint());
       }
       if (options.verifyCache && fingerprintsAfter != fingerprintsBefore) {
         throw rayreuse::ValidationError(
@@ -882,6 +925,17 @@ int main(int argumentCount, char* arguments[]) {
                  << '\n';
         writePerSourceCacheFingerprints(printLog, fingerprintsBefore,
                                         fingerprintsAfter, "cache fingerprint");
+      }
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(
+            printLog, sourceTraces.front().requestedWorkerCount,
+            sourceTraces.front().effectiveWorkerCount);
+        std::vector<std::vector<double>> traceWorkerSeconds;
+        traceWorkerSeconds.reserve(sourceTraces.size());
+        for (const rayreuse::RayFanTraceResult& trace : sourceTraces) {
+          traceWorkerSeconds.push_back(trace.workerSeconds);
+        }
+        writeTraceWorkerSeconds(printLog, traceWorkerSeconds, 0U, false);
       }
     } else if (runMode == rayreuse::SimulationRunMode::AsciiArrivals ||
                runMode == rayreuse::SimulationRunMode::BinaryArrivals) {
@@ -935,11 +989,13 @@ int main(int argumentCount, char* arguments[]) {
       double fusedWriterSeconds = 0.0;
       if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
         statistics = rayreuse::ArrivalSolver::solveNonReuse(
-            parsed.simulationCase, consumer, options.verifyCache);
+            parsed.simulationCase, consumer, options.verifyCache,
+            traceSettings);
       } else if (options.executionMode ==
                  rayreuse::BroadbandExecutionMode::Reuse) {
         statistics = rayreuse::ArrivalSolver::solve(
-            parsed.simulationCase, consumer, options.verifyCache);
+            parsed.simulationCase, consumer, options.verifyCache,
+            traceSettings);
       } else if (options.executionMode ==
                  rayreuse::BroadbandExecutionMode::Fused) {
         std::vector<std::filesystem::path> outputPaths;
@@ -980,7 +1036,8 @@ int main(int argumentCount, char* arguments[]) {
             parsed.simulationCase, fusedConsumer, influenceSettings,
             options.verifyCache,
             rayreuse::FusedRayReuseExecutionSettings{
-                .requestedRangeWorkers = fusedRequestedRangeWorkers});
+                .requestedRangeWorkers = fusedRequestedRangeWorkers,
+                .traceSettings = traceSettings});
         const Clock::time_point finalizeBegin = Clock::now();
         writers.finalize();
         fusedWriterSeconds +=
@@ -999,7 +1056,8 @@ int main(int argumentCount, char* arguments[]) {
       } else {
         const std::size_t workers = resolvedWorkerCount(options.workerCount);
         statistics = rayreuse::ArrivalSolver::solveParallel(
-            parsed.simulationCase, consumer, workers, options.verifyCache);
+            parsed.simulationCase, consumer, workers, options.verifyCache,
+            traceSettings);
       }
       writeProductExecutionMode(printLog, options.executionMode,
                                 statistics.frequencyCount,
@@ -1040,6 +1098,15 @@ int main(int argumentCount, char* arguments[]) {
             "solver cache fingerprint");
       } else {
         printLog << "cache fingerprint verification = disabled\n";
+      }
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(printLog,
+                               statistics.requestedTraceWorkerCount,
+                               statistics.effectiveTraceWorkerCount);
+        writeTraceWorkerSeconds(
+            printLog, statistics.traceWorkerSecondsBySource,
+            parsed.simulationCase.sourceCount(),
+            options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse);
       }
     } else if (runMode == rayreuse::SimulationRunMode::Eigenray) {
       const auto consumer =
@@ -1091,14 +1158,17 @@ int main(int argumentCount, char* arguments[]) {
       rayreuse::EigenraySolverStatistics statistics;
       if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
         statistics = rayreuse::EigenraySolver::solveNonReuse(
-            parsed.simulationCase, consumer, options.verifyCache);
+            parsed.simulationCase, consumer, options.verifyCache,
+            traceSettings);
       } else if (options.executionMode ==
                  rayreuse::BroadbandExecutionMode::Reuse) {
         statistics = rayreuse::EigenraySolver::solve(
-            parsed.simulationCase, consumer, options.verifyCache);
+            parsed.simulationCase, consumer, options.verifyCache,
+            traceSettings);
       } else {
         statistics = rayreuse::EigenraySolver::solveParallel(
-            parsed.simulationCase, consumer, workers, options.verifyCache);
+            parsed.simulationCase, consumer, workers, options.verifyCache,
+            traceSettings);
       }
       writeProductExecutionMode(printLog, options.executionMode,
                                 statistics.frequencyCount,
@@ -1121,11 +1191,20 @@ int main(int argumentCount, char* arguments[]) {
       } else {
         printLog << "cache fingerprint verification = disabled\n";
       }
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(printLog,
+                               statistics.requestedTraceWorkerCount,
+                               statistics.effectiveTraceWorkerCount);
+        writeTraceWorkerSeconds(
+            printLog, statistics.traceWorkerSecondsBySource,
+            parsed.simulationCase.sourceCount(),
+            options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse);
+      }
     } else if (parsed.simulationCase.frequencies().size() == 1U) {
       const rayreuse::SingleFrequencyResult result =
           rayreuse::SingleFrequencySolver::solve(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
-              parsed.beam.loopRange, influenceSettings);
+              parsed.beam.loopRange, influenceSettings, traceSettings);
 
       const Clock::time_point writeBegin = Clock::now();
       // Per-source SHD records: one receiversPerRange-record block per source
@@ -1143,12 +1222,18 @@ int main(int argumentCount, char* arguments[]) {
         writeInfluenceStatistics(printLog, result.timings.influenceStatistics);
       }
       printLog << "SHD seconds = " << writeSeconds << '\n';
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(printLog, result.requestedTraceWorkerCount,
+                               result.effectiveTraceWorkerCount);
+        writeTraceWorkerSeconds(printLog,
+                                result.traceWorkerSecondsBySource, 0U, false);
+      }
     } else if (options.executionMode ==
                rayreuse::BroadbandExecutionMode::NonReuse) {
       rayreuse::BroadbandNonReuseResult result =
           rayreuse::BroadbandNonReuseSolver::solve(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
-              parsed.beam.loopRange, influenceSettings);
+              parsed.beam.loopRange, influenceSettings, traceSettings);
 
       // One source-major workspace vector per frequency (first source in
       // `workspace`, the rest in `additionalSourceWorkspaces`).
@@ -1199,6 +1284,23 @@ int main(int argumentCount, char* arguments[]) {
         writeInfluenceStatistics(
             printLog, result.statistics.phaseTotals.influenceStatistics);
       }
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(
+            printLog, result.frequencyResults.front().requestedTraceWorkerCount,
+            result.frequencyResults.front().effectiveTraceWorkerCount);
+        std::vector<std::vector<double>> traceWorkerSeconds;
+        traceWorkerSeconds.reserve(
+            result.statistics.tracePassCount);
+        for (const rayreuse::SingleFrequencyResult& frequencyResult :
+             result.frequencyResults) {
+          for (const std::vector<double>& sourceWorkerSeconds :
+               frequencyResult.traceWorkerSecondsBySource) {
+            traceWorkerSeconds.push_back(sourceWorkerSeconds);
+          }
+        }
+        writeTraceWorkerSeconds(printLog, traceWorkerSeconds,
+                                parsed.simulationCase.sourceCount(), true);
+      }
     } else if (options.executionMode ==
                rayreuse::BroadbandExecutionMode::Reuse) {
       double writeSeconds = 0.0;
@@ -1224,7 +1326,7 @@ int main(int argumentCount, char* arguments[]) {
           rayreuse::SerialRayReuseSolver::solveStreaming(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange, consumer, influenceSettings,
-              options.verifyCache);
+              options.verifyCache, traceSettings);
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
       writeSeconds +=
@@ -1234,7 +1336,14 @@ int main(int argumentCount, char* arguments[]) {
                << "Trace passes = " << statistics.tracePassCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
                << "ray point count = " << statistics.totalRayPointCount << '\n'
-               << "ray cache bytes = " << statistics.rayCacheBytes << '\n'
+               << "ray cache bytes = " << statistics.rayCacheBytes << '\n';
+      if (options.traceWorkerCountSpecified) {
+        printLog << "requested trace worker count = "
+                 << statistics.requestedTraceWorkerCount << '\n'
+                 << "effective trace worker count = "
+                 << statistics.effectiveTraceWorkerCount << '\n';
+      }
+      printLog
                << "Trace seconds = " << statistics.phaseTotals.traceSeconds
                << '\n'
                << "Project seconds = " << statistics.phaseTotals.projectSeconds
@@ -1245,6 +1354,20 @@ int main(int argumentCount, char* arguments[]) {
                << '\n'
                << "reuse wall seconds = " << statistics.wallSeconds << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
+      if (options.traceWorkerCountSpecified) {
+        for (std::size_t sourceIndex = 0U;
+             sourceIndex < statistics.traceWorkerSecondsBySource.size();
+             ++sourceIndex) {
+          const std::vector<double>& workerSeconds =
+              statistics.traceWorkerSecondsBySource[sourceIndex];
+          for (std::size_t workerIndex = 0U;
+               workerIndex < workerSeconds.size(); ++workerIndex) {
+            printLog << "source " << sourceIndex << " trace worker "
+                     << workerIndex << " seconds = "
+                     << workerSeconds[workerIndex] << '\n';
+          }
+        }
+      }
       if (statistics.cacheFingerprintVerified) {
         printLog << "cache fingerprint verification = enabled\n"
                  << "cache fingerprint before = "
@@ -1293,7 +1416,8 @@ int main(int argumentCount, char* arguments[]) {
                           ? 1U
                           : (options.workerCountSpecified
                                  ? options.workerCount
-                                 : 4U)});
+                                 : 4U),
+                  .traceSettings = traceSettings});
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
       writeSeconds +=
@@ -1338,6 +1462,14 @@ int main(int argumentCount, char* arguments[]) {
         writeInfluenceStatistics(printLog,
                                  statistics.phaseTotals.influenceStatistics);
       }
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(printLog,
+                               statistics.requestedTraceWorkerCount,
+                               statistics.effectiveTraceWorkerCount);
+        writeTraceWorkerSeconds(printLog,
+                                statistics.traceWorkerSecondsBySource, 0U,
+                                false);
+      }
     } else {
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
@@ -1362,6 +1494,7 @@ int main(int argumentCount, char* arguments[]) {
           .workerCount = resolvedWorkerCount(options.workerCount),
           .outputQueueCapacity = options.outputQueueCapacity,
           .memoryBudgetBytes = memoryBudgetBytes(options.memoryBudgetMiB),
+          .traceSettings = traceSettings,
       };
       const rayreuse::ParallelRayReuseStatistics statistics =
           rayreuse::ParallelRayReuseSolver::solveStreaming(
@@ -1422,6 +1555,14 @@ int main(int argumentCount, char* arguments[]) {
       if (options.profileFrequencyTasks) {
         writeFrequencyTaskTimings(printLog, parsed.simulationCase.frequencies(),
                                   statistics.frequencyTimings);
+      }
+      if (options.traceWorkerCountSpecified) {
+        writeTraceWorkerCounts(printLog,
+                               statistics.requestedTraceWorkerCount,
+                               statistics.effectiveTraceWorkerCount);
+        writeTraceWorkerSeconds(printLog,
+                                statistics.traceWorkerSecondsBySource, 0U,
+                                false);
       }
     }
 
