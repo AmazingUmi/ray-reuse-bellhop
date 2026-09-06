@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(
-  BellhopRayReuse
+  BellhopBroadband
   VERSION 0.1.0
-  DESCRIPTION "C++20 broadband Bellhop ray-reuse implementation"
+  DESCRIPTION "C++20 Bellhop Broadband execution framework"
   LANGUAGES CXX
 )
 
@@ -120,13 +120,13 @@ add_library(
     src/ray/flat_boundary_reflection.cpp
     src/ray/geometry_tracer.cpp
     src/ray/ray_stepper.cpp
-    src/solver/broadband_nonreuse_solver.cpp
+    src/solver/nonreuse_solver.cpp
     src/solver/arrival_solver.cpp
-    src/solver/fused_ray_reuse_solver.cpp
+    src/solver/reuse_range_para_solver.cpp
     src/solver/eigenray_solver.cpp
-    src/solver/parallel_ray_reuse_solver.cpp
+    src/solver/reuse_freq_para_solver.cpp
     src/solver/ray_trace_product.cpp
-    src/solver/serial_ray_reuse_solver.cpp
+    src/solver/reuse_serial_solver.cpp
     src/solver/single_frequency_solver.cpp
 )
 target_include_directories(
@@ -140,26 +140,26 @@ target_link_libraries(
     bellhop_rayreuse_project_options
 )
 
-add_executable(bellhop_rayreuse app/main.cpp)
+add_executable(bellhop_broadband app/main.cpp)
 target_compile_definitions(
-  bellhop_rayreuse
+  bellhop_broadband
   PRIVATE
     RAYREUSE_VERSION="${PROJECT_VERSION}"
 )
 target_link_libraries(
-  bellhop_rayreuse
+  bellhop_broadband
   PRIVATE
     bellhop_rayreuse_core
     bellhop_rayreuse_project_options
 )
 set_target_properties(
-  bellhop_rayreuse
+  bellhop_broadband
   PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 install(
-  TARGETS bellhop_rayreuse
+  TARGETS bellhop_broadband
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
 install(
@@ -310,19 +310,19 @@ if(BUILD_TESTING)
   add_rayreuse_test(
     bellhop_rayreuse_broadband_nonreuse_solver_tests
     rayreuse.component.broadband_nonreuse_solver
-    tests/component/broadband_nonreuse_solver_test.cpp
+    tests/component/nonreuse_solver_test.cpp
     component
   )
   add_rayreuse_test(
     bellhop_rayreuse_serial_ray_reuse_solver_tests
     rayreuse.reuse.serial_solver
-    tests/component/serial_ray_reuse_solver_test.cpp
+    tests/component/reuse_serial_solver_test.cpp
     "component;reuse"
   )
   add_rayreuse_test(
     bellhop_rayreuse_fused_ray_reuse_solver_tests
     rayreuse.component.fused_solver
-    tests/component/fused_ray_reuse_solver_test.cpp
+    tests/component/reuse_range_para_solver_test.cpp
     "component;reuse"
   )
   add_rayreuse_test(
@@ -370,7 +370,7 @@ if(BUILD_TESTING)
   add_rayreuse_test(
     bellhop_rayreuse_parallel_ray_reuse_solver_tests
     rayreuse.parallel.solver
-    tests/component/parallel_ray_reuse_solver_test.cpp
+    tests/component/reuse_freq_para_solver_test.cpp
     "component;parallel;reuse"
   )
   add_rayreuse_test(
@@ -472,18 +472,18 @@ if(BUILD_TESTING)
       bellhop_rayreuse_core
       bellhop_rayreuse_project_options
   )
-  add_test(NAME rayreuse.cli.help COMMAND bellhop_rayreuse --help)
+  add_test(NAME rayreuse.cli.help COMMAND bellhop_broadband --help)
   set_tests_properties(rayreuse.cli.help PROPERTIES LABELS "unit")
 
-  add_test(NAME rayreuse.cli.version COMMAND bellhop_rayreuse --version)
+  add_test(NAME rayreuse.cli.version COMMAND bellhop_broadband --version)
   set_tests_properties(
     rayreuse.cli.version
     PROPERTIES
       LABELS "unit"
-      PASS_REGULAR_EXPRESSION "Bellhop RayReuse ${PROJECT_VERSION}"
+      PASS_REGULAR_EXPRESSION "Bellhop Broadband ${PROJECT_VERSION}"
   )
 
-  add_test(NAME rayreuse.cli.missing_root COMMAND bellhop_rayreuse)
+  add_test(NAME rayreuse.cli.missing_root COMMAND bellhop_broadband)
   set_tests_properties(
     rayreuse.cli.missing_root
     PROPERTIES
@@ -493,12 +493,12 @@ if(BUILD_TESTING)
 endif()
 
 set(CPACK_GENERATOR "TGZ")
-set(CPACK_PACKAGE_NAME "bellhop-rayreuse")
-set(CPACK_PACKAGE_VENDOR "Bellhop RayReuse")
+set(CPACK_PACKAGE_NAME "bellhop-broadband")
+set(CPACK_PACKAGE_VENDOR "Bellhop Broadband")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(
   CPACK_PACKAGE_FILE_NAME
-  "bellhop-rayreuse-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+  "bellhop-broadband-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
 )
 include(CPack)

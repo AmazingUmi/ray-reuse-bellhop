@@ -1,4 +1,4 @@
-#include "rayreuse/solver/broadband_nonreuse_solver.hpp"
+#include "rayreuse/solver/nonreuse_solver.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -26,11 +26,11 @@ void accumulateTimings(SingleFrequencyTimings& total,
 
 }  // namespace
 
-BroadbandNonReuseResult BroadbandNonReuseSolver::solve(
+NonReuseResult NonReuseSolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, CartesianCervenySettings influenceSettings,
     RayFanTraceSettings traceSettings) {
-  BroadbandNonReuseResult result;
+  NonReuseResult result;
   result.frequencyResults.reserve(simulation.frequencies().size());
 
   const Clock::time_point wallBegin = Clock::now();

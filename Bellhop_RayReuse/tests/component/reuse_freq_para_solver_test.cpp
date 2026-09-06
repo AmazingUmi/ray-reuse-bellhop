@@ -1,4 +1,4 @@
-#include "rayreuse/solver/parallel_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_freq_para_solver.hpp"
 
 #include <algorithm>
 #include <complex>
@@ -13,8 +13,8 @@
 
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/simulation_case.hpp"
-#include "rayreuse/solver/broadband_nonreuse_solver.hpp"
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/nonreuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -24,8 +24,8 @@ using rayreuse::BeamWidthMode;
 using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
-using rayreuse::BroadbandNonReuseResult;
-using rayreuse::BroadbandNonReuseSolver;
+using rayreuse::NonReuseResult;
+using rayreuse::NonReuseSolver;
 using rayreuse::CervenyCoordinateSystem;
 using rayreuse::Environment;
 using rayreuse::FieldComponent;
@@ -33,12 +33,12 @@ using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
-using rayreuse::ParallelRayReuseSettings;
-using rayreuse::ParallelRayReuseSolver;
-using rayreuse::ParallelRayReuseStatistics;
+using rayreuse::ReuseFreqParaSettings;
+using rayreuse::ReuseFreqParaSolver;
+using rayreuse::ReuseFreqParaStatistics;
 using rayreuse::ReceiverGrid;
-using rayreuse::SerialRayReuseResult;
-using rayreuse::SerialRayReuseSolver;
+using rayreuse::ReuseSerialResult;
+using rayreuse::ReuseSerialSolver;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SoundSpeedPoint;
@@ -130,11 +130,11 @@ struct StreamedParallelRun {
   std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
       workspaces;
   std::vector<std::size_t> callbackCounts;
-  ParallelRayReuseStatistics statistics;
+  ReuseFreqParaStatistics statistics;
 };
 
 StreamedParallelRun runParallel(const SimulationCase& simulation,
-                                ParallelRayReuseSettings settings,
+                                ReuseFreqParaSettings settings,
                                 bool verifyCacheFingerprint = false) {
   StreamedParallelRun run{
       .workspaces =
@@ -143,7 +143,7 @@ StreamedParallelRun runParallel(const SimulationCase& simulation,
       .callbackCounts =
           std::vector<std::size_t>(simulation.frequencies().size(), 0U),
       .statistics = {}};
-  run.statistics = ParallelRayReuseSolver::solveStreaming(
+  run.statistics = ReuseFreqParaSolver::solveStreaming(
       simulation, 1.0, 50.0,
       [&run](std::size_t frequencyIndex,
              std::vector<rayreuse::FrequencyWorkspace>&& sourceWorkspaces,
@@ -172,13 +172,13 @@ void testFrequencyCounts(Context& context) {
   for (const std::size_t frequencyCount : {1U, 2U, 16U}) {
     const SimulationCase simulation =
         makeSimulation(makeFrequencies(frequencyCount));
-    const BroadbandNonReuseResult nonReuse =
-        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-    const SerialRayReuseResult serial =
-        SerialRayReuseSolver::solve(simulation, 1.0, 50.0);
+    const NonReuseResult nonReuse =
+        NonReuseSolver::solve(simulation, 1.0, 50.0);
+    const ReuseSerialResult serial =
+        ReuseSerialSolver::solve(simulation, 1.0, 50.0);
     const StreamedParallelRun parallel =
         runParallel(simulation,
-                    ParallelRayReuseSettings{.workerCount = 4U,
+                    ReuseFreqParaSettings{.workerCount = 4U,
                                              .outputQueueCapacity = 2U,
                                              .memoryBudgetBytes = 0U},
                     frequencyCount == 2U);
@@ -238,7 +238,7 @@ void testFrequencyCounts(Context& context) {
 
 void testRepeatedRunIsDeterministic(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
-  const ParallelRayReuseSettings settings{
+  const ReuseFreqParaSettings settings{
       .workerCount = 4U, .outputQueueCapacity = 1U, .memoryBudgetBytes = 0U};
   const StreamedParallelRun first = runParallel(simulation, settings);
   const StreamedParallelRun second = runParallel(simulation, settings);
@@ -260,16 +260,16 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
   const std::vector<VolumeAttenuation> models = {
       makeThorpAttenuation(), makeFrancoisGarrisonAttenuation(10.0),
       makeBiologicalAttenuation(100.0)};
-  const ParallelRayReuseSettings settings{
+  const ReuseFreqParaSettings settings{
       .workerCount = 3U, .outputQueueCapacity = 1U, .memoryBudgetBytes = 0U};
 
   for (const VolumeAttenuation& model : models) {
     const SimulationCase simulation =
         makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, model);
-    const BroadbandNonReuseResult nonReuse =
-        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-    const SerialRayReuseResult serial =
-        SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+    const NonReuseResult nonReuse =
+        NonReuseSolver::solve(simulation, 1.0, 50.0);
+    const ReuseSerialResult serial =
+        ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
     const StreamedParallelRun first = runParallel(simulation, settings, true);
     const StreamedParallelRun repeated =
         runParallel(simulation, settings, true);
@@ -319,10 +319,10 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
         makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, parameterPair.first);
     const SimulationCase changedSimulation =
         makeAttenuatedSimulation({500.0, 1000.0, 2000.0}, parameterPair.second);
-    const SerialRayReuseResult first =
-        SerialRayReuseSolver::solve(firstSimulation, 1.0, 50.0, {}, true);
-    const SerialRayReuseResult changed =
-        SerialRayReuseSolver::solve(changedSimulation, 1.0, 50.0, {}, true);
+    const ReuseSerialResult first =
+        ReuseSerialSolver::solve(firstSimulation, 1.0, 50.0, {}, true);
+    const ReuseSerialResult changed =
+        ReuseSerialSolver::solve(changedSimulation, 1.0, 50.0, {}, true);
     context.check(
         first.statistics.cacheFingerprintBefore ==
                 changed.statistics.cacheFingerprintBefore &&
@@ -362,13 +362,13 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
           SimulationRunMode::SemiCoherent}) {
       const SimulationCase simulation =
           makeSimulation({50.0, 100.0}, mode, beamFamily);
-      const BroadbandNonReuseResult nonReuse =
-          BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-      const SerialRayReuseResult reuse =
-          SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+      const NonReuseResult nonReuse =
+          NonReuseSolver::solve(simulation, 1.0, 50.0);
+      const ReuseSerialResult reuse =
+          ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
       const StreamedParallelRun parallel =
           runParallel(simulation,
-                      ParallelRayReuseSettings{.workerCount = 2U,
+                      ReuseFreqParaSettings{.workerCount = 2U,
                                                .outputQueueCapacity = 1U,
                                                .memoryBudgetBytes = 0U},
                       true);
@@ -404,13 +404,13 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
 void testSimpleGaussianMatchesAcrossExecution(Context& context) {
   const SimulationCase simulation = makeSimulation(
       {50.0, 100.0}, SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
-  const BroadbandNonReuseResult nonReuse =
-      BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-  const SerialRayReuseResult reuse =
-      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+  const NonReuseResult nonReuse =
+      NonReuseSolver::solve(simulation, 1.0, 50.0);
+  const ReuseSerialResult reuse =
+      ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
   const StreamedParallelRun parallel =
       runParallel(simulation,
-                  ParallelRayReuseSettings{.workerCount = 2U,
+                  ReuseFreqParaSettings{.workerCount = 2U,
                                            .outputQueueCapacity = 1U,
                                            .memoryBudgetBytes = 0U},
                   true);
@@ -449,20 +449,20 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
       for (const BeamWidthMode widthMode :
            {BeamWidthMode::SpaceFilling, BeamWidthMode::MinimumWidth,
             BeamWidthMode::Wkb}) {
-        std::optional<SerialRayReuseResult> pressure;
+        std::optional<ReuseSerialResult> pressure;
         for (const FieldComponent component :
              {FieldComponent::Pressure, FieldComponent::Vertical,
               FieldComponent::Horizontal}) {
           const SimulationCase simulation =
               makeSimulation({50.0, 100.0}, mode, BeamFamily::CervenyGaussian,
                              component, curvatureMode, widthMode);
-          const BroadbandNonReuseResult nonReuse =
-              BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-          const SerialRayReuseResult reuse =
-              SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+          const NonReuseResult nonReuse =
+              NonReuseSolver::solve(simulation, 1.0, 50.0);
+          const ReuseSerialResult reuse =
+              ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
           const StreamedParallelRun parallel =
               runParallel(simulation,
-                          ParallelRayReuseSettings{.workerCount = 2U,
+                          ReuseFreqParaSettings{.workerCount = 2U,
                                                    .outputQueueCapacity = 1U,
                                                    .memoryBudgetBytes = 0U},
                           true);
@@ -524,13 +524,13 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
           const SimulationCase simulation = makeSimulation(
               {50.0, 100.0}, mode, BeamFamily::CervenyGaussian, component,
               curvatureMode, widthMode, CervenyCoordinateSystem::RayCentered);
-          const BroadbandNonReuseResult nonReuse =
-              BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-          const SerialRayReuseResult reuse =
-              SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+          const NonReuseResult nonReuse =
+              NonReuseSolver::solve(simulation, 1.0, 50.0);
+          const ReuseSerialResult reuse =
+              ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
           const StreamedParallelRun parallel =
               runParallel(simulation,
-                          ParallelRayReuseSettings{.workerCount = 2U,
+                          ReuseFreqParaSettings{.workerCount = 2U,
                                                    .outputQueueCapacity = 1U,
                                                    .memoryBudgetBytes = 0U},
                           true);
@@ -572,13 +572,13 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
         {50.0, 100.0}, mode, BeamFamily::GeometricHat, FieldComponent::Pressure,
         BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
         CervenyCoordinateSystem::RayCentered);
-    const BroadbandNonReuseResult nonReuse =
-        BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-    const SerialRayReuseResult reuse =
-        SerialRayReuseSolver::solve(simulation, 1.0, 50.0, {}, true);
+    const NonReuseResult nonReuse =
+        NonReuseSolver::solve(simulation, 1.0, 50.0);
+    const ReuseSerialResult reuse =
+        ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
     const StreamedParallelRun parallel =
         runParallel(simulation,
-                    ParallelRayReuseSettings{.workerCount = 2U,
+                    ReuseFreqParaSettings{.workerCount = 2U,
                                              .outputQueueCapacity = 1U,
                                              .memoryBudgetBytes = 0U},
                     true);
@@ -609,7 +609,7 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
 void testMemoryBudget(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
   const StreamedParallelRun unrestricted = runParallel(
-      simulation, ParallelRayReuseSettings{.workerCount = 4U,
+      simulation, ReuseFreqParaSettings{.workerCount = 4U,
                                            .outputQueueCapacity = 1U,
                                            .memoryBudgetBytes = 0U});
   const std::size_t cacheBytes = unrestricted.statistics.rayCacheBytes;
@@ -619,7 +619,7 @@ void testMemoryBudget(Context& context) {
 
   const StreamedParallelRun constrained = runParallel(
       simulation,
-      ParallelRayReuseSettings{.workerCount = 4U,
+      ReuseFreqParaSettings{.workerCount = 4U,
                                .outputQueueCapacity = 1U,
                                .memoryBudgetBytes = twoWorkerBudget});
   context.check(
@@ -631,7 +631,7 @@ void testMemoryBudget(Context& context) {
       [&]() {
         static_cast<void>(runParallel(
             simulation,
-            ParallelRayReuseSettings{
+            ReuseFreqParaSettings{
                 .workerCount = 4U,
                 .outputQueueCapacity = 1U,
                 .memoryBudgetBytes = cacheBytes + 2U * workspaceBytes}));
@@ -645,46 +645,46 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(2U));
   context.expectThrows<ValidationError>(
       [&]() {
-        static_cast<void>(ParallelRayReuseSolver::solveStreaming(
+        static_cast<void>(ReuseFreqParaSolver::solveStreaming(
             simulation, 1.0, 50.0,
             [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
-            ParallelRayReuseSettings{.workerCount = 0U,
+            ReuseFreqParaSettings{.workerCount = 0U,
                                      .outputQueueCapacity = 1U,
                                      .memoryBudgetBytes = 0U}));
       },
       "parallel solver rejects zero workers");
   context.expectThrows<ValidationError>(
       [&]() {
-        static_cast<void>(ParallelRayReuseSolver::solveStreaming(
+        static_cast<void>(ReuseFreqParaSolver::solveStreaming(
             simulation, 1.0, 50.0,
             [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
-            ParallelRayReuseSettings{.workerCount = 1U,
+            ReuseFreqParaSettings{.workerCount = 1U,
                                      .outputQueueCapacity = 0U,
                                      .memoryBudgetBytes = 0U}));
       },
       "parallel solver rejects an empty output queue");
   context.expectThrows<ValidationError>(
       [&]() {
-        static_cast<void>(ParallelRayReuseSolver::solveStreaming(
+        static_cast<void>(ReuseFreqParaSolver::solveStreaming(
             simulation, 1.0, 50.0,
             [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {},
-            ParallelRayReuseSettings{.workerCount = 1U,
+            ReuseFreqParaSettings{.workerCount = 1U,
                                      .outputQueueCapacity = 3U,
                                      .memoryBudgetBytes = 0U}));
       },
       "parallel solver rejects output queue capacity above two");
   context.expectThrows<std::runtime_error>(
       [&]() {
-        static_cast<void>(ParallelRayReuseSolver::solveStreaming(
+        static_cast<void>(ReuseFreqParaSolver::solveStreaming(
             simulation, 1.0, 50.0,
             [](std::size_t, std::vector<rayreuse::FrequencyWorkspace>&&,
                const rayreuse::SingleFrequencyTimings&) {
               throw std::runtime_error("consumer failure");
             },
-            ParallelRayReuseSettings{.workerCount = 2U,
+            ReuseFreqParaSettings{.workerCount = 2U,
                                      .outputQueueCapacity = 1U,
                                      .memoryBudgetBytes = 0U}));
       },

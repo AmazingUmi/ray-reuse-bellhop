@@ -9,7 +9,7 @@
 
 namespace rayreuse {
 
-struct BroadbandNonReuseStatistics {
+struct NonReuseStatistics {
   std::size_t tracePassCount{};
   std::size_t totalRayCount{};
   std::size_t totalRayPointCount{};
@@ -19,16 +19,16 @@ struct BroadbandNonReuseStatistics {
   double wallSeconds{};
 };
 
-struct BroadbandNonReuseResult {
+struct NonReuseResult {
   // Input frequency order is preserved. Each element retains its own ray,
   // cache, and phase-timing statistics.
   std::vector<SingleFrequencyResult> frequencyResults;
-  BroadbandNonReuseStatistics statistics;
+  NonReuseStatistics statistics;
 };
 
-class BroadbandNonReuseSolver {
+class NonReuseSolver {
  public:
-  [[nodiscard]] static BroadbandNonReuseResult solve(
+  [[nodiscard]] static NonReuseResult solve(
       const SimulationCase& simulation, double epsilonMultiplier,
       double loopRange, CartesianCervenySettings influenceSettings = {},
       RayFanTraceSettings traceSettings = {});

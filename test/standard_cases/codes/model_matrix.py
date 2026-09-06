@@ -424,11 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--profiles", default="single,broadband_smoke"
     )
     parser.add_argument(
-        # Pinned explicitly: fused is out of model-matrix scope because the
-        # matrix runs every case kind, while fused is only defined for
-        # CC coherent TL broadband runs.
+        # Pinned explicitly: the range route (reuse-range) is out of
+        # model-matrix scope because the matrix runs every case kind, while
+        # the range route is only defined for a subset of broadband runs.
         "--modes",
-        default="nonreuse,reuse,parallel",
+        default="nonreuse,reuse-serial,reuse-frequency",
     )
     parser.add_argument(
         "--work-root",

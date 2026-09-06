@@ -19,6 +19,7 @@ sys.path.insert(0, str(PLOTREAD_TESTS_ROOT))
 
 from case_model import discover_cases
 from standard_cases import (
+    RAYREUSE_EXECUTION_ARGUMENTS,
     VersionAdapter,
     build_parser,
     default_adapters,
@@ -48,7 +49,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
             / "Bellhop_RayReuse"
             / "build"
             / "release"
-            / "bellhop_rayreuse",
+            / "bellhop_broadband",
         )
 
     def test_print_validation_uses_declared_noncoherent_mode(self) -> None:
@@ -147,7 +148,12 @@ class StandardCasesAdapterTests(unittest.TestCase):
             "nonreuse",
         )
 
-        for execution_mode in ("nonreuse", "reuse", "parallel"):
+        for execution_mode in (
+            "nonreuse",
+            "reuse-serial",
+            "reuse-frequency",
+            "reuse-range",
+        ):
             with self.subTest(execution_mode=execution_mode):
                 args = parser.parse_args(
                     [
@@ -176,7 +182,12 @@ class StandardCasesAdapterTests(unittest.TestCase):
                 enabled=True,
             )
 
-            for execution_mode in ("nonreuse", "reuse", "parallel"):
+            for execution_mode in (
+                "nonreuse",
+                "reuse-serial",
+                "reuse-frequency",
+                "reuse-range",
+            ):
                 with self.subTest(execution_mode=execution_mode):
                     with patch("standard_cases.subprocess.run") as run:
                         adapter.run_broadband(
@@ -192,8 +203,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                             "direct_broadband",
                             "--frequencies-hz",
                             "50,250",
-                            "--execution-mode",
-                            execution_mode,
+                            *RAYREUSE_EXECUTION_ARGUMENTS[execution_mode],
                         ],
                         cwd=working_directory,
                         check=True,
@@ -214,7 +224,12 @@ class StandardCasesAdapterTests(unittest.TestCase):
         frequencies = self.definition.frequencies("broadband_smoke")
         launch_count = self.definition.shared_launch_angle_count(frequencies)
 
-        for execution_mode in ("nonreuse", "reuse", "parallel"):
+        for execution_mode in (
+            "nonreuse",
+            "reuse-serial",
+            "reuse-frequency",
+            "reuse-range",
+        ):
             with self.subTest(execution_mode=execution_mode):
                 with tempfile.TemporaryDirectory() as temporary_directory:
                     results_root = Path(temporary_directory)
@@ -261,7 +276,9 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         manifest["broadband_run"][
                             "execution_mode_argument"
                         ],
-                        execution_mode,
+                        " ".join(
+                            RAYREUSE_EXECUTION_ARGUMENTS[execution_mode]
+                        ),
                     )
                     self.assertEqual(
                         manifest["broadband_run"][
@@ -522,12 +539,30 @@ class StandardCasesAdapterTests(unittest.TestCase):
             self.definition,
             expected_dimensions=(1, 1, 1, 1, 1, 2, 3),
         )
-        for execution_mode, mode_marker, trace_passes in (
-            ("nonreuse", "execution mode = broadband non-reuse", 2),
-            ("reuse", "execution mode = broadband reuse", 1),
+        for execution_mode, mode_markers, trace_passes in (
+            ("nonreuse", ("execution mode = broadband nonreuse",), 2),
             (
-                "parallel",
-                "execution mode = broadband parallel reuse",
+                "reuse-serial",
+                (
+                    "execution mode = broadband reuse",
+                    "reuse mode = serial",
+                ),
+                1,
+            ),
+            (
+                "reuse-frequency",
+                (
+                    "execution mode = broadband reuse",
+                    "reuse mode = frequency",
+                ),
+                1,
+            ),
+            (
+                "reuse-range",
+                (
+                    "execution mode = broadband reuse",
+                    "reuse mode = range",
+                ),
                 1,
             ),
         ):
@@ -543,7 +578,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                                 "Cartesian beams",
                                 "Rectilinear receiver grid",
                                 *definition.prt_markers,
-                                mode_marker,
+                                *mode_markers,
                                 f"Trace passes = {trace_passes}",
                             )
                         ),
@@ -582,17 +617,31 @@ class StandardCasesAdapterTests(unittest.TestCase):
                 *definition.prt_markers,
             )
             write_little_endian_rectilinear_file(shade_path, frequencies)
-            for execution_mode, mode_marker, trace_passes in (
-                ("nonreuse", "execution mode = broadband non-reuse", 4),
-                ("reuse", "execution mode = broadband reuse", 2),
-                ("parallel", "execution mode = broadband parallel reuse", 2),
+            for execution_mode, mode_markers, trace_passes in (
+                ("nonreuse", ("execution mode = broadband nonreuse",), 4),
+                (
+                    "reuse-serial",
+                    (
+                        "execution mode = broadband reuse",
+                        "reuse mode = serial",
+                    ),
+                    2,
+                ),
+                (
+                    "reuse-frequency",
+                    (
+                        "execution mode = broadband reuse",
+                        "reuse mode = frequency",
+                    ),
+                    2,
+                ),
             ):
                 with self.subTest(execution_mode=execution_mode):
                     print_path.write_text(
                         "\n".join(
                             (
                                 *common_lines,
-                                mode_marker,
+                                *mode_markers,
                                 f"Trace passes = {trace_passes}",
                             )
                         ),
@@ -606,13 +655,20 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         shade_path,
                     )
             # Single-source statistics must now be rejected for NSz = 2.
-            for execution_mode, mode_marker, wrong_trace_passes in (
+            for execution_mode, mode_markers, wrong_trace_passes in (
                 (
                     "nonreuse",
-                    "execution mode = broadband non-reuse",
+                    ("execution mode = broadband nonreuse",),
                     "2",
                 ),
-                ("reuse", "execution mode = broadband reuse", "1"),
+                (
+                    "reuse-serial",
+                    (
+                        "execution mode = broadband reuse",
+                        "reuse mode = serial",
+                    ),
+                    "1",
+                ),
             ):
                 with self.subTest(
                     execution_mode=execution_mode,
@@ -622,7 +678,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         "\n".join(
                             (
                                 *common_lines,
-                                mode_marker,
+                                *mode_markers,
                                 f"Trace passes = {wrong_trace_passes}",
                             )
                         ),
@@ -664,11 +720,11 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         "execution mode = broadband reuse",
                         "Trace passes = 2",
                     ),
-                    "execution mode = broadband non-reuse",
+                    "execution mode = broadband nonreuse",
                 ),
                 (
                     (
-                        "execution mode = broadband non-reuse",
+                        "execution mode = broadband nonreuse",
                         "Trace passes = 20",
                     ),
                     "Trace passes = 2",
@@ -707,7 +763,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         "Cartesian beams",
                         "Rectilinear receiver grid",
                         *definition.prt_markers,
-                        "execution mode = broadband non-reuse",
+                        "execution mode = broadband nonreuse",
                         "Trace passes = 2",
                     )
                 ),

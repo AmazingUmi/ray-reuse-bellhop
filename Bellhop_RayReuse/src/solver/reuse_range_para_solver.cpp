@@ -1,4 +1,4 @@
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -208,7 +208,7 @@ void validateFusedArrivalScope(const SimulationCase& simulation,
 
 }  // namespace
 
-bool supportsFusedRayReuse(const SimulationCase& simulation) {
+bool supportsReuseRangePara(const SimulationCase& simulation) {
   return fusedScopeFailure(simulation) == FusedScopeFailure::None;
 }
 
@@ -224,11 +224,11 @@ bool supportsFusedRayReuse(const SimulationCase& simulation) {
 // and since A05 the Geometric Gaussian family (Cartesian) join the fused
 // set; the remaining family tasks widen the beam-family dimension further.
 template <typename Adapter, typename Sink>
-typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
+typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
-    FusedRayReuseExecutionSettings executionSettings,
+    ReuseRangeParaExecutionSettings executionSettings,
     std::size_t sourceIndex) {
   if constexpr (std::is_same_v<Sink, ArrivalFusedSink>) {
     validateFusedArrivalScope(simulation, sourceIndex);
@@ -380,11 +380,11 @@ typename Sink::Result FusedRayReuseSolver::accumulateFrequenciesImpl(
       arrivalStatistics);
 }
 
-FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
+FusedAccumulationResult ReuseRangeParaSolver::accumulateFrequencies(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
-    FusedRayReuseExecutionSettings executionSettings) {
+    ReuseRangeParaExecutionSettings executionSettings) {
   // A02/A03/A04/A05/A06 dispatchers (design §3.3): the unified executor owns
   // validation and the worker loop; the scope gate covers all TL run modes
   // of Cerveny (both coordinate systems), Geometric Hat, and Geometric
@@ -429,11 +429,11 @@ FusedAccumulationResult FusedRayReuseSolver::accumulateFrequencies(
 }
 
 FusedIntensityAccumulationResult
-FusedRayReuseSolver::accumulateFrequenciesIntensity(
+ReuseRangeParaSolver::accumulateFrequenciesIntensity(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
     double epsilonMultiplier, double loopRange,
     CartesianCervenySettings influenceSettings,
-    FusedRayReuseExecutionSettings executionSettings) {
+    ReuseRangeParaExecutionSettings executionSettings) {
   // Family legality, reachable enforcement (design §9, live since A06): the
   // intensity sink exists only for families with legal incoherent /
   // semi-coherent modes. Simple Gaussian is coherent-only — its adapter
@@ -479,10 +479,10 @@ FusedRayReuseSolver::accumulateFrequenciesIntensity(
 }
 
 FusedArrivalAccumulationResult
-FusedRayReuseSolver::accumulateArrivalFrequencies(
+ReuseRangeParaSolver::accumulateArrivalFrequencies(
     const SimulationCase& simulation, const RayPathCache& sourceCache,
     std::size_t sourceIndex, CartesianCervenySettings influenceSettings,
-    FusedRayReuseExecutionSettings executionSettings) {
+    ReuseRangeParaExecutionSettings executionSettings) {
   if (simulation.beamFamily() == BeamFamily::GeometricHat) {
     return accumulateFrequenciesImpl<GeometricHatFusedAdapter,
                                      ArrivalFusedSink>(
@@ -495,11 +495,11 @@ FusedRayReuseSolver::accumulateArrivalFrequencies(
       executionSettings, sourceIndex);
 }
 
-ArrivalSolverStatistics FusedRayReuseSolver::solveArrivalStreaming(
+ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
     const SimulationCase& simulation,
     const FusedArrivalSourceConsumer& consumer,
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
-    FusedRayReuseExecutionSettings executionSettings) {
+    ReuseRangeParaExecutionSettings executionSettings) {
   if (!consumer) {
     throw ValidationError("fused arrival source consumer must be callable");
   }
@@ -576,18 +576,18 @@ ArrivalSolverStatistics FusedRayReuseSolver::solveArrivalStreaming(
   return statistics;
 }
 
-FusedRayReuseStatistics FusedRayReuseSolver::solveStreaming(
+ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, const RayReuseFrequencyConsumer& consumer,
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
-    FusedRayReuseExecutionSettings executionSettings) {
+    ReuseRangeParaExecutionSettings executionSettings) {
   if (!consumer) {
     throw ValidationError(
         "fused ray-reuse frequency consumer must be callable");
   }
   validateFusedScope(simulation);
 
-  FusedRayReuseStatistics statistics;
+  ReuseRangeParaStatistics statistics;
   const Clock::time_point wallBegin = Clock::now();
   // One frozen trace pass over the validated single source; the cache is
   // owned here and handed out as const only (V2-GATE-09, D8).

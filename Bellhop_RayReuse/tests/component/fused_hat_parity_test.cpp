@@ -1,4 +1,4 @@
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -20,7 +20,7 @@
 #include "rayreuse/field/pressure_scaling.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 #include "support/munk_case_fixture.hpp"
 #include "support/test_harness.hpp"
@@ -35,8 +35,8 @@
 //             workspaces materialized per frequency (std::memcmp over the
 //             payload span bytes).
 //   Level C — scaled workspace bitwise parity per frequency via the two
-//             production paths (SerialRayReuseSolver::solve vs
-//             FusedRayReuseSolver::solveStreaming).
+//             production paths (ReuseSerialSolver::solve vs
+//             ReuseRangeParaSolver::solveStreaming).
 //   Level D — worker counts 1/2/4/8, each gated against the same serial
 //             reference (transitively identical raw bytes).
 //   Level A — fused fingerprint before == after and == the serial reuse
@@ -64,15 +64,15 @@ using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::FrequencyProjector;
 using rayreuse::FrequencyWorkspace;
-using rayreuse::FusedRayReuseSolver;
-using rayreuse::FusedRayReuseStatistics;
+using rayreuse::ReuseRangeParaSolver;
+using rayreuse::ReuseRangeParaStatistics;
 using rayreuse::GeometricHatInfluence;
 using rayreuse::IntensityWorkspace;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
 using rayreuse::ReceiverGrid;
-using rayreuse::SerialRayReuseResult;
-using rayreuse::SerialRayReuseSolver;
+using rayreuse::ReuseSerialResult;
+using rayreuse::ReuseSerialSolver;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SingleFrequencyResult;
@@ -83,7 +83,7 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
 using rayreuse::WorkspaceDelivery;
-using rayreuse::supportsFusedRayReuse;
+using rayreuse::supportsReuseRangePara;
 using rayreuse::test::Context;
 
 struct WorkspaceByteComparison {
@@ -405,9 +405,9 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
   // 1/2/4/8).
   if (coherentRunMode) {
     const rayreuse::FusedAccumulationResult fused =
-        FusedRayReuseSolver::accumulateFrequencies(
+        ReuseRangeParaSolver::accumulateFrequencies(
             simulation, trace.cache, 1.0, 50.0, settings,
-            rayreuse::FusedRayReuseExecutionSettings{
+            rayreuse::ReuseRangeParaExecutionSettings{
                 .requestedRangeWorkers = workerCount});
     context.check(
         fused.rawWorkspace.frequencyCount() == frequencies.size() &&
@@ -440,9 +440,9 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
     }
   } else {
     const rayreuse::FusedIntensityAccumulationResult fused =
-        FusedRayReuseSolver::accumulateFrequenciesIntensity(
+        ReuseRangeParaSolver::accumulateFrequenciesIntensity(
             simulation, trace.cache, 1.0, 50.0, settings,
-            rayreuse::FusedRayReuseExecutionSettings{
+            rayreuse::ReuseRangeParaExecutionSettings{
                 .requestedRangeWorkers = workerCount});
     context.check(
         fused.rawIntensityWorkspace.frequencyCount() ==
@@ -485,14 +485,14 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
   }
 
   // Level C: production paths on the same SimulationCase.
-  const SerialRayReuseResult serial =
-      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, settings, true);
+  const ReuseSerialResult serial =
+      ReuseSerialSolver::solve(simulation, 1.0, 50.0, settings, true);
   std::vector<std::optional<std::vector<FrequencyWorkspace>>> streamed(
       frequencies.size());
   std::vector<double> streamedScaleSeconds(frequencies.size(), -1.0);
   std::vector<std::size_t> callbackOrder;
-  const FusedRayReuseStatistics fusedStatistics =
-      FusedRayReuseSolver::solveStreaming(
+  const ReuseRangeParaStatistics fusedStatistics =
+      ReuseRangeParaSolver::solveStreaming(
           simulation, 1.0, 50.0,
           [&](std::size_t frequencyIndex,
               std::vector<FrequencyWorkspace>&& sourceWorkspaces,
@@ -502,7 +502,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
             streamed.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
           },
           settings, true,
-          rayreuse::FusedRayReuseExecutionSettings{
+          rayreuse::ReuseRangeParaExecutionSettings{
               .requestedRangeWorkers = workerCount});
 
   context.check(
@@ -608,10 +608,10 @@ int main() {
   // rayreuse.component.fused_solver; one assertion here keeps the parity
   // test honest about the domain it exercises.
   context.check(
-      supportsFusedRayReuse(makeMunkHatCase(SimulationRunMode::Coherent,
+      supportsReuseRangePara(makeMunkHatCase(SimulationRunMode::Coherent,
                                             CervenyCoordinateSystem::
                                                 Cartesian)) &&
-          supportsFusedRayReuse(makeMunkHatCase(
+          supportsReuseRangePara(makeMunkHatCase(
               SimulationRunMode::SemiCoherent,
               CervenyCoordinateSystem::RayCentered)),
       "the fused-support predicate accepts hat fixtures in both coordinates "

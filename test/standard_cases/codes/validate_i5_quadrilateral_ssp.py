@@ -140,7 +140,7 @@ def generation_commands(
     }
     if rayreuse_executable is not None:
         versions = versions + (("rayreuse",),)
-        executable_for["rayreuse"] = "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+        executable_for["rayreuse"] = "Bellhop_RayReuse/build/release/bellhop_broadband"
     for version_group in versions:
         for version in version_group:
             for case_id in CASES:
@@ -475,7 +475,7 @@ def validate(
             "--f2cpp-executable "
             "Bellhop_F2CPP/build/release/bellhop_f2cpp "
             "--rayreuse-executable "
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
     return result
 

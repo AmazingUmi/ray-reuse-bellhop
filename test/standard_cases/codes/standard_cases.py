@@ -31,7 +31,43 @@ from eigenray_io import parse_eigenray
 
 VERSIONS = ("origin", "f2cpp", "rayreuse")
 STAGES = ("generate", "run", "validate", "test")
-RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse", "fused", "parallel")
+# Two-layer execution model (BB-1 A03): the runner names complete routes;
+# each route maps to the executable's explicit argument tail and to the PRT
+# marker lines it must produce. `reuse-serial`/`reuse-frequency`/`reuse-range`
+# replace the legacy reuse/parallel/fused single-layer values.
+RAYREUSE_EXECUTION_MODES = (
+    "nonreuse",
+    "reuse-serial",
+    "reuse-frequency",
+    "reuse-range",
+)
+RAYREUSE_EXECUTION_ARGUMENTS = {
+    "nonreuse": ("--execution-mode", "nonreuse"),
+    "reuse-serial": (
+        "--execution-mode", "reuse", "--reuse-mode", "serial",
+    ),
+    "reuse-frequency": (
+        "--execution-mode", "reuse", "--reuse-mode", "frequency",
+    ),
+    "reuse-range": (
+        "--execution-mode", "reuse", "--reuse-mode", "range",
+    ),
+}
+RAYREUSE_EXECUTION_PRT_MARKERS = {
+    "nonreuse": ("execution mode = broadband nonreuse",),
+    "reuse-serial": (
+        "execution mode = broadband reuse",
+        "reuse mode = serial",
+    ),
+    "reuse-frequency": (
+        "execution mode = broadband reuse",
+        "reuse mode = frequency",
+    ),
+    "reuse-range": (
+        "execution mode = broadband reuse",
+        "reuse mode = range",
+    ),
+}
 DECLARABLE_BEAM_FAMILY_MARKERS = (
     "Ray centered beams",
     "Geometric hat beams in Cartesian coordinates",
@@ -82,8 +118,7 @@ class VersionAdapter:
                 file_root,
                 "--frequencies-hz",
                 format_frequency_csv(frequencies_hz),
-                "--execution-mode",
-                execution_mode,
+                *RAYREUSE_EXECUTION_ARGUMENTS[execution_mode],
             ],
             cwd=working_directory,
             check=True,
@@ -176,7 +211,7 @@ def default_adapters(executable_override: Path | None) -> dict[str, VersionAdapt
                 / "Bellhop_RayReuse"
                 / "build"
                 / "release"
-                / "bellhop_rayreuse"
+                / "bellhop_broadband"
             ),
             enabled=True,
         ),
@@ -392,22 +427,17 @@ def validate_broadband_output(
     print_lines = {
         line.strip() for line in print_contents.splitlines()
     }
-    expected_mode_marker = {
-        "nonreuse": "execution mode = broadband non-reuse",
-        "reuse": "execution mode = broadband reuse",
-        "fused": "execution mode = broadband fused reuse",
-        "parallel": "execution mode = broadband parallel reuse",
-    }[execution_mode]
+    expected_mode_markers = RAYREUSE_EXECUTION_PRT_MARKERS[execution_mode]
     # Frozen multi-source statistics (FP-2F worklist §1.5):
-    # non-reuse traces once per (frequency, source); reuse/parallel trace
-    # each source fan exactly once.
+    # non-reuse traces once per (frequency, source); every reuse route
+    # traces each source fan exactly once.
     expected_trace_passes = (
         len(frequencies) * definition.source_depth_count
         if execution_mode == "nonreuse"
         else definition.source_depth_count
     )
     for marker in (
-        expected_mode_marker,
+        *expected_mode_markers,
         f"Trace passes = {expected_trace_passes}",
     ):
         if marker not in print_lines:
@@ -453,12 +483,7 @@ def validate_broadband_product_outputs(
     print_lines = {
         line.strip() for line in print_path.read_text(errors="replace").splitlines()
     }
-    expected_mode_marker = {
-        "nonreuse": "execution mode = broadband non-reuse",
-        "reuse": "execution mode = broadband reuse",
-        "fused": "execution mode = broadband fused reuse",
-        "parallel": "execution mode = broadband parallel reuse",
-    }[execution_mode]
+    expected_mode_markers = RAYREUSE_EXECUTION_PRT_MARKERS[execution_mode]
     # Frozen multi-source statistics (FP-2F worklist §1.5): see
     # validate_broadband_output.
     expected_trace_passes = (
@@ -467,7 +492,7 @@ def validate_broadband_product_outputs(
         else definition.source_depth_count
     )
     for marker in (
-        expected_mode_marker,
+        *expected_mode_markers,
         f"Trace passes = {expected_trace_passes}",
     ):
         if marker not in print_lines:
@@ -716,7 +741,9 @@ def process_rayreuse_broadband(
             "working_directory": "broadband",
             "file_root": file_root,
             "frequencies_argument": frequency_csv,
-            "execution_mode_argument": execution_mode,
+            "execution_mode_argument": " ".join(
+                RAYREUSE_EXECUTION_ARGUMENTS[execution_mode]
+            ),
             "expected_solver_invocations": 1,
             "frequency_slices_share_output": definition.output_kind == "shd",
             "frequency_products_independent": definition.output_kind != "shd",

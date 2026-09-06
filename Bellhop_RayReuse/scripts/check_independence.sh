@@ -35,7 +35,7 @@ for build_directory in \
   fi
 done
 
-release_executable="${project_root}/build/release/bellhop_rayreuse"
+release_executable="${project_root}/build/release/bellhop_broadband"
 if [[ -x "${release_executable}" ]]; then
   if command -v otool >/dev/null 2>&1; then
     if otool -L "${release_executable}" |

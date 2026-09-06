@@ -102,9 +102,9 @@ CommandLineOptions parseCommandLine(
   bool verifyCacheSpecified = false;
   bool profileInfluenceSpecified = false;
   bool profileFrequencyTasksSpecified = false;
-  bool rangeParallelSpecified = false;
+  bool reuseModeSpecified = false;
   bool traceWorkerCountSpecified = false;
-  bool workerCountSpecified = false;
+  bool reuseWorkerCountSpecified = false;
   bool outputQueueCapacitySpecified = false;
   bool memoryBudgetSpecified = false;
   for (std::size_t index = 0U; index < arguments.size(); ++index) {
@@ -126,25 +126,42 @@ CommandLineOptions parseCommandLine(
       }
       if (index + 1U >= arguments.size()) {
         throw ValidationError(
-            "--execution-mode requires 'nonreuse', 'reuse', 'parallel', or "
-            "'fused'");
+            "--execution-mode requires 'nonreuse' or 'reuse'");
       }
       const std::string_view value = arguments[++index];
       if (value == "nonreuse") {
-        options.executionMode = BroadbandExecutionMode::NonReuse;
+        options.executionMode = ExecutionMode::NonReuse;
       } else if (value == "reuse") {
-        options.executionMode = BroadbandExecutionMode::Reuse;
-      } else if (value == "parallel") {
-        options.executionMode = BroadbandExecutionMode::Parallel;
-      } else if (value == "fused") {
-        options.executionMode = BroadbandExecutionMode::Fused;
+        options.executionMode = ExecutionMode::Reuse;
       } else {
         throw ValidationError(
-            "--execution-mode must be 'nonreuse', 'reuse', 'parallel', or "
-            "'fused'");
+            "--execution-mode must be 'nonreuse' or 'reuse'");
       }
       executionModeSpecified = true;
       options.executionModeSpecified = true;
+      continue;
+    }
+    if (argument == "--reuse-mode") {
+      if (reuseModeSpecified) {
+        throw ValidationError("--reuse-mode may be specified only once");
+      }
+      if (index + 1U >= arguments.size()) {
+        throw ValidationError(
+            "--reuse-mode requires 'serial', 'frequency', or 'range'");
+      }
+      const std::string_view value = arguments[++index];
+      if (value == "serial") {
+        options.reuseMode = ReuseMode::Serial;
+      } else if (value == "frequency") {
+        options.reuseMode = ReuseMode::Frequency;
+      } else if (value == "range") {
+        options.reuseMode = ReuseMode::Range;
+      } else {
+        throw ValidationError(
+            "--reuse-mode must be 'serial', 'frequency', or 'range'");
+      }
+      reuseModeSpecified = true;
+      options.reuseModeSpecified = true;
       continue;
     }
     if (argument == "--verify-cache") {
@@ -172,14 +189,6 @@ CommandLineOptions parseCommandLine(
       profileFrequencyTasksSpecified = true;
       continue;
     }
-    if (argument == "--range-parallel") {
-      if (rangeParallelSpecified) {
-        throw ValidationError("--range-parallel may be specified only once");
-      }
-      options.rangeParallel = true;
-      rangeParallelSpecified = true;
-      continue;
-    }
     if (argument == "--trace-workers") {
       if (traceWorkerCountSpecified) {
         throw ValidationError("--trace-workers may be specified only once");
@@ -193,16 +202,17 @@ CommandLineOptions parseCommandLine(
       traceWorkerCountSpecified = true;
       continue;
     }
-    if (argument == "--workers") {
-      if (workerCountSpecified) {
-        throw ValidationError("--workers may be specified only once");
+    if (argument == "--reuse-workers") {
+      if (reuseWorkerCountSpecified) {
+        throw ValidationError("--reuse-workers may be specified only once");
       }
       if (index + 1U >= arguments.size()) {
-        throw ValidationError("--workers requires a positive integer");
+        throw ValidationError("--reuse-workers requires a positive integer");
       }
-      options.workerCount = parsePositiveSize(arguments[++index], "--workers");
-      workerCountSpecified = true;
-      options.workerCountSpecified = true;
+      options.reuseWorkerCount =
+          parsePositiveSize(arguments[++index], "--reuse-workers");
+      reuseWorkerCountSpecified = true;
+      options.reuseWorkerCountSpecified = true;
       continue;
     }
     if (argument == "--output-queue-capacity") {
@@ -253,31 +263,26 @@ CommandLineOptions parseCommandLine(
   if (options.fileRoot.empty()) {
     throw ValidationError("a file root is required");
   }
-  if (rangeParallelSpecified &&
-      (!executionModeSpecified ||
-       options.executionMode != BroadbandExecutionMode::Fused)) {
-    throw ValidationError(
-        "--range-parallel requires explicit --execution-mode fused");
+  if (reuseModeSpecified && options.executionMode != ExecutionMode::Reuse) {
+    throw ValidationError("--reuse-mode requires --execution-mode reuse");
   }
-  if (workerCountSpecified &&
-      options.executionMode != BroadbandExecutionMode::Parallel &&
-      !(options.executionMode == BroadbandExecutionMode::Fused &&
-        options.rangeParallel)) {
-    throw ValidationError(
-        "--workers requires --execution-mode parallel or "
-        "--execution-mode fused --range-parallel");
+  if (reuseWorkerCountSpecified &&
+      options.executionMode != ExecutionMode::Reuse) {
+    throw ValidationError("--reuse-workers requires --execution-mode reuse");
   }
-  if ((outputQueueCapacitySpecified || memoryBudgetSpecified) &&
-      options.executionMode != BroadbandExecutionMode::Parallel) {
+  if (options.executionMode == ExecutionMode::Reuse &&
+      options.reuseMode == ReuseMode::Serial && reuseWorkerCountSpecified) {
     throw ValidationError(
-        "--output-queue-capacity and --memory-budget-mib require "
-        "--execution-mode parallel");
+        "--reuse-workers is not accepted with --reuse-mode serial");
   }
-  if (profileFrequencyTasksSpecified &&
-      options.executionMode != BroadbandExecutionMode::Parallel) {
+  if ((outputQueueCapacitySpecified || memoryBudgetSpecified ||
+       profileFrequencyTasksSpecified) &&
+      !(options.executionMode == ExecutionMode::Reuse &&
+        options.reuseMode == ReuseMode::Frequency)) {
     throw ValidationError(
-        "--profile-frequency-tasks requires --execution-mode "
-        "parallel");
+        "--output-queue-capacity, --memory-budget-mib, and "
+        "--profile-frequency-tasks require --execution-mode reuse "
+        "--reuse-mode frequency");
   }
   return options;
 }

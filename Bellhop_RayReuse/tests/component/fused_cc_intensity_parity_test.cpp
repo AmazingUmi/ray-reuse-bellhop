@@ -1,4 +1,4 @@
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -21,7 +21,7 @@
 #include "rayreuse/field/pressure_scaling.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 #include "support/munk_case_fixture.hpp"
 #include "support/test_harness.hpp"
@@ -32,14 +32,14 @@
 //   Level B — raw double-payload bitwise parity per frequency: the legacy
 //             reuse intensity accumulation (public CartesianCervenyInfluence
 //             entries, the same kernel the solver's Prevalidated route uses)
-//             vs FusedRayReuseSolver::accumulateFrequenciesIntensity +
+//             vs ReuseRangeParaSolver::accumulateFrequenciesIntensity +
 //             materializeIntensityFrequency (std::memcmp over the intensity
 //             span bytes), plus the converted end-to-end seam
 //             (solveFrequencyFromSourceCache Raw, which applies the same
 //             scaleCartesianIntensityToPressure conversion).
 //   Level C — scaled workspace bitwise parity per frequency via the two
-//             production paths (SerialRayReuseSolver::solve vs
-//             FusedRayReuseSolver::solveStreaming).
+//             production paths (ReuseSerialSolver::solve vs
+//             ReuseRangeParaSolver::solveStreaming).
 //   Level D — worker counts 1/2/4/8, each gated against the same serial
 //             reference (transitively identical raw intensity bytes).
 //   Level A — fused fingerprint before == after and == the serial reuse
@@ -57,14 +57,14 @@ using rayreuse::Environment;
 using rayreuse::FrequencyGrid;
 using rayreuse::FrequencyProjector;
 using rayreuse::FrequencyWorkspace;
-using rayreuse::FusedRayReuseSolver;
-using rayreuse::FusedRayReuseStatistics;
+using rayreuse::ReuseRangeParaSolver;
+using rayreuse::ReuseRangeParaStatistics;
 using rayreuse::IntensityWorkspace;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
 using rayreuse::ReceiverGrid;
-using rayreuse::SerialRayReuseResult;
-using rayreuse::SerialRayReuseSolver;
+using rayreuse::ReuseSerialResult;
+using rayreuse::ReuseSerialSolver;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SingleFrequencyResult;
@@ -381,10 +381,10 @@ void testIntensityParityLevels(Context& context,
   // same serial reference, so raw intensity bytes are transitively identical
   // across 1/2/4/8).
   const rayreuse::FusedIntensityAccumulationResult fused =
-      FusedRayReuseSolver::accumulateFrequenciesIntensity(
+      ReuseRangeParaSolver::accumulateFrequenciesIntensity(
           simulation, trace.cache, 1.0,
           50.0, settings,
-          rayreuse::FusedRayReuseExecutionSettings{
+          rayreuse::ReuseRangeParaExecutionSettings{
               .requestedRangeWorkers = workerCount});
   context.check(
       fused.rawIntensityWorkspace.frequencyCount() == frequencies.size() &&
@@ -431,14 +431,14 @@ void testIntensityParityLevels(Context& context,
   }
 
   // Level C: production paths on the same SimulationCase.
-  const SerialRayReuseResult serial =
-      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, settings, true);
+  const ReuseSerialResult serial =
+      ReuseSerialSolver::solve(simulation, 1.0, 50.0, settings, true);
   std::vector<std::optional<std::vector<FrequencyWorkspace>>> streamed(
       frequencies.size());
   std::vector<double> streamedScaleSeconds(frequencies.size(), -1.0);
   std::vector<std::size_t> callbackOrder;
-  const FusedRayReuseStatistics fusedStatistics =
-      FusedRayReuseSolver::solveStreaming(
+  const ReuseRangeParaStatistics fusedStatistics =
+      ReuseRangeParaSolver::solveStreaming(
           simulation, 1.0, 50.0,
           [&](std::size_t frequencyIndex,
               std::vector<FrequencyWorkspace>&& sourceWorkspaces,
@@ -448,7 +448,7 @@ void testIntensityParityLevels(Context& context,
             streamed.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
           },
           settings, true,
-          rayreuse::FusedRayReuseExecutionSettings{
+          rayreuse::ReuseRangeParaExecutionSettings{
               .requestedRangeWorkers = workerCount});
 
   context.check(

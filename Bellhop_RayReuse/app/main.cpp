@@ -11,7 +11,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -24,12 +23,12 @@
 #include "rayreuse/io/ray_writer.hpp"
 #include "rayreuse/io/shd_writer.hpp"
 #include "rayreuse/solver/arrival_solver.hpp"
-#include "rayreuse/solver/broadband_nonreuse_solver.hpp"
+#include "rayreuse/solver/nonreuse_solver.hpp"
 #include "rayreuse/solver/eigenray_solver.hpp"
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
-#include "rayreuse/solver/parallel_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
+#include "rayreuse/solver/reuse_freq_para_solver.hpp"
 #include "rayreuse/solver/ray_trace_product.hpp"
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 
 namespace {
@@ -37,15 +36,15 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 void printUsage(std::ostream& stream) {
-  stream << "Usage: bellhop_rayreuse --version\n"
-         << "       bellhop_rayreuse <file-root> "
+  stream << "Usage: bellhop_broadband --version\n"
+         << "       bellhop_broadband <file-root> "
             "[--frequencies-hz <f0,f1,...>] "
-            "[--execution-mode <nonreuse|reuse|parallel|fused>] "
+            "[--execution-mode <nonreuse|reuse>] "
+            "[--reuse-mode <serial|frequency|range>] "
+            "[--trace-workers <count>] "
+            "[--reuse-workers <count>] "
             "[--verify-cache] [--profile-influence] "
             "[--profile-frequency-tasks] "
-            "[--range-parallel] "
-            "[--trace-workers <count>] "
-            "[--workers <count>] "
             "[--output-queue-capacity <count>] "
             "[--memory-budget-mib <MiB>]\n"
          << "\n"
@@ -54,57 +53,25 @@ void printUsage(std::ostream& stream) {
          << "Without --frequencies-hz, the scalar or strictly increasing "
             "frequency list in the .env file is used.\n"
          << "With --frequencies-hz, the strictly increasing list "
-            "overrides the .env frequency.\n"
-         << "Broadband execution defaults to nonreuse; use "
-            "--execution-mode fused for production RayReuse on supported "
-            "multi-frequency TL cases with regular receiver grids: Cerveny "
-            "Gaussian and geometric hat in both coordinate systems, "
-            "geometric Gaussian, and simple Gaussian. Fused runs coherent "
-            "TL for every supported family and incoherent/semi-coherent TL "
-            "where legal for the family; fused eligibility is a subset of "
-            "each family's legal support matrix. Multi-frequency ASCII and "
-            "binary arrivals also support fused geometric hat (both "
-            "coordinate systems) and geometric Gaussian execution, including "
-            "multiple sources. The deprecated legacy "
-            "reuse and parallel modes are retained for compatibility.\n"
+            "overrides the .env frequency (an Input override).\n"
+         << "Execution defaults to nonreuse; under --execution-mode reuse "
+            "the reuse mode defaults to serial.\n"
+         << "--trace-workers defaults to 1 (serial trace at N=1, static "
+            "parallel trace above 1) and applies to nonreuse and to every "
+            "reuse route.\n"
+         << "--reuse-workers defaults to 1; the frequency route splits "
+            "frequency tasks and the range route splits receiver-range "
+            "blocks across the workers, while the serial route does not "
+            "accept the option.\n"
          << "--verify-cache hashes the complete frozen ray cache before "
             "and after projection and is intended for validation.\n"
          << "--profile-influence records detailed Influence work counts "
-            "and sub-phase timings; it is disabled by default.\n"
-         << "--profile-frequency-tasks writes existing per-frequency "
-            "Project/Influence/Scale timings for parallel reuse; it is "
+            "and sub-phase timings for Cartesian Cerveny TL only; it is "
             "disabled by default.\n"
-         << "--range-parallel explicitly enables static contiguous "
-            "receiver-range partitioning for fused mode and defaults to 4 "
-            "workers. --workers overrides that count only when "
-            "--range-parallel is present; it does not enable range "
-            "parallelism by itself. For legacy parallel mode, --workers "
-            "selects frequency workers and defaults to hardware "
-            "concurrency, the output "
-            "queue defaults to 2, and a zero/unset memory budget means "
-            "no explicit budget.\n";
-}
-
-void warnIfReplaceableLegacyMode(
-    const rayreuse::ParsedEnvironment& parsed,
-    const rayreuse::CommandLineOptions& options) {
-  if (!options.executionModeSpecified ||
-      !rayreuse::supportsFusedRayReuse(parsed.simulationCase)) {
-    return;
-  }
-  if (options.executionMode == rayreuse::BroadbandExecutionMode::Reuse) {
-    std::cerr
-        << "bellhop_rayreuse: warning: --execution-mode reuse is deprecated "
-           "for this supported broadband TL case; use --execution-mode "
-           "fused (retained for compatibility)\n";
-  } else if (options.executionMode ==
-             rayreuse::BroadbandExecutionMode::Parallel) {
-    std::cerr
-        << "bellhop_rayreuse: warning: --execution-mode parallel is "
-           "deprecated for this supported broadband TL case; use "
-           "--execution-mode fused --range-parallel (retained for "
-           "compatibility)\n";
-  }
+         << "--profile-frequency-tasks, --output-queue-capacity, and "
+            "--memory-budget-mib apply only to reuse + frequency "
+            "multi-frequency TL runs; the output queue defaults to 2 and "
+            "a zero/unset memory budget means no explicit budget.\n";
 }
 
 [[nodiscard]] std::string runModeName(rayreuse::SimulationRunMode mode) {
@@ -295,19 +262,12 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
       throw rayreuse::ValidationError(
           "multi-frequency R products are not supported by the executable");
     }
-    if (options.executionModeSpecified &&
-        (options.executionMode == rayreuse::BroadbandExecutionMode::Reuse ||
-         options.executionMode == rayreuse::BroadbandExecutionMode::Parallel)) {
+    if (options.executionMode == rayreuse::ExecutionMode::Reuse) {
       throw rayreuse::ValidationError(
-          "--execution-mode reuse/parallel is not defined for R products");
-    }
-    if (options.executionModeSpecified &&
-        options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
-      throw rayreuse::ValidationError(
-          "--execution-mode fused is not defined for R products");
+          "--execution-mode reuse is not defined for R products");
     }
     if (options.profileInfluence || options.profileFrequencyTasks ||
-        options.workerCountSpecified || unsupportedParallelTuning) {
+        unsupportedParallelTuning) {
       throw rayreuse::ValidationError(
           "profiling and parallel tuning options are only supported for TL");
     }
@@ -315,23 +275,15 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
   }
   if (rayreuse::isTransmissionLossMode(mode) &&
       parsed.simulationCase.frequencies().size() == 1U &&
-      options.executionModeSpecified &&
-      (options.executionMode == rayreuse::BroadbandExecutionMode::Reuse ||
-       options.executionMode == rayreuse::BroadbandExecutionMode::Parallel)) {
+      options.executionMode == rayreuse::ExecutionMode::Reuse) {
     throw rayreuse::ValidationError(
-        "--execution-mode reuse/parallel requires a multi-frequency TL run");
+        "--execution-mode reuse requires a multi-frequency TL run");
   }
   if (rayreuse::isTransmissionLossMode(mode) &&
-      parsed.simulationCase.frequencies().size() == 1U &&
-      options.executionModeSpecified &&
-      options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
-    throw rayreuse::ValidationError(
-        "--execution-mode fused requires a multi-frequency TL run");
-  }
-  if (rayreuse::isTransmissionLossMode(mode) &&
-      options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
-    // Fused TL covers every run mode of the Cerveny family in both
-    // coordinate systems (coherent, incoherent, semi-coherent; IGR-3A
+      options.executionMode == rayreuse::ExecutionMode::Reuse &&
+      options.reuseMode == rayreuse::ReuseMode::Range) {
+    // Range-parallel reuse TL covers every run mode of the Cerveny family in
+    // both coordinate systems (coherent, incoherent, semi-coherent; IGR-3A
     // A02b/A03 design §9), of the geometric hat family in both coordinate
     // systems since A04, of the Cartesian geometric Gaussian family since
     // A05, and of the simple Gaussian family in its only legal mode,
@@ -346,16 +298,16 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
         parsed.simulationCase.beamFamily() !=
             rayreuse::BeamFamily::SimpleGaussian) {
       throw rayreuse::ValidationError(
-          "--execution-mode fused requires Cerveny Gaussian, geometric hat, "
+          "--reuse-mode range requires Cerveny Gaussian, geometric hat, "
           "geometric Gaussian, or simple Gaussian TL");
     }
     if (parsed.simulationCase.sourceCount() != 1U) {
       throw rayreuse::ValidationError(
-          "--execution-mode fused requires a single source");
+          "--reuse-mode range requires a single source");
     }
     if (parsed.simulationCase.receivers().isIrregular()) {
       throw rayreuse::ValidationError(
-          "--execution-mode fused requires a rectilinear receiver grid");
+          "--reuse-mode range requires a rectilinear receiver grid");
     }
   }
   if (rayreuse::isTransmissionLossMode(mode) && options.profileInfluence &&
@@ -375,23 +327,23 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
           "Influence profiling and parallel tuning options are not supported "
           "for arrival/eigenray products");
     }
-    if (options.executionModeSpecified &&
-        options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
+    if (options.executionMode == rayreuse::ExecutionMode::Reuse &&
+        options.reuseMode == rayreuse::ReuseMode::Range) {
       if (parsed.simulationCase.frequencies().size() < 2U) {
         throw rayreuse::ValidationError(
-            "--execution-mode fused requires a multi-frequency arrival run");
+            "--reuse-mode range requires a multi-frequency arrival run");
       }
       if (parsed.simulationCase.beamFamily() !=
               rayreuse::BeamFamily::GeometricHat &&
           parsed.simulationCase.beamFamily() !=
               rayreuse::BeamFamily::GeometricGaussian) {
         throw rayreuse::ValidationError(
-            "--execution-mode fused arrivals require geometric hat or "
+            "--reuse-mode range arrivals require geometric hat or "
             "geometric Gaussian beams");
       }
       if (parsed.simulationCase.receivers().isIrregular()) {
         throw rayreuse::ValidationError(
-            "--execution-mode fused arrivals require a rectilinear receiver "
+            "--reuse-mode range arrivals require a rectilinear receiver "
             "grid");
       }
     }
@@ -403,16 +355,16 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
           "Influence profiling and parallel tuning options are not supported "
           "for arrival/eigenray products");
     }
-    if (options.executionModeSpecified &&
-        options.executionMode == rayreuse::BroadbandExecutionMode::Fused) {
+    if (options.executionMode == rayreuse::ExecutionMode::Reuse &&
+        options.reuseMode == rayreuse::ReuseMode::Range) {
       throw rayreuse::ValidationError(
-          "--execution-mode fused is not defined for eigenray products");
+          "--reuse-mode range is not defined for eigenray products");
     }
   }
 }
 
 void printVersion(std::ostream& stream) {
-  stream << "Bellhop RayReuse " << RAYREUSE_VERSION << '\n';
+  stream << "Bellhop Broadband " << RAYREUSE_VERSION << '\n';
 }
 
 void writeBoundarySummary(std::ostream& stream,
@@ -457,7 +409,7 @@ void writeConfigurationSummary(std::ostream& stream,
                                const rayreuse::ParsedEnvironment& parsed) {
   const rayreuse::SimulationCase& simulation = parsed.simulationCase;
   const rayreuse::Environment& environment = simulation.environment();
-  stream << "BELLHOP RAYREUSE\n"
+  stream << "BELLHOP BROADBAND\n"
          << "program version = " << RAYREUSE_VERSION << "\n\n"
          << parsed.title << '\n';
   if (simulation.frequencies().size() == 1U) {
@@ -707,15 +659,6 @@ void writeFrequencyTaskTimings(
   }
 }
 
-[[nodiscard]] std::size_t resolvedWorkerCount(
-    std::size_t requestedWorkerCount) {
-  if (requestedWorkerCount != 0U) {
-    return requestedWorkerCount;
-  }
-  const unsigned int hardwareCount = std::thread::hardware_concurrency();
-  return hardwareCount == 0U ? 1U : static_cast<std::size_t>(hardwareCount);
-}
-
 [[nodiscard]] std::size_t memoryBudgetBytes(std::size_t memoryBudgetMiB) {
   constexpr std::size_t bytesPerMiB = 1024U * 1024U;
   if (memoryBudgetMiB > std::numeric_limits<std::size_t>::max() / bytesPerMiB) {
@@ -726,34 +669,41 @@ void writeFrequencyTaskTimings(
 }
 
 void writeProductExecutionMode(std::ostream& stream,
-                               rayreuse::BroadbandExecutionMode mode,
+                               rayreuse::ExecutionMode mode,
+                               rayreuse::ReuseMode reuseMode,
                                std::size_t frequencyCount,
                                std::size_t sourceCount = 1U) {
-  if (frequencyCount == 1U) {
-    stream << "execution mode = single-frequency ";
-  } else {
-    stream << "execution mode = broadband ";
-  }
   switch (mode) {
-    case rayreuse::BroadbandExecutionMode::NonReuse:
-      stream << "non-reuse\n";
+    case rayreuse::ExecutionMode::NonReuse:
+      // Single-frequency non-reuse keeps the historical line wording.
+      stream << (frequencyCount == 1U
+                     ? "execution mode = single-frequency non-reuse\n"
+                     : "execution mode = broadband nonreuse\n");
       break;
-    case rayreuse::BroadbandExecutionMode::Reuse:
-      stream << "reuse\n";
-      break;
-    case rayreuse::BroadbandExecutionMode::Parallel:
-      stream << "parallel reuse\n";
-      break;
-    case rayreuse::BroadbandExecutionMode::Fused:
-      // Unreachable in practice (fused is rejected for every product that
-      // calls this helper); kept for switch exhaustiveness (design §1.8).
-      stream << "fused reuse\n";
+    case rayreuse::ExecutionMode::Reuse:
+      // Single-frequency reuse keeps the historical first-line wording, so
+      // single-frequency ARR/E runs are not misdescribed as broadband; the
+      // reuse-mode line is emitted in both cases.
+      stream << (frequencyCount == 1U
+                     ? "execution mode = single-frequency reuse\n"
+                     : "execution mode = broadband reuse\n");
+      switch (reuseMode) {
+        case rayreuse::ReuseMode::Serial:
+          stream << "reuse mode = serial\n";
+          break;
+        case rayreuse::ReuseMode::Frequency:
+          stream << "reuse mode = frequency\n";
+          break;
+        case rayreuse::ReuseMode::Range:
+          stream << "reuse mode = range\n";
+          break;
+      }
       break;
   }
   // Frozen semantics (Worklist FP-2F §1.5): trace passes count per-source
-  // fan traces (non-reuse = Nfreq x NSz, reuse/parallel = NSz).
+  // fan traces (non-reuse = Nfreq x NSz, reuse routes = NSz).
   stream << "Trace passes = "
-         << (mode == rayreuse::BroadbandExecutionMode::NonReuse
+         << (mode == rayreuse::ExecutionMode::NonReuse
                  ? frequencyCount * sourceCount
                  : sourceCount)
          << '\n';
@@ -829,7 +779,7 @@ int main(int argumentCount, char* arguments[]) {
     options = rayreuse::parseCommandLine(argumentViews);
   } catch (const std::exception& error) {
     printUsage(std::cerr);
-    std::cerr << "bellhop_rayreuse: " << error.what() << '\n';
+    std::cerr << "bellhop_broadband: " << error.what() << '\n';
     return 2;
   }
   if (options.showHelp) {
@@ -848,7 +798,7 @@ int main(int argumentCount, char* arguments[]) {
 
   std::ofstream printLog(printPath, std::ios::out | std::ios::trunc);
   if (!printLog.is_open()) {
-    std::cerr << "bellhop_rayreuse: unable to open print output: " << printPath
+    std::cerr << "bellhop_broadband: unable to open print output: " << printPath
               << '\n';
     return 1;
   }
@@ -860,7 +810,6 @@ int main(int argumentCount, char* arguments[]) {
         rayreuse::EnvironmentParser::parseFile(
             environmentPath, std::move(options.frequencyOverrideHz));
     validateProductOptions(parsed, options);
-    warnIfReplaceableLegacyMode(parsed, options);
     // Product files are mode-owned.  Remove every known product for this
     // root before solving so switching modes cannot expose stale output.
     removeProductArtifacts(fileRoot);
@@ -984,20 +933,24 @@ int main(int argumentCount, char* arguments[]) {
             }
           };
       rayreuse::ArrivalSolverStatistics statistics;
-      std::size_t fusedRequestedRangeWorkers = 0U;
-      std::size_t fusedEffectiveRangeWorkers = 0U;
-      double fusedWriterSeconds = 0.0;
-      if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
+      std::size_t rangeRequestedWorkers = 0U;
+      std::size_t rangeEffectiveWorkers = 0U;
+      double rangeWriterSeconds = 0.0;
+      if (options.executionMode == rayreuse::ExecutionMode::NonReuse) {
         statistics = rayreuse::ArrivalSolver::solveNonReuse(
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
-      } else if (options.executionMode ==
-                 rayreuse::BroadbandExecutionMode::Reuse) {
+      } else if (options.reuseMode == rayreuse::ReuseMode::Serial) {
         statistics = rayreuse::ArrivalSolver::solve(
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
-      } else if (options.executionMode ==
-                 rayreuse::BroadbandExecutionMode::Fused) {
+      } else if (options.reuseMode == rayreuse::ReuseMode::Frequency) {
+        statistics = rayreuse::ArrivalSolver::solveParallel(
+            parsed.simulationCase, consumer, options.reuseWorkerCount,
+            options.verifyCache, traceSettings);
+      } else {
+        // ReuseMode::Range: multi-frequency arrivals streamed through the
+        // range-parallel reuse solver, one source at a time.
         std::vector<std::filesystem::path> outputPaths;
         outputPaths.reserve(parsed.simulationCase.frequencies().size());
         for (std::size_t frequencyIndex = 0U;
@@ -1013,7 +966,7 @@ int main(int argumentCount, char* arguments[]) {
         const Clock::time_point writerSetupBegin = Clock::now();
         rayreuse::BroadbandArrivalWriterSet writers(
             outputPaths, parsed.title, parsed.simulationCase, encoding);
-        fusedWriterSeconds +=
+        rangeWriterSeconds +=
             std::chrono::duration<double>(Clock::now() - writerSetupBegin)
                 .count();
         const rayreuse::FusedArrivalSourceConsumer fusedConsumer =
@@ -1021,26 +974,23 @@ int main(int argumentCount, char* arguments[]) {
                 const rayreuse::BroadbandArrivalWorkspace& workspace) {
               const Clock::time_point appendBegin = Clock::now();
               writers.appendSource(sourceIndex, workspace);
-              fusedWriterSeconds +=
+              rangeWriterSeconds +=
                   std::chrono::duration<double>(Clock::now() - appendBegin)
                       .count();
             };
-        fusedRequestedRangeWorkers =
-            !options.rangeParallel
-                ? 1U
-                : (options.workerCountSpecified ? options.workerCount : 4U);
-        fusedEffectiveRangeWorkers = std::min(
-            fusedRequestedRangeWorkers,
+        rangeRequestedWorkers = options.reuseWorkerCount;
+        rangeEffectiveWorkers = std::min(
+            rangeRequestedWorkers,
             parsed.simulationCase.receivers().rangeCount());
-        statistics = rayreuse::FusedRayReuseSolver::solveArrivalStreaming(
+        statistics = rayreuse::ReuseRangeParaSolver::solveArrivalStreaming(
             parsed.simulationCase, fusedConsumer, influenceSettings,
             options.verifyCache,
-            rayreuse::FusedRayReuseExecutionSettings{
-                .requestedRangeWorkers = fusedRequestedRangeWorkers,
+            rayreuse::ReuseRangeParaExecutionSettings{
+                .requestedRangeWorkers = rangeRequestedWorkers,
                 .traceSettings = traceSettings});
         const Clock::time_point finalizeBegin = Clock::now();
         writers.finalize();
-        fusedWriterSeconds +=
+        rangeWriterSeconds +=
             std::chrono::duration<double>(Clock::now() - finalizeBegin)
                 .count();
 
@@ -1053,14 +1003,9 @@ int main(int argumentCount, char* arguments[]) {
                    << '\n'
                    << "product = " << outputPaths[frequencyIndex] << '\n';
         }
-      } else {
-        const std::size_t workers = resolvedWorkerCount(options.workerCount);
-        statistics = rayreuse::ArrivalSolver::solveParallel(
-            parsed.simulationCase, consumer, workers, options.verifyCache,
-            traceSettings);
       }
       writeProductExecutionMode(printLog, options.executionMode,
-                                statistics.frequencyCount,
+                                options.reuseMode, statistics.frequencyCount,
                                 parsed.simulationCase.sourceCount());
       printLog << "frequency count = " << statistics.frequencyCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
@@ -1068,14 +1013,12 @@ int main(int argumentCount, char* arguments[]) {
                << '\n'
                << "arrival consume seconds = " << statistics.consumeSeconds
                << '\n';
-      if (options.executionMode ==
-          rayreuse::BroadbandExecutionMode::Fused) {
-        printLog << "range parallel = "
-                 << (options.rangeParallel ? "enabled\n" : "disabled\n")
-                 << "requested range worker count = "
-                 << fusedRequestedRangeWorkers << '\n'
-                 << "effective range worker count = "
-                 << fusedEffectiveRangeWorkers << '\n'
+      if (options.executionMode == rayreuse::ExecutionMode::Reuse &&
+          options.reuseMode == rayreuse::ReuseMode::Range) {
+        printLog << "requested reuse worker count = "
+                 << rangeRequestedWorkers << '\n'
+                 << "effective reuse worker count = "
+                 << rangeEffectiveWorkers << '\n'
                  << "Trace seconds = " << statistics.traceSeconds << '\n'
                  << "Project seconds = " << statistics.projectSeconds << '\n'
                  << "Influence seconds = " << statistics.influenceSeconds
@@ -1084,7 +1027,7 @@ int main(int argumentCount, char* arguments[]) {
                  << statistics.peakRayCacheBytes << '\n'
                  << "peak arrival workspace bytes = "
                  << statistics.peakArrivalWorkspaceBytes << '\n'
-                 << "ARR writer seconds = " << fusedWriterSeconds << '\n';
+                 << "ARR writer seconds = " << rangeWriterSeconds << '\n';
       }
       if (statistics.cacheFingerprintVerified) {
         printLog << "cache fingerprint verification = enabled\n"
@@ -1106,7 +1049,7 @@ int main(int argumentCount, char* arguments[]) {
         writeTraceWorkerSeconds(
             printLog, statistics.traceWorkerSecondsBySource,
             parsed.simulationCase.sourceCount(),
-            options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse);
+            options.executionMode == rayreuse::ExecutionMode::NonReuse);
       }
     } else if (runMode == rayreuse::SimulationRunMode::Eigenray) {
       const auto consumer =
@@ -1154,24 +1097,27 @@ int main(int argumentCount, char* arguments[]) {
                                               "cache fingerprint");
             }
           };
-      const std::size_t workers = resolvedWorkerCount(options.workerCount);
       rayreuse::EigenraySolverStatistics statistics;
-      if (options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse) {
+      if (options.executionMode == rayreuse::ExecutionMode::NonReuse) {
         statistics = rayreuse::EigenraySolver::solveNonReuse(
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
-      } else if (options.executionMode ==
-                 rayreuse::BroadbandExecutionMode::Reuse) {
+      } else if (options.reuseMode == rayreuse::ReuseMode::Serial) {
         statistics = rayreuse::EigenraySolver::solve(
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
-      } else {
+      } else if (options.reuseMode == rayreuse::ReuseMode::Frequency) {
         statistics = rayreuse::EigenraySolver::solveParallel(
-            parsed.simulationCase, consumer, workers, options.verifyCache,
-            traceSettings);
+            parsed.simulationCase, consumer, options.reuseWorkerCount,
+            options.verifyCache, traceSettings);
+      } else {
+        // ReuseMode::Range is rejected by validateProductOptions for
+        // eigenray products; this arm is unreachable defense.
+        throw rayreuse::ValidationError(
+            "--reuse-mode range is not defined for eigenray products");
       }
       writeProductExecutionMode(printLog, options.executionMode,
-                                statistics.frequencyCount,
+                                options.reuseMode, statistics.frequencyCount,
                                 parsed.simulationCase.sourceCount());
       printLog << "frequency count = " << statistics.frequencyCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
@@ -1198,7 +1144,7 @@ int main(int argumentCount, char* arguments[]) {
         writeTraceWorkerSeconds(
             printLog, statistics.traceWorkerSecondsBySource,
             parsed.simulationCase.sourceCount(),
-            options.executionMode == rayreuse::BroadbandExecutionMode::NonReuse);
+            options.executionMode == rayreuse::ExecutionMode::NonReuse);
       }
     } else if (parsed.simulationCase.frequencies().size() == 1U) {
       const rayreuse::SingleFrequencyResult result =
@@ -1228,10 +1174,9 @@ int main(int argumentCount, char* arguments[]) {
         writeTraceWorkerSeconds(printLog,
                                 result.traceWorkerSecondsBySource, 0U, false);
       }
-    } else if (options.executionMode ==
-               rayreuse::BroadbandExecutionMode::NonReuse) {
-      rayreuse::BroadbandNonReuseResult result =
-          rayreuse::BroadbandNonReuseSolver::solve(
+    } else if (options.executionMode == rayreuse::ExecutionMode::NonReuse) {
+      rayreuse::NonReuseResult result =
+          rayreuse::NonReuseSolver::solve(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange, influenceSettings, traceSettings);
 
@@ -1259,7 +1204,7 @@ int main(int argumentCount, char* arguments[]) {
       const double writeSeconds =
           std::chrono::duration<double>(Clock::now() - writeBegin).count();
 
-      printLog << "execution mode = broadband non-reuse\n"
+      printLog << "execution mode = broadband nonreuse\n"
                << "Trace passes = " << result.statistics.tracePassCount << '\n'
                << "total ray count = " << result.statistics.totalRayCount
                << '\n'
@@ -1301,8 +1246,7 @@ int main(int argumentCount, char* arguments[]) {
         writeTraceWorkerSeconds(printLog, traceWorkerSeconds,
                                 parsed.simulationCase.sourceCount(), true);
       }
-    } else if (options.executionMode ==
-               rayreuse::BroadbandExecutionMode::Reuse) {
+    } else if (options.reuseMode == rayreuse::ReuseMode::Serial) {
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       rayreuse::ShdFrequencyWriter writer(shadePath, parsed.title,
@@ -1322,8 +1266,8 @@ int main(int argumentCount, char* arguments[]) {
                 std::chrono::duration<double>(Clock::now() - writeBegin)
                     .count();
           };
-      const rayreuse::SerialRayReuseStatistics statistics =
-          rayreuse::SerialRayReuseSolver::solveStreaming(
+      const rayreuse::ReuseSerialStatistics statistics =
+          rayreuse::ReuseSerialSolver::solveStreaming(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange, consumer, influenceSettings,
               options.verifyCache, traceSettings);
@@ -1333,6 +1277,7 @@ int main(int argumentCount, char* arguments[]) {
           std::chrono::duration<double>(Clock::now() - finalizeBegin).count();
 
       printLog << "execution mode = broadband reuse\n"
+               << "reuse mode = serial\n"
                << "Trace passes = " << statistics.tracePassCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
                << "ray point count = " << statistics.totalRayPointCount << '\n'
@@ -1384,8 +1329,7 @@ int main(int argumentCount, char* arguments[]) {
         writeInfluenceStatistics(printLog,
                                  statistics.phaseTotals.influenceStatistics);
       }
-    } else if (options.executionMode ==
-               rayreuse::BroadbandExecutionMode::Fused) {
+    } else if (options.reuseMode == rayreuse::ReuseMode::Range) {
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       rayreuse::ShdFrequencyWriter writer(shadePath, parsed.title,
@@ -1405,18 +1349,13 @@ int main(int argumentCount, char* arguments[]) {
                 std::chrono::duration<double>(Clock::now() - writeBegin)
                     .count();
           };
-      const rayreuse::FusedRayReuseStatistics statistics =
-          rayreuse::FusedRayReuseSolver::solveStreaming(
+      const rayreuse::ReuseRangeParaStatistics statistics =
+          rayreuse::ReuseRangeParaSolver::solveStreaming(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange, consumer, influenceSettings,
               options.verifyCache,
-              rayreuse::FusedRayReuseExecutionSettings{
-                  .requestedRangeWorkers =
-                      !options.rangeParallel
-                          ? 1U
-                          : (options.workerCountSpecified
-                                 ? options.workerCount
-                                 : 4U),
+              rayreuse::ReuseRangeParaExecutionSettings{
+                  .requestedRangeWorkers = options.reuseWorkerCount,
                   .traceSettings = traceSettings});
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
@@ -1424,12 +1363,11 @@ int main(int argumentCount, char* arguments[]) {
           std::chrono::duration<double>(Clock::now() - finalizeBegin)
               .count();
 
-      printLog << "execution mode = broadband fused reuse\n"
-               << "range parallel = "
-               << (options.rangeParallel ? "enabled\n" : "disabled\n")
-               << "requested range worker count = "
+      printLog << "execution mode = broadband reuse\n"
+               << "reuse mode = range\n"
+               << "requested reuse worker count = "
                << statistics.requestedRangeWorkers << '\n'
-               << "effective range worker count = "
+               << "effective reuse worker count = "
                << statistics.effectiveRangeWorkers << '\n'
                << "Trace passes = " << statistics.tracePassCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
@@ -1471,6 +1409,7 @@ int main(int argumentCount, char* arguments[]) {
                                 false);
       }
     } else {
+      // ReuseMode::Frequency: frequency-parallel reuse TL.
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       rayreuse::ShdFrequencyWriter writer(shadePath, parsed.title,
@@ -1490,14 +1429,14 @@ int main(int argumentCount, char* arguments[]) {
                 std::chrono::duration<double>(Clock::now() - writeBegin)
                     .count();
           };
-      const rayreuse::ParallelRayReuseSettings settings{
-          .workerCount = resolvedWorkerCount(options.workerCount),
+      const rayreuse::ReuseFreqParaSettings settings{
+          .workerCount = options.reuseWorkerCount,
           .outputQueueCapacity = options.outputQueueCapacity,
           .memoryBudgetBytes = memoryBudgetBytes(options.memoryBudgetMiB),
           .traceSettings = traceSettings,
       };
-      const rayreuse::ParallelRayReuseStatistics statistics =
-          rayreuse::ParallelRayReuseSolver::solveStreaming(
+      const rayreuse::ReuseFreqParaStatistics statistics =
+          rayreuse::ReuseFreqParaSolver::solveStreaming(
               parsed.simulationCase, parsed.beam.epsilonMultiplier,
               parsed.beam.loopRange, consumer, settings, influenceSettings,
               options.verifyCache);
@@ -1506,12 +1445,14 @@ int main(int argumentCount, char* arguments[]) {
       writeSeconds +=
           std::chrono::duration<double>(Clock::now() - finalizeBegin).count();
 
-      printLog << "execution mode = broadband parallel reuse\n"
+      printLog << "execution mode = broadband reuse\n"
+               << "reuse mode = frequency\n"
                << "Trace passes = " << statistics.tracePassCount << '\n'
                << "ray count = " << statistics.rayCount << '\n'
                << "ray point count = " << statistics.totalRayPointCount << '\n'
                << "ray cache bytes = " << statistics.rayCacheBytes << '\n'
-               << "requested worker count = " << statistics.requestedWorkerCount
+               << "requested reuse worker count = "
+               << statistics.requestedWorkerCount
                << '\n'
                << "active frequency limit = " << statistics.activeFrequencyLimit
                << '\n'
@@ -1569,7 +1510,7 @@ int main(int argumentCount, char* arguments[]) {
     printLog << "Total solver and product seconds = "
              << std::chrono::duration<double>(Clock::now() - solveBegin).count()
              << '\n'
-             << "Bellhop RayReuse completed successfully\n";
+             << "Bellhop Broadband completed successfully\n";
     printLog.close();
     if (!printLog) {
       throw rayreuse::BellhopError("failed to finalize print output: " +
@@ -1582,7 +1523,7 @@ int main(int argumentCount, char* arguments[]) {
     }
     printLog << "\nFATAL ERROR: " << error.what() << '\n';
     printLog.close();
-    std::cerr << "bellhop_rayreuse: " << error.what() << '\n';
+    std::cerr << "bellhop_broadband: " << error.what() << '\n';
     return 1;
   }
 }

@@ -15,11 +15,11 @@
 
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/solver/arrival_solver.hpp"
-#include "rayreuse/solver/broadband_nonreuse_solver.hpp"
+#include "rayreuse/solver/nonreuse_solver.hpp"
 #include "rayreuse/solver/eigenray_solver.hpp"
-#include "rayreuse/solver/parallel_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_freq_para_solver.hpp"
 #include "rayreuse/solver/ray_trace_product.hpp"
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
@@ -29,8 +29,8 @@ using rayreuse::ArrivalSolverStatistics;
 using rayreuse::BeamFamily;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::BoundaryModel;
-using rayreuse::BroadbandNonReuseResult;
-using rayreuse::BroadbandNonReuseSolver;
+using rayreuse::NonReuseResult;
+using rayreuse::NonReuseSolver;
 using rayreuse::CervenyCoordinateSystem;
 using rayreuse::EigenrayHit;
 using rayreuse::EigenraySolver;
@@ -42,15 +42,15 @@ using rayreuse::FrequencyGrid;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
-using rayreuse::ParallelRayReuseSettings;
-using rayreuse::ParallelRayReuseSolver;
-using rayreuse::ParallelRayReuseStatistics;
+using rayreuse::ReuseFreqParaSettings;
+using rayreuse::ReuseFreqParaSolver;
+using rayreuse::ReuseFreqParaStatistics;
 using rayreuse::RayFanTraceResult;
 using rayreuse::RayPathCache;
 using rayreuse::ReceiverGrid;
-using rayreuse::SerialRayReuseResult;
-using rayreuse::SerialRayReuseSolver;
-using rayreuse::SerialRayReuseStatistics;
+using rayreuse::ReuseSerialResult;
+using rayreuse::ReuseSerialSolver;
+using rayreuse::ReuseSerialStatistics;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SingleFrequencyResult;
@@ -152,7 +152,7 @@ std::vector<HitIdentity> snapshotHits(const EigenraySourceHits& hits) {
 
 struct ParallelRun {
   std::vector<std::optional<std::vector<FrequencyWorkspace>>> workspaces;
-  ParallelRayReuseStatistics statistics;
+  ReuseFreqParaStatistics statistics;
 };
 
 ParallelRun runParallel(const SimulationCase& simulation) {
@@ -160,14 +160,14 @@ ParallelRun runParallel(const SimulationCase& simulation) {
       .workspaces = std::vector<std::optional<std::vector<FrequencyWorkspace>>>(
           simulation.frequencies().size()),
       .statistics = {}};
-  run.statistics = ParallelRayReuseSolver::solveStreaming(
+  run.statistics = ReuseFreqParaSolver::solveStreaming(
       simulation, 1.0, 50.0,
       [&run](std::size_t frequencyIndex,
              std::vector<FrequencyWorkspace>&& sourceWorkspaces,
              const rayreuse::SingleFrequencyTimings&) {
         run.workspaces.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
       },
-      ParallelRayReuseSettings{.workerCount = 2U,
+      ReuseFreqParaSettings{.workerCount = 2U,
                                .outputQueueCapacity = 1U,
                                .memoryBudgetBytes = 0U},
       {}, true);
@@ -187,10 +187,10 @@ void testDualSourceTlThreeModes(Context& context) {
                     dual.sources()[1U].depth == 70.0,
                 "dual-source TL fixture is depth sorted");
 
-  const BroadbandNonReuseResult nonReuse =
-      BroadbandNonReuseSolver::solve(dual, 1.0, 50.0);
-  const SerialRayReuseResult reuse =
-      SerialRayReuseSolver::solve(dual, 1.0, 50.0, {}, true);
+  const NonReuseResult nonReuse =
+      NonReuseSolver::solve(dual, 1.0, 50.0);
+  const ReuseSerialResult reuse =
+      ReuseSerialSolver::solve(dual, 1.0, 50.0, {}, true);
   const ParallelRun parallel = runParallel(dual);
 
   context.check(nonReuse.statistics.tracePassCount == 4U &&
@@ -259,8 +259,8 @@ void testDualSourceTlThreeModes(Context& context) {
                       single.launchFanPlan().launchAngleStep ==
                           dual.launchFanPlan().launchAngleStep,
                   "single-source reference plans the same launch fan");
-    const SerialRayReuseResult singleReuse =
-        SerialRayReuseSolver::solve(single, 1.0, 50.0, {}, true);
+    const ReuseSerialResult singleReuse =
+        ReuseSerialSolver::solve(single, 1.0, 50.0, {}, true);
     bool sourceMatchesSingle = true;
     for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U;
          ++frequencyIndex) {

@@ -114,7 +114,7 @@ def generation_commands(
     versions = ("origin", "f2cpp")
     if rayreuse_executable is not None:
         executables["rayreuse"] = (
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
         versions = ("origin", "f2cpp", "rayreuse")
     return [
@@ -369,7 +369,7 @@ def validate(
         )
         result["generation"]["validator_command"] += (
             " --rayreuse-executable "
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
         result["provenance_guards"]["f2cpp_rayreuse_payload_zero_difference"] = (
             all(entry["passed"] for entry in payload_exact.values())

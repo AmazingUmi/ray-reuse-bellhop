@@ -1,9 +1,9 @@
-name: Bellhop RayReuse quality gate
+name: Bellhop Broadband quality gate
 
 on:
   push:
     paths:
-      - ".github/workflows/bellhop-rayreuse-quality-gate.yml"
+      - ".github/workflows/bellhop-broadband-quality-gate.yml"
       - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
@@ -15,7 +15,7 @@ on:
       - "test/standard_cases/codes/**"
   pull_request:
     paths:
-      - ".github/workflows/bellhop-rayreuse-quality-gate.yml"
+      - ".github/workflows/bellhop-broadband-quality-gate.yml"
       - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
@@ -58,7 +58,7 @@ jobs:
       - name: Sync locked Python environment
         run: uv sync --locked
 
-      - name: Run the shared Bellhop RayReuse quality gate
+      - name: Run the shared Bellhop Broadband quality gate
         env:
           RAYREUSE_BUILD_JOBS: "3"
         run: |

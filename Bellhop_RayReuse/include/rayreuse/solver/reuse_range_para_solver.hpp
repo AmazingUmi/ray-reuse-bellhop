@@ -17,14 +17,14 @@
 
 namespace rayreuse {
 
-// Single source of truth for the production fused solver's scientific and
-// receiver-grid support boundary. CLI compatibility warnings use this same
-// predicate so they cannot advertise fused as a replacement for a case the
+// Single source of truth for the production range-parallel reuse solver's
+// scientific and receiver-grid support boundary. Tests use this same
+// predicate so they cannot advertise the range route for a case the
 // solver will reject.
-[[nodiscard]] bool supportsFusedRayReuse(
+[[nodiscard]] bool supportsReuseRangePara(
     const SimulationCase& simulation);
 
-struct FusedRayReuseExecutionSettings {
+struct ReuseRangeParaExecutionSettings {
   std::size_t requestedRangeWorkers{1U};
   // Shared-seam trace settings (Worklist PERF-TRACE-PAR-1 A01); orthogonal
   // to the receiver-range worker count above.
@@ -74,9 +74,9 @@ struct FusedArrivalAccumulationResult {
   std::size_t effectiveRangeWorkers{};
 };
 
-// Same fields and meanings as SerialRayReuseStatistics (fused-run shape, so
+// Same fields and meanings as ReuseSerialStatistics (fused-run shape, so
 // the PRT writer / fingerprint reporting stay reuse-compatible).
-struct FusedRayReuseStatistics {
+struct ReuseRangeParaStatistics {
   std::size_t tracePassCount{};
   std::size_t rayCount{};
   std::size_t totalRayPointCount{};
@@ -106,7 +106,7 @@ using FusedArrivalSourceConsumer = std::function<void(
 // frequencies per ray through the fused kernel, then scales and delivers per
 // frequency in index order. Optional static range partitioning preserves the
 // serial accumulation stream for every pressure cell.
-class FusedRayReuseSolver {
+class ReuseRangeParaSolver {
  public:
   // Level-B seam: no tracing, no scaling, no cache mutation, no consumer.
   // `sourceCache` must be frozen and traced from simulation.sources().front().
@@ -114,7 +114,7 @@ class FusedRayReuseSolver {
       const SimulationCase& simulation, const RayPathCache& sourceCache,
       double epsilonMultiplier, double loopRange,
       CartesianCervenySettings influenceSettings = {},
-      FusedRayReuseExecutionSettings executionSettings = {});
+      ReuseRangeParaExecutionSettings executionSettings = {});
 
   // IGR-3A A02b (design §3.3/§6.2): intensity twin of accumulateFrequencies
   // for the incoherent/semi-coherent fused sink. The fused scope gate covers
@@ -126,7 +126,7 @@ class FusedRayReuseSolver {
       const SimulationCase& simulation, const RayPathCache& sourceCache,
       double epsilonMultiplier, double loopRange,
       CartesianCervenySettings influenceSettings = {},
-      FusedRayReuseExecutionSettings executionSettings = {});
+      ReuseRangeParaExecutionSettings executionSettings = {});
 
   // One frozen source cache -> all-frequency Arrival lanes. This source-aware
   // seam is intentionally independent of the TL single-source eligibility
@@ -136,7 +136,7 @@ class FusedRayReuseSolver {
       const SimulationCase& simulation, const RayPathCache& sourceCache,
       std::size_t sourceIndex,
       CartesianCervenySettings influenceSettings = {},
-      FusedRayReuseExecutionSettings executionSettings = {});
+      ReuseRangeParaExecutionSettings executionSettings = {});
 
   // Trace one source, accumulate all frequencies into one broadband
   // workspace, consume it, then release both workspace and cache before
@@ -146,22 +146,22 @@ class FusedRayReuseSolver {
       const FusedArrivalSourceConsumer& consumer,
       CartesianCervenySettings influenceSettings = {},
       bool verifyCacheFingerprint = false,
-      FusedRayReuseExecutionSettings executionSettings = {});
+      ReuseRangeParaExecutionSettings executionSettings = {});
 
-  // Production entry; mirrors SerialRayReuseSolver::solveStreaming semantics
+  // Production entry; mirrors ReuseSerialSolver::solveStreaming semantics
   // (consumer invoked per frequency index after that frequency's scale).
-  [[nodiscard]] static FusedRayReuseStatistics solveStreaming(
+  [[nodiscard]] static ReuseRangeParaStatistics solveStreaming(
       const SimulationCase& simulation, double epsilonMultiplier,
       double loopRange, const RayReuseFrequencyConsumer& consumer,
       CartesianCervenySettings influenceSettings = {},
       bool verifyCacheFingerprint = false,
-      FusedRayReuseExecutionSettings executionSettings = {});
+      ReuseRangeParaExecutionSettings executionSettings = {});
 
  private:
   // Unified fused executor (design §3.1-§3.2), parameterized over a kernel
   // adapter (src/solver/fused_influence_adapters.hpp) and a sink policy
   // (CoherentFusedSink / IntensityFusedSink); instantiated implicitly inside
-  // fused_ray_reuse_solver.cpp only. Since A02 this template is the single
+  // reuse_range_para_solver.cpp only. Since A02 this template is the single
   // worker/partition/projection/exception/timing implementation; the public
   // entries are thin dispatchers.
   template <typename Adapter, typename Sink>
@@ -169,7 +169,7 @@ class FusedRayReuseSolver {
       const SimulationCase& simulation, const RayPathCache& sourceCache,
       double epsilonMultiplier, double loopRange,
       CartesianCervenySettings influenceSettings,
-      FusedRayReuseExecutionSettings executionSettings,
+      ReuseRangeParaExecutionSettings executionSettings,
       std::size_t sourceIndex = 0U);
 };
 

@@ -34,21 +34,21 @@ python_command=("${python_executable}")
   cmake --build --preset package "${parallel_arguments[@]}"
 )
 
-install_root="$(mktemp -d "${TMPDIR:-/tmp}/bellhop-rayreuse-install.XXXXXX")"
+install_root="$(mktemp -d "${TMPDIR:-/tmp}/bellhop-broadband-install.XXXXXX")"
 cleanup_install() {
   rm -rf -- "${install_root}"
 }
 trap cleanup_install EXIT
 
 cmake --install "${project_root}/build/package" --prefix "${install_root}"
-version_output="$("${install_root}/bin/bellhop_rayreuse" --version)"
-if [[ ! "${version_output}" =~ ^Bellhop\ RayReuse\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+version_output="$("${install_root}/bin/bellhop_broadband" --version)"
+if [[ ! "${version_output}" =~ ^Bellhop\ Broadband\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "installed executable returned an invalid version: ${version_output}" >&2
   exit 1
 fi
 
 version="${version_output##* }"
-package_path="${project_root}/build/package/bellhop-rayreuse-${version}-$(uname -s)-$(uname -m).tar.gz"
+package_path="${project_root}/build/package/bellhop-broadband-${version}-$(uname -s)-$(uname -m).tar.gz"
 if [[ ! -f "${package_path}" ]]; then
   echo "expected versioned TGZ package is missing: ${package_path}" >&2
   exit 1

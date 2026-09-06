@@ -344,7 +344,7 @@ def generation_commands(include_rayreuse: bool) -> list[str]:
     }
     if include_rayreuse:
         executables["rayreuse"] = (
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
     return [
         "python3 test/standard_cases/codes/standard_cases.py test "
@@ -535,7 +535,7 @@ def validate(
                 "Bellhop_F2CPP/build/release/bellhop_f2cpp "
                 + (
                     "--rayreuse-executable "
-                    "Bellhop_RayReuse/build/release/bellhop_rayreuse "
+                    "Bellhop_RayReuse/build/release/bellhop_broadband "
                     if "rayreuse" in executables
                     else ""
                 )

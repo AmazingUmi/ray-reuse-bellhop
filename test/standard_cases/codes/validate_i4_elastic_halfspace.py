@@ -239,7 +239,7 @@ def validate(
                 "--results-root <results-root> "
                 "--origin-executable Bellhop_origin/bin/bellhop "
                 "--f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
-                + (" --rayreuse-executable Bellhop_RayReuse/build/release/bellhop_rayreuse" if "rayreuse" in versions else "")
+                + (" --rayreuse-executable Bellhop_RayReuse/build/release/bellhop_broadband" if "rayreuse" in versions else "")
             ),
         },
         "sha256": {

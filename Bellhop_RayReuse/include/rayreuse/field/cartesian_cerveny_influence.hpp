@@ -143,7 +143,7 @@ class CartesianCervenyInfluence {
 
  private:
   friend class SingleFrequencySolver;
-  friend class FusedRayReuseSolver;
+  friend class ReuseRangeParaSolver;
   // IGR-3A unified-executor adapter (design §4): its accumulateFused hook
   // forwards to the private fused kernel entry below.
   friend struct CartesianCervenyFusedAdapter;

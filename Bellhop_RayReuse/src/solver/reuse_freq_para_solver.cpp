@@ -1,4 +1,4 @@
-#include "rayreuse/solver/parallel_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_freq_para_solver.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -136,10 +136,10 @@ void recordFailure(WorkState& state, std::exception_ptr failure) {
 
 }  // namespace
 
-ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
+ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, const RayReuseFrequencyConsumer& consumer,
-    ParallelRayReuseSettings settings,
+    ReuseFreqParaSettings settings,
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint) {
   if (!consumer) {
     throw ValidationError(
@@ -185,7 +185,7 @@ ParallelRayReuseStatistics ParallelRayReuseSolver::solveStreaming(
       frequencyCount, settings.workerCount, effectiveQueueCapacity,
       totalCacheBytes, frequencyWorkspaceBytes, settings.memoryBudgetBytes);
 
-  ParallelRayReuseStatistics statistics;
+  ReuseFreqParaStatistics statistics;
   statistics.tracePassCount = sourceCount;
   statistics.rayCount = totalRayCount;
   statistics.totalRayPointCount = totalRayPointCount;

@@ -383,7 +383,7 @@ def generation_commands(rayreuse_executable: Path | None = None) -> list[str]:
     ]
     if rayreuse_executable is not None:
         pairs.append(
-            ("rayreuse", "Bellhop_RayReuse/build/release/bellhop_rayreuse")
+            ("rayreuse", "Bellhop_RayReuse/build/release/bellhop_broadband")
         )
     return [
         "python3 test/standard_cases/codes/standard_cases.py test "
@@ -508,7 +508,7 @@ def validate(
         ] = True
         result["generation"]["validator_command"] += (
             " --rayreuse-executable "
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
     return result
 

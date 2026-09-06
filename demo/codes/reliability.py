@@ -49,7 +49,7 @@ DEFAULT_EXECUTABLES = {
         / "Bellhop_RayReuse"
         / "build"
         / "release"
-        / "bellhop_rayreuse"
+        / "bellhop_broadband"
     ),
 }
 

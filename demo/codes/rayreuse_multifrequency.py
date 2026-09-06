@@ -26,13 +26,34 @@ from bellhop_io_py.shd import PressureField, ShdReader
 from reliability import common_tl_limits, draw_tl, output_paths
 
 
-EXECUTION_MODES = ("nonreuse", "reuse", "parallel")
+EXECUTION_MODES = ("nonreuse", "reuse-serial", "reuse-frequency")
+EXECUTION_ARGUMENTS = {
+    "nonreuse": ["--execution-mode", "nonreuse"],
+    "reuse-serial": ["--execution-mode", "reuse", "--reuse-mode", "serial"],
+    "reuse-frequency": [
+        "--execution-mode",
+        "reuse",
+        "--reuse-mode",
+        "frequency",
+    ],
+}
+EXECUTION_PRT_MARKERS = {
+    "nonreuse": ("execution mode = broadband nonreuse",),
+    "reuse-serial": (
+        "execution mode = broadband reuse",
+        "reuse mode = serial",
+    ),
+    "reuse-frequency": (
+        "execution mode = broadband reuse",
+        "reuse mode = frequency",
+    ),
+}
 DEFAULT_EXECUTABLE = (
     PROJECT_ROOT
     / "Bellhop_RayReuse"
     / "build"
     / "release"
-    / "bellhop_rayreuse"
+    / "bellhop_broadband"
 )
 RESULT_VERSION = "rayreuse_multifrequency"
 
@@ -95,7 +116,7 @@ def run_multifrequency(
             stale_path.unlink()
 
     print(
-        f"[Bellhop RayReuse/{execution_mode}] {output.environment.name} -> "
+        f"[Bellhop Broadband/{execution_mode}] {output.environment.name} -> "
         f"{output.shade.name}",
         flush=True,
     )
@@ -104,21 +125,18 @@ def run_multifrequency(
         [
             str(executable),
             output.root.name,
-            "--execution-mode",
-            execution_mode,
+            *EXECUTION_ARGUMENTS[execution_mode],
         ],
         cwd=version_directory,
         check=True,
     )
     elapsed = time.perf_counter() - started
     _, reader, print_text = validate_result(results_root, environment)
-    expected_marker = {
-        "nonreuse": "execution mode = broadband non-reuse",
-        "reuse": "execution mode = broadband reuse",
-        "parallel": "execution mode = broadband parallel reuse",
-    }[execution_mode]
-    if expected_marker not in print_text:
-        raise RuntimeError(f"PRT execution-mode marker missing: {expected_marker}")
+    for expected_marker in EXECUTION_PRT_MARKERS[execution_mode]:
+        if expected_marker not in print_text:
+            raise RuntimeError(
+                f"PRT execution-mode marker missing: {expected_marker}"
+            )
 
     report = {
         "schema": "bellhop.rayreuse.multifrequency_run",
@@ -224,7 +242,7 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--executable", type=Path, default=DEFAULT_EXECUTABLE)
     parser.add_argument(
-        "--execution-mode", choices=EXECUTION_MODES, default="reuse"
+        "--execution-mode", choices=EXECUTION_MODES, default="reuse-serial"
     )
     parser.add_argument("--results-root", type=Path, default=DEMO_ROOT / "results")
 

@@ -1,4 +1,4 @@
-#include "rayreuse/solver/broadband_nonreuse_solver.hpp"
+#include "rayreuse/solver/nonreuse_solver.hpp"
 
 #include <algorithm>
 #include <complex>
@@ -16,8 +16,8 @@
 namespace {
 
 using rayreuse::BoundaryModel;
-using rayreuse::BroadbandNonReuseResult;
-using rayreuse::BroadbandNonReuseSolver;
+using rayreuse::NonReuseResult;
+using rayreuse::NonReuseSolver;
 using rayreuse::Environment;
 using rayreuse::FrequencyGrid;
 using rayreuse::IntegratorSettings;
@@ -68,8 +68,8 @@ void checkPressureEqual(Context& context, const SingleFrequencyResult& actual,
 
 void testTwoFrequencyNonReuseSolve(Context& context) {
   const SimulationCase simulation = makeSimulation();
-  const BroadbandNonReuseResult broadband =
-      BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
+  const NonReuseResult broadband =
+      NonReuseSolver::solve(simulation, 1.0, 50.0);
 
   context.check(
       broadband.frequencyResults.size() == 2U &&

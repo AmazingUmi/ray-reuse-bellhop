@@ -1,4 +1,4 @@
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 
 #include <chrono>
 #include <utility>
@@ -26,7 +26,7 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
 
 }  // namespace
 
-SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
+ReuseSerialStatistics ReuseSerialSolver::solveStreaming(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, const RayReuseFrequencyConsumer& consumer,
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
@@ -36,7 +36,7 @@ SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
         "serial ray-reuse frequency consumer must be callable");
   }
 
-  SerialRayReuseStatistics statistics;
+  ReuseSerialStatistics statistics;
 
   const Clock::time_point wallBegin = Clock::now();
   // One frozen cache per source (Worklist FP-2F §1.2): the reuse unit is
@@ -103,18 +103,18 @@ SerialRayReuseStatistics SerialRayReuseSolver::solveStreaming(
   return statistics;
 }
 
-SerialRayReuseResult SerialRayReuseSolver::solve(
+ReuseSerialResult ReuseSerialSolver::solve(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, CartesianCervenySettings influenceSettings,
     bool verifyCacheFingerprint, RayFanTraceSettings traceSettings) {
-  SerialRayReuseResult result;
+  ReuseSerialResult result;
   result.frequencyResults.reserve(simulation.frequencies().size());
 
   result.statistics = solveStreaming(
       simulation, epsilonMultiplier, loopRange,
       [&result](std::size_t, std::vector<FrequencyWorkspace>&& workspaces,
                 const SingleFrequencyTimings& timings) {
-        result.frequencyResults.push_back(SerialRayReuseFrequencyResult{
+        result.frequencyResults.push_back(ReuseSerialFrequencyResult{
             .workspaces = std::move(workspaces), .timings = timings});
       },
       influenceSettings, verifyCacheFingerprint, traceSettings);

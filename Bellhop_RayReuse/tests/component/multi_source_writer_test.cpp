@@ -28,7 +28,7 @@
 #include "rayreuse/io/shd_writer.hpp"
 #include "rayreuse/model/environment.hpp"
 #include "rayreuse/model/simulation_case.hpp"
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 #include "rayreuse/solver/ray_trace_product.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 #include "support/test_harness.hpp"
@@ -680,7 +680,7 @@ void testFusedArrivalSourceStreamingContract(Context& context) {
                SimulationRunMode::AsciiArrivals, BeamFamily::GeometricHat);
   std::vector<std::size_t> callbackOrder;
   const rayreuse::ArrivalSolverStatistics statistics =
-      rayreuse::FusedRayReuseSolver::solveArrivalStreaming(
+      rayreuse::ReuseRangeParaSolver::solveArrivalStreaming(
           simulation,
           [&](std::size_t sourceIndex,
               const BroadbandArrivalWorkspace& workspace) {

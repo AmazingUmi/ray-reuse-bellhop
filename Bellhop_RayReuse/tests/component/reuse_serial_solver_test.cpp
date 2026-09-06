@@ -1,4 +1,4 @@
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 
 #include <algorithm>
 #include <complex>
@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "rayreuse/model/simulation_case.hpp"
-#include "rayreuse/solver/broadband_nonreuse_solver.hpp"
+#include "rayreuse/solver/nonreuse_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 #include "support/munk_case_fixture.hpp"
 #include "support/test_harness.hpp"
@@ -20,8 +20,8 @@ namespace {
 
 using rayreuse::BiologicalAttenuationLayers;
 using rayreuse::BoundaryModel;
-using rayreuse::BroadbandNonReuseResult;
-using rayreuse::BroadbandNonReuseSolver;
+using rayreuse::NonReuseResult;
+using rayreuse::NonReuseSolver;
 using rayreuse::Environment;
 using rayreuse::FrancoisGarrisonParameters;
 using rayreuse::FrequencyGrid;
@@ -29,9 +29,9 @@ using rayreuse::IntegratorSettings;
 using rayreuse::LaunchAngleDegreeBounds;
 using rayreuse::LaunchFan;
 using rayreuse::ReceiverGrid;
-using rayreuse::SerialRayReuseFrequencyResult;
-using rayreuse::SerialRayReuseResult;
-using rayreuse::SerialRayReuseSolver;
+using rayreuse::ReuseSerialFrequencyResult;
+using rayreuse::ReuseSerialResult;
+using rayreuse::ReuseSerialSolver;
 using rayreuse::SimulationCase;
 using rayreuse::SoundSpeedPoint;
 using rayreuse::SoundSpeedProfile;
@@ -88,7 +88,7 @@ SimulationCase makeSimulation(VolumeAttenuation volumeAttenuation = {}) {
 }
 
 void checkPressureEqual(Context& context,
-                        const SerialRayReuseFrequencyResult& actual,
+                        const ReuseSerialFrequencyResult& actual,
                         const rayreuse::SingleFrequencyResult& expected,
                         const char* message) {
   context.check(actual.workspaces.size() == expected.sourceCount() &&
@@ -107,9 +107,9 @@ void checkPressureEqual(Context& context,
 
 void testTwoFrequencySerialReuse(Context& context) {
   const SimulationCase simulation = makeSimulation();
-  const BroadbandNonReuseResult nonReuse =
-      BroadbandNonReuseSolver::solve(simulation, 1.0, 50.0);
-  const SerialRayReuseResult reuse = SerialRayReuseSolver::solve(
+  const NonReuseResult nonReuse =
+      NonReuseSolver::solve(simulation, 1.0, 50.0);
+  const ReuseSerialResult reuse = ReuseSerialSolver::solve(
       simulation, 1.0, 50.0,
       rayreuse::CartesianCervenySettings{.collectStatistics = true}, true);
 
@@ -257,8 +257,8 @@ void testMunkSplineFrozenGeometryAnchor(Context& context) {
 
 void testStreamingSerialReuse(Context& context) {
   const SimulationCase simulation = makeSimulation();
-  const SerialRayReuseResult collected =
-      SerialRayReuseSolver::solve(simulation, 1.0, 50.0);
+  const ReuseSerialResult collected =
+      ReuseSerialSolver::solve(simulation, 1.0, 50.0);
   std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
       streamed(simulation.frequencies().size());
   std::vector<std::size_t> callbackCounts(simulation.frequencies().size(), 0U);
@@ -266,8 +266,8 @@ void testStreamingSerialReuse(Context& context) {
                                                 0U);
   std::vector<std::size_t> callbackOrder;
 
-  const rayreuse::SerialRayReuseStatistics statistics =
-      SerialRayReuseSolver::solveStreaming(
+  const rayreuse::ReuseSerialStatistics statistics =
+      ReuseSerialSolver::solveStreaming(
           simulation, 1.0, 50.0,
           [&](std::size_t frequencyIndex,
               std::vector<rayreuse::FrequencyWorkspace>&& sourceWorkspaces,

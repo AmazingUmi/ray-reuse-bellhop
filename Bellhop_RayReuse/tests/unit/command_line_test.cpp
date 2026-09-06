@@ -1,8 +1,10 @@
 #include "rayreuse/io/command_line.hpp"
 
+#include <cstddef>
 #include <initializer_list>
 #include <iostream>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "rayreuse/error.hpp"
@@ -10,18 +12,19 @@
 
 namespace {
 
-using rayreuse::BroadbandExecutionMode;
 using rayreuse::CommandLineOptions;
+using rayreuse::ExecutionMode;
+using rayreuse::ReuseMode;
 using rayreuse::parseCommandLine;
-using rayreuse::ValidationError;
 using rayreuse::test::Context;
+using rayreuse::ValidationError;
 
 CommandLineOptions parse(std::initializer_list<std::string_view> arguments) {
   const std::vector<std::string_view> values(arguments);
   return parseCommandLine(values);
 }
 
-void testSingleFrequencyCompatibility(Context& context) {
+void testDefaults(Context& context) {
   const CommandLineOptions options = parse({"case/root"});
   context.check(!options.showHelp, "normal invocation does not show help");
   context.check(!options.showVersion,
@@ -30,92 +33,28 @@ void testSingleFrequencyCompatibility(Context& context) {
                 "single invocation preserves root");
   context.check(!options.frequencyOverrideHz.has_value(),
                 "single invocation leaves the environment frequency unchanged");
-  context.check(options.executionMode == BroadbandExecutionMode::NonReuse,
-                "non-reuse remains the default during the baseline gate");
+  context.check(options.executionMode == ExecutionMode::NonReuse,
+                "nonreuse is the default execution mode");
   context.check(!options.executionModeSpecified,
                 "single invocation does not mark execution mode explicit");
+  context.check(options.reuseMode == ReuseMode::Serial,
+                "serial is the default reuse mode");
+  context.check(!options.reuseModeSpecified,
+                "single invocation does not mark reuse mode explicit");
   context.check(!options.verifyCache,
                 "cache fingerprint verification is disabled by default");
   context.check(!options.profileInfluence,
                 "Influence profiling is disabled by default");
   context.check(!options.profileFrequencyTasks,
                 "frequency-task profiling is disabled by default");
-  context.check(!options.rangeParallel,
-                "receiver-range parallelism is disabled by default");
-}
-
-void testExecutionMode(Context& context) {
-  const CommandLineOptions options =
-      parse({"case/root", "--frequencies-hz", "50,250", "--execution-mode",
-             "reuse", "--verify-cache", "--profile-influence"});
-  context.check(options.executionMode == BroadbandExecutionMode::Reuse,
-                "reuse execution mode is selected explicitly");
-  context.check(options.executionModeSpecified,
-                "explicit execution mode is tracked for product validation");
-  context.check(options.verifyCache,
-                "cache fingerprint verification is selected explicitly");
-  context.check(options.profileInfluence,
-                "Influence profiling is selected explicitly");
-  const CommandLineOptions traceParallel =
-      parse({"root", "--execution-mode", "reuse", "--trace-workers", "8"});
-  context.check(traceParallel.traceWorkerCountSpecified &&
-                    traceParallel.traceWorkerCount == 8U,
-                "reuse trace worker count is parsed");
-  const CommandLineOptions traceWorkers =
-      parse({"root", "--trace-workers", "2"});
-  context.check(traceWorkers.traceWorkerCountSpecified &&
-                    traceWorkers.traceWorkerCount == 2U,
-                "trace worker count is product- and mode-independent");
-  const CommandLineOptions orthogonalWorkers = parse(
-      {"root", "--execution-mode", "parallel", "--workers", "8",
-       "--trace-workers", "8"});
-  context.check(orthogonalWorkers.executionMode ==
-                    BroadbandExecutionMode::Parallel &&
-                    orthogonalWorkers.workerCount == 8U &&
-                    orthogonalWorkers.traceWorkerCount == 8U,
-                "trace workers stay orthogonal to frequency workers");
-  const CommandLineOptions parallel =
-      parse({"root", "--execution-mode", "parallel", "--workers", "8",
-             "--output-queue-capacity", "2", "--memory-budget-mib", "4096",
-             "--profile-frequency-tasks"});
-  context.check(parallel.executionMode == BroadbandExecutionMode::Parallel,
-                "parallel execution mode is selected explicitly");
-  context.check(parallel.workerCount == 8U, "parallel worker count is parsed");
-  context.check(parallel.outputQueueCapacity == 2U,
-                "parallel output queue capacity is parsed");
-  context.check(parallel.memoryBudgetMiB == 4096U,
-                "parallel memory budget is parsed");
-  context.check(parallel.profileFrequencyTasks,
-                "frequency-task profiling is selected explicitly");
-  context.check(parallel.workerCountSpecified &&
-                    parallel.outputQueueCapacitySpecified &&
-                    parallel.memoryBudgetSpecified,
-                "parallel tuning option presence is tracked");
-  const CommandLineOptions fusedSerial =
-      parse({"case/root", "--frequencies-hz", "50,250", "--execution-mode",
-             "fused"});
-  context.check(fusedSerial.executionMode == BroadbandExecutionMode::Fused,
-                "fused execution mode is selected explicitly");
-  context.check(fusedSerial.executionModeSpecified,
-                "fused execution mode is tracked for product validation");
-  context.check(!fusedSerial.rangeParallel &&
-                    !fusedSerial.workerCountSpecified,
-                "fused mode remains serial without --range-parallel");
-
-  const CommandLineOptions fusedDefaultRange = parse(
-      {"case/root", "--execution-mode", "fused", "--range-parallel"});
-  context.check(fusedDefaultRange.rangeParallel &&
-                    !fusedDefaultRange.workerCountSpecified,
-                "range-parallel fused leaves the app to resolve default 4");
-
-  const CommandLineOptions fusedExplicitRange =
-      parse({"case/root", "--workers", "8", "--range-parallel",
-             "--execution-mode", "fused"});
-  context.check(fusedExplicitRange.rangeParallel &&
-                    fusedExplicitRange.workerCountSpecified &&
-                    fusedExplicitRange.workerCount == 8U,
-                "range-parallel fused accepts an order-independent worker "
-                "override");
+  context.check(options.traceWorkerCount == 1U,
+                "trace worker count defaults to 1");
+  context.check(!options.traceWorkerCountSpecified,
+                "trace worker count is unmarked by default");
+  context.check(options.reuseWorkerCount == 1U,
+                "reuse worker count defaults to 1");
+  context.check(!options.reuseWorkerCountSpecified,
+                "reuse worker count is unmarked by default");
 }
 
 void testFrequencyOverride(Context& context) {
@@ -128,6 +67,211 @@ void testFrequencyOverride(Context& context) {
                       std::vector<double>({50.0, 250.0, 5000.0}),
                   "frequency override preserves ascending values");
   }
+}
+
+void testExecutionMode(Context& context) {
+  const CommandLineOptions options =
+      parse({"case/root", "--frequencies-hz", "50,250", "--execution-mode",
+             "reuse", "--verify-cache", "--profile-influence"});
+  context.check(options.executionMode == ExecutionMode::Reuse,
+                "reuse execution mode is selected explicitly");
+  context.check(options.executionModeSpecified,
+                "explicit execution mode is tracked for product validation");
+  context.check(options.verifyCache,
+                "cache fingerprint verification is selected explicitly");
+  context.check(options.profileInfluence,
+                "Influence profiling is selected explicitly");
+  const CommandLineOptions nonReuse = parse(
+      {"case/root", "--frequencies-hz", "50,250", "--execution-mode",
+       "nonreuse"});
+  context.check(nonReuse.executionMode == ExecutionMode::NonReuse,
+                "nonreuse execution mode is selected explicitly");
+  context.check(nonReuse.executionModeSpecified,
+                "explicit nonreuse execution mode is tracked");
+  const CommandLineOptions traceParallel = parse(
+      {"root", "--execution-mode", "reuse", "--trace-workers", "8"});
+  context.check(traceParallel.traceWorkerCountSpecified &&
+                    traceParallel.traceWorkerCount == 8U,
+                "reuse trace worker count is parsed");
+  const CommandLineOptions traceWorkers =
+      parse({"root", "--trace-workers", "2"});
+  context.check(traceWorkers.traceWorkerCountSpecified &&
+                    traceWorkers.traceWorkerCount == 2U,
+                "trace worker count is product- and mode-independent");
+}
+
+void testReuseMode(Context& context) {
+  const std::pair<std::string_view, ReuseMode> legalValues[] = {
+      {"serial", ReuseMode::Serial},
+      {"frequency", ReuseMode::Frequency},
+      {"range", ReuseMode::Range}};
+  for (const auto& [value, mode] : legalValues) {
+    const CommandLineOptions options = parse(
+        {"root", "--execution-mode", "reuse", "--reuse-mode", value});
+    context.check(options.executionMode == ExecutionMode::Reuse &&
+                      options.reuseMode == mode && options.reuseModeSpecified,
+                  "reuse mode value is parsed under reuse execution");
+  }
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--reuse-mode", "serial"})); },
+      "reuse mode without reuse execution is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "nonreuse", "--reuse-mode", "range"}));
+      },
+      "reuse mode under nonreuse execution is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "fused"}));
+      },
+      "unknown reuse mode value is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode"}));
+      },
+      "missing reuse mode value is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                 "--reuse-mode", "serial", "--reuse-mode",
+                                 "serial"}));
+      },
+      "duplicate reuse mode option is rejected");
+}
+
+void testReuseWorkers(Context& context) {
+  const std::pair<std::string_view, std::size_t> workerCounts[] = {
+      {"1", 1U}, {"2", 2U}};
+  for (const std::string_view route : {"frequency", "range"}) {
+    for (const auto& workerCount : workerCounts) {
+      const CommandLineOptions options = parse(
+          {"root", "--execution-mode", "reuse", "--reuse-mode", route,
+           "--reuse-workers", workerCount.first});
+      context.check(
+          options.reuseWorkerCountSpecified &&
+              options.reuseWorkerCount == workerCount.second,
+          "reuse worker count is parsed on worker-splitting routes");
+    }
+  }
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                 "--reuse-mode", "serial", "--reuse-workers",
+                                 "1"}));
+      },
+      "explicit reuse worker count 1 is rejected on the serial route");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                 "--reuse-mode", "serial", "--reuse-workers",
+                                 "2"}));
+      },
+      "reuse worker count 2 is rejected on the serial route");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-workers", "2"}));
+      },
+      "reuse workers under the default serial reuse mode are rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--reuse-workers", "2"}));
+      },
+      "reuse workers under nonreuse execution are rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
+             "--reuse-workers", "0"}));
+      },
+      "zero reuse worker count is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
+             "--reuse-workers", "-1"}));
+      },
+      "negative reuse worker count is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "range",
+             "--reuse-workers", "1.5"}));
+      },
+      "non-integral reuse worker count is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "range",
+             "--reuse-workers", "8", "--reuse-workers", "8"}));
+      },
+      "duplicate reuse workers option is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "range",
+             "--reuse-workers"}));
+      },
+      "missing reuse workers value is rejected");
+}
+
+void testFrequencyRouteTuning(Context& context) {
+  const CommandLineOptions frequencyRoute = parse(
+      {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
+       "--reuse-workers", "8", "--output-queue-capacity", "2",
+       "--memory-budget-mib", "4096", "--profile-frequency-tasks"});
+  context.check(frequencyRoute.reuseMode == ReuseMode::Frequency,
+                "frequency route is selected explicitly");
+  context.check(frequencyRoute.reuseWorkerCount == 8U,
+                "frequency route reuse worker count is parsed");
+  context.check(frequencyRoute.outputQueueCapacity == 2U,
+                "frequency route output queue capacity is parsed");
+  context.check(frequencyRoute.memoryBudgetMiB == 4096U,
+                "frequency route memory budget is parsed");
+  context.check(frequencyRoute.profileFrequencyTasks,
+                "frequency route frequency-task profiling is selected");
+  context.check(frequencyRoute.outputQueueCapacitySpecified &&
+                    frequencyRoute.memoryBudgetSpecified,
+                "frequency route tuning option presence is tracked");
+  for (const std::string_view route : {"serial", "range"}) {
+    context.expectThrows<ValidationError>(
+        [&route] {
+          static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                   "--reuse-mode", route,
+                                   "--output-queue-capacity", "2"}));
+        },
+        "output queue tuning is rejected outside the frequency route");
+    context.expectThrows<ValidationError>(
+        [&route] {
+          static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                   "--reuse-mode", route,
+                                   "--memory-budget-mib", "4096"}));
+        },
+        "memory budget tuning is rejected outside the frequency route");
+    context.expectThrows<ValidationError>(
+        [&route] {
+          static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                   "--reuse-mode", route,
+                                   "--profile-frequency-tasks"}));
+        },
+        "frequency-task profiling is rejected outside the frequency route");
+  }
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--output-queue-capacity", "2"}));
+      },
+      "output queue tuning without reuse execution is rejected");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--memory-budget-mib", "4096"}));
+      },
+      "memory budget tuning without reuse execution is rejected");
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--profile-frequency-tasks"})); },
+      "frequency-task profiling without reuse execution is rejected");
 }
 
 void testInvalidArguments(Context& context) {
@@ -146,6 +290,20 @@ void testInvalidArguments(Context& context) {
       [] { static_cast<void>(parse({"root", "--unknown"})); },
       "unknown option is rejected");
   context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--workers", "2"})); },
+      "the legacy --workers option is rejected as unknown");
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--range-parallel"})); },
+      "the legacy --range-parallel option is rejected as unknown");
+  context.expectThrows<ValidationError>(
+      [] {
+        static_cast<void>(parse({"root", "--execution-mode", "parallel"}));
+      },
+      "the parallel execution value is rejected");
+  context.expectThrows<ValidationError>(
+      [] { static_cast<void>(parse({"root", "--execution-mode", "fused"})); },
+      "the fused execution value is rejected");
+  context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--execution-mode", "invalid"})); },
       "unknown execution mode is rejected");
   context.expectThrows<ValidationError>(
@@ -153,13 +311,11 @@ void testInvalidArguments(Context& context) {
       "missing execution mode value is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse({"root", "--execution-mode", "fused",
-                                 "--output-queue-capacity", "1"}));
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--execution-mode",
+             "nonreuse"}));
       },
-      "fused mode rejects parallel output queue tuning");
-  context.expectThrows<ValidationError>(
-      [] { static_cast<void>(parse({"root", "--workers", "0"})); },
-      "zero worker count is rejected");
+      "duplicate execution mode option is rejected");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--trace-workers", "0"})); },
       "zero trace worker count is rejected");
@@ -170,43 +326,14 @@ void testInvalidArguments(Context& context) {
       "negative queue capacity is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse({"root", "--execution-mode", "parallel",
-                                 "--output-queue-capacity", "3"}));
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
+             "--output-queue-capacity", "3"}));
       },
       "queue capacity above the single-writer bound is rejected");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--memory-budget-mib", "1.5"})); },
       "non-integral memory budget is rejected");
-  context.expectThrows<ValidationError>(
-      [] { static_cast<void>(parse({"root", "--workers", "4"})); },
-      "workers alone do not enable receiver-range parallelism");
-  context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "fused", "--workers", "4"}));
-      },
-      "fused workers require explicit receiver-range parallelism");
-  context.expectThrows<ValidationError>(
-      [] { static_cast<void>(parse({"root", "--range-parallel"})); },
-      "range parallelism never selects fused implicitly");
-  context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(parse({"root", "--execution-mode", "parallel",
-                                 "--range-parallel"}));
-      },
-      "legacy frequency-parallel mode rejects range parallelism");
-  context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                 "--range-parallel"}));
-      },
-      "legacy serial reuse rejects range parallelism");
-  context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(parse({"root", "--execution-mode", "fused",
-                                 "--range-parallel", "--range-parallel"}));
-      },
-      "duplicate receiver-range parallel option is rejected");
   context.expectThrows<ValidationError>(
       [] {
         static_cast<void>(
@@ -215,14 +342,14 @@ void testInvalidArguments(Context& context) {
       "duplicate Influence profiling option is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(
-            parse({"root", "--execution-mode", "parallel",
-                   "--profile-frequency-tasks", "--profile-frequency-tasks"}));
+        static_cast<void>(parse(
+            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
+             "--profile-frequency-tasks", "--profile-frequency-tasks"}));
       },
       "duplicate frequency-task profiling option is rejected");
   context.expectThrows<ValidationError>(
-      [] { static_cast<void>(parse({"root", "--profile-frequency-tasks"})); },
-      "frequency-task profiling requires parallel mode");
+      [] { static_cast<void>(parse({"root", "--frequencies-hz"})); },
+      "missing frequency list value is rejected");
 }
 
 void testHelp(Context& context) {
@@ -239,9 +366,12 @@ void testVersion(Context& context) {
 
 int main() {
   Context context;
-  testSingleFrequencyCompatibility(context);
+  testDefaults(context);
   testFrequencyOverride(context);
   testExecutionMode(context);
+  testReuseMode(context);
+  testReuseWorkers(context);
+  testFrequencyRouteTuning(context);
   testInvalidArguments(context);
   testHelp(context);
   testVersion(context);

@@ -59,7 +59,7 @@ done
 "${script_directory}/check_independence.sh"
 
 isolation_root="$(
-  mktemp -d "${TMPDIR:-/tmp}/bellhop-rayreuse-isolated.XXXXXX"
+  mktemp -d "${TMPDIR:-/tmp}/bellhop-broadband-isolated.XXXXXX"
 )"
 cleanup_isolation() {
   rm -rf -- "${isolation_root}"

@@ -249,7 +249,7 @@ def validate(
     command_versions = ("origin", "f2cpp")
     if rayreuse_executable is not None:
         executables_for_commands["rayreuse"] = (
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
         command_versions = ("origin", "f2cpp", "rayreuse")
     commands = [
@@ -269,7 +269,7 @@ def validate(
     if rayreuse_executable is not None:
         validator_command += (
             " --rayreuse-executable "
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            "Bellhop_RayReuse/build/release/bellhop_broadband"
         )
     result: dict[str, object] = {
         "schema": "bellhop.f2cpp.i6_irregular_receiver_validation",

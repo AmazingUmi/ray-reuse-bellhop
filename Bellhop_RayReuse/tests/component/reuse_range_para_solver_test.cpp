@@ -1,4 +1,4 @@
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 
 #include <algorithm>
 #include <complex>
@@ -13,7 +13,7 @@
 
 #include "rayreuse/error.hpp"
 #include "rayreuse/model/simulation_case.hpp"
-#include "rayreuse/solver/serial_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_serial_solver.hpp"
 #include "rayreuse/solver/single_frequency_solver.hpp"
 #include "support/test_harness.hpp"
 
@@ -29,15 +29,15 @@ using rayreuse::Environment;
 using rayreuse::FieldComponent;
 using rayreuse::FrequencyGrid;
 using rayreuse::FrequencyWorkspace;
-using rayreuse::FusedRayReuseExecutionSettings;
-using rayreuse::FusedRayReuseSolver;
-using rayreuse::FusedRayReuseStatistics;
+using rayreuse::ReuseRangeParaExecutionSettings;
+using rayreuse::ReuseRangeParaSolver;
+using rayreuse::ReuseRangeParaStatistics;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
 using rayreuse::ReceiverGrid;
 using rayreuse::ReceiverGridLayout;
-using rayreuse::SerialRayReuseResult;
-using rayreuse::SerialRayReuseSolver;
+using rayreuse::ReuseSerialResult;
+using rayreuse::ReuseSerialSolver;
 using rayreuse::SimulationCase;
 using rayreuse::SimulationRunMode;
 using rayreuse::SingleFrequencyTimings;
@@ -46,7 +46,7 @@ using rayreuse::SoundSpeedProfile;
 using rayreuse::Source;
 using rayreuse::SourceBeamPattern;
 using rayreuse::ValidationError;
-using rayreuse::supportsFusedRayReuse;
+using rayreuse::supportsReuseRangePara;
 using rayreuse::test::Context;
 
 // Small in-scope fused fixture: CC coherent, Cartesian, single source,
@@ -94,15 +94,15 @@ void noOpConsumer(std::size_t, std::vector<FrequencyWorkspace>&&,
                   const SingleFrequencyTimings&) {}
 
 void testSolverScopeRejections(Context& context) {
-  context.check(supportsFusedRayReuse(makeSimulation()),
+  context.check(supportsReuseRangePara(makeSimulation()),
                 "the shared fused-support predicate accepts the production "
                 "fixture");
   // IGR-3A A02b (intended behavior change): Cartesian Cerveny fused
   // eligibility covers every TL run mode of the family — incoherent and
   // semi-coherent are accepted, not rejected.
   context.check(
-      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Incoherent)) &&
-          supportsFusedRayReuse(
+      supportsReuseRangePara(makeSimulation(SimulationRunMode::Incoherent)) &&
+          supportsReuseRangePara(
               makeSimulation(SimulationRunMode::SemiCoherent)),
       "the shared fused-support predicate accepts CC incoherent and "
       "semi-coherent TL");
@@ -110,14 +110,14 @@ void testSolverScopeRejections(Context& context) {
   // eligibility covers every TL run mode of the family in both coordinate
   // systems (design §9).
   context.check(
-      supportsFusedRayReuse(makeSimulation(
+      supportsReuseRangePara(makeSimulation(
           SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
           CervenyCoordinateSystem::RayCentered)) &&
-          supportsFusedRayReuse(
+          supportsReuseRangePara(
               makeSimulation(SimulationRunMode::Incoherent,
                              BeamFamily::CervenyGaussian,
                              CervenyCoordinateSystem::RayCentered)) &&
-          supportsFusedRayReuse(
+          supportsReuseRangePara(
               makeSimulation(SimulationRunMode::SemiCoherent,
                              BeamFamily::CervenyGaussian,
                              CervenyCoordinateSystem::RayCentered)),
@@ -131,8 +131,8 @@ void testSolverScopeRejections(Context& context) {
         SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
         CervenyCoordinateSystem::RayCentered);
     std::size_t rayCenteredCallbackCount = 0U;
-    const FusedRayReuseStatistics rayCenteredStatistics =
-        FusedRayReuseSolver::solveStreaming(
+    const ReuseRangeParaStatistics rayCenteredStatistics =
+        ReuseRangeParaSolver::solveStreaming(
             rayCenteredSimulation, 1.0, 50.0,
             [&rayCenteredCallbackCount, &context](
                 std::size_t,
@@ -158,19 +158,19 @@ void testSolverScopeRejections(Context& context) {
   // (design §9) — one adapter; the kernel owns the internal Cartesian /
   // ray-centered traversal selection.
   context.check(
-      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Coherent,
+      supportsReuseRangePara(makeSimulation(SimulationRunMode::Coherent,
                                            BeamFamily::GeometricHat)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::Incoherent, BeamFamily::GeometricHat)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::SemiCoherent, BeamFamily::GeometricHat)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::Coherent, BeamFamily::GeometricHat,
               CervenyCoordinateSystem::RayCentered)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::Incoherent, BeamFamily::GeometricHat,
               CervenyCoordinateSystem::RayCentered)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::SemiCoherent, BeamFamily::GeometricHat,
               CervenyCoordinateSystem::RayCentered)),
       "the shared fused-support predicate accepts geometric hat coherent, "
@@ -184,8 +184,8 @@ void testSolverScopeRejections(Context& context) {
         SimulationRunMode::Coherent, BeamFamily::GeometricHat,
         hatCoordinates);
     std::size_t hatCallbackCount = 0U;
-    const FusedRayReuseStatistics hatStatistics =
-        FusedRayReuseSolver::solveStreaming(
+    const ReuseRangeParaStatistics hatStatistics =
+        ReuseRangeParaSolver::solveStreaming(
             hatSimulation, 1.0, 50.0,
             [&hatCallbackCount, &context](
                 std::size_t,
@@ -209,11 +209,11 @@ void testSolverScopeRejections(Context& context) {
   // eligibility covers every TL run mode of the family (Cartesian only —
   // the family has no ray-centered variant; design §9).
   context.check(
-      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Coherent,
+      supportsReuseRangePara(makeSimulation(SimulationRunMode::Coherent,
                                            BeamFamily::GeometricGaussian)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::Incoherent, BeamFamily::GeometricGaussian)) &&
-          supportsFusedRayReuse(makeSimulation(
+          supportsReuseRangePara(makeSimulation(
               SimulationRunMode::SemiCoherent,
               BeamFamily::GeometricGaussian)),
       "the shared fused-support predicate accepts geometric Gaussian "
@@ -224,8 +224,8 @@ void testSolverScopeRejections(Context& context) {
     const SimulationCase gaussianSimulation = makeSimulation(
         SimulationRunMode::Coherent, BeamFamily::GeometricGaussian);
     std::size_t gaussianCallbackCount = 0U;
-    const FusedRayReuseStatistics gaussianStatistics =
-        FusedRayReuseSolver::solveStreaming(
+    const ReuseRangeParaStatistics gaussianStatistics =
+        ReuseRangeParaSolver::solveStreaming(
             gaussianSimulation, 1.0, 50.0,
             [&gaussianCallbackCount, &context](
                 std::size_t,
@@ -246,7 +246,7 @@ void testSolverScopeRejections(Context& context) {
         "leaves the frozen cache unchanged");
   }
   context.check(
-      !supportsFusedRayReuse(makeSimulation(
+      !supportsReuseRangePara(makeSimulation(
           SimulationRunMode::Coherent, BeamFamily::CervenyGaussian,
           CervenyCoordinateSystem::Cartesian,
           FrequencyGrid({50.0, 100.0}),
@@ -259,7 +259,7 @@ void testSolverScopeRejections(Context& context) {
                        &messages](SimulationCase bad, const char* label) {
     const std::optional<std::string> message =
         capturedValidationMessage([&bad] {
-          static_cast<void>(FusedRayReuseSolver::solveStreaming(
+          static_cast<void>(ReuseRangeParaSolver::solveStreaming(
               bad, 1.0, 50.0, noOpConsumer));
         });
     context.check(message.has_value(), label);
@@ -271,10 +271,10 @@ void testSolverScopeRejections(Context& context) {
   // coherent-only matrix is product law, not a fused restriction).
   // Non-coherent Simple Gaussian runs are rejected upstream at SimulationCase
   // construction (simulation_case.cpp:404-409), so no SG+I/S case exists for
-  // supportsFusedRayReuse to see; the constructibility assertion below pins
+  // supportsReuseRangePara to see; the constructibility assertion below pins
   // that legal-matrix fact.
   context.check(
-      supportsFusedRayReuse(makeSimulation(SimulationRunMode::Coherent,
+      supportsReuseRangePara(makeSimulation(SimulationRunMode::Coherent,
                                            BeamFamily::SimpleGaussian)),
       "the shared fused-support predicate accepts simple Gaussian coherent "
       "TL");
@@ -303,7 +303,7 @@ void testSolverScopeRejections(Context& context) {
     rayreuse::RayPathCache anyCache;
     const std::optional<std::string> intensityMessage =
         capturedValidationMessage([&simpleGaussianSimulation, &anyCache] {
-          static_cast<void>(FusedRayReuseSolver::accumulateFrequenciesIntensity(
+          static_cast<void>(ReuseRangeParaSolver::accumulateFrequenciesIntensity(
               simpleGaussianSimulation, anyCache, 1.0, 50.0));
         });
     context.check(
@@ -322,8 +322,8 @@ void testSolverScopeRejections(Context& context) {
     const SimulationCase simpleGaussianSimulation = makeSimulation(
         SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
     std::size_t simpleGaussianCallbackCount = 0U;
-    const FusedRayReuseStatistics simpleGaussianStatistics =
-        FusedRayReuseSolver::solveStreaming(
+    const ReuseRangeParaStatistics simpleGaussianStatistics =
+        ReuseRangeParaSolver::solveStreaming(
             simpleGaussianSimulation, 1.0, 50.0,
             [&simpleGaussianCallbackCount, &context](
                 std::size_t,
@@ -412,7 +412,7 @@ void testSolverScopeRejections(Context& context) {
   rayreuse::RayPathCache unfrozenCache;
   const std::optional<std::string> unfrozenMessage =
       capturedValidationMessage([&simulation, &unfrozenCache] {
-        static_cast<void>(FusedRayReuseSolver::accumulateFrequencies(
+        static_cast<void>(ReuseRangeParaSolver::accumulateFrequencies(
             simulation, unfrozenCache, 1.0, 50.0));
       });
   context.check(
@@ -422,10 +422,10 @@ void testSolverScopeRejections(Context& context) {
 
   const std::optional<std::string> zeroWorkerMessage =
       capturedValidationMessage([&simulation] {
-        static_cast<void>(FusedRayReuseSolver::solveStreaming(
+        static_cast<void>(ReuseRangeParaSolver::solveStreaming(
             simulation, 1.0, 50.0, noOpConsumer,
             CartesianCervenySettings{}, false,
-            FusedRayReuseExecutionSettings{.requestedRangeWorkers = 0U}));
+            ReuseRangeParaExecutionSettings{.requestedRangeWorkers = 0U}));
       });
   context.check(zeroWorkerMessage.has_value() &&
                     *zeroWorkerMessage ==
@@ -438,8 +438,8 @@ void testSolverScopeRejections(Context& context) {
 void testFusedStreamingMatchesSerialReuse(Context& context) {
   const SimulationCase simulation = makeSimulation();
   const CartesianCervenySettings settings{.collectStatistics = true};
-  const SerialRayReuseResult reuse =
-      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, settings, true);
+  const ReuseSerialResult reuse =
+      ReuseSerialSolver::solve(simulation, 1.0, 50.0, settings, true);
 
   std::vector<std::optional<std::vector<FrequencyWorkspace>>> streamed(
       simulation.frequencies().size());
@@ -447,8 +447,8 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
       simulation.frequencies().size(), 0U);
   std::vector<std::size_t> callbackOrder;
   std::vector<double> callbackScaleSeconds;
-  const FusedRayReuseStatistics statistics =
-      FusedRayReuseSolver::solveStreaming(
+  const ReuseRangeParaStatistics statistics =
+      ReuseRangeParaSolver::solveStreaming(
       simulation, 1.0, 50.0,
       [&](std::size_t frequencyIndex,
           std::vector<FrequencyWorkspace>&& sourceWorkspaces,
@@ -520,14 +520,14 @@ void testRangeWorkerResolution(Context& context) {
       CervenyCoordinateSystem::Cartesian, FrequencyGrid({50.0, 100.0}),
       ReceiverGrid({25.0, 50.0, 75.0}, {10.0, 100.0}));
   std::size_t callbackCount = 0U;
-  const FusedRayReuseStatistics clamped =
-      FusedRayReuseSolver::solveStreaming(
+  const ReuseRangeParaStatistics clamped =
+      ReuseRangeParaSolver::solveStreaming(
           twoRanges, 1.0, 50.0,
           [&callbackCount](std::size_t,
                            std::vector<FrequencyWorkspace>&&,
                            const SingleFrequencyTimings&) { ++callbackCount; },
           CartesianCervenySettings{}, true,
-          FusedRayReuseExecutionSettings{.requestedRangeWorkers = 8U});
+          ReuseRangeParaExecutionSettings{.requestedRangeWorkers = 8U});
   context.check(clamped.requestedRangeWorkers == 8U &&
                     clamped.effectiveRangeWorkers == 2U &&
                     callbackCount == twoRanges.frequencies().size(),
@@ -538,10 +538,10 @@ void testRangeWorkerResolution(Context& context) {
 void testFusedCounterSemantics(Context& context) {
   const SimulationCase simulation = makeSimulation();
   const CartesianCervenySettings settings{.collectStatistics = true};
-  const SerialRayReuseResult reuse =
-      SerialRayReuseSolver::solve(simulation, 1.0, 50.0, settings, true);
-  const FusedRayReuseStatistics statistics =
-      FusedRayReuseSolver::solveStreaming(simulation, 1.0, 50.0,
+  const ReuseSerialResult reuse =
+      ReuseSerialSolver::solve(simulation, 1.0, 50.0, settings, true);
+  const ReuseRangeParaStatistics statistics =
+      ReuseRangeParaSolver::solveStreaming(simulation, 1.0, 50.0,
                                           noOpConsumer, settings, true);
   const rayreuse::CartesianCervenyStatistics& fused =
       statistics.phaseTotals.influenceStatistics;

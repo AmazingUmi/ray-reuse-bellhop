@@ -20,7 +20,7 @@ output="${RAYREUSE_MICROBENCH_OUTPUT:-${project_root}/test/standard_cases/result
   "${project_root}/test/standard_cases/codes/microbenchmark_models.py" \
   --origin-executable "${project_root}/Bellhop_origin/bin/bellhop" \
   --f2cpp-executable "${project_root}/Bellhop_F2CPP/build/release/bellhop_f2cpp" \
-  --rayreuse-executable "${project_root}/Bellhop_RayReuse/build/release/bellhop_rayreuse" \
+  --rayreuse-executable "${project_root}/Bellhop_RayReuse/build/release/bellhop_broadband" \
   --case constant_speed_direct \
   --case munk_cerveny_cc \
   --warmups "${warmups}" \

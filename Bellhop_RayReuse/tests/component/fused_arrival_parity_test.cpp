@@ -1,4 +1,4 @@
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -119,11 +119,11 @@ void checkParity(Context& context, const SimulationCase& simulation,
   }
 
   const rayreuse::FusedArrivalAccumulationResult fusedOne =
-      rayreuse::FusedRayReuseSolver::accumulateArrivalFrequencies(
+      rayreuse::ReuseRangeParaSolver::accumulateArrivalFrequencies(
           simulation, trace.cache, sourceIndex, {},
           {.requestedRangeWorkers = 1U});
   const rayreuse::FusedArrivalAccumulationResult fusedFour =
-      rayreuse::FusedRayReuseSolver::accumulateArrivalFrequencies(
+      rayreuse::ReuseRangeParaSolver::accumulateArrivalFrequencies(
           simulation, trace.cache, sourceIndex, {},
           {.requestedRangeWorkers = 4U});
 

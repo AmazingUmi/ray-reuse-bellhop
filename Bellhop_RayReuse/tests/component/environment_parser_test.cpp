@@ -830,9 +830,9 @@ void testVolumeAttenuationParsing(Context& context) {
 
 void testPrtVolumeAttenuationMarkers(Context& context) {
   const std::filesystem::path executable =
-      std::filesystem::current_path() / "bellhop_rayreuse";
+      std::filesystem::current_path() / "bellhop_broadband";
   context.check(std::filesystem::exists(executable),
-                "PRT marker test locates the bellhop_rayreuse executable");
+                "PRT marker test locates the bellhop_broadband executable");
   if (!std::filesystem::exists(executable)) {
     return;
   }

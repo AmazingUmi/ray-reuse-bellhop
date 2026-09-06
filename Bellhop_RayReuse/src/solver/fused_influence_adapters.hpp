@@ -1,7 +1,7 @@
 // IGR-3A src-internal unified-executor interface (design §3-§6). Not
 // installed: the adapter set and the sink policy pair are compile-time
 // executor plumbing; the public solver surface stays in
-// rayreuse/solver/fused_ray_reuse_solver.hpp. Adapters hold no data and no
+// rayreuse/solver/reuse_range_para_solver.hpp. Adapters hold no data and no
 // logic beyond kernel construction, per-ray preparation, forwarding to the
 // kernels' private fused entries, and the legacy post-scale selector.
 
@@ -28,14 +28,14 @@
 #include "rayreuse/field/simple_gaussian_influence.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/ray/ray_path.hpp"
-#include "rayreuse/solver/fused_ray_reuse_solver.hpp"
+#include "rayreuse/solver/reuse_range_para_solver.hpp"
 
 namespace rayreuse {
 
 // Cartesian Cerveny adapter (design §4). makeKernel mirrors the
 // single-frequency CC construction verbatim
 // (single_frequency_solver.cpp:264-266); preparePerRay is the epsilon loop
-// of the fused solver body (fused_ray_reuse_solver.cpp:223-231);
+// of the fused solver body (reuse_range_para_solver.cpp:223-231);
 // accumulateFused forwards to the unchanged private fused kernel entry;
 // scaleFrequency reproduces the coherent Cerveny branch of the legacy
 // post-scale selector (single_frequency_solver.cpp:377-379). The intensity

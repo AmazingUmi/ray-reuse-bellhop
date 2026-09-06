@@ -404,7 +404,7 @@ def generation_commands(include_rayreuse: bool) -> list[str]:
     executables = {
         "origin": "Bellhop_origin/bin/bellhop",
         "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
-        "rayreuse": "Bellhop_RayReuse/build/release/bellhop_rayreuse",
+        "rayreuse": "Bellhop_RayReuse/build/release/bellhop_broadband",
     }
     versions = ("origin", "f2cpp", "rayreuse") if include_rayreuse else (
         "origin",
@@ -658,7 +658,7 @@ def validate(
                 "--f2cpp-executable "
                 "Bellhop_F2CPP/build/release/bellhop_f2cpp "
                 "--rayreuse-executable "
-                "Bellhop_RayReuse/build/release/bellhop_rayreuse "
+                "Bellhop_RayReuse/build/release/bellhop_broadband "
                 "--output Bellhop_RayReuse/doc/reports/validation/"
                 "fp1i_ray_centered_geometric_hat_report.json"
             ),
