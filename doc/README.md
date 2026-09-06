@@ -37,7 +37,8 @@
 - RayReuse 当前支持边界：
   [`../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
 - 当前工作与待决事项：[`plans/PLAN_CURRENT_WORK.md`](./plans/PLAN_CURRENT_WORK.md)
-- IGR-3 用户冻结 scope/architecture handoff（`PRE-CONSTRUCTION`）：
+- IGR-3 scope/architecture decision 与 closure（`ACCEPTED / CLOSED`；
+  IGR-3A `dda1c2c` / IGR-3B `0050f59`）：
   [`../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
 - IGR-1 历史理论与数值契约：
   [`reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](./reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md)
@@ -52,13 +53,32 @@
 - 历史项目实施清单：
   [`archive/PLAN_PROJECT_IMPLEMENTATION_2026-08-14.md`](./archive/PLAN_PROJECT_IMPLEMENTATION_2026-08-14.md)
 
+## Terminology after BB-M1（历史术语映射）
+
+BB-M1（Bellhop Broadband 命名里程碑，BB-1 已于 2026-09-06 验收）之前的
+历史文档、worklist 与报告中使用的执行模型名称，按下表映射为当前术语。
+该表仅用于阅读历史材料，不修改原始历史结论：
+
+| 历史术语（BB-M1 前） | 当前术语（BB-M1 后） |
+|---|---|
+| `bellhop_rayreuse`（executable） | `bellhop_broadband` |
+| legacy `--execution-mode reuse` | Serial Reuse（`--execution-mode reuse --reuse-mode serial`） |
+| legacy `--execution-mode parallel` | Frequency Reuse（`--execution-mode reuse --reuse-mode frequency`） |
+| legacy `--execution-mode fused` | Range Reuse implementation family（`--execution-mode reuse --reuse-mode range`） |
+| legacy `fused` + `--range-parallel` | Range Reuse with explicit `--reuse-workers N`（旧 `--workers N` 取原值；旧未指定时为 4；旧 N=1 仍映射为 1） |
+
+注意：新 CLI 的 `--reuse-workers` 默认 1，与旧 parallel（未指定时用硬件
+并发数）和旧 range-parallel（默认请求 4）不同；迁移旧命令时必须显式写出
+worker 请求。低层实现术语（fused kernel/workspace/sink/adapter 等）在源码
+中保留，描述 Range Reuse 内部的跨频融合实现，而非用户层执行路线。
+
 ## 组件文档
 
 | 组件 | 文档入口 | 当前角色 |
 |---|---|---|
 | Origin | [`Bellhop_origin/doc/README.md`](../Bellhop_origin/doc/README.md) | Fortran 单频行为 oracle |
 | F2CPP | [`Bellhop_F2CPP/doc/README.md`](../Bellhop_F2CPP/doc/README.md) | 独立 C++20 二维单频实现，功能已封板 |
-| RayReuse | [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md) | 已完成 F2CPP production Feature Parity 的独立多频轨迹复用实现；无 active FP Batch |
+| RayReuse（Bellhop Broadband 产品实现） | [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md) | Bellhop Broadband 产品（executable `bellhop_broadband`；目录名保留历史名称）；已完成 F2CPP production Feature Parity 的独立多频实现，RayReuse 为其轨迹复用算法族 |
 | PlotRead | [`test/PlotRead/README.md`](../test/PlotRead/README.md) | SHD 读取、绘图和导出 |
 | 标准算例 | [`test/standard_cases/README.md`](../test/standard_cases/README.md) | 三模型共用运行与比较框架 |
 | 展示 | [`demo/README.md`](../demo/README.md) | 可靠性与多频展示 |

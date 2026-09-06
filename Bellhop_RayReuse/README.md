@@ -1,9 +1,11 @@
-# Bellhop RayReuse
+# Bellhop RayReuse（Bellhop Broadband 产品实现）
 
-本目录是独立的 C++20 多频 Bellhop 实现。它已完成
-Bellhop_F2CPP 二维 production surface 的 Feature Parity，并在此基础上提供
-`nonreuse` reference、production `fused` RayReuse，以及兼容保留的 legacy
-`reuse` / frequency-`parallel` broadband execution。
+本目录是独立的 C++20 多频 Bellhop 实现，产品名为 **Bellhop Broadband**
+（可执行程序 `bellhop_broadband`；目录与仓库名保留历史 RayReuse 名称）。
+它已完成 Bellhop_F2CPP 二维 production surface 的 Feature Parity，并在此
+基础上以两层 CLI 提供宽带执行：`--execution-mode <nonreuse|reuse>` 加
+`--reuse-mode <serial|frequency|range>`，其中 RayReuse 是 reuse 侧的轨迹
+复用算法族（Serial / Frequency / Range Reuse）。
 
 ```text
 Bellhop_F2CPP → Bellhop_RayReuse
@@ -42,15 +44,16 @@ IGR-3B fused Arrival closure commit: 0050f59
 总体设计见
 [ARCHITECTURE_BELLHOP_RAY_REUSE.md](../doc/architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)。
 
-production fused TL 支持域（IGR-3A）为多频
+production Range Reuse（reuse 的 range 路线，内部即 fused executor）的 TL
+支持域（IGR-3A）为多频
 （≥2 频率）单 source、规则 receiver grid 的 TL 运行，run-mode 覆盖等于各
 beam family 的合法产品 run mode——Cerveny Gaussian（`CC/IC/SC`、`CR/IR/SR`）、
 geometric hat（`CG/IG/SG`、`Cg/Ig/Sg`）与 geometric Gaussian（`CB/IB/SB`）
 支持 coherent/incoherent/semi-coherent，simple Gaussian 仅其唯一合法模式
 coherent（`CS`）。IGR-3B 已增加多频、规则 receiver grid 的
 Geometric Hat Cartesian/ray-centered 与 Geometric Gaussian `A/a`
-（`G/g/B`）fused execution，允许 multisource 并按 source 流式生成每频 ARR；
-fused eligibility 始终是合法 beam×run-mode support matrix 的子集。IGR-3A
+（`G/g/B`）的 range 路线执行，允许 multisource 并按 source 流式生成每频 ARR；
+range eligibility 始终是合法 beam×run-mode support matrix 的子集。IGR-3A
 与 IGR-3B 均已 `ACCEPTED / CLOSED`。权威 closure 见
 [IGR-3 Scope & Architecture Decision](./doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
@@ -105,7 +108,7 @@ Bellhop_RayReuse/scripts/single_thread_microbenchmark.sh
 单频调用使用 ENV 中的频率：
 
 ```bash
-Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root>
+Bellhop_RayReuse/build/release/bellhop_broadband <file-root>
 ```
 
 产品由 ENV run type 决定：支持矩阵范围内的 TL family 写 SHD，`R/E` 写 RAY，
@@ -116,42 +119,47 @@ source/receiver、boundary、attenuation 和 writer 语义见
 宽带频率可由 CLI 严格升序列表覆盖：
 
 ```bash
-Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+Bellhop_RayReuse/build/release/bellhop_broadband <file-root> \
   --frequencies-hz 50,100,250 \
   --execution-mode nonreuse
 ```
 
 - `nonreuse`：每个频率独立 trace 与 projection，作为 execution baseline；
-- `fused`：支持域内的 production RayReuse 主路径；TL 与 `G/g/B × A/a`
-  均在 ray 内跨频率 fused Influence，默认 serial；
-- `reuse`：legacy 逐频串行 cache-reuse compatibility path；
-- `parallel`：legacy frequency-parallel compatibility path。
+- `reuse --reuse-mode serial`：trace once 后逐频串行投影（Serial Reuse，
+  reuse 下未显式指定 `--reuse-mode` 时的默认路线）；
+- `reuse --reuse-mode frequency`：trace once 后按 frequency tasks 分配
+  reuse workers（Frequency Reuse）；
+- `reuse --reuse-mode range`：支持域内的 production RayReuse 路线；TL 与
+  `G/g/B × A/a` 均在 ray 内跨频率 fused Influence，reuse workers 按连续
+  receiver-range block 分割（Range Reuse）。
 
-production receiver-range parallel 示例：
+Range Reuse 示例：
 
 ```bash
-Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+Bellhop_RayReuse/build/release/bellhop_broadband <file-root> \
   --frequencies-hz 50,100,250 \
-  --execution-mode fused \
-  --range-parallel \
-  --workers 8
+  --execution-mode reuse \
+  --reuse-mode range \
+  --reuse-workers 8
 ```
 
-`--range-parallel` 未指定 `--workers` 时默认请求 4 workers；effective workers
-会 clamp 到 receiver range 数。单独指定 `--workers` 不会隐式开启 range
-parallel。legacy frequency-parallel 示例：
+`--reuse-workers` 默认 1（新 CLI 的资源默认决策）；range 路线的 effective
+workers 会 clamp 到 receiver range 数。Frequency Reuse 示例：
 
 ```bash
-Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+Bellhop_RayReuse/build/release/bellhop_broadband <file-root> \
   --frequencies-hz 50,100,250 \
-  --execution-mode parallel \
-  --workers 8 \
+  --execution-mode reuse \
+  --reuse-mode frequency \
+  --reuse-workers 8 \
   --output-queue-capacity 2 \
   --memory-budget-mib 4096
 ```
 
-legacy `parallel` 的 `--workers` 默认采用硬件并发数；完成队列容量只能为 1 或
-2，默认 2。显式 memory budget 限制 cache 与活动 frequency workspaces，不等同于整个进程 RSS。
+`--reuse-workers` 在 frequency 路线同样默认 1，请求值会受频率数与 memory
+budget 向下 clamp；完成队列容量只能为 1 或 2，默认 2，且仅 reuse+frequency
+的多频 TL 路线接受。显式 memory budget 限制 cache 与活动 frequency
+workspaces，不等同于整个进程 RSS。
 RayReuse 也接受 ENV 频率记录中的严格递增列表；CLI 覆盖优先于 ENV。
 
 ## Profiling 与 benchmark
@@ -159,19 +167,20 @@ RayReuse 也接受 ENV 频率记录中的严格递增列表；CLI 覆盖优先�
 Influence 热点诊断默认关闭：
 
 ```bash
-Bellhop_RayReuse/build/release/bellhop_rayreuse <file-root> \
+Bellhop_RayReuse/build/release/bellhop_broadband <file-root> \
   --frequencies-hz 50,250 \
   --execution-mode reuse \
   --profile-influence
 ```
 
-parallel 逐频任务计时可用 `--profile-frequency-tasks`。这两个选项只用于诊断，
+reuse+frequency 路线的逐频任务计时可用 `--profile-frequency-tasks`（该开关
+仅 reuse+frequency 的多频 TL 运行接受）。这两个选项只用于诊断，
 不能与未启用诊断的正式 wall-clock 样本混用。`--profile-influence` 在 TL 上只对
-Cartesian Cerveny 定义（所有执行模式，其余 beam family 直接报错）；fused 运行
-中只有 Cartesian Cerveny 填充 Influence 计数，各 family 的统计 envelope 与
-fused PRT 模式行见
+Cartesian Cerveny 定义（所有执行路线，其余 beam family 直接报错）；range
+路线运行中只有 Cartesian Cerveny 填充 Influence 计数，各 family 的统计
+envelope 与 reuse 执行的 PRT 模式行见
 [Feature Support Matrix](./doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
-的 fused 支持域小节。
+的 reuse range 路线支持域小节。
 
 可重复 benchmark 使用共享标准算例、轮换采样顺序、外部 wall、隔离进程
 max RSS 和产品哈希门，并记录提交、机器、工具链、workers、频率与原始样本。

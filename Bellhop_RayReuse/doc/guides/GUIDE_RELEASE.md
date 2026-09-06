@@ -25,7 +25,7 @@ RAYREUSE_BUILD_JOBS=4 uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
 1. 全量 C++ clang-format 检查；
 2. 由 CMake compilation database 驱动的 Clang static analyzer；
 3. Release、install 和 CPack TGZ 构建；
-4. 安装目录内 `bellhop_rayreuse --version` 烟测；
+4. 安装目录内 `bellhop_broadband --version` 烟测；
 5. TGZ SHA-256 输出。
 
 本地和 CI 均通过根目录 uv 环境运行 Python 驱动。

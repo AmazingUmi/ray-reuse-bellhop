@@ -1,6 +1,8 @@
 # Bellhop RayReuse 文档索引
 
-RayReuse 是独立的 C++20 多频轨迹复用实现。`RR-B1`～`RR-B4` 与
+本组件产品名为 **Bellhop Broadband**（可执行程序 `bellhop_broadband`；
+目录与内部命名保留历史 RayReuse 名称）。RayReuse 是其中的多频轨迹复用
+算法族。`RR-B1`～`RR-B4` 与
 `FP-1A`～`FP-2I` 已全部 `ACCEPTED / CLOSED`：
 
 ```text
@@ -14,8 +16,9 @@ IGR-2 productionization commit: e7f2705
 
 IGR-2 已 `ACCEPTED / CLOSED`：已保留的 fused layout 是支持域内的
 production RayReuse 主路径，可选静态 receiver-range parallelism 已产品化。
-IGR-3 scope/architecture direction 已 `USER-FROZEN / PRE-CONSTRUCTION`，但
-construction 尚未开始。
+IGR-3（IGR-3A commit `dda1c2c` / IGR-3B commit `0050f59`）同样已
+`ACCEPTED / CLOSED`。BB-1（Bellhop Broadband 产品命名与两层 execution /
+reuse-mode CLI）已于 2026-09-06 经独立 final review `ACCEPTED`。
 
 ## 当前权威入口
 
@@ -39,17 +42,21 @@ construction 尚未开始。
 | **IGR-2 冻结设计** | [`worklists/DESIGN_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION.md`](./worklists/DESIGN_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION.md) |
 | **IGR-2 closed worklist** | [`worklists/IGR-2_FUSED_INFLUENCE_PRODUCTIONIZATION_WORKLIST.md`](./worklists/IGR-2_FUSED_INFLUENCE_PRODUCTIONIZATION_WORKLIST.md) |
 | **IGR-2 final review (`ACCEPTED`)** | [`reviews/IGR2_FINAL_REVIEW_2026-09-03.md`](./reviews/IGR2_FINAL_REVIEW_2026-09-03.md) |
-| **IGR-3 用户冻结 scope/architecture handoff（非 design/worklist）** | [`worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](./worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md) |
+| **IGR-3 scope/architecture decision 与 closure（`ACCEPTED / CLOSED`）** | [`worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](./worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)、[`worklists/IGR-3A_TL_BEAM_FAMILY_ADAPTATION_WORKLIST.md`](./worklists/IGR-3A_TL_BEAM_FAMILY_ADAPTATION_WORKLIST.md)、[`worklists/IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md`](./worklists/IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md) |
+| **BB-1 Broadband 命名与执行模型（`ACCEPTED`，2026-09-06）** | [`worklists/BB-1_WORKLIST.md`](./worklists/BB-1_WORKLIST.md) |
 | HDF5 延后决策 | [`decisions/DECISION_HDF5_SCHEMA.md`](./decisions/DECISION_HDF5_SCHEMA.md) |
 | 已完成计划和历史基准 | [`archive/README.md`](./archive/README.md) |
 
 当前路径是：**Trajectory Reuse 已完成 → IGR-1 已 `ACCEPTED / CLOSED` →
 IGR-1p 保留 L1/L1c locality layout → IGR-2 已完成 fused CC TL
-与可选静态 range parallel productionization**。IGR-2 不扩展 beam/product/source/receiver 支持域；
-dynamic tiles、frequency blocking 与 L1b 均未保留。新的候选方向统一从
+与可选静态 range parallel productionization → IGR-3A/IGR-3B 已完成统一
+fused executor 的 TL beam families 与 Arrival closure → BB-1 已完成
+Bellhop Broadband 产品/CLI 重构（`nonreuse|reuse` 两层 execution 模型加
+`serial|frequency|range` reuse 模式）**。新的候选方向统一从
 [`doc/plans/PLAN_CURRENT_WORK.md`](../../doc/plans/PLAN_CURRENT_WORK.md) 进入。
-IGR-3A 是 documentation preflight 后的 next Batch；IGR-3A 独立验收并提交后
-才可进入 IGR-3B。这里的 future direction 不构成 current production feature claim。
+当前命令用法以 [`guides/GUIDE_USAGE.md`](./guides/GUIDE_USAGE.md) 为准，
+支持边界以 [`reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](./reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+为准。
 
 ## 目录语义
 

@@ -1183,7 +1183,7 @@ Bellhop_RayReuse/
     field/          FrequencyWorkspace, broadband orchestration
     io/             MultiFrequencyWriter
   src/
-  app/              bellhop_rayreuse 宽带程序
+  app/              bellhop_broadband 宽带程序（Bellhop Broadband 产品）
   tests/
     broadband/
     reuse/
@@ -1282,7 +1282,13 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
 - IGR-3A 与 IGR-3B 均已 `ACCEPTED / CLOSED`；统一 fused executor 已覆盖当前
   support matrix 中的 TL 与 Arrival 支持域，详见
   [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md) 与
-  [`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)。
+  [`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)；
+- BB-1 已完成 Bellhop Broadband 命名与两层 CLI 重构（2026-09-06 验收）：
+  executable `bellhop_broadband`、`--execution-mode <nonreuse|reuse>` +
+  `--reuse-mode <serial|frequency|range>`、`--trace-workers`/
+  `--reuse-workers`（默认 1），旧 `parallel`/`fused` 模式值与
+  `--range-parallel`/`--workers` 删除；科学算法与输出语义不变，详见
+  [`BB-1_WORKLIST.md`](../../Bellhop_RayReuse/doc/worklists/BB-1_WORKLIST.md)。
 
 以下是已经落实的架构基线和首版范围决策；封板后的新增能力仍以组件支持矩阵
 为准：

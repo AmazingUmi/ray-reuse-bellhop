@@ -54,7 +54,7 @@ uv run make -C demo plot VERSIONS=origin,f2cpp,rayreuse
 ```text
 Bellhop_origin/bin/bellhop
 Bellhop_F2CPP/build/release/bellhop_f2cpp
-Bellhop_RayReuse/build/release/bellhop_rayreuse
+Bellhop_RayReuse/build/release/bellhop_broadband
 ```
 
 以 F2CPP 为例，展示脚本对应的原生调用是：
@@ -115,7 +115,7 @@ mkdir -p demo/results/rayreuse_multifrequency
 cp demo/cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env \
   demo/results/rayreuse_multifrequency/
 cd demo/results/rayreuse_multifrequency
-../../../Bellhop_RayReuse/build/release/bellhop_rayreuse \
+../../../Bellhop_RayReuse/build/release/bellhop_broadband \
   munk_rayreuse_multifrequency --execution-mode reuse
 ```
 

@@ -1,11 +1,18 @@
-# BB-M1 — Broadband Execution Model & Naming Milestone Worklist
+# BB-M1 — Broadband Execution Model & Naming Milestone Review
 
-**Status:** `DRAFT / USER REVIEW`
+**Status:** `RECONCILED DESIGN / PRE-CONSTRUCTION`（2026-09-06）
 **Milestone type:** Architecture / Naming / CLI Breaking Change
 **Repository:** `AmazingUmi/ray-reuse-bellhop`
 **Current development branch:** `feat/igr-influence-geometry-reuse`
 **Implementation baseline:** construction 开始前记录实际 `HEAD` SHA
 **Protected references:** `Bellhop_origin/`、`Bellhop_F2CPP/` 不得修改
+
+本次核对基线为 `a3f20d8c0d8ac207766fa0adb083de3526f74fd7`（初始工作树干净）。
+第 1–24 节描述 BB-M1 的目标契约，不是当前实现完成声明；差异与逐节证据见
+[正式里程碑 Worklist](../worklists/BB-M1_WORKLIST.md)。实施任务和验收以
+[BB-1](../worklists/BB-1_WORKLIST.md) 与 [BB-2](../worklists/BB-2_WORKLIST.md)
+为执行依据；下文第 25–38 节为同步后的里程碑说明，不另建重复 gate。
+本次用户授权为审阅、修订和生成 Worklist，尚未启动 production construction。
 
 ---
 
@@ -30,6 +37,11 @@
 7. 历史文档保留历史名称，不伪造历史。
 
 本里程碑**不是性能优化批次**，也不进行 8 种逻辑组合的性能优劣评价。性能比较在本里程碑关闭后独立开展。
+
+历史 IGR-2/IGR-3 将 fused 定位为支持域内的 production 路线，并将旧
+reuse/parallel 保留为带条件弃用告警的 compatibility 路线。BB-M1 将三条路线
+作为可显式选择的策略，是新的产品组织决策；不改写历史结论，也不宣称三者性能等价。
+新 CLI 应去掉旧 `warnIfReplaceableLegacyMode` 的弃用提示及 help 中的旧推荐命令。
 
 ---
 
@@ -74,6 +86,9 @@ frequency 1:
 ```
 
 不同频率之间不共享 RayPathCache。
+
+上图适用于需要逐频声学计算的产品，或是作为对比基线；普通 R 仅 trace/write，不含 Projection/Influence。
+单频 TL 保留 `SingleFrequencySolver` 路径，不能为了新模型强制进入宽带 solver。
 
 ### `reuse`
 
@@ -133,6 +148,9 @@ Trace 次数 ≈ Nsource
 
 具体数量继续服从现有产品与 source 生命周期语义。
 
+这不是新增 trace 能力：PERF-TRACE-PAR-1 已将同一 trace seam 接入所有合法
+TL/ARR/Eigenray/R 路径。复用阶段只适用于产品本来支持的路线。
+
 ---
 
 # 4. Trace 并行模型
@@ -149,6 +167,9 @@ CLI：
 N = 1    → serial trace
 N > 1    → static trace parallel
 ```
+
+N 是 requested count；effective count 沿用 `min(N, launchCount)`，不承诺
+始终创建 N 个 worker。保留正整数校验、serial fast path 和已有异常/诊断语义。
 
 默认：
 
@@ -312,21 +333,23 @@ Range Reuse
 ```text
 Trace once
 → Frozen RayPathCache
-→ cross-frequency fused projection/influence
-→ receiver-range partition
+→ receiver-range partition（single worker 覆盖全部 range）
+→ 每个 range worker 逐 ray、逐频独立 Projection
+→ worker 在所属 range 上执行 cross-frequency fused Influence
 ```
 
 结构：
 
 ```text
-Frozen RayPathCache
-        ↓
-cross-frequency fused processing
-        ↓
+Frozen RayPathCache（只读共享）
+        ↓ static contiguous receiver-range partition
  ┌──────┼──────┬──────┐
-range   range  range  range
-block0  block1 block2 block3
+worker0 worker1 worker2 worker3
+ 各自 Projection + fused Influence，写入不相交的 range
 ```
+
+不得把该示意实现为一次全局 fused projection 后再分块；当前 projector 仍逐频
+产生独立 `RayFrequencyState`，相同投影可能在不同 range worker 内重复。
 
 worker 分割对象：
 
@@ -412,7 +435,7 @@ reuse-workers = 1
 --reuse-workers N
 ```
 
-建议规则：明确拒绝。
+冻结规则：任何显式 `--reuse-workers N` 均拒绝，包括 `N=1`，与第 21 节一致。
 
 禁止静默忽略。
 
@@ -439,6 +462,9 @@ range + workers=1
 仍走 Range Reuse / fused 实现。
 
 不得因为 worker=1 自动改成 Serial Reuse。
+
+worker 数表示请求值；Frequency 继续受频率数及原 TL memory budget 约束，
+Range 继续 clamp 到 receiver range 数，不保证实际启动数等于请求数。
 
 ---
 
@@ -490,6 +516,12 @@ reuse-mode    = serial
 reuse-workers = 1
 ```
 
+这里的 1 是新 CLI 的资源默认决策，不是旧行为的原样保留：旧 `parallel`
+未指定 `--workers` 时使用 `hardware_concurrency()`（不可用时回退 1）；旧
+`fused --range-parallel` 默认 4；未开启 range parallel 的旧 fused 为 1。
+迁移旧命令若要保留并行资源请求，必须显式写出对应 `--reuse-workers N`。
+Serial 的内部默认 1 不代表允许显式指定该参数。
+
 继续保持默认 `nonreuse` 的原因：
 
 * 避免本次命名重构同时改变默认科学执行路线；
@@ -525,6 +557,9 @@ bellhop_broadband case
 * scalar frequency；
 * 或合法 broadband frequency list。
 
+这是当前 RayReuse parser 已有扩展：频率记录接受正值、严格递增列表；
+不表示 Origin/F2CPP 原生输入也接受该宽带列表，不改动两份 reference parser。
+
 CLI：
 
 ```text
@@ -548,6 +583,10 @@ Input overrides
 # 10. 合法执行组合
 
 按逻辑路线而非具体 worker 数计算，共形成 8 类组合：
+
+这 8 类是合法支持域内的执行形态，不是 product × source × receiver 的全支持矩阵。
+普通 R 只有 NonReuse 的两种 trace 形态；单频 TL 不接受显式 reuse；
+Eigenray 不支持 Range；Range TL 与 ARR 的 source 支持不同，见第 22 节。
 
 | # | Execution | Trace          | Reuse Mode |
 | - | --------- | -------------- | ---------- |
@@ -628,12 +667,16 @@ bellhop_broadband case \
 
 > Trace Stage 与 Reuse Stage 同时执行的 nested/overlapped concurrency。
 
-当前要求仍为阶段顺序：
+当前要求在各路线原有 source/cache 生命周期内保持阶段顺序：
 
 ```text
 Trace complete
 → Reuse begin
 ```
+
+禁止把它加强为新的全局 all-source barrier。特别是 IGR-3B ARR 保持
+`trace source i → all-frequency accumulation → source consumer → next source`；
+其他路线继续保留其原有 caches 集合和 writer 生命周期，不统一重排或复制。
 
 ---
 
@@ -739,6 +782,9 @@ bellhop_broadband case \
   --reuse-workers 8
 ```
 
+未显式指定旧 `--workers` 的命令不保证资源默认等价；第 8 节列出默认变化。
+输出对比使用相同的显式 trace/reuse worker 请求。
+
 ---
 
 # 13. 删除的旧 CLI 概念
@@ -814,6 +860,10 @@ reuse-mode = frequency
 
 继续只在 Frequency Reuse 合法时接受。
 
+还必须经过产品层校验：上述 queue/memory/frequency-task profiling 仅支持 TL，
+不能因为 ARR/Eigenray 支持 Frequency 路线就开放这些参数。`--profile-influence`
+仍仅适用 Cartesian Cerveny TL；`--verify-cache` 保留原有适用域。
+
 不得为了 CLI 美观顺带扩大其作用域。
 
 ---
@@ -834,7 +884,7 @@ bellhop_broadband
 
 ## 15.2 CMake project
 
-建议同步：
+同步迁移：
 
 ```text
 BellhopRayReuse
@@ -886,23 +936,25 @@ BELLHOP RAYREUSE
 BELLHOP BROADBAND
 ```
 
-仅修改产品身份，不修改 Origin-compatible 科学产品格式。
+产品级身份与路线诊断文字按新命名更新；不修改 Origin-compatible 科学产品格式。
+SHD/ASCII ARR/binary ARR/RAY 及文件命名、发布顺序保持原路线等价；PRT/stderr
+只允许身份、路线/参数名称、已声明的 worker 默认值、旧弃用告警及运行时间差异。
+不得要求改名后的 PRT 与旧 PRT 全文件 byte identity，也不得用忽略整份 PRT 掩盖差异。
 
 ---
 
 # 16. 项目目录命名
 
-本 milestone 建议同步完成：
+原提案建议同步目录迁移；本次为减少路径 churn，冻结为本 milestone 保留：
 
 ```text
 Bellhop_RayReuse/
-→
-Bellhop_Broadband/
 ```
 
 原因：
 
-`Bellhop_RayReuse` 已不再准确描述包含 NonReuse 与 RayReuse 两大计算路线的产品。
+产品身份由 executable/CMake/package/help/当前文档表达；历史目录名不限制产品架构。
+目录迁移留待独立授权，不作为 BB-M1 gate；正式 Worklist 位于本目录下的 `doc/worklists/`。
 
 仓库名称：
 
@@ -978,7 +1030,13 @@ supportsFusedRayReuse(...)
 → supportsReuseRangePara(...)
 ```
 
-具体符号由 architect 审阅后统一，但必须满足：
+上述四个 solver 目标名作为路线命名表；相关 result/statistics/settings 同前缀迁移。
+`ArrivalSolver`/`EigenraySolver` 是产品类，保留类名，其 `solve`/`solveNonReuse`/
+`solveParallel` 等入口按新 dispatch 对接；`SingleFrequencySolver` 与公共
+`RayFanTraceSettings::workerCount` 不作全局机械重命名。
+`supportsFusedRayReuse` 当前只判断 TL，改名后也不得用它统一判定 ARR 支持。
+
+必须满足：
 
 > 外层算法名称使用 Serial / Freq / Range。
 
@@ -1057,6 +1115,9 @@ rangeParallel
 workerCount
 ```
 
+以上移除只针对 CLI options 旧路线字段；内部 trace/frequency/range settings 的
+worker 字段与并行实现不受机械替换。range 开关由新路线和请求数映射到现有实现。
+
 是否保留 `BroadbandExecutionMode` 类型名由 architect 判断，但枚举值最终只能表达：
 
 ```text
@@ -1112,10 +1173,12 @@ reuse-mode = serial
 若显式：
 
 ```text
-reuse-workers > 1
+--reuse-workers N（包括 N=1）
 ```
 
 必须拒绝。
+
+两个 worker 参数均只接受正整数；Frequency/Range 的 `N=1` 保持所选路线。
 
 ### nonreuse
 
@@ -1174,6 +1237,20 @@ old fused
 
 必须以当前 production code 的真实 support gate 为基线进行迁移。
 
+已核对的关键边界（仍叠加 `SimulationCase` 各 beam/run-mode 的合法性）：
+
+| 产品 | 当前支持与迁移约束 |
+|---|---|
+| TL | 单频走 SingleFrequencySolver；多频有四条旧路线。Range 仅单 source、规则网格；Cerveny 与 GeoHat 两坐标系、Cartesian GeoGaussian、SimpleGaussian 的各自合法 TL 模式；SimpleGaussian 仅 coherent。 |
+| A/a | NonReuse/Serial/Frequency 保持现状；Range 需至少 2 频率、规则网格、G/g/B，支持多 source 的 source-streamed output。 |
+| Eigenray | NonReuse/Serial/Frequency；Range 拒绝。 |
+| R | 仅单频 trace/write；显式 reuse 各路线拒绝，trace-workers 合法。 |
+
+依据：`app/main.cpp::validateProductOptions`、各 solver/SimulationCase gate，
+以及 IGR-3A/3B、PERF-TRACE-PAR-1 已关闭 Worklist。不能把 Range TL 的单 source
+限制套到 ARR，也不能将 ARR 的多 source 能力扩展给 TL。
+Range TL/ARR 的规则网格还要求至少两个等距 range；不得只检查 `!isIrregular()`。
+
 若发现现有文档与代码不一致：
 
 > BB-1 以 production code 当前实际行为为准记录；
@@ -1201,7 +1278,7 @@ old fused
 
 目标是：
 
-> **Rename + dispatch refactor，not numerical refactor。**
+> **Rename + dispatch refactor + 已声明的 CLI 默认/校验变化；科学数值算法冻结。**
 
 ---
 
@@ -1216,207 +1293,35 @@ old fused
 * 修改 frequency scheduling algorithm；
 * 修改 worker ownership；
 * 修改 writer publication order；
-* 修改 deterministic exception semantics。
+* 修改各路线已有异常传播规则（trace 的最低 launch-index failure 与 ARR/E
+  frequency workers 的首先捕获异常规则分别保留，不宣称全部路线已有统一确定性）。
 
 只允许：
 
-> 旧 worker 参数 → 新 worker 参数的语义映射。
+> 旧 worker 参数 → 新 worker 参数的语义映射，以及第 8 节明确列出的资源默认变化。
+
+不修改已有调度、clamp、每频状态隔离、cache freeze、source streaming 或发布语义；
+新默认改变请求 worker 数，不构成重设计 scheduling algorithm 的授权。
 
 ---
 
 # 25. BB-1 Implementation Tasks
 
-## A01 `[ADVANCED]` — Architecture Freeze
+正式任务与状态以 [BB-1 Worklist](../worklists/BB-1_WORKLIST.md) 为准。
+此处只列映射，不另设同名任务或重复 gate。
 
-由 architect 完成：
+| 任务 | 风险 | 内容 |
+|---|---|---|
+| A01 | ADVANCED | construction baseline、rename 清单和最小验证 fixture freeze |
+| A02 | STANDARD | 产品身份、构建/install/package、活跃脚本/测试调用迁移 |
+| A03 | ADVANCED | CLI/options、solver 命名、产品 dispatch、resource/profiling 参数映射 |
+| A04 | ADVANCED | 集中独立 checkpoint review；findings 原 reviewer re-check |
+| A05 | ADVANCED | 一次 Batch Acceptance，汇总最小 V1–V5 |
+| A06 | ADVANCED | 独立 final review 与 remediation 闭环 |
 
-1. 审查本任务书；
-2. 建立 old → new execution mapping；
-3. 冻结 product / algorithm / internal implementation 三层命名边界；
-4. 明确 solver rename 清单；
-5. 明确 directory/CMake/package rename 影响面；
-6. 明确 support gate 不变化；
-7. 记录 BB-M1 baseline HEAD SHA；
-8. 输出简短 architecture decision。
-
-不得施工 production behavior。
-
----
-
-## A02 `[STANDARD]` — Product Identity Rename
-
-完成：
-
-```text
-bellhop_rayreuse → bellhop_broadband
-BellhopRayReuse → BellhopBroadband
-Bellhop RayReuse → Bellhop Broadband
-```
-
-以及构建/install/package/script 中直接依赖 executable 名称的当前有效引用。
-
-若执行目录迁移：
-
-```text
-Bellhop_RayReuse/
-→
-Bellhop_Broadband/
-```
-
-同步修复当前有效构建路径。
-
-不修改历史报告文本。
-
----
-
-## A03 `[ADVANCED]` — CLI Execution Model Refactor
-
-实现：
-
-```text
---execution-mode <nonreuse|reuse>
---reuse-mode <serial|frequency|range>
---trace-workers N
---reuse-workers N
-```
-
-删除：
-
-```text
-parallel
-fused
---range-parallel
---workers
-```
-
-实现第 21 节 validation contract。
-
-保持：
-
-```text
---frequencies-hz
-```
-
-为 input override。
-
----
-
-## A04 `[ADVANCED]` — Solver Route Rename
-
-完成：
-
-```text
-SerialRayReuse → SerialReuse
-ParallelRayReuse → FrequencyReuse
-FusedRayReuse → RangeReuse
-```
-
-只重命名 route-level symbols/files。
-
-保留合理的 low-level fused terminology。
-
-不得修改算法计算顺序。
-
----
-
-## A05 `[ADVANCED]` — Dispatch Remap
-
-重新整理 `main` / product dispatch，使执行模型显式表现为：
-
-```text
-ExecutionMode
-    ├── NonReuse
-    └── Reuse
-         └── ReuseMode
-              ├── Serial
-              ├── Frequency
-              └── Range
-```
-
-避免继续存在：
-
-```text
-if parallel ...
-else if fused ...
-```
-
-这类旧概念作为顶层 execution 分支。
-
-Trace settings 必须独立注入：
-
-```text
-NonReuse
-Reuse/Serial
-Reuse/Frequency
-Reuse/Range
-```
-
----
-
-## A06 `[STANDARD]` — Resource / Profiling Parameter Remap
-
-把：
-
-```text
---output-queue-capacity
---memory-budget-mib
---profile-frequency-tasks
-```
-
-从旧：
-
-```text
-execution-mode parallel
-```
-
-迁移到：
-
-```text
-execution-mode reuse
-reuse-mode frequency
-```
-
-其他 profiling/cache 参数仅按现有能力迁移，不扩大作用域。
-
----
-
-## A07 `[STANDARD]` — Build / Script / Test Invocation Migration
-
-更新当前有效：
-
-* CMake executable references；
-* install rules；
-* package rules；
-* quality/engineering gates；
-* benchmark scripts；
-* standard-case runner；
-* CI；
-* demo invocation；
-* CLI tests。
-
-历史 archived report/worklist 不在 A07 修改。
-
----
-
-## A08 `[ADVANCED REVIEW]` — Naming Boundary Review
-
-Reviewer 专门检查：
-
-1. 是否还把 `parallel/fused` 当作顶层 execution mode；
-2. Trace Stage 是否正确存在于 NonReuse 与 RayReuse 两条路线；
-3. `trace-workers` 是否与 `reuse-workers` 正交；
-4. Frequency / Range 是否被错误地允许同时运行；
-5. 是否误把 low-level `fused` 术语机械替换；
-6. 是否产生算法行为变化；
-7. 是否存在旧 executable/CLI 的活跃引用。
-
-结论：
-
-```text
-PASS
-或
-CHANGES_REQUIRED
-```
+名称严格使用第18节四 solver 目标名；保留产品类、低层 fused 术语和
+`Bellhop_RayReuse/` 目录。trace settings 注入所有原有合法产品路径；
+不统一重排 source/cache 生命周期。
 
 ---
 
@@ -1473,7 +1378,11 @@ reuse
 
 ### Regression
 
-执行现有 full CTest / 项目现有主回归体系。
+BB-1 acceptance 集中执行一次 release full CTest，并运行实际改动的 Python
+runner/demo 测试。若既有 gate 已覆盖同一构建，不重复执行；不默认叠加 debug、
+isolated release、全仓 pytest、全 Origin/F2CPP matrix 或性能矩阵。
+CLI、route mapping、trace、cache 证据合并采集，具体最小集合见正式 BB-1 Worklist。
+BB-2 仅文档时不重跑数值回归。
 
 不设置新的性能提升门槛。
 
@@ -1519,13 +1428,13 @@ CHANGES_REQUIRED
 
 BB-1 `ACCEPTED` 后：
 
-> 自动进入 BB-2，不额外暂停等待。
+> 后续施工已获授权时自动进入 BB-2；本次文档准备不构成施工授权。
 
 ---
 
 # 28. BB-1 Milestone Commit
 
-BB-1 ACCEPTED 后独立 commit。
+BB-1 ACCEPTED 后可独立 commit；本次仅文档准备，不自动提交。
 
 建议：
 
@@ -1570,7 +1479,7 @@ BB-1 ACCEPTED 后进入。
 
 ```text
 README.md
-Bellhop_Broadband/README.md
+Bellhop_RayReuse/README.md
 GUIDE_USAGE.md
 GUIDE_BENCHMARKING.md
 GUIDE_RELEASE.md
@@ -1646,7 +1555,8 @@ legacy execution-mode fused
     → Range Reuse implementation family
 
 legacy fused + range-parallel
-    → Range Reuse with reuse-workers > 1
+    → Range Reuse with explicit reuse-workers N
+      （旧 --workers N 原值；旧未指定时填 4；旧 N=1 仍映射为 1）
 ```
 
 该说明用于阅读历史，不修改原始历史结论。
@@ -1677,97 +1587,18 @@ BB-2 必须重新以 production code 为 source of truth 审阅：
 
 # 33. BB-2 Tasks
 
-## B01 `[STANDARD]` — Living Doc Inventory
+正式任务与状态以 [BB-2 Worklist](../worklists/BB-2_WORKLIST.md) 为准。
 
-列出所有当前有效文档与脚本说明。
+| 任务 | 风险 | 内容 |
+|---|---|---|
+| B01 | SIMPLE | CURRENT / HISTORICAL / OBSOLETE 清单 |
+| B02 | ADVANCED | 按最终 production gate 核对支持矩阵并修正当前文档滞后 |
+| B03 | SIMPLE | living docs、新旧术语映射与带日期 closure report |
+| B04 | ADVANCED | 集中文档/Git 验证、历史完整性和独立 final review |
 
-分类：
-
-```text
-CURRENT
-HISTORICAL
-OBSOLETE
-```
-
----
-
-## B02 `[ADVANCED]` — Support Matrix Audit
-
-从 production validation/dispatch 出发重新核对：
-
-```text
-NonReuse
-Serial Reuse
-Frequency Reuse
-Range Reuse
-```
-
-分别支持哪些 product / beam / receiver / source 组合。
-
-文档不能反向决定代码行为。
-
----
-
-## B03 `[STANDARD]` — Current Documentation Rewrite
-
-统一当前文档：
-
-```text
-Bellhop Broadband
-NonReuse
-RayReuse
-Serial Reuse
-Frequency Reuse
-Range Reuse
-Trace workers
-Reuse workers
-```
-
-删除 current docs 中把：
-
-```text
-parallel
-fused
-range-parallel
-```
-
-当作当前用户 execution mode 的描述。
-
-低层实现讨论中可以继续使用 `fused`。
-
----
-
-## B04 `[ADVANCED REVIEW]` — Historical Integrity Audit
-
-确认：
-
-* 历史报告没有被重写；
-* milestone 前术语仍保持原貌；
-* 新旧术语映射清楚；
-* 当前文档没有引用已经删除的 CLI；
-* current support matrix 与 production code 一致。
-
----
-
-## B05 `[FINAL REVIEW]` — Milestone Closure
-
-最终检查：
-
-```text
-Code naming
-CLI
-Build/install
-Current docs
-Historical docs
-Support matrix
-Repository cleanliness
-```
-
-结论：
-
-```text
-ACCEPTED / CLOSED
-```
+final-reviewer 结论只能 `ACCEPTED` 或 `CHANGES_REQUIRED`；findings 修复后
+回原 reviewer。通过后由 coordinator 记录 `BB-2 ACCEPTED` 和里程碑 CLOSED。
+不在纯文档阶段重复数值回归，也不另设重复的 B05 验收。
 
 ---
 
@@ -1788,7 +1619,7 @@ docs(broadband): align documentation with broadband naming milestone
 最终创建：
 
 ```text
-REPORT_BB_M1_BROADBAND_NAMING_MILESTONE.md
+REPORT_BB_M1_BROADBAND_NAMING_MILESTONE_YYYY-MM-DD.md
 ```
 
 至少记录：
@@ -1832,8 +1663,8 @@ parallel controls:
 并记录：
 
 * baseline SHA；
-* BB-1 commit；
-* BB-2 commit；
+* BB-1 commit（未提交则明确记录未提交）；
+* BB-2 commit（未提交则明确记录未提交）；
 * tests；
 * output parity；
 * support matrix audit；
@@ -1933,7 +1764,7 @@ Range Reuse × Trace serial/parallel
 * [ ] BB-2 Final Review `ACCEPTED`
 * [ ] `Bellhop_origin` 未修改
 * [ ] `Bellhop_F2CPP` 未修改
-* [ ] working tree clean
+* [ ] working tree scope 已核对；未提交工作明确列明（不以 clean 为由删除既有工作或自动提交）
 * [ ] milestone report 完成
 
 最终状态：

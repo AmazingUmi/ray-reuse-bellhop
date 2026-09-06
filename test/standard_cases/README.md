@@ -170,7 +170,7 @@ uv run python test/standard_cases/codes/standard_cases.py \
 # 验证一次追踪、多频投影的复用路径
 uv run python test/standard_cases/codes/standard_cases.py \
   test --version rayreuse --case munk_cerveny_cc \
-  --profile broadband_smoke --rayreuse-execution-mode reuse
+  --profile broadband_smoke --rayreuse-execution-mode reuse-serial
 ```
 
 ## 结果和比较
@@ -198,9 +198,9 @@ results/rayreuse/<case>/<profile>/
 ```
 
 宽带 `.env` 的频率字段使用 profile 首频，发射角数仍按 profile 的最高频率
-统一计算。运行时适配器只调用一次 `bellhop_rayreuse`，并传入 `<root>`、
-`--frequencies-hz <严格升序逗号列表>` 以及
-`--execution-mode <nonreuse|reuse|fused|parallel>`。标准 runner 的
+统一计算。运行时适配器只调用一次 `bellhop_broadband`，并传入 `<root>`、
+`--frequencies-hz <严格升序逗号列表>` 以及所选路线的参数尾（如
+`--execution-mode reuse --reuse-mode <serial|frequency|range>`）。标准 runner 的
 `--rayreuse-execution-mode` 默认是 `nonreuse`，只对 RayReuse 多频运行生效；
 `origin`、`f2cpp` 和 RayReuse 单频调用不传此参数。清单中的每个频率记录都
 映射到同一个 PRT/SHD，并通过 `execution_model`、`execution_mode` 和
@@ -209,8 +209,8 @@ results/rayreuse/<case>/<profile>/
 运行清单记录频率向量、最高设计频率、共享发射角数、来源和各频率状态。
 宽带校验要求 SHD 第一维等于频率数、完整频率轴与 profile 一致、其余维度
 与算例定义一致，并逐频检查复压力有限且非全零。PRT 必须报告所选 execution
-mode；`nonreuse` 的 `Trace passes` 必须等于频率数，`reuse` 和
-`parallel` 则必须等于 1。
+mode；`nonreuse` 的 `Trace passes` 必须等于频率数，三条 reuse 路线
+（serial/frequency/range）则必须等于 1。
 
 比较两个 SHD 频率切片：
 
@@ -225,8 +225,9 @@ TL 差异。
 ## RayReuse 性能基准
 
 `codes/benchmark_rayreuse.py` 复用相同 case/profile 和输出校验，直接比较
-`nonreuse`、`reuse`、`fused`、`parallel`。`--parallel-workers` 针对 legacy
-frequency-`parallel`，`--fused-range-workers` 针对 fused range-parallel。benchmark 按
+`nonreuse`、`reuse-serial`、`reuse-frequency`、`reuse-range`。旗标名
+`--parallel-workers` 与 `--fused-range-workers` 保留，语义为 reuse workers
+轴：分别展开 `reuse-frequency` 与 `reuse-range` 配置。benchmark 按
 轮次旋转配置顺序，并将外部 wall、隔离 max RSS、PRT 阶段计时、输入/SHD
 哈希及运行元数据写入 JSON。正式基准默认拒绝脏工作区；协议和推荐命令见
 [`../../Bellhop_RayReuse/doc/guides/GUIDE_BENCHMARKING.md`](../../Bellhop_RayReuse/doc/guides/GUIDE_BENCHMARKING.md)。
@@ -241,11 +242,11 @@ frequency-`parallel`，`--fused-range-workers` 针对 fused range-parallel。ben
 
 `origin` 和 `f2cpp` 的执行/输入适配均已启用；`f2cpp` 默认可执行文件为
 `Bellhop_F2CPP/build/release/bellhop_f2cpp`。RayReuse 适配器已启用，默认
-可执行文件为 `Bellhop_RayReuse/build/release/bellhop_rayreuse`；single
+可执行文件为 `Bellhop_RayReuse/build/release/bellhop_broadband`；single
 profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调用。
-多频调用同时显式传递 `--execution-mode`；可由 runner 的
-`--rayreuse-execution-mode nonreuse|reuse|fused|parallel` 选择，默认
-`nonreuse`。
+多频调用同时显式传递路线参数；可由 runner 的
+`--rayreuse-execution-mode nonreuse|reuse-serial|reuse-frequency|reuse-range`
+选择，默认 `nonreuse`。
 
 三模型本地矩阵使用原版作为 broadband 主 oracle；F2CPP 在 `single` 全频
 门控，在 broadband 仅 `fmax` 切片门控，低频差异仍进入报告但不作为失败，

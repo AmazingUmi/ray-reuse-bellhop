@@ -1,6 +1,6 @@
 # Bellhop RayReuse 当前进度
 
-> 更新日期：2026-09-04
+> 更新日期：2026-09-06
 > Feature Parity accepted production HEAD：`0721fb3036ebaa26bbd72fcb20458e9118317457`
 > （`0721fb3`）
 > Final acceptance documentation commit：`88ba8b7`
@@ -10,6 +10,9 @@
 > IGR-3A fused TL adaptation commit：`dda1c2c`
 > IGR-3B fused Arrival closure commit：`0050f59`
 > IGR-3 unified architecture：**ACCEPTED / CLOSED**
+> BB-M1 / BB-1（Bellhop Broadband 命名与两层执行模型）：**ACCEPTED**
+> （2026-09-06，独立 final review；construction baseline `a3f20d8`，
+> 改动本轮保持未提交）
 > 当前状态：`Bellhop_F2CPP → Bellhop_RayReuse` Production Feature Parity 序列
 > 全部完成（RR-B1～RR-B4、FP-1A～FP-2I 全部 `ACCEPTED / CLOSED`）。
 > 最后一个功能批次 FP-2I（Line Source Closure）已全流程验收通过。
@@ -33,16 +36,46 @@ SHA-256，没有记录 exact dirty diff hash；因此仅作为本地 acceptance 
 当前 production implementation：
 
 ```text
-Current accepted production (IGR-3 CLOSED):
+Current accepted production (IGR-3 CLOSED, BB-1 accepted product surface):
     one Cross-Frequency Fused + Static Range Parallel Influence executor
       + legal TL beam-family sinks (IGR-3A)
       + G/g/B Arrival sink and [R][D][F] broadband lanes (IGR-3B)
+    exposed as Bellhop Broadband / bellhop_broadband with
+      --execution-mode <nonreuse|reuse>
+      + --reuse-mode <serial|frequency|range>
+      + --trace-workers / --reuse-workers (defaults 1; BB-1)
 ```
 
 IGR-3A 已提交于 `dda1c2c`，IGR-3B 已提交于 `0050f59`；两者均经独立 final
 review 验收并关闭。权威 scope/closure 见
 [`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
 与 [`IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md`](../worklists/IGR-3B_ARRIVAL_FUSED_INFLUENCE_WORKLIST.md)。
+
+## Broadband 命名里程碑（BB-M1）
+
+BB-M1 将产品从 Bellhop RayReuse 演进为 **Bellhop Broadband**：executable
+`bellhop_broadband`、CMake project `BellhopBroadband`、package
+`bellhop-broadband`（`Bellhop_RayReuse/` 目录名与内部 namespace/include 根
+保留）。CLI 重组为两层执行模型（`--execution-mode <nonreuse|reuse>` +
+`--reuse-mode <serial|frequency|range>`，默认 nonreuse/serial），并行参数
+统一为 `--trace-workers` 与 `--reuse-workers`（默认 1）；旧
+`parallel`/`fused` 模式值与 `--range-parallel`/`--workers` 选项删除。solver
+顶层命名为 `NonReuseSolver` / `ReuseSerialSolver` / `ReuseFreqParaSolver` /
+`ReuseRangeParaSolver`；低层 fused 实现术语保留。科学算法、输出语义与
+support matrix 未改变（20 组新旧 CLI 对比产品 byte-identical，PRT 归一化
+一致）。
+
+- BB-1（实现 Batch）已于 2026-09-06 经独立 final review **ACCEPTED**；
+  任务与 evidence 见 [`BB-1_WORKLIST.md`](../worklists/BB-1_WORKLIST.md)。
+- BB-2（文档/术语 Batch）已于 2026-09-06 经独立 final review **ACCEPTED**：
+  living docs（13 个 CURRENT 文件）迁移到新命名/CLI/默认值，support matrix
+  按代码复核修正（GUIDE_USAGE 的 "A/a 不进 fused、IGR-3B 未开始" 等滞后已
+  修正），历史文档零改写，新增 "Terminology after BB-M1" 映射入口；evidence
+  见 [`BB-2_WORKLIST.md`](../worklists/BB-2_WORKLIST.md)。
+- 里程碑整体 **BB-M1 ACCEPTED / CLOSED**（2026-09-06）；closure report：
+  [`REPORT_BB_M1_BROADBAND_NAMING_MILESTONE_2026-09-06.md`](../reports/REPORT_BB_M1_BROADBAND_NAMING_MILESTONE_2026-09-06.md)。
+- construction baseline：`a3f20d8c0d8ac207766fa0adb083de3526f74fd7`；
+  BB-1 与 BB-2 全部改动本轮均保持未提交（按授权）。
 
 `0721fb3` 是 accepted production parity HEAD；`88ba8b7` 是最终验收文档记录
 commit，不替代 Feature Parity production acceptance identity。IGR-2 的后续
@@ -114,5 +147,6 @@ range block。TL consumer 仍按频率索引顺序调用；fused Arrival 由每�
 **Bellhop_F2CPP → Bellhop_RayReuse Production Feature Parity COMPLETE**。
 所有 Feature Parity 批次（FP-1A～FP-2I）均已完成独立 Final Review 并标记为 `ACCEPTED / CLOSED`。
 当前仓库生产支持面已完全覆盖 F2CPP production 范围，剩余真实 GAP 数量为 **0**。
-IGR-1～IGR-3 也均已独立验收并关闭；当前 unified fused Influence architecture
-与 TL/Arrival 支持域以本状态页和支持矩阵为准。
+IGR-1～IGR-3 也均已独立验收并关闭；BB-1 已完成 Bellhop Broadband 产品与
+CLI 重构（见上文 Broadband 命名里程碑）。当前 unified fused Influence
+architecture 与 TL/Arrival 支持域以本状态页和支持矩阵为准。
