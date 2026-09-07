@@ -45,7 +45,7 @@ def execution_arguments(execution_mode: str, reuse_mode: str | None) -> list[str
 
 DEFAULT_EXECUTABLE = (
     PROJECT_ROOT
-    / "Bellhop_RayReuse"
+    / "Bellhop_Broadband"
     / "build"
     / "release"
     / "bellhop_broadband"

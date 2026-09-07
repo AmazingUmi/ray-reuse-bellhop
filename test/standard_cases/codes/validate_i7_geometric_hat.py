@@ -400,13 +400,13 @@ def load_run(
     }
 
 
-def generation_commands(include_rayreuse: bool) -> list[str]:
+def generation_commands(include_broadband: bool) -> list[str]:
     executables = {
         "origin": "Bellhop_origin/bin/bellhop",
         "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
-        "rayreuse": "Bellhop_RayReuse/build/release/bellhop_broadband",
+        "broadband": "Bellhop_Broadband/build/release/bellhop_broadband",
     }
-    versions = ("origin", "f2cpp", "rayreuse") if include_rayreuse else (
+    versions = ("origin", "f2cpp", "broadband") if include_broadband else (
         "origin",
         "f2cpp",
     )
@@ -424,7 +424,7 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     source_contract = validate_origin_source_contract()
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
@@ -432,8 +432,8 @@ def validate(
         "origin": origin_executable.resolve(),
         "f2cpp": f2cpp_executable.resolve(),
     }
-    if rayreuse_executable is not None:
-        executables["rayreuse"] = rayreuse_executable.resolve()
+    if broadband_executable is not None:
+        executables["broadband"] = broadband_executable.resolve()
     if len(set(executables.values())) != len(executables):
         raise ValueError("solver executable paths must differ")
     if not all(path.is_file() for path in executables.values()):
@@ -511,24 +511,24 @@ def validate(
             raise ValueError(f"{case_id} Origin/F2CPP mismatch: {metrics}")
         comparisons[key] = {"passed": True, **metrics}
 
-    rayreuse_comparisons: dict[str, dict[str, dict[str, object]]] = {}
-    if "rayreuse" in executables:
+    broadband_comparisons: dict[str, dict[str, dict[str, object]]] = {}
+    if "broadband" in executables:
         for reference in ("origin", "f2cpp"):
-            pair = f"{reference}_rayreuse"
-            rayreuse_comparisons[pair] = {}
+            pair = f"{reference}_broadband"
+            broadband_comparisons[pair] = {}
             for key, (case_id, _, _) in CASES.items():
                 passed, metrics = compare_files(
                     loaded[reference][key]["shade"],
-                    loaded["rayreuse"][key]["shade"],
+                    loaded["broadband"][key]["shade"],
                     0,
                     0,
                     tolerance_path,
                 )
                 if not passed:
                     raise ValueError(
-                        f"{case_id} {reference}/RayReuse mismatch: {metrics}"
+                        f"{case_id} {reference}/Broadband mismatch: {metrics}"
                     )
-                rayreuse_comparisons[pair][key] = {
+                broadband_comparisons[pair][key] = {
                     "passed": True,
                     **metrics,
                 }
@@ -569,10 +569,10 @@ def validate(
     return {
         "schema": (
             "bellhop.feature_parity.fp1i_ray_centered_geometric_hat_validation"
-            if "rayreuse" in executables
+            if "broadband" in executables
             else "bellhop.f2cpp.i7_geometric_hat_validation"
         ),
-        "schema_version": 2 if "rayreuse" in executables else 1,
+        "schema_version": 2 if "broadband" in executables else 1,
         "status": "passed",
         "matrix": {
             "frequency_hz": FREQUENCY_HZ,
@@ -590,7 +590,7 @@ def validate(
         "executables": executable_records,
         "origin_source_contract": source_contract,
         "origin_f2cpp_field_comparisons": comparisons,
-        "rayreuse_field_comparisons": rayreuse_comparisons,
+        "broadband_field_comparisons": broadband_comparisons,
         "independent_coordinate_effect_guards": effects,
         "field_summaries": field_summaries,
         "provenance_guards": {
@@ -605,8 +605,8 @@ def validate(
             "integrator_record_is_environment_eof": True,
             "env_and_prt_family_identity_bound": True,
             "origin_f2cpp_comparison_count": len(comparisons),
-            "rayreuse_comparison_count": sum(
-                len(pair) for pair in rayreuse_comparisons.values()
+            "broadband_comparison_count": sum(
+                len(pair) for pair in broadband_comparisons.values()
             ),
             "coordinate_effect_guard_count": len(effects),
         },
@@ -622,11 +622,11 @@ def validate(
             ),
             **(
                 {
-                    "rayreuse_field_aggregate": aggregate_sha256(
-                        [loaded["rayreuse"][key]["shade"] for key in CASES]
+                    "broadband_field_aggregate": aggregate_sha256(
+                        [loaded["broadband"][key]["shade"] for key in CASES]
                     )
                 }
-                if "rayreuse" in executables
+                if "broadband" in executables
                 else {}
             ),
             "origin_prt": {
@@ -639,17 +639,17 @@ def validate(
             },
             **(
                 {
-                    "rayreuse_prt": {
-                        key: sha256(loaded["rayreuse"][key]["print"])
+                    "broadband_prt": {
+                        key: sha256(loaded["broadband"][key]["print"])
                         for key in CASES
                     }
                 }
-                if "rayreuse" in executables
+                if "broadband" in executables
                 else {}
             ),
         },
         "generation": {
-            "case_commands": generation_commands("rayreuse" in executables),
+            "case_commands": generation_commands("broadband" in executables),
             "validator_command": (
                 "python3 test/standard_cases/codes/"
                 "validate_i7_geometric_hat.py "
@@ -657,9 +657,9 @@ def validate(
                 "--origin-executable Bellhop_origin/bin/bellhop "
                 "--f2cpp-executable "
                 "Bellhop_F2CPP/build/release/bellhop_f2cpp "
-                "--rayreuse-executable "
-                "Bellhop_RayReuse/build/release/bellhop_broadband "
-                "--output Bellhop_RayReuse/doc/reports/validation/"
+                "--broadband-executable "
+                "Bellhop_Broadband/build/release/bellhop_broadband "
+                "--output Bellhop_Broadband/doc/reports/validation/"
                 "fp1i_ray_centered_geometric_hat_report.json"
             ),
         },
@@ -671,7 +671,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -682,8 +682,8 @@ def main() -> int:
         args.results_root.resolve(),
         args.origin_executable.resolve(),
         args.f2cpp_executable.resolve(),
-        args.rayreuse_executable.resolve()
-        if args.rayreuse_executable is not None
+        args.broadband_executable.resolve()
+        if args.broadband_executable is not None
         else None,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

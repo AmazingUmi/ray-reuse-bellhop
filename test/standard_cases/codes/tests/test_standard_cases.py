@@ -19,8 +19,8 @@ sys.path.insert(0, str(PLOTREAD_TESTS_ROOT))
 
 from case_model import discover_cases
 from standard_cases import (
-    rayreuse_execution_arguments,
-    require_rayreuse_execution_mode,
+    broadband_execution_arguments,
+    require_broadband_execution_mode,
     VersionAdapter,
     build_parser,
     default_adapters,
@@ -40,14 +40,14 @@ class StandardCasesAdapterTests(unittest.TestCase):
         definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
         cls.definition = definitions["constant_speed_direct"]
 
-    def test_rayreuse_single_adapter_is_enabled_at_release_path(self) -> None:
-        adapter = default_adapters(None)["rayreuse"]
+    def test_broadband_single_adapter_is_enabled_at_release_path(self) -> None:
+        adapter = default_adapters(None)["broadband"]
 
         self.assertTrue(adapter.enabled)
         self.assertEqual(
             adapter.executable,
             PROJECT_ROOT
-            / "Bellhop_RayReuse"
+            / "Bellhop_Broadband"
             / "build"
             / "release"
             / "bellhop_broadband",
@@ -125,13 +125,13 @@ class StandardCasesAdapterTests(unittest.TestCase):
             print_path.write_text(base_contents, encoding="utf-8")
             validate_print_output(definition, print_path, "origin")
             with self.assertRaisesRegex(RuntimeError, "source depths = 3"):
-                validate_print_output(definition, print_path, "rayreuse")
+                validate_print_output(definition, print_path, "broadband")
             print_path.write_text(
                 base_contents + "\nsource depths = 3\n",
                 encoding="utf-8",
             )
             validate_print_output(definition, print_path, "f2cpp")
-            validate_print_output(definition, print_path, "rayreuse")
+            validate_print_output(definition, print_path, "broadband")
 
     def test_runner_execution_mode_defaults_and_accepts_both_modes(self) -> None:
         parser = build_parser()
@@ -139,7 +139,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
             [
                 "generate",
                 "--version",
-                "rayreuse",
+                "broadband",
                 "--profile",
                 "broadband_smoke",
             ]
@@ -160,7 +160,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                     [
                         "generate",
                         "--version",
-                        "rayreuse",
+                        "broadband",
                         "--profile",
                         "broadband_smoke",
                         "--execution-mode",
@@ -173,13 +173,13 @@ class StandardCasesAdapterTests(unittest.TestCase):
                     execution_mode,
                 )
 
-    def test_rayreuse_broadband_cli_passes_explicit_execution_modes(self) -> None:
+    def test_broadband_broadband_cli_passes_explicit_execution_modes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             working_directory = Path(temporary_directory)
             executable = working_directory / "bellhop_broadband"
             executable.touch()
             adapter = VersionAdapter(
-                name="rayreuse",
+                name="broadband",
                 executable=executable,
                 enabled=True,
             )
@@ -206,7 +206,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                             "direct_broadband",
                             "--frequencies-hz",
                             "50,250",
-                            *rayreuse_execution_arguments(execution_mode, reuse_mode),
+                            *broadband_execution_arguments(execution_mode, reuse_mode),
                         ],
                         cwd=working_directory,
                         check=True,
@@ -222,8 +222,8 @@ class StandardCasesAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "strictly increasing"):
             format_frequency_csv((250.0, 50.0))
 
-    def test_rayreuse_broadband_manifest_records_execution_modes(self) -> None:
-        adapter = default_adapters(None)["rayreuse"]
+    def test_broadband_broadband_manifest_records_execution_modes(self) -> None:
+        adapter = default_adapters(None)["broadband"]
         frequencies = self.definition.frequencies("broadband_smoke")
         launch_count = self.definition.shared_launch_angle_count(frequencies)
 
@@ -248,7 +248,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
 
                     profile_root = (
                         results_root
-                        / "rayreuse"
+                        / "broadband"
                         / self.definition.case_id
                         / "broadband_smoke"
                     )
@@ -314,8 +314,8 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         1,
                     )
 
-    def test_rayreuse_single_generate_keeps_per_frequency_layout(self) -> None:
-        adapter = default_adapters(None)["rayreuse"]
+    def test_broadband_single_generate_keeps_per_frequency_layout(self) -> None:
+        adapter = default_adapters(None)["broadband"]
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             results_root = Path(temporary_directory)
@@ -329,7 +329,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
 
             profile_root = (
                 results_root
-                / "rayreuse"
+                / "broadband"
                 / self.definition.case_id
                 / "single"
             )
@@ -345,7 +345,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
             self.assertNotIn("execution_mode", manifest)
             self.assertNotIn("broadband_run", manifest)
 
-    def test_rayreuse_product_manifest_uses_frequency_scoped_outputs(self) -> None:
+    def test_broadband_product_manifest_uses_frequency_scoped_outputs(self) -> None:
         definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
         expected = {
             "ray_trace_directional_tabulated": "ray_file",
@@ -355,7 +355,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
             "eigenray_geometric_gaussian": "ray_file",
             "eigenray_zero": "ray_file",
         }
-        adapter = default_adapters(None)["rayreuse"]
+        adapter = default_adapters(None)["broadband"]
         for case_id, product_field in expected.items():
             with self.subTest(case=case_id):
                 with tempfile.TemporaryDirectory() as temporary_directory:
@@ -369,7 +369,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                     manifest = json.loads(
                         manifest_path.read_text(encoding="utf-8")
                     )
-                    self.assertEqual(manifest["version"], "rayreuse")
+                    self.assertEqual(manifest["version"], "broadband")
                     self.assertEqual(manifest["frequencies_hz"], [1000.0])
                     self.assertEqual(len(manifest["runs"]), 1)
                     run = manifest["runs"][0]
@@ -384,7 +384,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                     self.assertIsNone(run[product_field])
                     self.assertIsNone(run[other_product])
 
-    def test_rayreuse_broadband_product_name_is_frequency_stable(self) -> None:
+    def test_broadband_broadband_product_name_is_frequency_stable(self) -> None:
         self.assertEqual(
             frequency_product_name(
                 "arrival_geometric_hat_ascii_broadband", 0, 50.0, ".arr"
@@ -505,7 +505,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
             results_root = Path(temporary_directory)
             executable = results_root / "solver"
             executable.touch()
-            adapter = VersionAdapter("rayreuse", executable, True)
+            adapter = VersionAdapter("broadband", executable, True)
             manifest_path = process_case(
                 self.definition,
                 "broadband_smoke",

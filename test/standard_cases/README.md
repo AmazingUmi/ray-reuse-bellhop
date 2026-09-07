@@ -1,6 +1,6 @@
 # Bellhop 共享标准算例
 
-这里是原版 Bellhop、Bellhop_F2CPP 和 Bellhop_RayReuse 共用的标准测试入口。
+这里是原版 Bellhop、Bellhop_F2CPP 和 Bellhop_Broadband 共用的标准测试入口。
 物理环境只定义一次；单频与多频是同一环境的不同 frequency profile。SHD
 格式读取和人工绘图入口见 [`../PlotRead/README.md`](../PlotRead/README.md)。
 
@@ -14,7 +14,7 @@ standard_cases/
 │       └── origin.env.in  原版 Bellhop 输入模板
 ├── codes/                 生成、运行、校验、比较及单元测试代码
 │   ├── standard_cases.py  唯一命令行入口
-│   ├── benchmark_rayreuse.py
+│   ├── benchmark_broadband.py
 │   ├── case_model.py
 │   ├── compare_fields.py
 │   ├── tolerances.toml
@@ -164,12 +164,12 @@ uv run python test/standard_cases/codes/standard_cases.py \
   test --version origin --case munk_cerveny_cc --profile single
 
 uv run python test/standard_cases/codes/standard_cases.py \
-  test --version rayreuse --case munk_cerveny_cc \
+  test --version broadband --case munk_cerveny_cc \
   --profile broadband_smoke --execution-mode nonreuse
 
 # 验证一次追踪、多频投影的复用路径
 uv run python test/standard_cases/codes/standard_cases.py \
-  test --version rayreuse --case munk_cerveny_cc \
+  test --version broadband --case munk_cerveny_cc \
   --profile broadband_smoke --execution-mode reuse --reuse-mode serial
 ```
 
@@ -189,7 +189,7 @@ results/<version>/<case>/<profile>/
 RayReuse 多频 profile 由一次求解产生完整频率轴，因此使用单一宽带目录：
 
 ```text
-results/rayreuse/<case>/<profile>/
+results/broadband/<case>/<profile>/
 ├── run_manifest.json
 └── broadband/
     ├── <case>_<profile>_broadband.env
@@ -224,14 +224,14 @@ TL 差异。
 
 ## RayReuse 性能基准
 
-`codes/benchmark_rayreuse.py` 复用相同 case/profile 和输出校验，直接比较
+`codes/benchmark_broadband.py` 复用相同 case/profile 和输出校验，直接比较
 `nonreuse` 与 `reuse` execution mode；reuse mode 显式选择
 `serial`、`frequency` 或 `range`。`--reuse-workers` 为 Frequency Reuse 和
 Range Reuse 展开 worker 配置；新报告使用 schema v4 和独立的
 `execution_mode`、`reuse_mode`、`reuse_workers` 字段。benchmark 按
 轮次旋转配置顺序，并将外部 wall、隔离 max RSS、PRT 阶段计时、输入/SHD
 哈希及运行元数据写入 JSON。正式基准默认拒绝脏工作区；协议和推荐命令见
-[`../../Bellhop_RayReuse/doc/guides/GUIDE_BENCHMARKING.md`](../../Bellhop_RayReuse/doc/guides/GUIDE_BENCHMARKING.md)。
+[`../../Bellhop_Broadband/doc/guides/GUIDE_BENCHMARKING.md`](../../Bellhop_Broadband/doc/guides/GUIDE_BENCHMARKING.md)。
 
 ## 版本职责
 
@@ -239,11 +239,11 @@ Range Reuse 展开 worker 配置；新报告使用 schema v4 和独立的
 |---|---|---|
 | `origin` | 一次原版 Bellhop | 共享 `fmax` 角度网格后逐频运行 |
 | `f2cpp` | 已启用；生成兼容 PRT/SHD 并与原版逐场比较 | D-02 会按当前单频重新规划，仅 `fmax` 切片与共享扇语义等价 |
-| `rayreuse` | 单元素频率向量 | 一次运行完整频率向量 |
+| `broadband` | 单元素频率向量 | 一次运行完整频率向量 |
 
 `origin` 和 `f2cpp` 的执行/输入适配均已启用；`f2cpp` 默认可执行文件为
 `Bellhop_F2CPP/build/release/bellhop_f2cpp`。RayReuse 适配器已启用，默认
-可执行文件为 `Bellhop_RayReuse/build/release/bellhop_broadband`；single
+可执行文件为 `Bellhop_Broadband/build/release/bellhop_broadband`；single
 profile 不传频率参数，多频 profile 使用一次 `--frequencies-hz` 调用。
 多频调用同时显式传递路线参数；可由 runner 的
 `--execution-mode nonreuse|reuse` 与
@@ -260,7 +260,7 @@ uv run python test/standard_cases/codes/model_matrix.py
 
 矩阵通过 `--execution-modes nonreuse,reuse` 和
 `--reuse-modes serial,frequency` 选择路线，默认路线集合不变。当前矩阵报告
-schema v2 分别记录 `rayreuse_execution_modes`、`rayreuse_reuse_modes`，
+schema v2 分别记录 `broadband_execution_modes`、`broadband_reuse_modes`，
 历史 schema v1 报告保持原样。
 
 矩阵默认优先使用各 case 目录中的既有 `tolerances.toml`，没有 case-local

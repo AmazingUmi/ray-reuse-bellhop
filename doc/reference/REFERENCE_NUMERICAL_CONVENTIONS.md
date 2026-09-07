@@ -185,7 +185,7 @@ position = (range, depth) = (r, z)
 | 类型、枚举 | `PascalCase` | `RayPath` |
 | 函数、变量、字段 | `lowerCamelCase` | `soundSpeed` |
 | 编译期常量 | `kPascalCase` | `kReferenceSoundSpeed` |
-| 命名空间 | 小写 | `rayreuse` |
+| 命名空间 | 小写 | `broadband` |
 | 文件名 | `snake_case` | `ray_stepper.cpp` |
 
 核心领域变量默认不带单位后缀，因为单位已经统一：

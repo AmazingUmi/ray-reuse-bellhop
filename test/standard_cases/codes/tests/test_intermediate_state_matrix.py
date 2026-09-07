@@ -73,7 +73,7 @@ class IntermediateStateMatrixTests(unittest.TestCase):
         self.assertEqual(self.validate()["contract_version"], 1)
 
     def test_rejects_wrong_producer(self) -> None:
-        self.manifest["producer"] = "rayreuse"
+        self.manifest["producer"] = "broadband"
         self._write_manifest()
         with self.assertRaisesRegex(ValueError, "producer"):
             self.validate()

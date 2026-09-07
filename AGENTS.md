@@ -29,12 +29,12 @@
 | ---------------------- | ------------------------------ |
 | `Bellhop_origin/`      | Fortran scientific oracle      |
 | `Bellhop_F2CPP/`       | C++ single-frequency reference |
-| `Bellhop_RayReuse/`    | RayReuse production / research |
+| `Bellhop_Broadband/`   | Bellhop Broadband production / research |
 | `test/standard_cases/` | shared cases / oracle          |
 
 默认：
 
-* production 修改集中在 `Bellhop_RayReuse/`；
+* production 修改集中在 `Bellhop_Broadband/`；
 * `Bellhop_origin/`、`Bellhop_F2CPP/` 只读；
 * 必要时可修改共享测试和文档；
 * 不修改无关文件；
@@ -275,7 +275,7 @@ advanced-worker
 每个非平凡 Batch 使用：
 
 ```text
-Bellhop_RayReuse/doc/worklists/<BATCH>_WORKLIST.md
+Bellhop_Broadband/doc/worklists/<BATCH>_WORKLIST.md
 ```
 
 最小格式：

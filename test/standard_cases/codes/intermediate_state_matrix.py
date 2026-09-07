@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Fortran ray oracles and compare F2CPP/RayReuse geometry states."""
+"""Generate Fortran ray oracles and compare F2CPP/Broadband geometry states."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ def build_report(
     *,
     origin_executable: Path,
     f2cpp_probe: Path,
-    rayreuse_probe: Path,
+    broadband_probe: Path,
     cases: Sequence[str],
     work_root: Path,
 ) -> dict[str, object]:
@@ -117,19 +117,19 @@ def build_report(
                 configuration,
                 expected_producer="f2cpp",
             ),
-            "rayreuse": compare(
+            "broadband": compare(
                 oracle_dir,
-                rayreuse_probe,
+                broadband_probe,
                 configuration,
-                expected_producer="rayreuse",
+                expected_producer="broadband",
             ),
         }
         cpp_identical = (
             comparisons["f2cpp"]["probe_csv_sha256"]
-            == comparisons["rayreuse"]["probe_csv_sha256"]
+            == comparisons["broadband"]["probe_csv_sha256"]
         )
         if not cpp_identical:
-            raise ValueError(f"{case_id}: F2CPP/RayReuse probe CSV differs")
+            raise ValueError(f"{case_id}: F2CPP/Broadband probe CSV differs")
         results.append(
             {
                 "case_id": case_id,
@@ -154,9 +154,9 @@ def build_report(
                 "path": str(f2cpp_probe),
                 "sha256": sha256_file(f2cpp_probe),
             },
-            "rayreuse_probe": {
-                "path": str(rayreuse_probe),
-                "sha256": sha256_file(rayreuse_probe),
+            "broadband_probe": {
+                "path": str(broadband_probe),
+                "sha256": sha256_file(broadband_probe),
             },
         },
         "selector": {"source_index": 1, "launch_angle_index": 150},
@@ -173,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-probe", type=Path, required=True)
-    parser.add_argument("--rayreuse-probe", type=Path, required=True)
+    parser.add_argument("--broadband-probe", type=Path, required=True)
     parser.add_argument(
         "--case",
         action="append",
@@ -190,7 +190,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     paths = {
         "origin": args.origin_executable.resolve(),
         "f2cpp": args.f2cpp_probe.resolve(),
-        "rayreuse": args.rayreuse_probe.resolve(),
+        "broadband": args.broadband_probe.resolve(),
     }
     missing = [str(path) for path in paths.values() if not path.is_file()]
     if missing:
@@ -210,7 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         report = build_report(
             origin_executable=paths["origin"],
             f2cpp_probe=paths["f2cpp"],
-            rayreuse_probe=paths["rayreuse"],
+            broadband_probe=paths["broadband"],
             cases=tuple(args.cases or CASE_CONFIGURATIONS),
             work_root=work_root,
         )

@@ -5,7 +5,7 @@ origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart", "Bellhop_origin/Bellhop/ArrMod.f90 WriteArrivalsASCII"]
 
 [compatibility]
-versions = ["origin", "f2cpp", "rayreuse"]
+versions = ["origin", "f2cpp", "broadband"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0

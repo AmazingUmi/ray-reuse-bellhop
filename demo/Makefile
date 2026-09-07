@@ -1,6 +1,6 @@
 PYTHON ?= python3
 ENV ?= cases/reliability/munk_cerveny_cc.env
-VERSIONS ?= origin,f2cpp,rayreuse
+VERSIONS ?= origin,f2cpp,broadband
 DPI ?= 180
 MULTI_ENV ?= cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env
 MULTI_EXECUTION_MODE ?= reuse
@@ -12,7 +12,7 @@ MULTI_CLI := $(PYTHON) codes/rayreuse_multifrequency.py
 PLOT_ENV := MPLCONFIGDIR=/tmp/bellhop-showcase-matplotlib XDG_CACHE_HOME=/tmp/bellhop-showcase-cache
 COMMON_ARGS := --environment "$(ENV)"
 
-.PHONY: help check run plot show origin f2cpp rayreuse all \
+.PHONY: help check run plot show origin f2cpp broadband all \
 	rayreuse-multifrequency multifrequency-run multifrequency-plot test
 
 help:
@@ -20,7 +20,7 @@ help:
 	@echo "  make check      Check the ENV and three executables"
 	@echo "  make origin     Directly run and plot Original Bellhop"
 	@echo "  make f2cpp      Directly run and plot Bellhop F2CPP"
-	@echo "  make rayreuse   Directly run and plot Bellhop RayReuse"
+	@echo "  make broadband   Directly run and plot Bellhop Broadband"
 	@echo "  make all        Run the same ENV with all three and compare"
 	@echo "  make rayreuse-multifrequency  Run one multi-frequency ENV and plot slices"
 	@echo "  make run        Calculate selected VERSIONS only"
@@ -39,12 +39,12 @@ plot:
 show:
 	$(PLOT_ENV) $(CLI) show $(COMMON_ARGS) --versions "$(VERSIONS)" --dpi "$(DPI)"
 
-origin f2cpp rayreuse:
+origin f2cpp broadband:
 	$(PLOT_ENV) $(CLI) show $(COMMON_ARGS) --versions "$@" --dpi "$(DPI)"
 
 all:
 	$(PLOT_ENV) $(CLI) show $(COMMON_ARGS) \
-		--versions "origin,f2cpp,rayreuse" --dpi "$(DPI)"
+		--versions "origin,f2cpp,broadband" --dpi "$(DPI)"
 
 rayreuse-multifrequency:
 	$(PLOT_ENV) $(MULTI_CLI) show \

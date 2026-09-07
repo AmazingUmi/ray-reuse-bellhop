@@ -22,7 +22,7 @@ CASES = (
     "eigenray_irregular_pairs",
     "eigenray_zero",
 )
-RAYREUSE_CASES = (
+BROADBAND_CASES = (
     "eigenray_geometric_hat",
     "eigenray_geometric_hat_ray_centered",
     "eigenray_geometric_gaussian",
@@ -127,15 +127,15 @@ def _effect_summary(products: dict[str, EigenrayOutput], control_point_counts: t
     zero = products["eigenray_zero"]
     if zero.rays:
         raise ValueError("zero-hit eigenray case contains an EOF block")
-    if set(products) == set(RAYREUSE_CASES):
+    if set(products) == set(BROADBAND_CASES):
         nonzero = products["eigenray_geometric_gaussian"].rays
         if not nonzero:
-            raise ValueError("RayReuse eigenray matrix has no successful hit")
+            raise ValueError("Broadband eigenray matrix has no successful hit")
         if not any(ray.top_bounces or ray.bottom_bounces for ray in nonzero):
-            raise ValueError("RayReuse eigenray stream did not observe reflected prefixes")
+            raise ValueError("Broadband eigenray stream did not observe reflected prefixes")
         multi = products["eigenray_geometric_hat"]
         if math.prod(multi.header.source_counts) != 2:
-            raise ValueError("RayReuse eigenray matrix lost the two-source header")
+            raise ValueError("Broadband eigenray matrix lost the two-source header")
         return {
             "zero_blocks": 0,
             "nonzero_blocks": len(nonzero),
@@ -145,7 +145,7 @@ def _effect_summary(products: dict[str, EigenrayOutput], control_point_counts: t
             "prefix_point_minimum": min(ray.point_count for ray in nonzero),
             "prefix_point_maximum": max(ray.point_count for ray in nonzero),
             "multi_source_header_count": 2,
-            "scope": "rayreuse representative shared cases",
+            "scope": "broadband representative shared cases",
         }
     nonzero = [
         ray
@@ -176,20 +176,20 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
     implementations = {
         "origin": origin_executable.resolve(),
         "f2cpp": f2cpp_executable.resolve(),
     }
-    if rayreuse_executable is not None:
-        implementations["rayreuse"] = rayreuse_executable.resolve()
+    if broadband_executable is not None:
+        implementations["broadband"] = broadband_executable.resolve()
     products: dict[str, dict[str, EigenrayOutput]] = {name: {} for name in implementations}
     provenance: dict[str, object] = {}
     controls: dict[str, tuple[int, ...]] = {}
     for version, executable in implementations.items():
-        version_cases = RAYREUSE_CASES if version == "rayreuse" else CASES
+        version_cases = BROADBAND_CASES if version == "broadband" else CASES
         info: dict[str, object] = {"executable": str(executable), "executable_sha256": sha256(executable), "executable_mtime_ns": executable.stat().st_mtime_ns}
         for case_id in version_cases:
             definition = definitions[case_id]
@@ -202,7 +202,7 @@ def validate(
             output = parse_eigenray(product_path)
             products[version][case_id] = output
             info[case_id] = {"product_sha256": sha256(product_path), "environment_sha256": sha256(environment_path), "source_references": list(definition.source_references), "source_sha256": source_hashes(definition.source_references), "blocks": len(output.rays)}
-        if version != "rayreuse":
+        if version != "broadband":
             control_manifest, control_data = _manifest(results_root, version, CONTROL)
             if control_data.get("output_kind") != "ray":
                 raise ValueError(f"{control_manifest}: ordinary R control product provenance mismatch")
@@ -217,17 +217,17 @@ def validate(
             info[CONTROL] = {"product_sha256": sha256(control_path), "fixed_blocks": len(control.rays)}
         provenance[version] = info
     comparisons = {case_id: compare_eigenrays(products["origin"][case_id], products["f2cpp"][case_id], case_id) for case_id in CASES}
-    if "rayreuse" in implementations:
-        for case_id in RAYREUSE_CASES:
-            comparisons[f"origin_vs_rayreuse_{case_id}"] = compare_eigenrays(
-                products["origin"][case_id], products["rayreuse"][case_id],
-                f"Origin/RayReuse {case_id}",
+    if "broadband" in implementations:
+        for case_id in BROADBAND_CASES:
+            comparisons[f"origin_vs_broadband_{case_id}"] = compare_eigenrays(
+                products["origin"][case_id], products["broadband"][case_id],
+                f"Origin/Broadband {case_id}",
             )
-            comparisons[f"f2cpp_vs_rayreuse_{case_id}"] = compare_eigenrays(
-                products["f2cpp"][case_id], products["rayreuse"][case_id],
-                f"F2CPP/RayReuse {case_id}",
+            comparisons[f"f2cpp_vs_broadband_{case_id}"] = compare_eigenrays(
+                products["f2cpp"][case_id], products["broadband"][case_id],
+                f"F2CPP/Broadband {case_id}",
             )
-    return {"schema": "bellhop.i8.eigenray.parity.v1", "status": "passed", "coordinate_tolerance": {"absolute_m": ABS_TOL, "relative": REL_TOL}, "cases": list(CASES), "cases_by_version": {version: list(RAYREUSE_CASES if version == "rayreuse" else CASES) for version in implementations}, "provenance": provenance, "effects": {version: _effect_summary(products[version], controls.get(version, ())) for version in products}, "comparison": comparisons}
+    return {"schema": "bellhop.i8.eigenray.parity.v1", "status": "passed", "coordinate_tolerance": {"absolute_m": ABS_TOL, "relative": REL_TOL}, "cases": list(CASES), "cases_by_version": {version: list(BROADBAND_CASES if version == "broadband" else CASES) for version in implementations}, "provenance": provenance, "effects": {version: _effect_summary(products[version], controls.get(version, ())) for version in products}, "comparison": comparisons}
 
 
 def main() -> int:
@@ -235,13 +235,13 @@ def main() -> int:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    report = validate(args.results_root, args.origin_executable, args.f2cpp_executable, args.rayreuse_executable)
+    report = validate(args.results_root, args.origin_executable, args.f2cpp_executable, args.broadband_executable)
     report["command"] = ["validate_i8_eigenrays.py", "--results-root", "<results-root>", "--origin-executable", "<origin-executable>", "--f2cpp-executable", "<f2cpp-executable>"]
-    if args.rayreuse_executable is not None:
-        report["command"].extend(["--rayreuse-executable", "<rayreuse-executable>"])
+    if args.broadband_executable is not None:
+        report["command"].extend(["--broadband-executable", "<broadband-executable>"])
     report["command"].extend(["--output", "<report>"])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")

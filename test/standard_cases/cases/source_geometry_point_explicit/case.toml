@@ -8,7 +8,7 @@ source_references = [
 ]
 
 [compatibility]
-versions = ["origin", "f2cpp", "rayreuse"]
+versions = ["origin", "f2cpp", "broadband"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0

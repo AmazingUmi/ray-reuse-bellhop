@@ -7,7 +7,7 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
-      - "Bellhop_RayReuse/**"
+      - "Bellhop_Broadband/**"
       - "test/PlotRead/bellhop_io_py/**"
       - "test/PlotRead/pyproject.toml"
       - "test/PlotRead/tests/**"
@@ -19,7 +19,7 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
-      - "Bellhop_RayReuse/**"
+      - "Bellhop_Broadband/**"
       - "test/PlotRead/bellhop_io_py/**"
       - "test/PlotRead/pyproject.toml"
       - "test/PlotRead/tests/**"
@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rayreuse-quality-gate-${{ github.workflow }}-${{ github.ref }}
+  group: broadband-quality-gate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -60,14 +60,14 @@ jobs:
 
       - name: Run the shared Bellhop Broadband quality gate
         env:
-          RAYREUSE_BUILD_JOBS: "3"
+          BROADBAND_BUILD_JOBS: "3"
         run: |
           set -euo pipefail
-          uv run bash Bellhop_RayReuse/scripts/quality_gate.sh
+          uv run bash Bellhop_Broadband/scripts/quality_gate.sh
 
       - name: Run formatting, static-analysis and package gates
         env:
-          RAYREUSE_BUILD_JOBS: "3"
+          BROADBAND_BUILD_JOBS: "3"
         run: |
           set -euo pipefail
-          uv run bash Bellhop_RayReuse/scripts/engineering_gate.sh
+          uv run bash Bellhop_Broadband/scripts/engineering_gate.sh

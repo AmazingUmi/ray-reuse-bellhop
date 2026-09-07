@@ -155,7 +155,7 @@ class ModelMatrixTests(unittest.TestCase):
 
             results = compare_slice_sets(
                 reference_label="origin",
-                candidate_label="rayreuse",
+                candidate_label="broadband",
                 reference_slices=slices,
                 candidate_slices=slices,
                 tolerances_path=CODES_ROOT / "tolerances.toml",
@@ -227,14 +227,14 @@ class ModelMatrixTests(unittest.TestCase):
             scoped_tl_absolute_db(
                 case_id="munk_spline",
                 reference_label="origin",
-                candidate_label="rayreuse-parallel",
+                candidate_label="broadband-parallel",
                 frequency_hz=250.0,
             ),
             0.0065,
         )
         for case_id, reference, candidate, frequency in (
             ("munk_spline", "origin", "f2cpp", 50.0),
-            ("munk_spline", "f2cpp", "rayreuse-parallel", 250.0),
+            ("munk_spline", "f2cpp", "broadband-parallel", 250.0),
             ("munk_pchip", "origin", "f2cpp", 250.0),
         ):
             self.assertIsNone(
@@ -308,7 +308,7 @@ class ModelMatrixTests(unittest.TestCase):
 
             identical = compare_decoded_payloads(
                 reference_label="f2cpp",
-                candidate_label="rayreuse-reuse",
+                candidate_label="broadband-reuse",
                 frequency_hz=250.0,
                 reference=reference,
                 candidate=candidate_slice,
@@ -316,7 +316,7 @@ class ModelMatrixTests(unittest.TestCase):
             self.scale_first_pressure(candidate_path, 0, 0.5)
             different = compare_decoded_payloads(
                 reference_label="f2cpp",
-                candidate_label="rayreuse-reuse",
+                candidate_label="broadband-reuse",
                 frequency_hz=250.0,
                 reference=reference,
                 candidate=candidate_slice,
@@ -335,7 +335,7 @@ class ModelMatrixTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "frequency mismatch"):
             compare_slice_sets(
                 reference_label="origin",
-                candidate_label="rayreuse",
+                candidate_label="broadband",
                 reference_slices={},
                 candidate_slices={50.0: object()},
                 tolerances_path=CODES_ROOT / "tolerances.toml",

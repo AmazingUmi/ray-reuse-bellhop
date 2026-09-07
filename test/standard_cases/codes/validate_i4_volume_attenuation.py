@@ -129,11 +129,11 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     supplied = {"origin": origin_executable, "f2cpp": f2cpp_executable}
-    if rayreuse_executable is not None:
-        supplied["rayreuse"] = rayreuse_executable
+    if broadband_executable is not None:
+        supplied["broadband"] = broadband_executable
     executables = {
         version: executable.resolve()
         for version, executable in supplied.items()
@@ -192,11 +192,11 @@ def validate(
                 raise ValueError(
                     f"{case_id}/{profile}: origin and f2cpp rendered env bytes differ"
                 )
-            if profile == "single" and "rayreuse" in executables:
-                rayreuse_env = paths["rayreuse"][case_id]["single"][0][0].read_bytes()
-                if rayreuse_env != origin_envs[0]:
+            if profile == "single" and "broadband" in executables:
+                broadband_env = paths["broadband"][case_id]["single"][0][0].read_bytes()
+                if broadband_env != origin_envs[0]:
                     raise ValueError(
-                        f"{case_id}/single: rayreuse rendered env bytes differ from origin"
+                        f"{case_id}/single: broadband rendered env bytes differ from origin"
                     )
 
     tolerance_path = STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
@@ -208,25 +208,25 @@ def validate(
         for profile, frequencies in profiles.items():
             fmax = max(frequencies)
             for index, frequency in enumerate(frequencies):
-                # Origin/F2CPP have one SHD per run; RayReuse has one broadband SHD.
+                # Origin/F2CPP have one SHD per run; Broadband has one broadband SHD.
                 shades = {
                     version: paths[version][case_id][profile][
-                        0 if version == "rayreuse" else index
+                        0 if version == "broadband" else index
                     ][1]
                     for version in versions
                 }
                 for left, right in itertools.combinations(versions, 2):
                     is_gating = (
-                        (left, right) == ("origin", "rayreuse")
-                        or (right, left) == ("origin", "rayreuse")
+                        (left, right) == ("origin", "broadband")
+                        or (right, left) == ("origin", "broadband")
                         or frequency == fmax
                         or profile == "single"
                     )
                     passed, metrics = compare_files(
                         shades[left],
                         shades[right],
-                        index if left == "rayreuse" else 0,
-                        index if right == "rayreuse" else 0,
+                        index if left == "broadband" else 0,
+                        index if right == "broadband" else 0,
                         tolerance_path,
                     )
                     if is_gating:
@@ -285,18 +285,18 @@ def validate(
                 "max_pressure_absolute_vs_lossless": maximum_difference,
             }
 
-    # Assert RayReuse Thorp SHD hashes match H00 baseline
-    if "rayreuse" in executables:
+    # Assert Broadband Thorp SHD hashes match H00 baseline
+    if "broadband" in executables:
         for profile, expected_hash in EXPECTED_THORP_HASHES.items():
-            actual_shd = paths["rayreuse"]["constant_speed_thorp"][profile][0][1]
+            actual_shd = paths["broadband"]["constant_speed_thorp"][profile][0][1]
             actual_hash = sha256(actual_shd)
             if actual_hash != expected_hash:
                 raise ValueError(
-                    f"RayReuse Thorp {profile} SHD hash {actual_hash} != baseline {expected_hash}"
+                    f"Broadband Thorp {profile} SHD hash {actual_hash} != baseline {expected_hash}"
                 )
 
     return {
-        "schema": "bellhop.rayreuse.i4_volume_attenuation_validation",
+        "schema": "bellhop.broadband.i4_volume_attenuation_validation",
         "schema_version": 2,
         "status": "passed",
         "cases": {
@@ -311,7 +311,7 @@ def validate(
         "non_gating_comparisons": non_gating_count,
         "pairwise_field_comparisons": comparisons,
         "lossless_noop_guards": noop_guards,
-        "thorp_baseline_hashes_verified": "rayreuse" in executables,
+        "thorp_baseline_hashes_verified": "broadband" in executables,
         "executables": {
             v: {
                 "path": str(p),
@@ -337,14 +337,14 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
         args.results_root,
         args.origin_executable,
         args.f2cpp_executable,
-        args.rayreuse_executable,
+        args.broadband_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

@@ -1,4 +1,4 @@
-"""Run and compare the local Fortran, F2CPP and RayReuse model matrix."""
+"""Run and compare the local Fortran, F2CPP and Broadband model matrix."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from case_model import CaseDefinition, discover_cases
 from compare_fields import compare_files, decoded_complex64_payload
 from reference_snapshots import sha256_file, validate_candidate
 from standard_cases import (
-    RAYREUSE_EXECUTION_MODES,
-    RAYREUSE_REUSE_MODES,
+    BROADBAND_EXECUTION_MODES,
+    BROADBAND_REUSE_MODES,
     VersionAdapter,
     default_adapters,
     process_case,
@@ -59,7 +59,7 @@ def scoped_tl_absolute_db(
     frequency_hz: float,
 ) -> float | None:
     cpp_candidate = candidate_label == "f2cpp" or candidate_label.startswith(
-        "rayreuse-"
+        "broadband-"
     )
     if (
         case_id == "munk_spline"
@@ -238,26 +238,26 @@ def run_case_profile(
             work_root / "solver-results",
         )
 
-    rayreuse_labels: list[str] = []
+    broadband_labels: list[str] = []
     if profile_name == "single":
-        label = "rayreuse-single"
-        rayreuse_labels.append(label)
+        label = "broadband-single"
+        broadband_labels.append(label)
         manifests[label] = process_case(
             definition,
             profile_name,
-            adapters["rayreuse"],
+            adapters["broadband"],
             "test",
             work_root / label,
         )
     else:
         for execution_mode, reuse_mode in expand_routes(execution_modes, reuse_modes):
             route_label = execution_mode if reuse_mode is None else f"reuse-{reuse_mode}"
-            label = f"rayreuse-{route_label}"
-            rayreuse_labels.append(label)
+            label = f"broadband-{route_label}"
+            broadband_labels.append(label)
             manifests[label] = process_case(
                 definition,
                 profile_name,
-                adapters["rayreuse"],
+                adapters["broadband"],
                 "test",
                 work_root / label,
                 execution_mode,
@@ -279,7 +279,7 @@ def run_case_profile(
             "F2CPP D-02 replans from the current single frequency; "
             "only fmax matches the shared-fmax launch fan"
         )
-    for candidate_label in ("f2cpp", *rayreuse_labels):
+    for candidate_label in ("f2cpp", *broadband_labels):
         comparisons.extend(
             compare_slice_sets(
                 reference_label="origin",
@@ -300,7 +300,7 @@ def run_case_profile(
                 ),
             )
         )
-    for candidate_label in rayreuse_labels:
+    for candidate_label in broadband_labels:
         comparisons.extend(
             compare_slice_sets(
                 reference_label="f2cpp",
@@ -320,7 +320,7 @@ def run_case_profile(
         and MUNK_SPLINE_ORIGIN_CPP_250_HZ in slices["f2cpp"]
     ):
         frequency_hz = MUNK_SPLINE_ORIGIN_CPP_250_HZ
-        for candidate_label in rayreuse_labels:
+        for candidate_label in broadband_labels:
             payload_exact_results.append(
                 compare_decoded_payloads(
                     reference_label="f2cpp",
@@ -336,7 +336,7 @@ def run_case_profile(
         compact_reference = (
             reference_root / f"{definition.case_id}.json"
         )
-        for label in ("origin", "f2cpp", *rayreuse_labels):
+        for label in ("origin", "f2cpp", *broadband_labels):
             output = next(iter(slices[label].values()))
             passed, report = validate_candidate(
                 compact_reference,
@@ -355,10 +355,10 @@ def run_case_profile(
             )
 
     cross_mode: dict[str, object] | None = None
-    if len(rayreuse_labels) > 1:
+    if len(broadband_labels) > 1:
         hashes = {
             label: sha256_file(next(iter(slices[label].values())).shade_path)
-            for label in rayreuse_labels
+            for label in broadband_labels
         }
         cross_mode = {
             "sha256": hashes,
@@ -385,8 +385,8 @@ def run_case_profile(
         "frequencies_hz": list(definition.frequencies(profile_name)),
         "comparisons": comparisons,
         "compact_reference_comparisons": compact_results,
-        "rayreuse_cross_mode": cross_mode,
-        "f2cpp_rayreuse_payload_exact": payload_exact_results,
+        "broadband_cross_mode": cross_mode,
+        "f2cpp_broadband_payload_exact": payload_exact_results,
         "f2cpp_broadband_scope": (
             None
             if profile_name == "single"
@@ -423,8 +423,8 @@ def expand_routes(
     execution_modes: tuple[str, ...], reuse_modes: tuple[str, ...],
 ) -> tuple[tuple[str, str | None], ...]:
     for label, selected, allowed in (
-        ("execution modes", execution_modes, RAYREUSE_EXECUTION_MODES),
-        ("reuse modes", reuse_modes, RAYREUSE_REUSE_MODES),
+        ("execution modes", execution_modes, BROADBAND_EXECUTION_MODES),
+        ("reuse modes", reuse_modes, BROADBAND_REUSE_MODES),
     ):
         if not selected or len(set(selected)) != len(selected) or any(value not in allowed for value in selected):
             raise ValueError(f"{label} must be unique values from {','.join(allowed)}")
@@ -478,7 +478,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--origin-executable", type=Path)
     parser.add_argument("--f2cpp-executable", type=Path)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     return parser
 
 
@@ -508,7 +508,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             for definition in selected
             if definition.output_kind == "shd" and all(
                 version in definition.supported_versions
-                for version in ("origin", "f2cpp", "rayreuse")
+                for version in ("origin", "f2cpp", "broadband")
             )
         ]
         if explicit and len(fully_supported) != len(selected):
@@ -519,7 +519,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             raise ValueError(
                 "model matrix requires SHD output and "
-                "origin/f2cpp/rayreuse support: "
+                "origin/f2cpp/broadband support: "
                 + ", ".join(unsupported)
             )
         selected = fully_supported
@@ -527,7 +527,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         overrides = {
             "origin": args.origin_executable,
             "f2cpp": args.f2cpp_executable,
-            "rayreuse": args.rayreuse_executable,
+            "broadband": args.broadband_executable,
         }
         for name, override in overrides.items():
             if override is not None:
@@ -574,8 +574,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for name, adapter in adapters.items()
             },
             "profiles": list(profiles),
-            "rayreuse_execution_modes": list(execution_modes),
-            "rayreuse_reuse_modes": list(reuse_modes) if "reuse" in execution_modes else [],
+            "broadband_execution_modes": list(execution_modes),
+            "broadband_reuse_modes": list(reuse_modes) if "reuse" in execution_modes else [],
             "run_root": str(invocation_root),
             "results": results,
             "passed": bool(results)

@@ -94,18 +94,18 @@ class VolumeAttenuationValidatorTests(unittest.TestCase):
         bin_root.mkdir(parents=True)
         origin_exe = bin_root / "bellhop_origin"
         f2cpp_exe = bin_root / "bellhop_f2cpp"
-        rayreuse_exe = bin_root / "bellhop_rayreuse"
+        broadband_exe = bin_root / "bellhop_broadband"
         origin_exe.write_text("origin_binary")
         f2cpp_exe.write_text("f2cpp_binary")
-        rayreuse_exe.write_text("rayreuse_binary")
+        broadband_exe.write_text("broadband_binary")
 
         all_cases = {**CASE_FREQUENCIES, CONTROL_CASE: {"single": (5000.0,)}}
-        for version, exe in [("origin", origin_exe), ("f2cpp", f2cpp_exe), ("rayreuse", rayreuse_exe)]:
+        for version, exe in [("origin", origin_exe), ("f2cpp", f2cpp_exe), ("broadband", broadband_exe)]:
             for case_id, profiles in all_cases.items():
                 for profile, frequencies in profiles.items():
                     prof_dir = results_root / version / case_id / profile
                     runs = []
-                    if version == "rayreuse" and profile != "single":
+                    if version == "broadband" and profile != "single":
                         b_dir = prof_dir / "broadband"
                         b_dir.mkdir(parents=True)
                         b_env = b_dir / f"{case_id}_{profile}_broadband.env"
@@ -152,16 +152,16 @@ class VolumeAttenuationValidatorTests(unittest.TestCase):
         # If not mutating thorp hash, dynamically patch EXPECTED_THORP_HASHES in test environment
         if not mutate_thorp_hash:
             for profile in ("single", "broadband_smoke", "broadband_regression"):
-                shd = results_root / "rayreuse" / "constant_speed_thorp" / profile
+                shd = results_root / "broadband" / "constant_speed_thorp" / profile
                 shd_file = (shd / "broadband" / f"constant_speed_thorp_{profile}_broadband.shd") if profile != "single" else (shd / "f000_5000Hz" / "constant_speed_thorp_f000_5000Hz.shd")
                 EXPECTED_THORP_HASHES[profile] = sha256(shd_file)
 
-        return results_root, origin_exe, f2cpp_exe, rayreuse_exe
+        return results_root, origin_exe, f2cpp_exe, broadband_exe
 
     def test_three_party_synthetic_validation_counts_and_gates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            results_root, origin_exe, f2cpp_exe, rayreuse_exe = self._setup_synthetic_tree(Path(temp_dir))
-            res = validate(results_root, origin_exe, f2cpp_exe, rayreuse_exe)
+            results_root, origin_exe, f2cpp_exe, broadband_exe = self._setup_synthetic_tree(Path(temp_dir))
+            res = validate(results_root, origin_exe, f2cpp_exe, broadband_exe)
             self.assertEqual(res["status"], "passed")
             self.assertEqual(res["total_pairwise_comparisons"], 75)
             self.assertEqual(res["gating_passed_comparisons"], 39)
@@ -171,20 +171,20 @@ class VolumeAttenuationValidatorTests(unittest.TestCase):
 
     def test_thorp_hash_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            results_root, origin_exe, f2cpp_exe, rayreuse_exe = self._setup_synthetic_tree(
+            results_root, origin_exe, f2cpp_exe, broadband_exe = self._setup_synthetic_tree(
                 Path(temp_dir)
             )
             EXPECTED_THORP_HASHES["broadband_smoke"] = "0" * 64
             with self.assertRaisesRegex(ValueError, "SHD hash"):
-                validate(results_root, origin_exe, f2cpp_exe, rayreuse_exe)
+                validate(results_root, origin_exe, f2cpp_exe, broadband_exe)
 
     def test_noop_guard_failure_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            results_root, origin_exe, f2cpp_exe, rayreuse_exe = self._setup_synthetic_tree(
+            results_root, origin_exe, f2cpp_exe, broadband_exe = self._setup_synthetic_tree(
                 Path(temp_dir), make_noop=True
             )
             with self.assertRaisesRegex(ValueError, "no-op"):
-                validate(results_root, origin_exe, f2cpp_exe, rayreuse_exe)
+                validate(results_root, origin_exe, f2cpp_exe, broadband_exe)
 
 
 if __name__ == "__main__":

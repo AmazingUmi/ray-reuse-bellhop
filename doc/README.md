@@ -33,17 +33,17 @@
 ## 从这里开始
 
 - Feature Parity 最终整体验收：
-  [`../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md`](../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)
+  [`../Bellhop_Broadband/doc/reports/REPORT_FEATURE_PARITY_FINAL.md`](../Bellhop_Broadband/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)
 - RayReuse 当前支持边界：
-  [`../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+  [`../Bellhop_Broadband/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../Bellhop_Broadband/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
 - 当前工作与待决事项：[`plans/PLAN_CURRENT_WORK.md`](./plans/PLAN_CURRENT_WORK.md)
 - IGR-3 scope/architecture decision 与 closure（`ACCEPTED / CLOSED`；
   IGR-3A `dda1c2c` / IGR-3B `0050f59`）：
-  [`../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
+  [`../Bellhop_Broadband/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../Bellhop_Broadband/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
 - IGR-1 历史理论与数值契约：
   [`reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md`](./reference/REFERENCE_INFLUENCE_GEOMETRY_REUSE.md)
 - IGR-2 当前 productionization 收口：
-  [`../Bellhop_RayReuse/doc/reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md`](../Bellhop_RayReuse/doc/reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md)
+  [`../Bellhop_Broadband/doc/reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md`](../Bellhop_Broadband/doc/reports/REPORT_IGR2_FUSED_INFLUENCE_PRODUCTIONIZATION_2026-09-03.md)
 - 总体设计：
   [`architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md`](./architecture/ARCHITECTURE_BELLHOP_RAY_REUSE.md)
 - 射线理论：
@@ -78,7 +78,7 @@ worker 请求。低层实现术语（fused kernel/workspace/sink/adapter 等）�
 |---|---|---|
 | Origin | [`Bellhop_origin/doc/README.md`](../Bellhop_origin/doc/README.md) | Fortran 单频行为 oracle |
 | F2CPP | [`Bellhop_F2CPP/doc/README.md`](../Bellhop_F2CPP/doc/README.md) | 独立 C++20 二维单频实现，功能已封板 |
-| RayReuse（Bellhop Broadband 产品实现） | [`Bellhop_RayReuse/doc/README.md`](../Bellhop_RayReuse/doc/README.md) | Bellhop Broadband 产品（executable `bellhop_broadband`；目录名保留历史名称）；已完成 F2CPP production Feature Parity 的独立多频实现，RayReuse 为其轨迹复用算法族 |
+| Bellhop Broadband | [`Bellhop_Broadband/doc/README.md`](../Bellhop_Broadband/doc/README.md) | Bellhop Broadband 产品（executable `bellhop_broadband`）；已完成 F2CPP production Feature Parity 的独立多频实现，RayReuse 为其轨迹复用算法族 |
 | PlotRead | [`test/PlotRead/README.md`](../test/PlotRead/README.md) | SHD 读取、绘图和导出 |
 | 标准算例 | [`test/standard_cases/README.md`](../test/standard_cases/README.md) | 三模型共用运行与比较框架 |
 | 展示 | [`demo/README.md`](../demo/README.md) | 可靠性与多频展示 |

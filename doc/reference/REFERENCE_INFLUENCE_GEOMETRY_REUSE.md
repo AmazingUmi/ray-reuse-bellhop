@@ -4,7 +4,7 @@
 > 本文保留 IGR-1 的理论分解、数值顺序与验收语义，不代表当前 Batch 状态或
 > IGR-3 support boundary。IGR-1/IGR-2 已 `ACCEPTED / CLOSED`；当前
 > user-frozen IGR-3 direction 以
-> [`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../../Bellhop_RayReuse/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
+> [`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../../Bellhop_Broadband/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)
 > 为准。
 
 ## 1. 适用范围与生产基准
