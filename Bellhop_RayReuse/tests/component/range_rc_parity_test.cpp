@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <stdexcept>
@@ -14,10 +15,11 @@
 #include <utility>
 #include <vector>
 
+#include "rayreuse/field/beam_epsilon.hpp"
 #include "rayreuse/field/frequency_projector.hpp"
 #include "rayreuse/field/frequency_workspace.hpp"
-#include "rayreuse/field/geometric_gaussian_influence.hpp"
 #include "rayreuse/field/pressure_scaling.hpp"
+#include "rayreuse/field/ray_centered_cerveny_influence.hpp"
 #include "rayreuse/model/simulation_case.hpp"
 #include "rayreuse/model/sound_speed_evaluator.hpp"
 #include "rayreuse/solver/reuse_serial_solver.hpp"
@@ -25,14 +27,14 @@
 #include "support/munk_case_fixture.hpp"
 #include "support/test_harness.hpp"
 
-// IGR-3A A05 numerical parity gates for the Geometric Gaussian fused kernel
-// (design §5/§8/§11), every fused mode gated separately (C, I, S):
+// IGR-3A A03 numerical parity gates for the Ray-Centered Cerveny fused
+// kernels (design §5/§8/§11), every fused mode gated separately (C, I, S):
 //   Level B — raw bitwise parity per frequency: the legacy reuse
 //             accumulation (Raw seam for coherent pressure; the public
-//             GeometricGaussianInfluence entries built from the exact solver
-//             loop for I/S intensity, plus the converted Raw seam) vs the
-//             fused workspaces materialized per frequency (std::memcmp over
-//             the payload span bytes).
+//             RayCenteredCervenyInfluence entries built from the exact
+//             solver loop for I/S intensity, plus the converted Raw seam)
+//             vs the fused workspaces materialized per frequency
+//             (std::memcmp over the payload span bytes).
 //   Level C — scaled workspace bitwise parity per frequency via the two
 //             production paths (ReuseSerialSolver::solve vs
 //             ReuseRangeParaSolver::solveStreaming).
@@ -40,22 +42,17 @@
 //             reference (transitively identical raw bytes).
 //   Level A — fused fingerprint before == after and == the serial reuse
 //             fingerprint on the same case.
-// A05-specific risk coverage (design §8): the beam width sigma1 is
-// FREQUENCY-LOCAL (wavelength sigma = pi*c/f, near-field sigma =
-// 0.2*f*Re(tau_right)), so the per-lane receiver eligibility windows AND the
-// per-lane segment depth prefilters must be evaluated per frequency exactly
-// as legacy — eligibility is NOT lifted to frequency-independent geometry.
-// Fixture C uses frequencies spanning DIFFERENT width branches (near-field
-// capped vs wavelength capped vs geometric) with a runtime guard proving
-// that per-lane eligibility windows and width branches genuinely diverge;
-// fixture B covers the union-prefix traversal over per-frequency-diverging
-// active prefixes.
+// A03-specific risk coverage (design §8): the per-frequency-lane persistent
+// image-normal flip parity. Fixture B uses frequencies with DIFFERING active
+// prefixes and a runtime guard proving that the per-lane flip-parity states
+// genuinely diverge (gate-accepted step counts of odd difference), so the
+// Level B comparisons cannot pass vacuously — for the coherent AND the
+// intensity payload.
 
 namespace {
 
 using rayreuse::AcousticMaterial;
 using rayreuse::AttenuationUnit;
-using rayreuse::BeamFamily;
 using rayreuse::BeamWidthMode;
 using rayreuse::BoundaryCurvatureMode;
 using rayreuse::CartesianCervenySettings;
@@ -67,9 +64,6 @@ using rayreuse::FrequencyProjector;
 using rayreuse::FrequencyWorkspace;
 using rayreuse::ReuseRangeParaSolver;
 using rayreuse::ReuseRangeParaStatistics;
-using rayreuse::GeometricGaussianDiagnosticRequest;
-using rayreuse::GeometricGaussianInfluence;
-using rayreuse::GeometricGaussianWidthBranch;
 using rayreuse::IntensityWorkspace;
 using rayreuse::IntegratorSettings;
 using rayreuse::LaunchFan;
@@ -183,12 +177,15 @@ struct WorkspaceByteComparison {
   return {.equal = false, .detail = prefix + " memcmp failed"};  // unreachable
 }
 
-// Fixture A geometry (the Cerveny parity tests' Munk small case) as a
-// geometric Gaussian run: single source, real Munk profile, caustic-crossing
-// q dynamics. The family is Cartesian only (design §9).
-[[nodiscard]] SimulationCase makeMunkGaussianCase(
+// Fixture A geometry (the CC parity tests' Munk small case) in ray-centered
+// coordinates: single source, real Munk profile, default influence settings
+// (imageCount = 3). The field component and width mode are dimensions of
+// the RC kernel (fixtures C/D/E vary them).
+[[nodiscard]] SimulationCase makeMunkRayCenteredCase(
     SimulationRunMode runMode,
-    FrequencyGrid frequencies = FrequencyGrid({50.0, 250.0})) {
+    FrequencyGrid frequencies = FrequencyGrid({50.0, 250.0}),
+    BeamWidthMode widthMode = BeamWidthMode::MinimumWidth,
+    FieldComponent fieldComponent = FieldComponent::Pressure) {
   constexpr double kRadiansPerDegree = std::numbers::pi / 180.0;
   return SimulationCase(
       rayreuse::test::makeMunkEnvironment(
@@ -206,17 +203,17 @@ struct WorkspaceByteComparison {
                          .depthLimit = 5500.0,
                          .maximumRayPoints = 2000U},
       SourceBeamPattern::omnidirectional(), runMode,
-      BeamFamily::GeometricGaussian, FieldComponent::Pressure,
-      BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
-      CervenyCoordinateSystem::Cartesian);
+      rayreuse::BeamFamily::CervenyGaussian, fieldComponent,
+      rayreuse::BoundaryCurvatureMode::Standard, widthMode,
+      CervenyCoordinateSystem::RayCentered);
 }
 
-// Fixture B (divergent per-frequency active prefixes, the union-prefix
+// Fixture B (divergent per-frequency active prefixes, the A03 flip-parity
 // risk): constant-speed water with a lossy reflecting acoustic half-space
 // bottom whose attenuation follows a power law in frequency, so the
 // cumulative projected amplitude crosses the legacy 0.005 cutoff at
 // DIFFERENT points for the two frequencies.
-[[nodiscard]] SimulationCase makeDivergentPrefixGaussianCase(
+[[nodiscard]] SimulationCase makeDivergentPrefixRayCenteredCase(
     SimulationRunMode runMode) {
   constexpr double kRadiansPerDegree = std::numbers::pi / 180.0;
   return SimulationCase(
@@ -251,9 +248,9 @@ struct WorkspaceByteComparison {
                          .depthLimit = 200.0,
                          .maximumRayPoints = 4000U},
       SourceBeamPattern::omnidirectional(), runMode,
-      BeamFamily::GeometricGaussian, FieldComponent::Pressure,
-      BoundaryCurvatureMode::Standard, BeamWidthMode::MinimumWidth,
-      CervenyCoordinateSystem::Cartesian);
+      rayreuse::BeamFamily::CervenyGaussian, FieldComponent::Pressure,
+      rayreuse::BoundaryCurvatureMode::Standard,
+      BeamWidthMode::MinimumWidth, CervenyCoordinateSystem::RayCentered);
 }
 
 // First inactive point index of a projected state (points.size() when every
@@ -269,17 +266,37 @@ struct WorkspaceByteComparison {
   return state.points.size();
 }
 
+// Number of steps [1, prefix) whose near-horizontal geometric gate passes
+// (|normal.depth| >= eps; the flip never touches the depth component, so
+// the gate is frequency-independent). Its parity per frequency is exactly
+// the per-lane flip-parity divergence quantity of design §8.
+[[nodiscard]] std::size_t gateAcceptedStepCount(const rayreuse::RayPath& path,
+                                                std::size_t prefix) {
+  std::size_t count = 0U;
+  for (std::size_t rightIndex = 1U; rightIndex < prefix; ++rightIndex) {
+    const rayreuse::RayState& point = path.points[rightIndex];
+    const rayreuse::Vec2 tangent = point.soundSpeed * point.slowness;
+    if (std::abs(tangent.range) >=
+        std::numeric_limits<double>::epsilon()) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 // Fixture B guard: the per-frequency active prefixes must genuinely diverge
-// so the Level B comparisons cannot pass vacuously — for BOTH payloads (the
-// coherent and intensity twins share the union-prefix traversal).
-void checkDivergentPrefixes(Context& context,
-                            const rayreuse::RayPathCache& cache,
-                            const SimulationCase& simulation,
-                            const char* label) {
+// AND the per-lane flip-parity states must differ (odd difference of
+// gate-accepted step counts within each lane's own prefix) so the Level B
+// comparisons cannot pass vacuously — the A03-specific risk (design §8).
+void checkDivergentPrefixesAndFlipParity(Context& context,
+                                         const rayreuse::RayPathCache& cache,
+                                         const SimulationCase& simulation,
+                                         const char* label) {
   const std::vector<double>& frequencies = simulation.frequencies().values();
   const FrequencyProjector projector(simulation.environment());
   std::size_t divergentRays = 0U;
   std::size_t truncatedRays = 0U;
+  std::size_t flipParityDivergentRays = 0U;
   for (const rayreuse::RayPath& path : cache.paths()) {
     std::vector<std::size_t> prefixes(frequencies.size());
     for (std::size_t frequencyIndex = 0U;
@@ -298,120 +315,35 @@ void checkDivergentPrefixes(Context& context,
                     })) {
       ++truncatedRays;
     }
+    if (gateAcceptedStepCount(path, prefixes.front()) % 2U !=
+        gateAcceptedStepCount(path, prefixes.back()) % 2U) {
+      ++flipParityDivergentRays;
+    }
   }
-  std::cout << "fused-geometric-gaussian-parity " << label
+  std::cout << "range-rc-parity " << label
             << ": rays=" << cache.size() << " divergent-prefix rays="
             << divergentRays << " cutoff-truncated rays=" << truncatedRays
+            << " flip-parity divergent rays=" << flipParityDivergentRays
             << '\n';
   context.check(divergentRays > 0U && truncatedRays > 0U,
                 std::string(label) +
                     " Fixture B prefixes genuinely diverge across frequencies "
                     "(no vacuous pass)");
-}
-
-// Fixture C guard (the A05-specific risk, design §8): the width sigma1 is
-// frequency-local, so per-lane eligibility windows and width branches must
-// genuinely diverge. Proven through the PUBLIC legacy kernel only: the
-// diagnostic request records, per (ray, frequency, receiver), whether that
-// frequency's own window admitted the receiver (evaluated) and which width
-// branch (geometric / near-field / wavelength cap) produced sigma1. A ray
-// counts as window-divergent when some tested receiver is admitted by one
-// frequency and rejected by another; branch-divergent when some tested
-// receiver is admitted by every frequency with differing width branches.
-void checkSigmaBranchDivergence(Context& context,
-                                const rayreuse::RayPathCache& cache,
-                                const SimulationCase& simulation,
-                                const char* label) {
-  const std::vector<double>& frequencies = simulation.frequencies().values();
-  const FrequencyProjector projector(simulation.environment());
-  const GeometricGaussianInfluence kernel(simulation.receivers(),
-                                          simulation.sourceGeometry());
-  const double launchAngleStep =
-      simulation.launchFanPlan().launchAngleStep;
-  std::vector<FrequencyWorkspace> scratch;
-  scratch.reserve(frequencies.size());
-  for (const double frequency : frequencies) {
-    scratch.emplace_back(frequency, simulation.receivers());
-  }
-  // Sampled receiver cells for the diagnostic probes (bounded work).
-  std::vector<GeometricGaussianDiagnosticRequest> requests;
-  for (const std::size_t rangeIndex : {1U, 2U, 3U, 4U, 5U}) {
-    for (const std::size_t depthIndex : {1U, 2U, 3U}) {
-      requests.push_back(
-          GeometricGaussianDiagnosticRequest{.receiverRangeIndex = rangeIndex,
-                                             .receiverDepthIndex =
-                                                 depthIndex});
-    }
-  }
-  std::size_t windowDivergentRays = 0U;
-  std::size_t branchDivergentRays = 0U;
-  for (const rayreuse::RayPath& path : cache.paths()) {
-    bool windowDivergent = false;
-    bool branchDivergent = false;
-    for (const GeometricGaussianDiagnosticRequest& request : requests) {
-      std::vector<bool> evaluated(frequencies.size(), false);
-      std::vector<GeometricGaussianWidthBranch> branches(
-          frequencies.size(), GeometricGaussianWidthBranch::Geometric);
-      for (std::size_t frequencyIndex = 0U;
-           frequencyIndex < frequencies.size(); ++frequencyIndex) {
-        const rayreuse::RayFrequencyState state = projector.project(
-            path, frequencies[frequencyIndex], 1.0);
-        const std::optional<rayreuse::GeometricGaussianDiagnostic>
-            diagnostic = kernel.accumulate(
-                scratch[frequencyIndex], path, state, launchAngleStep,
-                request);
-        evaluated[frequencyIndex] =
-            diagnostic.has_value() && diagnostic->evaluated;
-        if (diagnostic.has_value()) {
-          branches[frequencyIndex] = diagnostic->widthBranch;
-        }
-      }
-      const bool anyEvaluated =
-          std::any_of(evaluated.begin(), evaluated.end(),
-                      [](bool value) { return value; });
-      const bool allEvaluated =
-          std::all_of(evaluated.begin(), evaluated.end(),
-                      [](bool value) { return value; });
-      if (anyEvaluated && !allEvaluated) {
-        windowDivergent = true;
-      }
-      if (allEvaluated &&
-          std::adjacent_find(branches.begin(), branches.end(),
-                             [](GeometricGaussianWidthBranch left,
-                                GeometricGaussianWidthBranch right) {
-                               return left != right;
-                             }) != branches.end()) {
-        branchDivergent = true;
-      }
-    }
-    if (windowDivergent) {
-      ++windowDivergentRays;
-    }
-    if (branchDivergent) {
-      ++branchDivergentRays;
-    }
-  }
-  std::cout << "fused-geometric-gaussian-parity " << label
-            << ": rays=" << cache.size()
-            << " window-divergent rays=" << windowDivergentRays
-            << " branch-divergent rays=" << branchDivergentRays << '\n';
-  context.check(
-      windowDivergentRays > 0U && branchDivergentRays > 0U,
-      std::string(label) +
-          " per-frequency sigma1 eligibility windows and width branches "
-          "genuinely diverge (no vacuous pass)");
+  context.check(flipParityDivergentRays > 0U,
+                std::string(label) +
+                    " Fixture B per-lane flip parities genuinely diverge "
+                    "(A03 flip-parity risk is exercised)");
 }
 
 // Legacy reuse raw intensity reference for one frequency: the exact solver
 // loop of SingleFrequencySolver::solveFrequencyFromSourceCache
-// (single_frequency_solver.cpp:281-350, geometric Gaussian intensity branch)
-// built from public pieces — projection, Lloyd-mirror amplitude for S, and
-// the GeometricGaussianInfluence kernel via its public accumulateIntensity
-// entry (the exact entry the solver's reuse path takes; no shared code with
-// the fused side).
+// (single_frequency_solver.cpp:281-350, intensity branch) built from public
+// pieces — projection, Lloyd-mirror amplitude for S, epsilon, and the
+// RayCenteredCervenyInfluence kernel via its public accumulateIntensity
+// entry (the exact entry the solver's reuse path takes).
 [[nodiscard]] IntensityWorkspace legacyRawIntensity(
     const SimulationCase& simulation, const rayreuse::RayPathCache& cache,
-    double frequency) {
+    double frequency, const CartesianCervenySettings& settings) {
   const Source& source = simulation.sources().front();
   const rayreuse::LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const rayreuse::GeometrySspEvaluator soundSpeedProfile(
@@ -421,8 +353,10 @@ void checkSigmaBranchDivergence(Context& context,
   const double sourceSoundSpeed = sourceSample.soundSpeed;
   IntensityWorkspace workspace(frequency, simulation.receivers());
   const FrequencyProjector projector(simulation.environment());
-  const GeometricGaussianInfluence kernel(simulation.receivers(),
-                                          simulation.sourceGeometry());
+  const rayreuse::RayCenteredCervenyInfluence kernel(
+      simulation.environment(), simulation.receivers(), settings,
+      simulation.beamWidthMode(), simulation.runMode(),
+      simulation.fieldComponent(), simulation.sourceGeometry());
   for (const rayreuse::RayPath& path : cache.paths()) {
     const double patternAmplitude =
         simulation.sourceBeamPattern().amplitudeForLaunchAngle(
@@ -442,15 +376,19 @@ void checkSigmaBranchDivergence(Context& context,
     }
     const rayreuse::RayFrequencyState frequencyState =
         projector.project(path, frequency, projectedSourceAmplitude);
-    static_cast<void>(kernel.accumulateIntensity(
-        workspace, path, frequencyState, launchFan.launchAngleStep));
+    const rayreuse::BeamEpsilon epsilon = rayreuse::pickBeamEpsilon(
+        simulation.beamWidthMode(), frequency, sourceSoundSpeed,
+        sourceSample.soundSpeedGradient.depth, path.launchAngle,
+        launchFan.launchAngleStep, 50.0, 1.0);
+    static_cast<void>(kernel.accumulateIntensity(workspace, path,
+                                                 frequencyState,
+                                                 epsilon.value));
   }
   return workspace;
 }
 
-// Levels B + C + A on one fixture for one run mode. `settings` flows to both
-// sides so the comparison isolates the fused-vs-reuse path (the Gaussian
-// kernel ignores it — no epsilon channel).
+// Levels B + C + A on one fixture for one run mode (C, I, or S). `settings`
+// flows to both sides so the comparison isolates the fused-vs-reuse path.
 void testParityLevels(Context& context, const SimulationCase& simulation,
                       const CartesianCervenySettings& settings,
                       const char* label, std::size_t workerCount = 1U) {
@@ -487,7 +425,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
     rawReuseConverted.push_back(std::move(result.workspace));
     if (!coherentRunMode) {
       rawReuseIntensity.push_back(
-          legacyRawIntensity(simulation, trace.cache, frequency));
+          legacyRawIntensity(simulation, trace.cache, frequency, settings));
     }
   }
 
@@ -527,7 +465,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
       context.check(levelB.equal,
                     std::string(label) + " Level B raw pressure bitwise "
                                         "parity: " +
-                        levelB.detail);
+                                        levelB.detail);
     }
   } else {
     const rayreuse::FusedIntensityAccumulationResult fused =
@@ -556,12 +494,13 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
       context.check(levelB.equal,
                     std::string(label) + " Level B raw intensity bitwise "
                                         "parity: " +
-                        levelB.detail);
-      // Converted seam: the same scaleGeometricIntensityToPressure call the
-      // fused sink chain makes (family-based selector) must reproduce the
-      // production solver's raw delivery byte for byte.
+                                        levelB.detail);
+      // Converted seam: the same scaleCartesianIntensityToPressure call the
+      // fused sink chain makes (family-based selector — Cerveny in both
+      // coordinate systems) must reproduce the production solver's raw
+      // delivery byte for byte.
       const FrequencyWorkspace fusedConverted =
-          rayreuse::scaleGeometricIntensityToPressure(
+          rayreuse::scaleCartesianIntensityToPressure(
               fusedWorkspace, simulation.receivers(),
               launchFan.launchAngleStep, sourceSoundSpeed,
               simulation.sourceGeometry());
@@ -570,7 +509,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
       context.check(levelBConverted.equal,
                     std::string(label) + " Level B converted seam bitwise "
                                         "parity: " +
-                        levelBConverted.detail);
+                                        levelBConverted.detail);
     }
   }
 
@@ -599,12 +538,12 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
       fusedStatistics.requestedRangeWorkers == workerCount &&
           fusedStatistics.effectiveRangeWorkers ==
               std::min(workerCount, simulation.receivers().rangeCount()),
-      std::string(label) + " Level C reports requested/effective workers");
-
+      std::string(label) +
+          " Level C reports requested/effective range workers");
   context.check(
       callbackOrder.size() == frequencies.size() &&
           std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
-      std::string(label) + " Level C fused consumer visits every frequency "
+      std::string(label) + " Level C Range Reuse consumer visits every frequency "
                            "in index order");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
@@ -612,8 +551,8 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
         streamed[frequencyIndex].has_value() &&
             streamed[frequencyIndex]->size() == 1U &&
             streamedScaleSeconds[frequencyIndex] >= 0.0,
-        std::string(label) + " Level C captured converted fused workspace "
-                             "and scale timing for frequency index " +
+        std::string(label) + " Level C captured scaled fused workspace and "
+                             "scale timing for frequency index " +
             std::to_string(frequencyIndex));
     const WorkspaceByteComparison levelC = memcmpPressureSpan(
         serial.frequencyResults[frequencyIndex].workspaces.front(),
@@ -621,7 +560,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
     context.check(levelC.equal,
                   std::string(label) + " Level C scaled workspace bitwise "
                                       "parity: " +
-                      levelC.detail);
+                                      levelC.detail);
   }
 
   // Level A: the fused fingerprint is stable and equals the serial reuse
@@ -632,76 +571,68 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
               fusedStatistics.cacheFingerprintAfter &&
           fusedStatistics.cacheFingerprintBefore ==
               serial.statistics.cacheFingerprintBefore,
-      std::string(label) + " Level A fused cache fingerprint is stable and "
+      std::string(label) + " Level A Range Reuse cache fingerprint is stable and "
                            "matches serial reuse");
 }
 
 void testMode(Context& context, SimulationRunMode runMode,
               const char* modeLabel) {
-  // Fixture A: Munk Gaussian.
-  testParityLevels(context, makeMunkGaussianCase(runMode),
+  // Fixture A: Munk RC, default settings (imageCount = 3).
+  testParityLevels(context, makeMunkRayCenteredCase(runMode),
                    CartesianCervenySettings{},
-                   (std::string("fixture A (munk gaussian ") + modeLabel +
-                    ')')
+                   (std::string("fixture A (munk RC ") + modeLabel +
+                    ", 3 images)")
                        .c_str());
   // Worker-count gate (Level D): 16 frequencies and >= 8 real ranges, every
   // requested worker count gated against the same serial reference.
   {
-    const SimulationCase parallelSimulation = makeMunkGaussianCase(
+    const SimulationCase parallelSimulation = makeMunkRayCenteredCase(
         runMode, FrequencyGrid({50.0, 100.0, 150.0, 200.0, 250.0, 300.0,
                                 350.0, 400.0, 450.0, 500.0, 550.0, 600.0,
                                 650.0, 700.0, 750.0, 800.0}));
     for (const std::size_t workerCount : {1U, 2U, 4U, 8U}) {
       const std::string label =
           "fixture A parallel (16F, " + std::to_string(workerCount) +
-          " workers, gaussian, " + modeLabel + ")";
+          " workers, " + modeLabel + ")";
       testParityLevels(context, parallelSimulation,
                        CartesianCervenySettings{}, label.c_str(), workerCount);
     }
   }
-  // Fixture B: divergent per-frequency active prefixes (union-prefix path).
-  // The divergence guard runs first so a degenerate fixture fails loudly
-  // instead of passing vacuously.
+  // Fixture A2: kernel image-loop coverage for imageCount = 2 (flip
+  // relevance requires imageCount >= 2, design §8).
+  testParityLevels(
+      context, makeMunkRayCenteredCase(runMode),
+      CartesianCervenySettings{.imageCount = 2U},
+      (std::string("fixture A2 (munk RC ") + modeLabel + ", 2 images)")
+          .c_str());
+  // Fixture B: divergent per-frequency active prefixes AND divergent
+  // per-lane flip parities (the A03-specific risk). The divergence guards
+  // run first so a degenerate fixture fails loudly instead of passing
+  // vacuously.
   {
     const SimulationCase simulation =
-        makeDivergentPrefixGaussianCase(runMode);
+        makeDivergentPrefixRayCenteredCase(runMode);
     const rayreuse::RayFanTraceResult trace =
         SingleFrequencySolver::traceSourceFan(simulation, 0U);
-    checkDivergentPrefixes(
+    checkDivergentPrefixesAndFlipParity(
         context, trace.cache, simulation,
-        (std::string("fixture B (lossy halfspace, gaussian ") + modeLabel +
-         ')')
+        (std::string("fixture B (lossy halfspace, ") + modeLabel + ")")
             .c_str());
     testParityLevels(
         context, simulation, CartesianCervenySettings{},
-        (std::string("fixture B parallel (lossy halfspace, 8 workers, "
-                     "gaussian, ") +
-         modeLabel + ')')
+        (std::string("fixture B parallel (lossy halfspace, 8 workers, ") +
+         modeLabel + ")")
             .c_str(),
         8U);
   }
-  // Fixture C (the A05-specific risk, design §8): frequencies whose width
-  // branches genuinely differ (near-field vs wavelength cap vs geometric),
-  // so per-lane eligibility windows and depth prefilters diverge at the same
-  // receiver cells. The sigma-branch guard runs first (non-vacuity), then
-  // the full Level B/C/D/A gates exercise the divergent windows bitwise.
-  {
-    const SimulationCase simulation =
-        makeMunkGaussianCase(runMode, FrequencyGrid({50.0, 1000.0}));
-    const rayreuse::RayFanTraceResult trace =
-        SingleFrequencySolver::traceSourceFan(simulation, 0U);
-    checkSigmaBranchDivergence(
-        context, trace.cache, simulation,
-        (std::string("fixture C (sigma branches, gaussian ") + modeLabel +
-         ')')
-            .c_str());
-    testParityLevels(
-        context, simulation, CartesianCervenySettings{},
-        (std::string("fixture C (sigma branches, 8 workers, gaussian, ") +
-         modeLabel + ')')
-            .c_str(),
-        8U);
-  }
+  // Fixture C: WKB beam width variant on the Fixture A geometry (epsilon
+  // real; alternate KMAH branch rule inside updateCervenyKmah).
+  testParityLevels(
+      context,
+      makeMunkRayCenteredCase(runMode, FrequencyGrid({50.0, 250.0}),
+                              BeamWidthMode::Wkb),
+      CartesianCervenySettings{},
+      (std::string("fixture C (munk RC ") + modeLabel + ", WKB)").c_str());
 }
 
 }  // namespace
@@ -709,30 +640,50 @@ void testMode(Context& context, SimulationRunMode runMode,
 int main() {
   Context context;
 
-  // Scope acceptance is gated per family x mode in
-  // rayreuse.component.fused_solver; one assertion here keeps the parity
-  // test honest about the domain it exercises.
+  // Gate behavior: the shared fused-support predicate accepts Ray-Centered
+  // Cerveny C/I/S (design §9).
   context.check(
-      supportsReuseRangePara(
-          makeMunkGaussianCase(SimulationRunMode::Coherent)) &&
-          supportsReuseRangePara(
-              makeMunkGaussianCase(SimulationRunMode::SemiCoherent)),
-      "the fused-support predicate accepts gaussian fixtures in every TL "
-      "mode");
+      supportsReuseRangePara(makeMunkRayCenteredCase(
+          SimulationRunMode::Coherent)) &&
+          supportsReuseRangePara(makeMunkRayCenteredCase(
+          SimulationRunMode::Incoherent)) &&
+          supportsReuseRangePara(makeMunkRayCenteredCase(
+          SimulationRunMode::SemiCoherent)),
+      "the shared fused-support predicate accepts Ray-Centered Cerveny "
+      "coherent, incoherent, and semi-coherent TL");
 
-  // C, I, and S are gated separately (design §11): I and S differ by the
-  // Lloyd-mirror projected source amplitude applied for S in the projection
-  // layer; the accumulation kernels are identical.
+  // The three fused modes are gated separately (design §11): they differ by
+  // the sink (complex pressure vs real intensity) and, for S, by the
+  // Lloyd-mirror projected amplitude in the projection layer.
   testMode(context, SimulationRunMode::Coherent, "C");
   testMode(context, SimulationRunMode::Incoherent, "I");
   testMode(context, SimulationRunMode::SemiCoherent, "S");
 
+  // Component fixtures (coherent): the V/H factor branches of the RC
+  // pressure path (ray_centered_cerveny_influence.cpp:417-435) — Fortran
+  // DOT_PRODUCT conjugation for V, handwritten unconjugated form for H.
+  testParityLevels(
+      context,
+      makeMunkRayCenteredCase(SimulationRunMode::Coherent,
+                              FrequencyGrid({50.0, 250.0}),
+                              BeamWidthMode::MinimumWidth,
+                              FieldComponent::Vertical),
+      CartesianCervenySettings{},
+      "fixture D (munk RC C, Vertical component)");
+  testParityLevels(
+      context,
+      makeMunkRayCenteredCase(SimulationRunMode::Coherent,
+                              FrequencyGrid({50.0, 250.0}),
+                              BeamWidthMode::MinimumWidth,
+                              FieldComponent::Horizontal),
+      CartesianCervenySettings{},
+      "fixture E (munk RC C, Horizontal component)");
+
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " fused-geometric-gaussian-parity assertion(s) failed\n";
+              << " range-rc-parity assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse fused-geometric-gaussian-parity tests "
-               "passed\n";
+  std::cout << "All Bellhop RayReuse range-rc-parity tests passed\n";
   return 0;
 }

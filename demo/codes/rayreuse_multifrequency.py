@@ -26,28 +26,23 @@ from bellhop_io_py.shd import PressureField, ShdReader
 from reliability import common_tl_limits, draw_tl, output_paths
 
 
-EXECUTION_MODES = ("nonreuse", "reuse-serial", "reuse-frequency")
-EXECUTION_ARGUMENTS = {
-    "nonreuse": ["--execution-mode", "nonreuse"],
-    "reuse-serial": ["--execution-mode", "reuse", "--reuse-mode", "serial"],
-    "reuse-frequency": [
-        "--execution-mode",
-        "reuse",
-        "--reuse-mode",
-        "frequency",
-    ],
-}
-EXECUTION_PRT_MARKERS = {
-    "nonreuse": ("execution mode = broadband nonreuse",),
-    "reuse-serial": (
-        "execution mode = broadband reuse",
-        "reuse mode = serial",
-    ),
-    "reuse-frequency": (
-        "execution mode = broadband reuse",
-        "reuse mode = frequency",
-    ),
-}
+EXECUTION_MODES = ("nonreuse", "reuse")
+REUSE_MODES = ("serial", "frequency")
+
+
+def execution_arguments(execution_mode: str, reuse_mode: str | None) -> list[str]:
+    if execution_mode not in EXECUTION_MODES:
+        raise ValueError(f"unknown execution mode: {execution_mode}")
+    if execution_mode == "nonreuse" and reuse_mode is not None:
+        raise ValueError("nonreuse execution does not accept a reuse mode")
+    if execution_mode == "reuse" and reuse_mode not in REUSE_MODES:
+        raise ValueError("reuse execution requires serial or frequency reuse mode")
+    arguments = ["--execution-mode", execution_mode]
+    if reuse_mode is not None:
+        arguments += ["--reuse-mode", reuse_mode]
+    return arguments
+
+
 DEFAULT_EXECUTABLE = (
     PROJECT_ROOT
     / "Bellhop_RayReuse"
@@ -104,8 +99,10 @@ def run_multifrequency(
     environment: Path,
     executable: Path,
     execution_mode: str,
+    reuse_mode: str | None,
     results_root: Path,
 ) -> Path:
+    command_arguments = execution_arguments(execution_mode, reuse_mode)
     validate_environment(environment, executable)
     version_directory = results_root / RESULT_VERSION
     version_directory.mkdir(parents=True, exist_ok=True)
@@ -125,14 +122,17 @@ def run_multifrequency(
         [
             str(executable),
             output.root.name,
-            *EXECUTION_ARGUMENTS[execution_mode],
+            *command_arguments,
         ],
         cwd=version_directory,
         check=True,
     )
     elapsed = time.perf_counter() - started
     _, reader, print_text = validate_result(results_root, environment)
-    for expected_marker in EXECUTION_PRT_MARKERS[execution_mode]:
+    expected_markers = [f"execution mode = broadband {execution_mode}"]
+    if reuse_mode is not None:
+        expected_markers.append(f"reuse mode = {reuse_mode}")
+    for expected_marker in expected_markers:
         if expected_marker not in print_text:
             raise RuntimeError(
                 f"PRT execution-mode marker missing: {expected_marker}"
@@ -140,13 +140,14 @@ def run_multifrequency(
 
     report = {
         "schema": "bellhop.rayreuse.multifrequency_run",
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "executable": str(executable),
         "environment": str(output.environment),
         "print_log": str(output.print_log),
         "shade": str(output.shade),
         "execution_mode": execution_mode,
+        "reuse_mode": reuse_mode,
         "frequencies_hz": [
             float(value) for value in reader.header.frequencies_hz
         ],
@@ -207,7 +208,7 @@ def plot_selected_frequencies(
 
     summary = {
         "schema": "bellhop.rayreuse.multifrequency_figures",
-        "schema_version": 1,
+        "schema_version": 2,
         "environment": str(environment),
         "shade": str(
             output_paths(results_root, RESULT_VERSION, environment.stem).shade
@@ -242,8 +243,10 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--executable", type=Path, default=DEFAULT_EXECUTABLE)
     parser.add_argument(
-        "--execution-mode", choices=EXECUTION_MODES, default="reuse-serial"
+        "--execution-mode", choices=EXECUTION_MODES, default="reuse"
     )
+    parser.add_argument("--reuse-mode", choices=REUSE_MODES,
+                        help="reuse strategy (default: serial with reuse execution)")
     parser.add_argument("--results-root", type=Path, default=DEMO_ROOT / "results")
 
 
@@ -282,6 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 environment=environment,
                 executable=executable,
                 execution_mode=arguments.execution_mode,
+                reuse_mode=(arguments.reuse_mode or "serial") if arguments.execution_mode == "reuse" else arguments.reuse_mode,
                 results_root=results_root,
             )
         if arguments.command in ("plot", "show"):

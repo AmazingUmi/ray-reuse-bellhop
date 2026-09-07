@@ -328,7 +328,7 @@ EigenraySolverStatistics EigenraySolver::solveNonReuse(
   return stats;
 }
 
-EigenraySolverStatistics EigenraySolver::solveParallel(
+EigenraySolverStatistics EigenraySolver::solveFrequency(
     const SimulationCase& simulation,
     const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount,
     bool verifyCache, RayFanTraceSettings traceSettings) {
@@ -407,7 +407,7 @@ EigenraySolverStatistics EigenraySolver::solveParallel(
   }
   if (verifyCache) {
     verifySourceFingerprints(caches, fingerprintsBefore,
-                             "parallel eigenray projection modified the "
+                             "Frequency Reuse eigenray projection modified the "
                              "frozen ray cache");
     stats.sourceCacheFingerprintsAfter = fingerprintsBefore;
     stats.cacheFingerprintAfter = fingerprintsBefore.front();

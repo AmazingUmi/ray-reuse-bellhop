@@ -24,6 +24,7 @@ from compare_fields import compare_files, decoded_complex64_payload
 from reference_snapshots import sha256_file, validate_candidate
 from standard_cases import (
     RAYREUSE_EXECUTION_MODES,
+    RAYREUSE_REUSE_MODES,
     VersionAdapter,
     default_adapters,
     process_case,
@@ -32,7 +33,7 @@ from standard_cases import (
 
 
 SCHEMA = "bellhop.standard_case.model_matrix"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SUPPORTED_PROFILES = ("single", "broadband_smoke")
 
 # FP-2D-R1: the established 0.005 dB Munk-spline oracle remains unchanged
@@ -214,7 +215,8 @@ def run_case_profile(
     definition: CaseDefinition,
     profile_name: str,
     adapters: dict[str, VersionAdapter],
-    modes: tuple[str, ...],
+    execution_modes: tuple[str, ...],
+    reuse_modes: tuple[str, ...],
     work_root: Path,
     tolerances_path: Path,
     reference_root: Path,
@@ -248,8 +250,9 @@ def run_case_profile(
             work_root / label,
         )
     else:
-        for mode in modes:
-            label = f"rayreuse-{mode}"
+        for execution_mode, reuse_mode in expand_routes(execution_modes, reuse_modes):
+            route_label = execution_mode if reuse_mode is None else f"reuse-{reuse_mode}"
+            label = f"rayreuse-{route_label}"
             rayreuse_labels.append(label)
             manifests[label] = process_case(
                 definition,
@@ -257,7 +260,8 @@ def run_case_profile(
                 adapters["rayreuse"],
                 "test",
                 work_root / label,
-                mode,
+                execution_mode,
+                reuse_mode,
             )
 
     slices = {
@@ -415,6 +419,22 @@ def git_identity() -> dict[str, object]:
     return {"revision": revision, "dirty": bool(status)}
 
 
+def expand_routes(
+    execution_modes: tuple[str, ...], reuse_modes: tuple[str, ...],
+) -> tuple[tuple[str, str | None], ...]:
+    for label, selected, allowed in (
+        ("execution modes", execution_modes, RAYREUSE_EXECUTION_MODES),
+        ("reuse modes", reuse_modes, RAYREUSE_REUSE_MODES),
+    ):
+        if not selected or len(set(selected)) != len(selected) or any(value not in allowed for value in selected):
+            raise ValueError(f"{label} must be unique values from {','.join(allowed)}")
+    return tuple(
+        (execution_mode, reuse_mode)
+        for execution_mode in execution_modes
+        for reuse_mode in (reuse_modes if execution_mode == "reuse" else (None,))
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the local three-model standard-case comparison matrix."
@@ -423,13 +443,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--profiles", default="single,broadband_smoke"
     )
-    parser.add_argument(
-        # Pinned explicitly: the range route (reuse-range) is out of
-        # model-matrix scope because the matrix runs every case kind, while
-        # the range route is only defined for a subset of broadband runs.
-        "--modes",
-        default="nonreuse,reuse-serial,reuse-frequency",
-    )
+    parser.add_argument("--execution-modes", default="nonreuse,reuse")
+    # Keep the established default route selection; Range Reuse is opt-in.
+    parser.add_argument("--reuse-modes", default="serial,frequency")
     parser.add_argument(
         "--work-root",
         type=Path,
@@ -481,16 +497,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ValueError(
                 "profiles must be single and/or broadband_smoke"
             )
-        modes = tuple(
-            value.strip() for value in args.modes.split(",") if value.strip()
-        )
-        if not modes or len(set(modes)) != len(modes) or any(
-            mode not in RAYREUSE_EXECUTION_MODES for mode in modes
-        ):
-            raise ValueError(
-                "modes must be unique values from "
-                + ",".join(RAYREUSE_EXECUTION_MODES)
-            )
+        execution_modes = tuple(value.strip() for value in args.execution_modes.split(",") if value.strip())
+        reuse_modes = tuple(value.strip() for value in args.reuse_modes.split(",") if value.strip())
+        expand_routes(execution_modes, reuse_modes)
 
         definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
         selected, explicit = select_cases(definitions, args.cases)
@@ -540,7 +549,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 definition=definition,
                 profile_name=profile_name,
                 adapters=adapters,
-                modes=modes,
+                execution_modes=execution_modes,
+                reuse_modes=reuse_modes,
                 work_root=invocation_root,
                 tolerances_path=resolve_tolerances_path(
                     definition, args.tolerances
@@ -564,7 +574,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for name, adapter in adapters.items()
             },
             "profiles": list(profiles),
-            "rayreuse_modes": list(modes),
+            "rayreuse_execution_modes": list(execution_modes),
+            "rayreuse_reuse_modes": list(reuse_modes) if "reuse" in execution_modes else [],
             "run_root": str(invocation_root),
             "results": results,
             "passed": bool(results)

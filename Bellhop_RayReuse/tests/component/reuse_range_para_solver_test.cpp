@@ -95,7 +95,7 @@ void noOpConsumer(std::size_t, std::vector<FrequencyWorkspace>&&,
 
 void testSolverScopeRejections(Context& context) {
   context.check(supportsReuseRangePara(makeSimulation()),
-                "the shared fused-support predicate accepts the production "
+                "the shared Range Reuse support predicate accepts the production "
                 "fixture");
   // IGR-3A A02b (intended behavior change): Cartesian Cerveny fused
   // eligibility covers every TL run mode of the family — incoherent and
@@ -104,7 +104,7 @@ void testSolverScopeRejections(Context& context) {
       supportsReuseRangePara(makeSimulation(SimulationRunMode::Incoherent)) &&
           supportsReuseRangePara(
               makeSimulation(SimulationRunMode::SemiCoherent)),
-      "the shared fused-support predicate accepts CC incoherent and "
+      "the shared Range Reuse support predicate accepts CC incoherent and "
       "semi-coherent TL");
   // IGR-3A A03 (intended behavior change): Ray-Centered Cerveny fused
   // eligibility covers every TL run mode of the family in both coordinate
@@ -121,10 +121,10 @@ void testSolverScopeRejections(Context& context) {
               makeSimulation(SimulationRunMode::SemiCoherent,
                              BeamFamily::CervenyGaussian,
                              CervenyCoordinateSystem::RayCentered)),
-      "the shared fused-support predicate accepts Ray-Centered Cerveny "
+      "the shared Range Reuse support predicate accepts Ray-Centered Cerveny "
       "coherent, incoherent, and semi-coherent TL");
   // End-to-end wiring for one Ray-Centered mode (numerical parity itself is
-  // gated in rayreuse.component.fused_rc_parity): the fused streaming path
+  // gated in rayreuse.reuse.range.rc_parity): the Range Reuse streaming path
   // must deliver every frequency through the RC adapter chain.
   {
     const SimulationCase rayCenteredSimulation = makeSimulation(
@@ -140,7 +140,7 @@ void testSolverScopeRejections(Context& context) {
                 const SingleFrequencyTimings&) {
               ++rayCenteredCallbackCount;
               context.check(sourceWorkspaces.size() == 1U,
-                            "ray-centered fused streaming delivers one source "
+                            "ray-centered Range Reuse streaming delivers one source "
                             "workspace per frequency");
             },
             CartesianCervenySettings{}, true);
@@ -150,7 +150,7 @@ void testSolverScopeRejections(Context& context) {
             rayCenteredStatistics.cacheFingerprintVerified &&
             rayCenteredStatistics.cacheFingerprintBefore ==
                 rayCenteredStatistics.cacheFingerprintAfter,
-        "ray-centered fused streaming delivers every frequency and leaves "
+        "ray-centered Range Reuse streaming delivers every frequency and leaves "
         "the frozen cache unchanged");
   }
   // IGR-3A A04 (intended behavior change): Geometric Hat fused eligibility
@@ -173,10 +173,10 @@ void testSolverScopeRejections(Context& context) {
           supportsReuseRangePara(makeSimulation(
               SimulationRunMode::SemiCoherent, BeamFamily::GeometricHat,
               CervenyCoordinateSystem::RayCentered)),
-      "the shared fused-support predicate accepts geometric hat coherent, "
+      "the shared Range Reuse support predicate accepts geometric hat coherent, "
       "incoherent, and semi-coherent TL in both coordinate systems");
   // End-to-end wiring for one Hat mode per coordinate (numerical parity
-  // itself is gated in rayreuse.component.fused_hat_parity).
+  // itself is gated in rayreuse.reuse.range.hat_parity).
   for (const CervenyCoordinateSystem hatCoordinates :
        {CervenyCoordinateSystem::Cartesian,
         CervenyCoordinateSystem::RayCentered}) {
@@ -193,7 +193,7 @@ void testSolverScopeRejections(Context& context) {
                 const SingleFrequencyTimings&) {
               ++hatCallbackCount;
               context.check(sourceWorkspaces.size() == 1U,
-                            "geometric hat fused streaming delivers one "
+                            "geometric hat Range Reuse streaming delivers one "
                             "source workspace per frequency");
             },
             CartesianCervenySettings{}, true);
@@ -202,7 +202,7 @@ void testSolverScopeRejections(Context& context) {
             hatStatistics.cacheFingerprintVerified &&
             hatStatistics.cacheFingerprintBefore ==
                 hatStatistics.cacheFingerprintAfter,
-        "geometric hat fused streaming delivers every frequency and leaves "
+        "geometric hat Range Reuse streaming delivers every frequency and leaves "
         "the frozen cache unchanged");
   }
   // IGR-3A A05 (intended behavior change): Geometric Gaussian fused
@@ -216,10 +216,10 @@ void testSolverScopeRejections(Context& context) {
           supportsReuseRangePara(makeSimulation(
               SimulationRunMode::SemiCoherent,
               BeamFamily::GeometricGaussian)),
-      "the shared fused-support predicate accepts geometric Gaussian "
+      "the shared Range Reuse support predicate accepts geometric Gaussian "
       "coherent, incoherent, and semi-coherent TL");
   // End-to-end wiring for one Gaussian mode (numerical parity itself is
-  // gated in rayreuse.component.fused_geometric_gaussian_parity).
+  // gated in rayreuse.reuse.range.geometric_gaussian_parity).
   {
     const SimulationCase gaussianSimulation = makeSimulation(
         SimulationRunMode::Coherent, BeamFamily::GeometricGaussian);
@@ -233,7 +233,7 @@ void testSolverScopeRejections(Context& context) {
                 const SingleFrequencyTimings&) {
               ++gaussianCallbackCount;
               context.check(sourceWorkspaces.size() == 1U,
-                            "geometric Gaussian fused streaming delivers one "
+                            "geometric Gaussian Range Reuse streaming delivers one "
                             "source workspace per frequency");
             },
             CartesianCervenySettings{}, true);
@@ -242,7 +242,7 @@ void testSolverScopeRejections(Context& context) {
             gaussianStatistics.cacheFingerprintVerified &&
             gaussianStatistics.cacheFingerprintBefore ==
                 gaussianStatistics.cacheFingerprintAfter,
-        "geometric Gaussian fused streaming delivers every frequency and "
+        "geometric Gaussian Range Reuse streaming delivers every frequency and "
         "leaves the frozen cache unchanged");
   }
   context.check(
@@ -251,8 +251,8 @@ void testSolverScopeRejections(Context& context) {
           CervenyCoordinateSystem::Cartesian,
           FrequencyGrid({50.0, 100.0}),
           ReceiverGrid({10.0, 55.0}, {25.0, 50.0, 90.0}))),
-      "the shared fused-support predicate excludes a non-equally-spaced "
-      "rectilinear receiver grid from legacy replacement warnings");
+      "the shared Range Reuse support predicate excludes a non-equally-spaced "
+      "rectilinear receiver grid from Range Reuse eligibility");
 
   std::vector<std::string> messages;
   const auto reject = [&context,
@@ -276,7 +276,7 @@ void testSolverScopeRejections(Context& context) {
   context.check(
       supportsReuseRangePara(makeSimulation(SimulationRunMode::Coherent,
                                            BeamFamily::SimpleGaussian)),
-      "the shared fused-support predicate accepts simple Gaussian coherent "
+      "the shared Range Reuse support predicate accepts simple Gaussian coherent "
       "TL");
   for (const SimulationRunMode illegalMode :
        {SimulationRunMode::Incoherent, SimulationRunMode::SemiCoherent}) {
@@ -291,7 +291,7 @@ void testSolverScopeRejections(Context& context) {
                 "simple Gaussian beams require coherent point-source TL on a "
                 "rectilinear receiver grid",
         "SimulationCase construction rejects simple Gaussian incoherent and "
-        "semi-coherent runs (the legal matrix upstream of the fused gate)");
+        "semi-coherent runs (the legal matrix upstream of the Range Reuse gate)");
   }
   // The intensity public entry is the reachable fused enforcement of the
   // same law: it must reject the coherent-only family BEFORE any adapter
@@ -309,13 +309,13 @@ void testSolverScopeRejections(Context& context) {
     context.check(
         intensityMessage.has_value() &&
             *intensityMessage ==
-                "fused ray-reuse solver requires a run mode that is legal "
+                "Range Reuse solver requires a run mode that is legal "
                 "for the beam family",
         "the fused intensity entry rejects the coherent-only simple Gaussian "
         "family with the family-legality message");
   }
   // End-to-end wiring (numerical parity itself is gated in
-  // rayreuse.component.fused_simple_gaussian_parity): the fused streaming
+  // rayreuse.reuse.range.simple_gaussian_parity): the Range Reuse streaming
   // path must deliver every frequency through the Simple Gaussian adapter
   // chain.
   {
@@ -331,7 +331,7 @@ void testSolverScopeRejections(Context& context) {
                 const SingleFrequencyTimings&) {
               ++simpleGaussianCallbackCount;
               context.check(sourceWorkspaces.size() == 1U,
-                            "simple Gaussian fused streaming delivers one "
+                            "simple Gaussian Range Reuse streaming delivers one "
                             "source workspace per frequency");
             },
             CartesianCervenySettings{}, true);
@@ -341,25 +341,25 @@ void testSolverScopeRejections(Context& context) {
             simpleGaussianStatistics.cacheFingerprintVerified &&
             simpleGaussianStatistics.cacheFingerprintBefore ==
                 simpleGaussianStatistics.cacheFingerprintAfter,
-        "simple Gaussian fused streaming delivers every frequency and leaves "
+        "simple Gaussian Range Reuse streaming delivers every frequency and leaves "
         "the frozen cache unchanged");
   }
-  // Non-TL products stay outside fused scope (A07: unchanged message; the
+  // Non-TL products stay outside the Range Reuse TL scope (A07: unchanged support gate; the
   // CLI layer rejects R/arrival/eigenray products before the solver).
   reject(makeSimulation(SimulationRunMode::RayTrace),
-         "non-TL run mode is rejected by the fused solver");
+         "non-TL run mode is rejected by the Range Reuse solver");
   reject(makeSimulation(SimulationRunMode::Coherent,
                         BeamFamily::CervenyGaussian,
                         CervenyCoordinateSystem::Cartesian,
                         FrequencyGrid({50.0})),
-         "single-frequency run is rejected by the fused solver");
+         "single-frequency run is rejected by the Range Reuse solver");
   reject(makeSimulation(SimulationRunMode::Coherent,
                         BeamFamily::CervenyGaussian,
                         CervenyCoordinateSystem::Cartesian,
                         FrequencyGrid({50.0, 100.0}),
                         ReceiverGrid({10.0, 55.0}, {25.0, 75.0},
                                      ReceiverGridLayout::Irregular)),
-         "irregular receiver grid is rejected by the fused solver");
+         "irregular receiver grid is rejected by the Range Reuse solver");
   reject(makeSimulation(SimulationRunMode::Coherent,
                         BeamFamily::CervenyGaussian,
                         CervenyCoordinateSystem::Cartesian,
@@ -371,7 +371,7 @@ void testSolverScopeRejections(Context& context) {
                         CervenyCoordinateSystem::Cartesian,
                         FrequencyGrid({50.0, 100.0}),
                         ReceiverGrid({10.0, 55.0}, {25.0, 50.0, 90.0})),
-         "nonuniform receiver ranges are rejected by the fused solver");
+         "nonuniform receiver ranges are rejected by the Range Reuse solver");
   {
     SimulationCase multiSource(
         Environment(
@@ -392,19 +392,19 @@ void testSolverScopeRejections(Context& context) {
                            .rangeLimit = 110.0,
                            .depthLimit = 110.0,
                            .maximumRayPoints = 100U});
-    reject(multiSource, "multi-source run is rejected by the fused solver");
+    reject(multiSource, "multi-source run is rejected by the Range Reuse solver");
   }
 
   for (const std::string& message : messages) {
-    context.check(message.starts_with("fused ray-reuse solver"),
-                  "solver-level fused rejection carries the fused prefix: " +
+    context.check(message.starts_with("Range Reuse solver"),
+                  "solver-level Range Reuse rejection carries the Range Reuse prefix: " +
                       message);
   }
   std::vector<std::string> sorted = messages;
   std::sort(sorted.begin(), sorted.end());
   context.check(std::adjacent_find(sorted.begin(), sorted.end()) ==
                     sorted.end(),
-                "solver-level fused rejection messages are distinct");
+                "solver-level Range Reuse rejection messages are distinct");
 
   // Frozen-cache defense in depth on the Level-B seam: a non-frozen cache is
   // rejected before any work.
@@ -417,7 +417,7 @@ void testSolverScopeRejections(Context& context) {
       });
   context.check(
       unfrozenMessage.has_value() &&
-          unfrozenMessage->starts_with("fused ray-reuse solver"),
+          unfrozenMessage->starts_with("Range Reuse solver"),
       "an unfrozen cache is rejected by the fused Level-B seam");
 
   const std::optional<std::string> zeroWorkerMessage =
@@ -429,13 +429,13 @@ void testSolverScopeRejections(Context& context) {
       });
   context.check(zeroWorkerMessage.has_value() &&
                     *zeroWorkerMessage ==
-                        "fused ray-reuse requested range worker count must be "
+                        "Range Reuse requested range worker count must be "
                         "positive",
-                "the fused solver rejects a zero range-worker count");
+                "the Range Reuse solver rejects a zero range-worker count");
 
 }
 
-void testFusedStreamingMatchesSerialReuse(Context& context) {
+void testRangeStreamingMatchesSerialReuse(Context& context) {
   const SimulationCase simulation = makeSimulation();
   const CartesianCervenySettings settings{.collectStatistics = true};
   const ReuseSerialResult reuse =
@@ -462,9 +462,9 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
 
   context.check(
       callbackOrder == std::vector<std::size_t>{0U, 1U},
-      "fused streaming callback preserves frequency order");
+      "Range Reuse streaming callback preserves frequency order");
   context.check(callbackCounts == std::vector<std::size_t>{1U, 1U},
-                "fused streaming consumes every frequency once");
+                "Range Reuse streaming consumes every frequency once");
   context.check(
       statistics.tracePassCount == 1U &&
           statistics.requestedRangeWorkers == 1U &&
@@ -473,7 +473,7 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
               simulation.launchFanPlan().launchAngleCount &&
           statistics.rayCacheBytes > 0U &&
           statistics.totalRayPointCount > statistics.rayCount,
-      "fused streaming reports one trace pass and the shared cache metrics");
+      "Range Reuse streaming reports one trace pass and the shared cache metrics");
 
   for (std::size_t frequencyIndex = 0U;
        frequencyIndex < simulation.frequencies().size(); ++frequencyIndex) {
@@ -501,7 +501,7 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
               statistics.cacheFingerprintAfter &&
           statistics.cacheFingerprintBefore ==
               reuse.statistics.cacheFingerprintBefore,
-      "fused streaming leaves the frozen cache unchanged and matches the "
+      "Range Reuse streaming leaves the frozen cache unchanged and matches the "
       "reuse fingerprint");
   context.check(
       statistics.wallSeconds >= 0.0 &&
@@ -509,7 +509,7 @@ void testFusedStreamingMatchesSerialReuse(Context& context) {
           statistics.phaseTotals.projectSeconds >= 0.0 &&
           statistics.phaseTotals.influenceSeconds >= 0.0 &&
           statistics.phaseTotals.scaleSeconds >= 0.0,
-      "fused streaming exposes the block-level phase timings");
+      "Range Reuse streaming exposes the block-level phase timings");
 }
 
 void testRangeWorkerResolution(Context& context) {
@@ -586,15 +586,15 @@ void testFusedCounterSemantics(Context& context) {
 int main() {
   Context context;
   testSolverScopeRejections(context);
-  testFusedStreamingMatchesSerialReuse(context);
+  testRangeStreamingMatchesSerialReuse(context);
   testRangeWorkerResolution(context);
   testFusedCounterSemantics(context);
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " fused-ray-reuse-solver assertion(s) failed\n";
+              << " reuse-range-para-solver assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse fused-ray-reuse-solver tests passed\n";
+  std::cout << "All Bellhop RayReuse reuse-range-para-solver tests passed\n";
   return 0;
 }

@@ -2,14 +2,16 @@
 
 ## 目标与适用范围
 
-`test/standard_cases/codes/benchmark_rayreuse.py` 用同一标准算例输入比较
-`nonreuse`、`reuse-serial`、`reuse-frequency` 与 `reuse-range`（默认
-`nonreuse,reuse-serial,reuse-frequency`）。它直接调用 Release 可执行程序
+`test/standard_cases/codes/benchmark_rayreuse.py` 用同一标准算例输入，按
+Broadband 两层执行模型展开配置：`--execution-modes nonreuse,reuse` 与
+`--reuse-modes serial,frequency,range`（默认
+`nonreuse,reuse` × `serial,frequency`，即 nonreuse、Serial Reuse 与
+8-worker Frequency Reuse）。它直接调用 Release 可执行程序
 `bellhop_broadband`，并记录 reuse workers、输出队列容量和内存预算。
 
-跨模式的主性能指标是外部测得的 `real_seconds`。PRT 内的 Trace、Project、
-Influence、Scale、solver wall 和 SHD 时间用于定位热点；不同模式的 solver
-wall 覆盖范围并不完全相同，不应用它计算跨模式加速比。
+跨配置的主性能指标是外部测得的 `real_seconds`。PRT 内的 Trace、Project、
+Influence、Scale、`Solver wall seconds` 和 SHD 时间用于定位热点；不同路线的
+solver wall 覆盖范围并不完全相同，不应用它计算跨路线加速比。
 
 ## 正式运行前提
 
@@ -26,8 +28,9 @@ uv run python test/standard_cases/codes/benchmark_rayreuse.py \
   --case constant_speed_direct \
   --case munk_cerveny_cc \
   --profile broadband_regression \
-  --modes nonreuse,reuse-serial,reuse-frequency \
-  --parallel-workers 8,10 \
+  --execution-modes nonreuse,reuse \
+  --reuse-modes serial,frequency \
+  --reuse-workers 8,10 \
   --queue 2 \
   --memory-budget-mib 2048 \
   --machine-label "Apple M4 MacBook Air, 10 cores, 16 GiB" \
@@ -37,26 +40,28 @@ uv run python test/standard_cases/codes/benchmark_rayreuse.py \
   --output Bellhop_RayReuse/build/benchmarks/regression.json
 ```
 
-`--parallel-workers` 与 `--fused-range-workers` 是保留的历史旗标名，语义已
-按 BB-1 执行模型改为 reuse workers 轴：前者把 `reuse-frequency` 展开为一组
-`--reuse-workers` 配置，后者把 `reuse-range` 展开为静态 receiver-range
-worker 配置，并使用相同的外部 wall/RSS/PRT/SHD 协议。不要把
-frequency-worker 与 range-worker 数据混在一列。
+`--reuse-workers` 是唯一的 worker 展开轴，同时作用于 Frequency Reuse 与
+Range Reuse：同一份 CSV 会把 `reuse-frequency` 与 `reuse-range` 各展开为一
+组对应 worker 数的配置。省略该旗标时保留既有路线默认：Frequency=8、
+Range=1。配置层只有 `reuse_workers` 一个字段，按路线分别表示 frequency
+workers 或 range workers；不要把 frequency-worker 与 range-worker 数据混在
+一列。
 
 开发中的非正式烟测可显式增加 `--allow-dirty`。报告会保留
 `git.dirty = true`，此类结果不得作为发布性能记录。
 
-需要诊断 reuse-frequency 逐频任务分布时，将模式限制为 `reuse-frequency`
-并增加 `--profile-frequency-tasks`（该开关要求本次运行只含 reuse-frequency
-模式）。runner 会把每个频率已有的
+需要诊断 Frequency Reuse 逐频任务分布时，将运行限制为
+`--execution-modes reuse --reuse-modes frequency` 并增加
+`--profile-frequency-tasks`。runner 会把每个频率已有的
 Project/Influence/Scale/total 计时保存到样本 JSON；该开关默认关闭：
 
 ```bash
 uv run python test/standard_cases/codes/benchmark_rayreuse.py \
   --case munk_cerveny_cc \
   --profile broadband_regression \
-  --modes reuse-frequency \
-  --parallel-workers 8,10 \
+  --execution-modes reuse \
+  --reuse-modes frequency \
+  --reuse-workers 8,10 \
   --queue 2 \
   --memory-budget-mib 2048 \
   --profile-frequency-tasks \
@@ -72,8 +77,8 @@ uv run python test/standard_cases/codes/benchmark_rayreuse.py \
 
 | 等级 | 用途 | 推荐配置 | 重复 |
 |---|---|---|---:|
-| smoke | 验证 runner、PRT、RSS 和哈希门 | direct 2频，所改模式 | 0 预热 + 1 计量 |
-| tuning | 比较单项优化或 workers | Munk 2频；必要时16频 reuse-frequency/reuse-range | 1 预热 + 3 计量 |
+| smoke | 验证 runner、PRT、RSS 和哈希门 | direct 2频，所改路线 | 0 预热 + 1 计量 |
+| tuning | 比较单项优化或 workers | Munk 2频；必要时16频 frequency/range | 1 预热 + 3 计量 |
 | formal | 冻结发布或算法基线 | 16频全矩阵；必要时精选64频配置 | 1 预热 + 5 计量 |
 
 正式 Munk 16频全矩阵包含 4 个配置时会执行
@@ -98,34 +103,70 @@ sum(各配置单次 wall) × (warmups + repeats)
 - 每轮将配置顺序循环左移，降低固定顺序和温度漂移造成的偏差；
 - 输入 ENV、每次 SHD 及跨配置 SHD 默认必须分别逐字节一致；
 - PRT 必须包含成功标记（`Bellhop Broadband completed successfully`）、正确
-  的 execution mode 与 reuse mode 路线行（`execution mode = broadband
-  nonreuse` / `execution mode = broadband reuse` + `reuse mode = …`）、
-  Trace passes，以及与请求一致的 workers、队列和预算回显；
+  的两层路线行（`execution mode = broadband nonreuse` 或
+  `execution mode = broadband reuse` + `reuse mode = …`）、Trace passes，
+  以及与请求一致的 workers、队列和预算回显；
 - 输出采用原子替换，JSON 禁止 NaN/Infinity。
 
 ## 报告内容
 
 JSON 记录 Git commit/tree/dirty 状态、可执行文件 SHA-256、平台、CPU/内存、
-Python、NumPy、环境信息、CMake/C++ 工具版本、完整配置和轮换顺序。
-在 macOS 等无法可靠查询具体芯片型号的平台，应通过 `--machine-label` 补充
+Python、NumPy、环境信息、CMake/C++ 工具版本、完整配置和轮换顺序。在
+macOS 等无法可靠查询具体芯片型号的平台，应通过 `--machine-label` 补充
 可读硬件身份；系统探测字段仍会独立保留。
 每个配置保留预热与原始计量样本，并汇总 wall、RSS 和 PRT 阶段时间的
 median/min/max；存在 `nonreuse` 时，按外部 wall 中位数计算
 `speedup_vs_nonreuse`。
 
-## 报告 schema 版本（v3）
+## 报告 schema 版本（当前 v4）
 
-BB-1 之后报告写入 `schema_version = 3`：路线词汇换为两层模型
-（`execution_mode` ∈ `nonreuse` / `reuse-serial` / `reuse-frequency` /
-`reuse-range`；identifier 语法 `reuse-frequency-w< N >-q< Q >-m< M >`、
-`reuse-range-w< N >`；PRT 指标字段 `requested/effective reuse worker
-count`）。BB-M1 之前的 v2 报告使用旧词汇（`reuse`/`parallel`/`fused`；
-identifier `parallel-w*` / `fused-range-w*`，裸 `fused` 配置无后缀；PRT
-字段 `requested worker count` / `requested/effective range worker count`）。
-两组词汇不可混用：跨 BB-M1 边界比较时，
-按版本号区分并先做下表映射，不同版本的报告不得直接合并或对比。
+BB-M1-R1 起报告写入 `schema_version = 4`。核心字段是显式两层模型：
 
-| v2（legacy） | v3（BB-1 起） |
+```json
+{
+  "execution_mode": "reuse",
+  "reuse_mode": "frequency",
+  "reuse_workers": 8
+}
+```
+
+四种配置的取值为：
+
+| execution_mode | reuse_mode | reuse_workers | 对应路线 |
+|---|---|---|---|
+| `nonreuse` | `null` | `null` | NonReuse |
+| `reuse` | `serial` | `null` | Serial Reuse |
+| `reuse` | `frequency` | `<N>` | Frequency Reuse（N = frequency workers） |
+| `reuse` | `range` | `<N>` | Range Reuse（N = range workers） |
+
+派生 identifier 语法保持稳定：`nonreuse`、`reuse-serial`、
+`reuse-frequency-w<N>-q<Q>-m<M>`、`reuse-range-w<N>`；`reuse-frequency` 的
+队列/内存参数只在该路线出现。identifier 只是展示与目录命名，不承载
+execution/reuse 分层语义，不得当作 `execution_mode` 使用。
+
+### 历史 schema（v3 / v2）
+
+v2/v3 JSON 是历史文件，一律不修改，当前 runner 也不读取它们。跨版本比较
+时按版本号区分并先做映射，不同版本的报告不得直接合并或对比。
+
+v3（BB-1 至 BB-M1 期间）把路线压成单一 `execution_mode`
+（`nonreuse` / `reuse-serial` / `reuse-frequency` / `reuse-range`），配置
+字段为 `parallel_workers` / `fused_range_workers`，CLI 旗标为
+`--parallel-workers` / `--fused-range-workers`。v3 → v4 映射：
+
+| v3 | v4 |
+|---|---|
+| `execution_mode: reuse-serial` | `execution_mode: reuse` + `reuse_mode: serial` + `reuse_workers: null` |
+| `execution_mode: reuse-frequency` + `parallel_workers: N` | `execution_mode: reuse` + `reuse_mode: frequency` + `reuse_workers: N` |
+| `execution_mode: reuse-range` + `fused_range_workers: N` | `execution_mode: reuse` + `reuse_mode: range` + `reuse_workers: N` |
+| identifier `reuse-frequency-w<N>-q<Q>-m<M>` / `reuse-range-w<N>` | 不变 |
+
+v2（BB-M1 之前）使用旧词汇（`reuse`/`parallel`/`fused`；identifier
+`parallel-w*` / `fused-range-w*`，裸 `fused` 配置无后缀；PRT 字段
+`requested worker count` / `requested/effective range worker count`）。
+v2 → v3 映射：
+
+| v2（legacy） | v3 |
 |---|---|
 | `execution_mode: reuse` | `reuse-serial` |
 | `execution_mode: parallel` | `reuse-frequency` |
@@ -136,26 +177,31 @@ identifier `parallel-w*` / `fused-range-w*`，裸 `fused` 配置无后缀；PRT
 | PRT `requested worker count` | `requested reuse worker count` |
 | PRT `requested/effective range worker count` | `requested/effective reuse worker count` |
 
-有意保留的旧名（不随 v3 改动）：配置字段 `parallel_workers` /
-`fused_range_workers` 与 CLI 旗标 `--parallel-workers` /
-`--fused-range-workers`——它们是 reuse workers 轴的展开参数，语义已在
-runner 中固定，彻底更名需要另行 bump schema 并迁移历史报告。
+## PRT 路线标识与 wall 字段
 
-## PRT 标签的保留边界与消费者
+新 PRT 的路线身份完全由两层标签表达：
 
-PRT 中以下行保留 legacy 措辞，属于路线诊断的冻结输出，不随命名里程碑改动：
+```text
+execution mode = broadband nonreuse
+execution mode = broadband reuse
+reuse mode = serial | frequency | range
+```
 
-| PRT 行 | 所属路线 | 保留理由 | 消费者 |
-|---|---|---|---|
-| `fused reuse wall seconds` | reuse-range | 描述底层跨频 fused 实现的 solver wall | benchmark `parse_prt_metrics`（wall 字段按路线映射）、[REFERENCE_FEATURE_SUPPORT_MATRIX](../reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md) IGR-3A A08 节的 serial/range PRT wall-seconds 差异描述（该文件不含这些行名的逐字引用）、本指南诊断说明 |
-| `parallel reuse wall seconds` | reuse-frequency | 同上（frequency-parallel 实现） | 同上 |
-| `non-reuse wall seconds` / `reuse wall seconds` | nonreuse / reuse-serial | 历史 solver wall 行名 | benchmark wall 映射、历史报告引用 |
-| `single-frequency non-reuse` / `single-frequency reuse` | 单频 ARR/E 路线行前缀 | 单频产品的历史行措辞 | 当前无代码消费者（生产者事实：`app/main.cpp` 的 `writeProductExecutionMode`；runner 的 marker 校验只覆盖 broadband 路线标记） |
+四条路线的 solver wall 统一输出单一行名：
 
-规范路线身份以两层新标签为准（`execution mode = broadband reuse` +
-`reuse mode = …`、`requested/effective reuse worker count`）；上表 legacy 行
-仅是 wall/前缀措辞。任何新增 PRT 解析方必须按路线映射 wall 字段，而不是
-按字符串全局匹配 "reuse wall"。
+```text
+Solver wall seconds = ...
+```
+
+不再按路线区分 wall 行名（v3 及以前的 `non-reuse wall seconds` /
+`reuse wall seconds` / `parallel reuse wall seconds` /
+`fused reuse wall seconds` 已随 BB-M1-R1 退役，只存在于历史 PRT 文件中）。
+任何新增 PRT 解析方应先读两层路线行再取 `Solver wall seconds`，不要按
+wall 行名反推路线。
+
+runtime 统计行保留 `requested reuse worker count` /
+`effective reuse worker count`，由各路线分别回显其 frequency/range worker
+请求与生效值。
 
 报告默认写入 `Bellhop_RayReuse/build/benchmarks/`，该目录属于可再生成构建
 产物，不进入 Git。需要归档时应将 JSON 连同对应提交或发布附件一起保存。

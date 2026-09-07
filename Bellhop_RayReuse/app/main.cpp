@@ -255,7 +255,7 @@ void removeProductArtifactsNoThrow(const std::string& fileRoot) noexcept {
 void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
                             const rayreuse::CommandLineOptions& options) {
   const rayreuse::SimulationRunMode mode = parsed.simulationCase.runMode();
-  const bool unsupportedParallelTuning =
+  const bool unsupportedFrequencyReuseTuning =
       options.outputQueueCapacitySpecified || options.memoryBudgetSpecified;
   if (mode == rayreuse::SimulationRunMode::RayTrace) {
     if (parsed.simulationCase.frequencies().size() != 1U) {
@@ -267,9 +267,9 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
           "--execution-mode reuse is not defined for R products");
     }
     if (options.profileInfluence || options.profileFrequencyTasks ||
-        unsupportedParallelTuning) {
+        unsupportedFrequencyReuseTuning) {
       throw rayreuse::ValidationError(
-          "profiling and parallel tuning options are only supported for TL");
+          "profiling and frequency reuse tuning options are only supported for TL");
     }
     return;
   }
@@ -282,7 +282,7 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
   if (rayreuse::isTransmissionLossMode(mode) &&
       options.executionMode == rayreuse::ExecutionMode::Reuse &&
       options.reuseMode == rayreuse::ReuseMode::Range) {
-    // Range-parallel reuse TL covers every run mode of the Cerveny family in
+    // Range Reuse TL covers every run mode of the Cerveny family in
     // both coordinate systems (coherent, incoherent, semi-coherent; IGR-3A
     // A02b/A03 design §9), of the geometric hat family in both coordinate
     // systems since A04, of the Cartesian geometric Gaussian family since
@@ -322,9 +322,9 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
   if (mode == rayreuse::SimulationRunMode::AsciiArrivals ||
       mode == rayreuse::SimulationRunMode::BinaryArrivals) {
     if (options.profileInfluence || options.profileFrequencyTasks ||
-        unsupportedParallelTuning) {
+        unsupportedFrequencyReuseTuning) {
       throw rayreuse::ValidationError(
-          "Influence profiling and parallel tuning options are not supported "
+          "Influence profiling and frequency reuse tuning options are not supported "
           "for arrival/eigenray products");
     }
     if (options.executionMode == rayreuse::ExecutionMode::Reuse &&
@@ -350,9 +350,9 @@ void validateProductOptions(const rayreuse::ParsedEnvironment& parsed,
   }
   if (mode == rayreuse::SimulationRunMode::Eigenray) {
     if (options.profileInfluence || options.profileFrequencyTasks ||
-        unsupportedParallelTuning) {
+        unsupportedFrequencyReuseTuning) {
       throw rayreuse::ValidationError(
-          "Influence profiling and parallel tuning options are not supported "
+          "Influence profiling and frequency reuse tuning options are not supported "
           "for arrival/eigenray products");
     }
     if (options.executionMode == rayreuse::ExecutionMode::Reuse &&
@@ -945,12 +945,12 @@ int main(int argumentCount, char* arguments[]) {
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
       } else if (options.reuseMode == rayreuse::ReuseMode::Frequency) {
-        statistics = rayreuse::ArrivalSolver::solveParallel(
+        statistics = rayreuse::ArrivalSolver::solveFrequency(
             parsed.simulationCase, consumer, options.reuseWorkerCount,
             options.verifyCache, traceSettings);
       } else {
         // ReuseMode::Range: multi-frequency arrivals streamed through the
-        // range-parallel reuse solver, one source at a time.
+        // Range Reuse solver, one source at a time.
         std::vector<std::filesystem::path> outputPaths;
         outputPaths.reserve(parsed.simulationCase.frequencies().size());
         for (std::size_t frequencyIndex = 0U;
@@ -1107,7 +1107,7 @@ int main(int argumentCount, char* arguments[]) {
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
       } else if (options.reuseMode == rayreuse::ReuseMode::Frequency) {
-        statistics = rayreuse::EigenraySolver::solveParallel(
+        statistics = rayreuse::EigenraySolver::solveFrequency(
             parsed.simulationCase, consumer, options.reuseWorkerCount,
             options.verifyCache, traceSettings);
       } else {
@@ -1222,7 +1222,7 @@ int main(int argumentCount, char* arguments[]) {
                << result.statistics.phaseTotals.influenceSeconds << '\n'
                << "Scale seconds = "
                << result.statistics.phaseTotals.scaleSeconds << '\n'
-               << "non-reuse wall seconds = " << result.statistics.wallSeconds
+               << "Solver wall seconds = " << result.statistics.wallSeconds
                << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
       if (options.profileInfluence) {
@@ -1297,7 +1297,7 @@ int main(int argumentCount, char* arguments[]) {
                << statistics.phaseTotals.influenceSeconds << '\n'
                << "Scale seconds = " << statistics.phaseTotals.scaleSeconds
                << '\n'
-               << "reuse wall seconds = " << statistics.wallSeconds << '\n'
+               << "Solver wall seconds = " << statistics.wallSeconds << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
       if (options.traceWorkerCountSpecified) {
         for (std::size_t sourceIndex = 0U;
@@ -1381,7 +1381,7 @@ int main(int argumentCount, char* arguments[]) {
                << statistics.phaseTotals.influenceSeconds << '\n'
                << "Scale seconds = " << statistics.phaseTotals.scaleSeconds
                << '\n'
-               << "fused reuse wall seconds = " << statistics.wallSeconds
+               << "Solver wall seconds = " << statistics.wallSeconds
                << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
       if (statistics.cacheFingerprintVerified) {
@@ -1409,7 +1409,7 @@ int main(int argumentCount, char* arguments[]) {
                                 false);
       }
     } else {
-      // ReuseMode::Frequency: frequency-parallel reuse TL.
+      // ReuseMode::Frequency: Frequency Reuse TL.
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       rayreuse::ShdFrequencyWriter writer(shadePath, parsed.title,
@@ -1474,7 +1474,7 @@ int main(int argumentCount, char* arguments[]) {
                << statistics.phaseTotals.influenceSeconds << '\n'
                << "Scale seconds = " << statistics.phaseTotals.scaleSeconds
                << '\n'
-               << "parallel reuse wall seconds = " << statistics.wallSeconds
+               << "Solver wall seconds = " << statistics.wallSeconds
                << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
       if (statistics.cacheFingerprintVerified) {

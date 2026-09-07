@@ -23,7 +23,7 @@ struct ReuseFreqParaSettings {
 
 struct ReuseFreqParaStatistics {
   // Frozen semantics (Worklist FP-2F §1.5): per-source fan trace count
-  // (NSz for parallel reuse; NSz == 1 keeps the legacy value 1).
+  // (NSz for Frequency Reuse; NSz == 1 keeps the legacy value 1).
   std::size_t tracePassCount{};
   std::size_t rayCount{};
   std::size_t totalRayPointCount{};

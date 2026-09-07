@@ -116,7 +116,7 @@ cp demo/cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env \
   demo/results/rayreuse_multifrequency/
 cd demo/results/rayreuse_multifrequency
 ../../../Bellhop_RayReuse/build/release/bellhop_broadband \
-  munk_rayreuse_multifrequency --execution-mode reuse
+  munk_rayreuse_multifrequency --execution-mode reuse --reuse-mode serial
 ```
 
 输出分类：

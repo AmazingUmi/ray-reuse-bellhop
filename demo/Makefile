@@ -3,7 +3,8 @@ ENV ?= cases/reliability/munk_cerveny_cc.env
 VERSIONS ?= origin,f2cpp,rayreuse
 DPI ?= 180
 MULTI_ENV ?= cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env
-MULTI_MODE ?= reuse
+MULTI_EXECUTION_MODE ?= reuse
+MULTI_REUSE_MODE ?= serial
 MULTI_INDEXES ?= 0,2,4
 
 CLI := $(PYTHON) codes/reliability.py
@@ -47,12 +48,12 @@ all:
 
 rayreuse-multifrequency:
 	$(PLOT_ENV) $(MULTI_CLI) show \
-		--environment "$(MULTI_ENV)" --execution-mode "$(MULTI_MODE)" \
+		--environment "$(MULTI_ENV)" --execution-mode "$(MULTI_EXECUTION_MODE)" $(if $(filter reuse,$(MULTI_EXECUTION_MODE)),--reuse-mode "$(MULTI_REUSE_MODE)") \
 		--plot-indexes "$(MULTI_INDEXES)" --dpi "$(DPI)"
 
 multifrequency-run:
 	$(MULTI_CLI) run \
-		--environment "$(MULTI_ENV)" --execution-mode "$(MULTI_MODE)"
+		--environment "$(MULTI_ENV)" --execution-mode "$(MULTI_EXECUTION_MODE)" $(if $(filter reuse,$(MULTI_EXECUTION_MODE)),--reuse-mode "$(MULTI_REUSE_MODE)")
 
 multifrequency-plot:
 	$(PLOT_ENV) $(MULTI_CLI) plot \

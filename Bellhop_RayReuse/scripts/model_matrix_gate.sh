@@ -13,11 +13,13 @@ fi
 python_command=("${python_executable}")
 
 profiles="${RAYREUSE_MATRIX_PROFILES:-single,broadband_smoke}"
-modes="${RAYREUSE_MATRIX_MODES:-nonreuse,reuse,parallel}"
+execution_modes="${RAYREUSE_MATRIX_EXECUTION_MODES:-nonreuse,reuse}"
+reuse_modes="${RAYREUSE_MATRIX_REUSE_MODES:-serial,frequency}"
 
 cd "${repository_root}"
 "${python_command[@]}" test/standard_cases/codes/model_matrix.py \
   --profiles "${profiles}" \
-  --modes "${modes}"
+  --execution-modes "${execution_modes}" \
+  --reuse-modes "${reuse_modes}"
 
 echo "Bellhop three-model matrix gate passed"

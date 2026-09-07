@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 import json
 from pathlib import Path
 import sys
@@ -12,6 +13,8 @@ sys.path.insert(0, str(CODES_ROOT))
 
 from benchmark_rayreuse import (
     BenchmarkConfiguration,
+    SCHEMA_VERSION,
+    _sample_command,
     add_speedups_vs_nonreuse,
     build_parser,
     expand_configurations,
@@ -27,36 +30,19 @@ from benchmark_rayreuse import (
 )
 
 
-def fixture_prt(mode: str = "reuse-frequency") -> str:
-    # Two-layer PRT markers (BB-1 A03): reuse routes share the "broadband
-    # reuse" execution-mode line and add a dedicated reuse-mode line.
-    execution_marker = {
-        "nonreuse": "broadband nonreuse",
-        "reuse-serial": "broadband reuse",
-        "reuse-frequency": "broadband reuse",
-        "reuse-range": "broadband reuse",
-    }[mode]
-    reuse_mode_line = {
-        "nonreuse": None,
-        "reuse-serial": "reuse mode = serial",
-        "reuse-frequency": "reuse mode = frequency",
-        "reuse-range": "reuse mode = range",
-    }[mode]
-    wall_name = {
-        "nonreuse": "non-reuse wall seconds",
-        "reuse-serial": "reuse wall seconds",
-        "reuse-frequency": "parallel reuse wall seconds",
-        "reuse-range": "fused reuse wall seconds",
-    }[mode]
+def fixture_prt(execution_mode: str = "reuse", reuse_mode: str | None = "frequency") -> str:
+    execution_marker = f"broadband {execution_mode}"
+    reuse_mode_line = None if reuse_mode is None else f"reuse mode = {reuse_mode}"
+    wall_name = "Solver wall seconds"
     mode_fields = ()
-    if mode == "reuse-range":
+    if reuse_mode == "range":
         mode_fields = (
             "requested reuse worker count = 1",
             "effective reuse worker count = 1",
         )
     frequency_fields = (
         ("requested reuse worker count = 8",)
-        if mode == "reuse-frequency"
+        if reuse_mode == "frequency"
         else ()
     )
     return "\n".join(
@@ -110,7 +96,7 @@ def sample(
 
 class PrtParsingTests(unittest.TestCase):
     def test_parses_required_phases_and_frequency_route_statistics(self) -> None:
-        metrics = parse_prt_metrics(fixture_prt(), "reuse-frequency")
+        metrics = parse_prt_metrics(fixture_prt(), "reuse", "frequency")
 
         self.assertEqual(metrics["trace_passes"], 1)
         self.assertEqual(metrics["trace_seconds"], 1.25)
@@ -126,25 +112,25 @@ class PrtParsingTests(unittest.TestCase):
         self.assertTrue(metrics["completed_successfully"])
 
     def test_parses_and_validates_range_route(self) -> None:
-        configuration = BenchmarkConfiguration(execution_mode="reuse-range")
-        metrics = parse_prt_metrics(fixture_prt("reuse-range"), "reuse-range")
+        configuration = BenchmarkConfiguration(execution_mode="reuse", reuse_mode="range", reuse_workers=1)
+        metrics = parse_prt_metrics(fixture_prt("reuse", "range"), "reuse", "range")
 
         self.assertEqual(metrics["execution_mode_marker"], "broadband reuse")
         self.assertEqual(metrics["reuse_mode_marker"], "range")
-        self.assertEqual(metrics["solver_wall_field"], "fused reuse wall seconds")
+        self.assertEqual(metrics["solver_wall_field"], "Solver wall seconds")
         self.assertEqual(metrics["ray_count"], 1000)
         self.assertEqual(metrics["ray_cache_bytes"], 4096)
 
         validate_prt_metrics(metrics, configuration, 16)
 
         with self.assertRaisesRegex(ValueError, "does not match"):
-            parse_prt_metrics(fixture_prt("reuse-serial"), "reuse-range")
+            parse_prt_metrics(fixture_prt("reuse", "serial"), "reuse", "range")
 
         range_configuration = BenchmarkConfiguration(
-            execution_mode="reuse-range", fused_range_workers=8
+            execution_mode="reuse", reuse_mode="range", reuse_workers=8
         )
         range_metrics = parse_prt_metrics(
-            fixture_prt("reuse-range")
+            fixture_prt("reuse", "range")
             .replace(
                 "requested reuse worker count = 1",
                 "requested reuse worker count = 8",
@@ -153,7 +139,7 @@ class PrtParsingTests(unittest.TestCase):
                 "effective reuse worker count = 1",
                 "effective reuse worker count = 8",
             ),
-            "reuse-range",
+            "reuse", "range",
         )
         validate_prt_metrics(range_metrics, range_configuration, 16)
 
@@ -177,7 +163,7 @@ class PrtParsingTests(unittest.TestCase):
             )
         )
         metrics = parse_prt_metrics(
-            fixture_prt("reuse-serial") + "\n" + counter_lines, "reuse-serial"
+            fixture_prt("reuse", "serial") + "\n" + counter_lines, "reuse", "serial"
         )
 
         self.assertEqual(
@@ -203,24 +189,24 @@ class PrtParsingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "is not an integer"):
             parse_prt_metrics(
                 (
-                    fixture_prt("reuse-serial")
+                    fixture_prt("reuse", "serial")
                     + "\n"
                     + counter_lines
                 ).replace(
                     "Influence ray accumulations = 10000",
                     "Influence ray accumulations = many",
                 ),
-                "reuse-serial",
+                "reuse", "serial",
             )
 
     def test_validates_frequency_route_protocol_invariants(self) -> None:
         configuration = BenchmarkConfiguration(
-            execution_mode="reuse-frequency",
-            parallel_workers=8,
+            execution_mode="reuse", reuse_mode="frequency",
+            reuse_workers=8,
             output_queue_capacity=2,
             memory_budget_mib=None,
         )
-        metrics = parse_prt_metrics(fixture_prt(), "reuse-frequency")
+        metrics = parse_prt_metrics(fixture_prt(), "reuse", "frequency")
 
         validate_prt_metrics(metrics, configuration, 10)
 
@@ -252,11 +238,11 @@ class PrtParsingTests(unittest.TestCase):
             )
             + "\n"
             + task_lines,
-            "reuse-frequency",
+            "reuse", "frequency",
         )
         configuration = BenchmarkConfiguration(
-            execution_mode="reuse-frequency",
-            parallel_workers=8,
+            execution_mode="reuse", reuse_mode="frequency",
+            reuse_workers=8,
             output_queue_capacity=2,
             memory_budget_mib=None,
         )
@@ -274,8 +260,8 @@ class PrtParsingTests(unittest.TestCase):
 
     def test_rejects_missing_completion_and_wrong_trace_count(self) -> None:
         configuration = BenchmarkConfiguration(
-            execution_mode="reuse-frequency",
-            parallel_workers=8,
+            execution_mode="reuse", reuse_mode="frequency",
+            reuse_workers=8,
             output_queue_capacity=2,
             memory_budget_mib=None,
         )
@@ -283,14 +269,14 @@ class PrtParsingTests(unittest.TestCase):
             fixture_prt().replace(
                 "\nBellhop Broadband completed successfully", ""
             ),
-            "reuse-frequency",
+            "reuse", "frequency",
         )
         with self.assertRaisesRegex(ValueError, "completion"):
             validate_prt_metrics(missing_completion, configuration, 10)
 
         wrong_trace_count = parse_prt_metrics(
             fixture_prt().replace("Trace passes = 1", "Trace passes = 2"),
-            "reuse-frequency",
+            "reuse", "frequency",
         )
         with self.assertRaisesRegex(ValueError, "trace passes"):
             validate_prt_metrics(wrong_trace_count, configuration, 10)
@@ -301,11 +287,11 @@ class PrtParsingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing PRT"):
             parse_prt_metrics(
                 fixture_prt().replace("Trace seconds = 1.25\n", ""),
-                "reuse-frequency",
+                "reuse", "frequency",
             )
         with self.assertRaisesRegex(ValueError, "duplicate PRT"):
             parse_prt_metrics(
-                fixture_prt() + "\nTrace seconds = 2.0\n", "reuse-frequency"
+                fixture_prt() + "\nTrace seconds = 2.0\n", "reuse", "frequency"
             )
         with self.assertRaisesRegex(ValueError, "finite"):
             parse_prt_metrics(
@@ -313,16 +299,16 @@ class PrtParsingTests(unittest.TestCase):
                     "Influence seconds = 3.75",
                     "Influence seconds = nan",
                 ),
-                "reuse-frequency",
+                "reuse", "frequency",
             )
         with self.assertRaisesRegex(ValueError, "does not match"):
-            parse_prt_metrics(fixture_prt("reuse-serial"), "reuse-frequency")
+            parse_prt_metrics(fixture_prt("reuse", "serial"), "reuse", "frequency")
         with self.assertRaisesRegex(ValueError, "does not match"):
             parse_prt_metrics(
-                fixture_prt("reuse-frequency").replace(
+                fixture_prt("reuse", "frequency").replace(
                     "reuse mode = frequency", "reuse mode = range"
                 ),
-                "reuse-frequency",
+                "reuse", "frequency",
             )
 
 
@@ -344,58 +330,54 @@ class RssNormalizationTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
-    def test_expands_workers_only_for_frequency_route(self) -> None:
+    def test_expands_shared_workers_for_frequency_and_range_routes(self) -> None:
         configurations = expand_configurations(
-            ("nonreuse", "reuse-serial", "reuse-range", "reuse-frequency"),
-            (4, 8),
-            2,
-            447,
+            ("nonreuse", "reuse"), ("serial", "range", "frequency"),
+            (4, 8), 2, 447,
         )
-
         self.assertEqual(
             [configuration.identifier for configuration in configurations],
-            (
-                [
-                    "nonreuse",
-                    "reuse-serial",
-                    "reuse-range-w1",
-                    "reuse-frequency-w4-q2-m447MiB",
-                    "reuse-frequency-w8-q2-m447MiB",
-                ]
-            ),
+            ["nonreuse", "reuse-serial", "reuse-range-w4", "reuse-range-w8",
+             "reuse-frequency-w4-q2-m447MiB", "reuse-frequency-w8-q2-m447MiB"],
         )
-        self.assertIsNone(configurations[0].parallel_workers)
-        self.assertEqual(configurations[-1].parallel_workers, 8)
+        self.assertIsNone(configurations[0].reuse_workers)
+        self.assertIsNone(configurations[1].reuse_workers)
+        self.assertEqual(configurations[-1].reuse_workers, 8)
         self.assertEqual(configurations[-1].memory_budget_mib, 447)
+        self.assertIsNone(configurations[2].memory_budget_mib)
+        self.assertEqual(SCHEMA_VERSION, 4)
+        for configuration in configurations:
+            record = asdict(configuration)
+            self.assertIn(record["execution_mode"], ("nonreuse", "reuse"))
+            self.assertIn("reuse_mode", record)
+            self.assertIn("reuse_workers", record)
 
-    def test_expands_range_workers_independently(self) -> None:
+    def test_preserves_default_worker_requests(self) -> None:
         configurations = expand_configurations(
-            ("reuse-range",), (8,), 2, None, (1, 2, 4, 8)
+            ("reuse",), ("frequency", "range"), None, 2, None,
         )
-
-        self.assertEqual(
-            [configuration.identifier for configuration in configurations],
-            [
-                "reuse-range-w1",
-                "reuse-range-w2",
-                "reuse-range-w4",
-                "reuse-range-w8",
-            ],
-        )
-        self.assertEqual(
-            [configuration.fused_range_workers for configuration in configurations],
-            [1, 2, 4, 8],
-        )
+        self.assertEqual([c.reuse_workers for c in configurations], [8, 1])
+        for configuration in configurations:
+            command = _sample_command(Path("/tmp/bellhop_broadband"), "case", (50, 250), configuration)
+            self.assertEqual(command[command.index("--execution-mode") + 1], "reuse")
+            self.assertEqual(command[command.index("--reuse-mode") + 1], configuration.reuse_mode)
+            self.assertEqual(command[command.index("--reuse-workers") + 1], str(configuration.reuse_workers))
 
     def test_rejects_invalid_configuration_inputs(self) -> None:
         with self.assertRaisesRegex(ValueError, "queue"):
-            expand_configurations(("reuse-frequency",), (8,), 3, None)
+            expand_configurations(("reuse",), ("frequency",), (8,), 3, None)
         with self.assertRaisesRegex(ValueError, "worker"):
-            expand_configurations(("reuse-frequency",), (), 2, None)
+            expand_configurations(("reuse",), ("frequency",), (), 2, None)
         with self.assertRaisesRegex(ValueError, "unknown"):
-            expand_configurations(("invalid",), (8,), 2, None)
-        with self.assertRaisesRegex(ValueError, "require the reuse-range"):
-            expand_configurations(("reuse-serial",), (8,), 2, None, (4,))
+            expand_configurations(("invalid",), (), (8,), 2, None)
+        with self.assertRaisesRegex(ValueError, "require"):
+            expand_configurations(("reuse",), ("serial",), (4,), 2, None)
+        with self.assertRaisesRegex(ValueError, "nonreuse"):
+            BenchmarkConfiguration("nonreuse", "range", 4)
+        with self.assertRaisesRegex(ValueError, "Serial"):
+            BenchmarkConfiguration("reuse", "serial", 4)
+        with self.assertRaisesRegex(ValueError, "positive"):
+            BenchmarkConfiguration("reuse", "range")
 
 
 class FrequencyOverrideTests(unittest.TestCase):
@@ -439,7 +421,7 @@ class SummaryAndHashTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not byte-identical"):
             require_identical_sample_hashes(
                 [sample("a" * 64), sample("b" * 64)],
-                "parallel-w8",
+                "reuse-frequency-w8",
             )
 
     def test_rejects_hash_mismatch_across_configurations(self) -> None:
@@ -463,7 +445,7 @@ class SummaryAndHashTests(unittest.TestCase):
                 "summary": {"real_seconds": {"median": 12.0}},
             },
             {
-                "configuration": {"execution_mode": "reuse-serial"},
+                "configuration": {"execution_mode": "reuse", "reuse_mode": "serial"},
                 "summary": {"real_seconds": {"median": 3.0}},
             },
         ]
@@ -518,16 +500,16 @@ class CliValidationTests(unittest.TestCase):
                 "broadband_stress",
                 "--frequencies-csv",
                 "50,250",
-                "--modes",
-                "nonreuse,reuse-serial,reuse-frequency,reuse-range",
+                "--execution-modes",
+                "nonreuse,reuse",
+                "--reuse-modes",
+                "serial,frequency,range",
                 "--repeats",
                 "5",
                 "--warmups",
                 "2",
-                "--parallel-workers",
+                "--reuse-workers",
                 "4,8",
-                "--fused-range-workers",
-                "1,2,4,8",
                 "--queue",
                 "1",
                 "--memory-budget-mib",
@@ -546,12 +528,12 @@ class CliValidationTests(unittest.TestCase):
 
         self.assertEqual(args.cases, ["constant_speed_direct"])
         self.assertEqual(
-            args.modes,
-            ("nonreuse", "reuse-serial", "reuse-frequency", "reuse-range"),
+            args.execution_modes,
+            ("nonreuse", "reuse"),
         )
         self.assertEqual(args.frequencies_csv, (50.0, 250.0))
-        self.assertEqual(args.parallel_workers, (4, 8))
-        self.assertEqual(args.fused_range_workers, (1, 2, 4, 8))
+        self.assertEqual(args.reuse_workers, (4, 8))
+        self.assertEqual(args.reuse_modes, ("serial", "frequency", "range"))
         self.assertEqual(args.repeats, 5)
         self.assertEqual(args.warmups, 2)
         self.assertEqual(args.output_queue_capacity, 1)
@@ -569,13 +551,13 @@ class CliValidationTests(unittest.TestCase):
             (
                 "--case",
                 "constant_speed_direct",
-                "--modes",
-                "reuse-serial,unknown",
+                "--execution-modes",
+                "reuse,unknown",
             ),
             (
                 "--case",
                 "constant_speed_direct",
-                "--parallel-workers",
+                "--reuse-workers",
                 "8,0",
             ),
         )

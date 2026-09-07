@@ -33,7 +33,7 @@ ReuseSerialStatistics ReuseSerialSolver::solveStreaming(
     RayFanTraceSettings traceSettings) {
   if (!consumer) {
     throw ValidationError(
-        "serial ray-reuse frequency consumer must be callable");
+        "Serial Reuse frequency consumer must be callable");
   }
 
   ReuseSerialStatistics statistics;
@@ -96,7 +96,7 @@ ReuseSerialStatistics ReuseSerialSolver::solveStreaming(
         statistics.sourceCacheFingerprintsAfter.front();
     if (statistics.sourceCacheFingerprintsAfter !=
         statistics.sourceCacheFingerprintsBefore) {
-      throw ValidationError("serial ray-reuse modified the frozen ray cache");
+      throw ValidationError("Serial Reuse modified the frozen ray cache");
     }
   }
   statistics.wallSeconds = elapsedSeconds(wallBegin, Clock::now());

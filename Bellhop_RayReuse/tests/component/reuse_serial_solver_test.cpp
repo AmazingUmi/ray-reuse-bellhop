@@ -317,9 +317,9 @@ int main() {
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " serial-ray-reuse-solver assertion(s) failed\n";
+              << " reuse-serial-solver assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse serial-ray-reuse-solver tests passed\n";
+  std::cout << "All Bellhop RayReuse reuse-serial-solver tests passed\n";
   return 0;
 }

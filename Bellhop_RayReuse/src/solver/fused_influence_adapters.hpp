@@ -35,7 +35,7 @@ namespace rayreuse {
 // Cartesian Cerveny adapter (design §4). makeKernel mirrors the
 // single-frequency CC construction verbatim
 // (single_frequency_solver.cpp:264-266); preparePerRay is the epsilon loop
-// of the fused solver body (reuse_range_para_solver.cpp:223-231);
+// of the Range Reuse solver body (reuse_range_para_solver.cpp:223-231);
 // accumulateFused forwards to the unchanged private fused kernel entry;
 // scaleFrequency reproduces the coherent Cerveny branch of the legacy
 // post-scale selector (single_frequency_solver.cpp:377-379). The intensity

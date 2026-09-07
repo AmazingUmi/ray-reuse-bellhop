@@ -280,7 +280,7 @@ void checkDivergentPrefixes(Context& context,
     ++rayIndex;
   }
   static_cast<void>(rayIndex);
-  std::cout << "fused-cc-intensity-parity " << label
+  std::cout << "range-cc-intensity-parity " << label
             << ": rays=" << cache.size() << " divergent-prefix rays="
             << divergentRays << " cutoff-truncated rays=" << truncatedRays
             << '\n';
@@ -461,7 +461,7 @@ void testIntensityParityLevels(Context& context,
   context.check(
       callbackOrder.size() == frequencies.size() &&
           std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
-      std::string(label) + " Level C fused consumer visits every frequency "
+      std::string(label) + " Level C Range Reuse consumer visits every frequency "
                            "in index order");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
@@ -489,7 +489,7 @@ void testIntensityParityLevels(Context& context,
               fusedStatistics.cacheFingerprintAfter &&
           fusedStatistics.cacheFingerprintBefore ==
               serial.statistics.cacheFingerprintBefore,
-      std::string(label) + " Level A fused cache fingerprint is stable and "
+      std::string(label) + " Level A Range Reuse cache fingerprint is stable and "
                            "matches serial reuse");
 }
 
@@ -566,9 +566,9 @@ int main() {
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " fused-cc-intensity-parity assertion(s) failed\n";
+              << " range-cc-intensity-parity assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse fused-cc-intensity-parity tests passed\n";
+  std::cout << "All Bellhop RayReuse range-cc-intensity-parity tests passed\n";
   return 0;
 }

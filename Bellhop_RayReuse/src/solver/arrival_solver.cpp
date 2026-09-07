@@ -341,7 +341,7 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
   return stats;
 }
 
-ArrivalSolverStatistics ArrivalSolver::solveParallel(
+ArrivalSolverStatistics ArrivalSolver::solveFrequency(
     const SimulationCase& simulation,
     const FrozenFrequencyArrivalConsumer& consumer, std::size_t workerCount,
     bool verifyCache, RayFanTraceSettings traceSettings) {
@@ -425,7 +425,7 @@ ArrivalSolverStatistics ArrivalSolver::solveParallel(
   }
   if (verifyCache) {
     verifySourceFingerprints(caches, fingerprintsBefore,
-                             "parallel arrival projection modified the frozen "
+                             "Frequency Reuse arrival projection modified the frozen "
                              "ray cache");
     stats.sourceCacheFingerprintsAfter = fingerprintsBefore;
     stats.cacheFingerprintAfter = fingerprintsBefore.front();

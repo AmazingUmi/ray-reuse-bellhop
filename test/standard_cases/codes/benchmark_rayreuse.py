@@ -39,24 +39,11 @@ DEFAULT_OUTPUT = (
     / "benchmarks"
     / "rayreuse_benchmark.json"
 )
-# Two-layer execution model (BB-1 A03): complete route names mapping to the
-# executable's explicit two-layer CLI (legacy reuse/parallel/fused values are
-# gone). The reuse-frequency route replaces legacy parallel (frequency
-# workers); the reuse-range route replaces legacy fused (range workers).
-EXECUTION_MODES = (
-    "nonreuse",
-    "reuse-serial",
-    "reuse-frequency",
-    "reuse-range",
-)
-# v3 (BB-M1): two-layer route vocabulary — execution_mode values
-# nonreuse/reuse-serial/reuse-frequency/reuse-range, identifiers
-# reuse-frequency-w*-q*-m* / reuse-range-w*, and PRT metric fields
-# "requested/effective reuse worker count". v2 reports (pre-BB-M1) carry the
-# legacy reuse/parallel/fused vocabulary and are not mixable with v3.
-# Configuration field names (parallel_workers/fused_range_workers) and the
-# CLI flag names are intentionally retained as the reuse-worker axes.
-SCHEMA_VERSION = 3
+EXECUTION_MODES = ("nonreuse", "reuse")
+REUSE_MODES = ("serial", "frequency", "range")
+# v4 separates execution/reuse modes and unifies the requested worker axis.
+# Historical v2/v3 reports are preserved and are not read by this writer.
+SCHEMA_VERSION = 4
 
 sys.path.insert(0, str(CODES_ROOT))
 
@@ -73,34 +60,42 @@ from standard_cases import (
 @dataclass(frozen=True)
 class BenchmarkConfiguration:
     execution_mode: str
-    # Frequency-route workers (legacy `parallel` axis).
-    parallel_workers: int | None = None
-    # Range-route workers (legacy `fused` axis); None means the explicit
-    # single-worker request (BB-1 frozen mapping: bare legacy fused == range
-    # with one explicitly requested reuse worker).
-    fused_range_workers: int | None = None
+    reuse_mode: str | None = None
+    reuse_workers: int | None = None
     output_queue_capacity: int | None = None
     memory_budget_mib: int | None = None
 
+    def __post_init__(self) -> None:
+        if self.execution_mode not in EXECUTION_MODES:
+            raise ValueError(f"unknown execution mode: {self.execution_mode}")
+        if self.execution_mode == "nonreuse":
+            if self.reuse_mode is not None or self.reuse_workers is not None:
+                raise ValueError("nonreuse does not accept reuse mode/workers")
+        elif self.reuse_mode not in REUSE_MODES:
+            raise ValueError(f"unknown reuse mode: {self.reuse_mode}")
+        elif self.reuse_mode == "serial":
+            if self.reuse_workers is not None:
+                raise ValueError("Serial Reuse does not accept reuse workers")
+        elif self.reuse_workers is None or self.reuse_workers <= 0:
+            raise ValueError("Frequency/Range Reuse require positive reuse workers")
+
     @property
     def identifier(self) -> str:
-        if self.execution_mode == "reuse-range":
-            return f"reuse-range-w{self.fused_range_workers or 1}"
-        if self.execution_mode != "reuse-frequency":
-            return self.execution_mode
+        if self.execution_mode == "nonreuse":
+            return "nonreuse"
+        if self.reuse_mode == "serial":
+            return "reuse-serial"
+        if self.reuse_mode == "range":
+            return f"reuse-range-w{self.reuse_workers}"
         memory = (
             "unlimited"
             if self.memory_budget_mib is None
             else f"{self.memory_budget_mib}MiB"
         )
         return (
-            f"reuse-frequency-w{self.parallel_workers}"
+            f"reuse-frequency-w{self.reuse_workers}"
             f"-q{self.output_queue_capacity}-m{memory}"
         )
-
-    @property
-    def requested_range_workers(self) -> int:
-        return self.fused_range_workers or 1
 
 
 def positive_integer(value: str) -> int:
@@ -131,18 +126,26 @@ def nonnegative_integer(value: str) -> int:
     return parsed
 
 
-def parse_modes(value: str) -> tuple[str, ...]:
+def _parse_modes(value: str, allowed: Sequence[str], layer: str) -> tuple[str, ...]:
     modes = tuple(part.strip() for part in value.split(",") if part.strip())
     if not modes:
-        raise argparse.ArgumentTypeError("at least one mode is required")
-    unknown = tuple(mode for mode in modes if mode not in EXECUTION_MODES)
+        raise argparse.ArgumentTypeError(f"at least one {layer} mode is required")
+    unknown = tuple(mode for mode in modes if mode not in allowed)
     if unknown:
         raise argparse.ArgumentTypeError(
-            f"unknown execution mode(s): {', '.join(unknown)}"
+            f"unknown {layer} mode(s): {', '.join(unknown)}"
         )
     if len(set(modes)) != len(modes):
-        raise argparse.ArgumentTypeError("execution modes must be unique")
+        raise argparse.ArgumentTypeError(f"{layer} modes must be unique")
     return modes
+
+
+def parse_execution_modes(value: str) -> tuple[str, ...]:
+    return _parse_modes(value, EXECUTION_MODES, "execution")
+
+
+def parse_reuse_modes(value: str) -> tuple[str, ...]:
+    return _parse_modes(value, REUSE_MODES, "reuse")
 
 
 def parse_positive_integer_csv(value: str) -> tuple[int, ...]:
@@ -154,7 +157,7 @@ def parse_positive_integer_csv(value: str) -> tuple[int, ...]:
     values = tuple(positive_integer(part) for part in parts)
     if len(set(values)) != len(values):
         raise argparse.ArgumentTypeError(
-            "reuse-frequency worker counts must be unique"
+            "reuse worker counts must be unique"
         )
     return values
 
@@ -193,62 +196,63 @@ def parse_frequency_csv(value: str) -> tuple[float, ...]:
 
 
 def expand_configurations(
-    modes: Sequence[str],
-    parallel_workers: Sequence[int],
+    execution_modes: Sequence[str],
+    reuse_modes: Sequence[str],
+    reuse_workers: Sequence[int] | None,
     output_queue_capacity: int,
     memory_budget_mib: int | None,
-    fused_range_workers: Sequence[int] = (),
 ) -> tuple[BenchmarkConfiguration, ...]:
-    if not modes:
+    if not execution_modes:
         raise ValueError("at least one execution mode is required")
     if output_queue_capacity not in (1, 2):
         raise ValueError("output queue capacity must be 1 or 2")
     if memory_budget_mib is not None and memory_budget_mib <= 0:
         raise ValueError("memory budget must be positive")
-    if fused_range_workers and "reuse-range" not in modes:
-        raise ValueError(
-            "range worker counts require the reuse-range execution mode"
-        )
-    if any(worker_count <= 0 for worker_count in fused_range_workers):
-        raise ValueError("range worker counts must be positive")
+    for modes, allowed, layer in (
+        (execution_modes, EXECUTION_MODES, "execution"),
+        (reuse_modes, REUSE_MODES, "reuse"),
+    ):
+        if len(set(modes)) != len(modes):
+            raise ValueError(f"duplicate {layer} mode")
+        if any(mode not in allowed for mode in modes):
+            raise ValueError(f"unknown {layer} mode")
+    if "reuse" in execution_modes and not reuse_modes:
+        raise ValueError("at least one reuse mode is required")
+    if reuse_workers is not None:
+        if not reuse_workers or any(count <= 0 for count in reuse_workers):
+            raise ValueError("reuse worker counts must be positive")
+        if len(set(reuse_workers)) != len(reuse_workers):
+            raise ValueError("reuse worker counts must be unique")
+        if "reuse" not in execution_modes or not any(
+            mode in ("frequency", "range") for mode in reuse_modes
+        ):
+            raise ValueError("reuse workers require Frequency or Range Reuse")
 
     configurations: list[BenchmarkConfiguration] = []
-    seen_modes: set[str] = set()
-    for mode in modes:
-        if mode not in EXECUTION_MODES:
-            raise ValueError(f"unknown execution mode: {mode}")
-        if mode in seen_modes:
-            raise ValueError(f"duplicate execution mode: {mode}")
-        seen_modes.add(mode)
-        if mode == "reuse-range" and fused_range_workers:
-            for worker_count in fused_range_workers:
-                configurations.append(
-                    BenchmarkConfiguration(
-                        execution_mode=mode,
-                        fused_range_workers=worker_count,
-                    )
-                )
+    for execution_mode in execution_modes:
+        if execution_mode == "nonreuse":
+            configurations.append(BenchmarkConfiguration("nonreuse"))
             continue
-        if mode != "reuse-frequency":
-            configurations.append(BenchmarkConfiguration(mode))
-            continue
-        if not parallel_workers:
-            raise ValueError(
-                "at least one reuse-frequency worker count is required"
+        for reuse_mode in reuse_modes:
+            if reuse_mode == "serial":
+                configurations.append(BenchmarkConfiguration("reuse", "serial"))
+                continue
+            # Preserve the existing route defaults when no worker CSV is given.
+            workers = reuse_workers if reuse_workers is not None else (
+                (8,) if reuse_mode == "frequency" else (1,)
             )
-        for worker_count in parallel_workers:
-            if worker_count <= 0:
-                raise ValueError(
-                    "reuse-frequency worker counts must be positive"
-                )
-            configurations.append(
-                BenchmarkConfiguration(
-                    execution_mode=mode,
-                    parallel_workers=worker_count,
-                    output_queue_capacity=output_queue_capacity,
-                    memory_budget_mib=memory_budget_mib,
-                )
-            )
+            for count in workers:
+                configurations.append(BenchmarkConfiguration(
+                    execution_mode="reuse",
+                    reuse_mode=reuse_mode,
+                    reuse_workers=count,
+                    output_queue_capacity=(
+                        output_queue_capacity if reuse_mode == "frequency" else None
+                    ),
+                    memory_budget_mib=(
+                        memory_budget_mib if reuse_mode == "frequency" else None
+                    ),
+                ))
     return tuple(configurations)
 
 
@@ -303,7 +307,8 @@ def _parse_nonnegative_integer(value: str, field_name: str) -> int:
 
 def parse_prt_metrics(
     contents: str,
-    expected_mode: str | None = None,
+    expected_execution_mode: str | None = None,
+    expected_reuse_mode: str | None = None,
 ) -> dict[str, Any]:
     fields: dict[str, str] = {}
     for raw_line in contents.splitlines():
@@ -328,50 +333,28 @@ def parse_prt_metrics(
     if missing:
         raise ValueError(f"missing PRT field(s): {', '.join(missing)}")
 
-    # Two-layer PRT markers (BB-1 A03): every reuse route prints the shared
-    # "broadband reuse" execution-mode line plus a dedicated reuse-mode line.
-    mode_markers = {
-        "nonreuse": ("broadband nonreuse", None),
-        "reuse-serial": ("broadband reuse", "serial"),
-        "reuse-frequency": ("broadband reuse", "frequency"),
-        "reuse-range": ("broadband reuse", "range"),
-    }
     execution_mode = fields["execution mode"]
     reuse_mode = fields.get("reuse mode")
-    if execution_mode not in {
-        marker[0] for marker in mode_markers.values()
-    }:
-        raise ValueError(
-            f"unknown PRT execution mode marker: {execution_mode!r}"
-        )
-    if expected_mode is not None:
-        if expected_mode not in mode_markers:
-            raise ValueError(f"unknown expected execution mode: {expected_mode}")
-        expected_execution_marker, expected_reuse_mode = mode_markers[
-            expected_mode
-        ]
-        if execution_mode != expected_execution_marker:
-            raise ValueError(
-                f"PRT execution mode {execution_mode!r} does not match "
-                f"{expected_mode!r}"
-            )
+    if execution_mode not in {"broadband nonreuse", "broadband reuse"}:
+        raise ValueError(f"unknown PRT execution mode marker: {execution_mode!r}")
+    if execution_mode == "broadband reuse":
+        if reuse_mode not in REUSE_MODES:
+            raise ValueError(f"unknown PRT reuse mode marker: {reuse_mode!r}")
+    elif reuse_mode is not None:
+        raise ValueError(f"unexpected PRT reuse mode with {execution_mode!r}")
+    if expected_execution_mode is not None:
+        if expected_execution_mode not in EXECUTION_MODES:
+            raise ValueError(f"unknown expected execution mode: {expected_execution_mode}")
+        if execution_mode != f"broadband {expected_execution_mode}":
+            raise ValueError("PRT execution mode does not match request")
         if reuse_mode != expected_reuse_mode:
-            raise ValueError(
-                f"PRT reuse mode {reuse_mode!r} does not match "
-                f"{expected_mode!r}"
-            )
-    elif reuse_mode is not None and execution_mode != "broadband reuse":
-        raise ValueError(
-            f"unexpected PRT reuse mode with {execution_mode!r}"
-        )
+            raise ValueError("PRT reuse mode does not match request")
+    elif expected_reuse_mode is not None:
+        raise ValueError("expected reuse mode requires expected execution mode")
 
-    wall_fields = tuple(
-        name for name in fields if name.endswith(" wall seconds")
-    )
-    if len(wall_fields) != 1:
-        raise ValueError(
-            "PRT must contain exactly one mode-specific wall-seconds field"
-        )
+    wall_fields = tuple(name for name in fields if name.endswith(" wall seconds"))
+    if wall_fields != ("Solver wall seconds",):
+        raise ValueError("PRT must contain exactly one Solver wall seconds field")
 
     metrics: dict[str, Any] = {
         "execution_mode_marker": execution_mode,
@@ -538,17 +521,8 @@ def validate_prt_metrics(
             f"{expected_trace_passes}"
         )
 
-    expected_wall_field = {
-        "nonreuse": "non-reuse wall seconds",
-        "reuse-serial": "reuse wall seconds",
-        "reuse-frequency": "parallel reuse wall seconds",
-        "reuse-range": "fused reuse wall seconds",
-    }[configuration.execution_mode]
-    if metrics["solver_wall_field"] != expected_wall_field:
-        raise ValueError(
-            f"PRT wall field {metrics['solver_wall_field']!r} != "
-            f"{expected_wall_field!r}"
-        )
+    if metrics["solver_wall_field"] != "Solver wall seconds":
+        raise ValueError("PRT wall field must be Solver wall seconds")
 
     required_by_mode = {
         "nonreuse": (
@@ -557,15 +531,15 @@ def validate_prt_metrics(
             "cumulative_ray_cache_bytes",
             "peak_ray_cache_bytes",
         ),
-        "reuse-serial": ("ray_count", "ray_point_count", "ray_cache_bytes"),
-        "reuse-range": (
+        "serial": ("ray_count", "ray_point_count", "ray_cache_bytes"),
+        "range": (
             "ray_count",
             "ray_point_count",
             "ray_cache_bytes",
             "requested_reuse_worker_count",
             "effective_reuse_worker_count",
         ),
-        "reuse-frequency": (
+        "frequency": (
             "ray_count",
             "ray_point_count",
             "ray_cache_bytes",
@@ -580,7 +554,7 @@ def validate_prt_metrics(
     }
     missing = tuple(
         name
-        for name in required_by_mode[configuration.execution_mode]
+        for name in required_by_mode[configuration.reuse_mode or configuration.execution_mode]
         if name not in metrics
     )
     if missing:
@@ -590,7 +564,7 @@ def validate_prt_metrics(
         )
     frequency_tasks = metrics.get("frequency_tasks")
     if expect_frequency_tasks:
-        if configuration.execution_mode != "reuse-frequency":
+        if configuration.reuse_mode != "frequency":
             raise ValueError(
                 "frequency-task profiling requires the reuse-frequency route"
             )
@@ -605,8 +579,8 @@ def validate_prt_metrics(
             "unexpected PRT frequency-task timings without profiling"
         )
 
-    if configuration.execution_mode == "reuse-range":
-        expected_requested_workers = configuration.requested_range_workers
+    if configuration.reuse_mode == "range":
+        expected_requested_workers = configuration.reuse_workers
         if (
             metrics["requested_reuse_worker_count"]
             != expected_requested_workers
@@ -621,11 +595,11 @@ def validate_prt_metrics(
                 "PRT effective reuse worker count is outside valid bounds"
             )
         return
-    if configuration.execution_mode != "reuse-frequency":
+    if configuration.reuse_mode != "frequency":
         return
     if (
         metrics["requested_reuse_worker_count"]
-        != configuration.parallel_workers
+        != configuration.reuse_workers
     ):
         raise ValueError("PRT requested reuse worker count does not match request")
     if (
@@ -634,7 +608,7 @@ def validate_prt_metrics(
     ):
         raise ValueError("PRT output queue capacity does not match request")
     if not 1 <= metrics["active_frequency_limit"] <= min(
-        configuration.parallel_workers or 0,
+        configuration.reuse_workers or 0,
         frequency_count,
     ):
         raise ValueError("PRT active frequency limit is outside valid bounds")
@@ -927,11 +901,11 @@ def _sample_command(
     ]
     if configuration.execution_mode == "nonreuse":
         command.extend(("--execution-mode", "nonreuse"))
-    elif configuration.execution_mode == "reuse-serial":
+    elif configuration.reuse_mode == "serial":
         command.extend(
             ("--execution-mode", "reuse", "--reuse-mode", "serial")
         )
-    elif configuration.execution_mode == "reuse-frequency":
+    elif configuration.reuse_mode == "frequency":
         command.extend(
             (
                 "--execution-mode",
@@ -939,7 +913,7 @@ def _sample_command(
                 "--reuse-mode",
                 "frequency",
                 "--reuse-workers",
-                str(configuration.parallel_workers),
+                str(configuration.reuse_workers),
             )
         )
         command.extend(
@@ -958,8 +932,7 @@ def _sample_command(
         if profile_frequency_tasks:
             command.append("--profile-frequency-tasks")
     else:
-        # reuse-range: the worker request is always explicit (BB-1 frozen
-        # mapping — bare legacy fused == one explicitly requested worker).
+        # Range Reuse always makes its worker request explicit.
         command.extend(
             (
                 "--execution-mode",
@@ -967,7 +940,7 @@ def _sample_command(
                 "--reuse-mode",
                 "range",
                 "--reuse-workers",
-                str(configuration.requested_range_workers),
+                str(configuration.reuse_workers),
             )
         )
     return command
@@ -1022,6 +995,7 @@ def run_internal_sample(request_path: Path) -> int:
     prt_metrics = parse_prt_metrics(
         print_path.read_text(encoding="utf-8", errors="strict"),
         configuration.execution_mode,
+        configuration.reuse_mode,
     )
     validate_prt_metrics(
         prt_metrics,
@@ -1121,6 +1095,7 @@ def _run_isolated_sample(
         configuration.execution_mode,
         print_path,
         shade_path,
+        reuse_mode=configuration.reuse_mode,
     )
     sample = json.loads(sample_output.read_text(encoding="utf-8"))
     sample.update(
@@ -1310,29 +1285,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--modes",
-        type=parse_modes,
-        default=parse_modes("nonreuse,reuse-serial,reuse-frequency"),
-        metavar="CSV",
+        "--execution-modes", type=parse_execution_modes,
+        default=parse_execution_modes("nonreuse,reuse"), metavar="CSV",
+    )
+    parser.add_argument(
+        "--reuse-modes", type=parse_reuse_modes,
+        default=parse_reuse_modes("serial,frequency"), metavar="CSV",
     )
     parser.add_argument("--repeats", type=positive_integer, default=3)
     parser.add_argument("--warmups", type=nonnegative_integer, default=1)
     parser.add_argument(
-        "--parallel-workers",
-        type=parse_positive_integer_csv,
-        default=parse_positive_integer_csv("8"),
-        metavar="CSV",
-    )
-    parser.add_argument(
-        "--fused-range-workers",
-        type=parse_positive_integer_csv,
-        default=(),
-        metavar="CSV",
-        help=(
-            "expand the reuse-range route into static receiver-range "
-            "worker configurations (for example '1,2,4,8'); omitted "
-            "requests one explicitly"
-        ),
+        "--reuse-workers", type=parse_positive_integer_csv, metavar="CSV",
+        help=("worker counts shared by Frequency and Range Reuse; omitted "
+              "preserves Frequency=8 and Range=1"),
     )
     parser.add_argument(
         "--queue",
@@ -1433,19 +1398,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ValueError("at least one --case is required")
         selected_cases = _validate_case_selection(definitions, args.cases)
         configurations = expand_configurations(
-            args.modes,
-            args.parallel_workers,
+            args.execution_modes,
+            args.reuse_modes,
+            args.reuse_workers,
             args.output_queue_capacity,
             args.memory_budget_mib,
-            args.fused_range_workers,
         )
         if args.profile_frequency_tasks and any(
-            configuration.execution_mode != "reuse-frequency"
+            configuration.reuse_mode != "frequency"
             for configuration in configurations
         ):
             raise ValueError(
                 "--profile-frequency-tasks requires "
-                "--modes reuse-frequency"
+                "--execution-modes reuse --reuse-modes frequency"
             )
 
         temporary_parent = Path(
@@ -1503,7 +1468,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     not args.no_cross_mode_shd_check
                 ),
                 "profile_frequency_tasks": args.profile_frequency_tasks,
-                "fused_range_workers": list(args.fused_range_workers),
+                "execution_modes": list(args.execution_modes),
+                "reuse_modes": list(args.reuse_modes),
+                "reuse_workers": (None if args.reuse_workers is None else list(args.reuse_workers)),
             },
             "cases": cases,
         }

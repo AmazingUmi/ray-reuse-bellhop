@@ -308,7 +308,7 @@ void testDualSourceArrivalThreeModes(Context& context) {
       ArrivalSolver::solve(dual, capture(serial, serialFingerprints, 2U), true);
   const ArrivalSolverStatistics nonreuseStats = ArrivalSolver::solveNonReuse(
       dual, capture(nonreuse, nonreuseFingerprints, 2U), true);
-  const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveParallel(
+  const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveFrequency(
       dual, capture(parallel, parallelFingerprints, 2U), 2U, true);
 
   context.check(serialStats.frequencyCount == 2U &&
@@ -440,7 +440,7 @@ void testDualSourceEigenrayThreeModes(Context& context) {
   const EigenraySolverStatistics nonreuseStats =
       EigenraySolver::solveNonReuse(dual, capture(nonreuse), true);
   const EigenraySolverStatistics parallelStats =
-      EigenraySolver::solveParallel(dual, capture(parallel), 2U, true);
+      EigenraySolver::solveFrequency(dual, capture(parallel), 2U, true);
 
   context.check(serialStats.frequencyCount == 2U &&
                     nonreuseStats.frequencyCount == 2U &&

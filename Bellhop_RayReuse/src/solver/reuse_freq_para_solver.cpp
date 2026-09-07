@@ -92,13 +92,13 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
   const std::size_t simultaneousWorkspaceCount = std::min(
       frequencyCount,
       checkedAdd(checkedAdd(activeFrequencyLimit, queueCapacity,
-                            "parallel workspace count overflows size_t"),
-                 1U, "parallel consumer workspace count overflows size_t"));
+                            "Frequency Reuse workspace count overflows size_t"),
+                 1U, "Frequency Reuse consumer workspace count overflows size_t"));
   return checkedAdd(
       rayCacheBytes,
       checkedMultiply(simultaneousWorkspaceCount, workspaceByteCount,
-                      "parallel workspace memory estimate overflows size_t"),
-      "parallel peak memory estimate overflows size_t");
+                      "Frequency Reuse workspace memory estimate overflows size_t"),
+      "Frequency Reuse peak memory estimate overflows size_t");
 }
 
 [[nodiscard]] std::size_t selectActiveFrequencyLimit(
@@ -118,7 +118,7 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
     }
   }
   throw ValidationError(
-      "parallel ray-reuse memory budget cannot accommodate "
+      "Frequency Reuse memory budget cannot accommodate "
       "one active frequency");
 }
 
@@ -143,18 +143,18 @@ ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint) {
   if (!consumer) {
     throw ValidationError(
-        "parallel ray-reuse frequency consumer must be callable");
+        "Frequency Reuse frequency consumer must be callable");
   }
   if (settings.workerCount == 0U) {
-    throw ValidationError("parallel ray-reuse worker count must be positive");
+    throw ValidationError("Frequency Reuse worker count must be positive");
   }
   if (settings.outputQueueCapacity == 0U) {
     throw ValidationError(
-        "parallel ray-reuse output queue capacity must be positive");
+        "Frequency Reuse output queue capacity must be positive");
   }
   if (settings.outputQueueCapacity > 2U) {
     throw ValidationError(
-        "parallel ray-reuse output queue capacity must be 1 or 2");
+        "Frequency Reuse output queue capacity must be 1 or 2");
   }
 
   const Clock::time_point wallBegin = Clock::now();
@@ -180,7 +180,7 @@ ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
   // One frequency product now spans every source's workspace.
   const std::size_t frequencyWorkspaceBytes =
       checkedMultiply(workspaceBytes(simulation), sourceCount,
-                      "parallel frequency workspace bytes overflows size_t");
+                      "Frequency Reuse frequency workspace bytes overflows size_t");
   const std::size_t activeFrequencyLimit = selectActiveFrequencyLimit(
       frequencyCount, settings.workerCount, effectiveQueueCapacity,
       totalCacheBytes, frequencyWorkspaceBytes, settings.memoryBudgetBytes);
@@ -311,7 +311,7 @@ ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
       std::lock_guard lock(state.mutex);
       if (state.completed.empty()) {
         throw ValidationError(
-            "parallel ray-reuse workers stopped before "
+            "Frequency Reuse workers stopped before "
             "all frequencies completed");
       }
       CompletedFrequency value = std::move(state.completed.front());
@@ -354,7 +354,7 @@ ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
         statistics.sourceCacheFingerprintsAfter.front();
     if (statistics.sourceCacheFingerprintsAfter !=
         statistics.sourceCacheFingerprintsBefore) {
-      throw ValidationError("parallel ray-reuse modified the frozen ray cache");
+      throw ValidationError("Frequency Reuse modified the frozen ray cache");
     }
   }
   statistics.peakQueuedResults = state.peakQueuedResults;

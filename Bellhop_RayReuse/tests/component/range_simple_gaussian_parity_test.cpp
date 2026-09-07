@@ -250,7 +250,7 @@ void checkDivergentPrefixes(Context& context,
       ++truncatedRays;
     }
   }
-  std::cout << "fused-simple-gaussian-parity " << label
+  std::cout << "range-simple-gaussian-parity " << label
             << ": rays=" << cache.size() << " divergent-prefix rays="
             << divergentRays << " cutoff-truncated rays=" << truncatedRays
             << '\n';
@@ -304,7 +304,7 @@ void checkCausticPhaseActivity(Context& context,
       ++causticRays;
     }
   }
-  std::cout << "fused-simple-gaussian-parity " << label
+  std::cout << "range-simple-gaussian-parity " << label
             << ": rays=" << cache.size()
             << " caustic-phase-active rays=" << causticRays << '\n';
   context.check(
@@ -405,7 +405,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
   context.check(
       callbackOrder.size() == frequencies.size() &&
           std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
-      std::string(label) + " Level C fused consumer visits every frequency "
+      std::string(label) + " Level C Range Reuse consumer visits every frequency "
                            "in index order");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
@@ -433,7 +433,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
               fusedStatistics.cacheFingerprintAfter &&
           fusedStatistics.cacheFingerprintBefore ==
               serial.statistics.cacheFingerprintBefore,
-      std::string(label) + " Level A fused cache fingerprint is stable and "
+      std::string(label) + " Level A Range Reuse cache fingerprint is stable and "
                            "matches serial reuse");
 }
 
@@ -443,7 +443,7 @@ int main() {
   Context context;
 
   // Scope acceptance is gated per family x mode in
-  // rayreuse.component.fused_solver; assertions here keep the parity test
+  // rayreuse.reuse.range.solver; assertions here keep the parity test
   // honest about the domain it exercises — coherent is the family's ONLY
   // legal mode (design §9).
   context.check(
@@ -499,10 +499,10 @@ int main() {
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " fused-simple-gaussian-parity assertion(s) failed\n";
+              << " range-simple-gaussian-parity assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse fused-simple-gaussian-parity tests "
+  std::cout << "All Bellhop RayReuse range-simple-gaussian-parity tests "
                "passed\n";
   return 0;
 }

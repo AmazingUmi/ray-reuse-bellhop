@@ -17,7 +17,7 @@
 
 namespace rayreuse {
 
-// Single source of truth for the production range-parallel reuse solver's
+// Single source of truth for the production Range Reuse solver's
 // scientific and receiver-grid support boundary. Tests use this same
 // predicate so they cannot advertise the range route for a case the
 // solver will reject.
@@ -117,7 +117,7 @@ class ReuseRangeParaSolver {
       ReuseRangeParaExecutionSettings executionSettings = {});
 
   // IGR-3A A02b (design §3.3/§6.2): intensity twin of accumulateFrequencies
-  // for the incoherent/semi-coherent fused sink. The fused scope gate covers
+  // for the incoherent/semi-coherent fused sink. The Range Reuse scope gate covers
   // every TL run mode of Cartesian Cerveny; callers select the sink to match
   // the run mode (solveStreaming does), and the raw payload is the
   // double-lane FusedIntensityWorkspace of the returned result.

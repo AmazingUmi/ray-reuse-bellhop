@@ -34,11 +34,11 @@ struct RangeWorkerResult {
   ArrivalAccumulationStatistics arrivalStatistics;
 };
 
-enum class FusedScopeFailure {
+enum class RangeScopeFailure {
   None,
   NotTransmissionLoss,
   // Run mode is not legal for the beam family (design §9 family legality:
-  // fused eligibility is always a subset of the legal beam x run-mode
+  // Range Reuse eligibility is always a subset of the legal beam x run-mode
   // support matrix). Live since A06 for the coherent-only SimpleGaussian
   // family: every Cerveny/Hat/Gaussian TL mode is legal, so only Simple
   // Gaussian outside coherent can ever reach it — and SimulationCase
@@ -56,12 +56,12 @@ enum class FusedScopeFailure {
   UnequallySpacedReceiverRanges,
 };
 
-[[nodiscard]] FusedScopeFailure fusedScopeFailure(
+[[nodiscard]] RangeScopeFailure rangeScopeFailure(
     const SimulationCase& simulation) {
   if (!isTransmissionLossMode(simulation.runMode())) {
-    return FusedScopeFailure::NotTransmissionLoss;
+    return RangeScopeFailure::NotTransmissionLoss;
   }
-  // Both Cerveny coordinate systems are in fused scope since A03, the
+  // Both Cerveny coordinate systems are in Range Reuse scope since A03, the
   // Geometric Hat family (both coordinates) since A04, the Geometric
   // Gaussian family (Cartesian only) since A05, and the Simple Gaussian
   // family (coherent only) since A06 (design §9);
@@ -72,7 +72,7 @@ enum class FusedScopeFailure {
       simulation.beamFamily() != BeamFamily::GeometricHat &&
       simulation.beamFamily() != BeamFamily::GeometricGaussian &&
       simulation.beamFamily() != BeamFamily::SimpleGaussian) {
-    return FusedScopeFailure::UnsupportedBeamFamily;
+    return RangeScopeFailure::UnsupportedBeamFamily;
   }
   // Family legality (design §9): Simple Gaussian's ONLY legal TL run mode
   // is coherent. SimulationCase construction rejects every non-coherent
@@ -80,20 +80,20 @@ enum class FusedScopeFailure {
   // intensity public entry carries the reachable enforcement.
   if (simulation.beamFamily() == BeamFamily::SimpleGaussian &&
       simulation.runMode() != SimulationRunMode::Coherent) {
-    return FusedScopeFailure::RunModeIllegalForFamily;
+    return RangeScopeFailure::RunModeIllegalForFamily;
   }
   if (simulation.sourceCount() != 1U) {
-    return FusedScopeFailure::NotSingleSource;
+    return RangeScopeFailure::NotSingleSource;
   }
   if (simulation.frequencies().size() < 2U) {
-    return FusedScopeFailure::TooFewFrequencies;
+    return RangeScopeFailure::TooFewFrequencies;
   }
   if (simulation.receivers().isIrregular()) {
-    return FusedScopeFailure::IrregularReceivers;
+    return RangeScopeFailure::IrregularReceivers;
   }
   const std::vector<double>& ranges = simulation.receivers().ranges();
   if (ranges.size() < 2U) {
-    return FusedScopeFailure::TooFewReceiverRanges;
+    return RangeScopeFailure::TooFewReceiverRanges;
   }
   const double rangeDelta = ranges[1U] - ranges[0U];
   for (std::size_t index = 2U; index < ranges.size(); ++index) {
@@ -103,53 +103,53 @@ enum class FusedScopeFailure {
         32.0 * std::numeric_limits<double>::epsilon() *
         std::max({1.0, std::abs(expected), std::abs(ranges[index])});
     if (std::abs(ranges[index] - expected) > tolerance) {
-      return FusedScopeFailure::UnequallySpacedReceiverRanges;
+      return RangeScopeFailure::UnequallySpacedReceiverRanges;
     }
   }
-  return FusedScopeFailure::None;
+  return RangeScopeFailure::None;
 }
 
 // Solver-layer scope validation (design §2, defense in depth).  Distinct
 // message prefix from the CLI layer so the failing layer is identifiable.
-void validateFusedScope(const SimulationCase& simulation) {
-  switch (fusedScopeFailure(simulation)) {
-    case FusedScopeFailure::None:
+void validateRangeScope(const SimulationCase& simulation) {
+  switch (rangeScopeFailure(simulation)) {
+    case RangeScopeFailure::None:
       return;
-    case FusedScopeFailure::NotTransmissionLoss:
+    case RangeScopeFailure::NotTransmissionLoss:
       throw ValidationError(
-          "fused ray-reuse solver requires a transmission-loss run mode");
-    case FusedScopeFailure::RunModeIllegalForFamily:
+          "Range Reuse solver requires a transmission-loss run mode");
+    case RangeScopeFailure::RunModeIllegalForFamily:
       throw ValidationError(
-          "fused ray-reuse solver requires a run mode that is legal for the "
+          "Range Reuse solver requires a run mode that is legal for the "
           "beam family");
-    case FusedScopeFailure::UnsupportedBeamFamily:
+    case RangeScopeFailure::UnsupportedBeamFamily:
       throw ValidationError(
-          "fused ray-reuse solver requires the Cerveny Gaussian, geometric "
+          "Range Reuse solver requires the Cerveny Gaussian, geometric "
           "hat, geometric Gaussian, or simple Gaussian beam family");
-    case FusedScopeFailure::NotSingleSource:
+    case RangeScopeFailure::NotSingleSource:
       throw ValidationError(
-          "fused ray-reuse solver requires exactly one source");
-    case FusedScopeFailure::TooFewFrequencies:
+          "Range Reuse solver requires exactly one source");
+    case RangeScopeFailure::TooFewFrequencies:
       throw ValidationError(
-          "fused ray-reuse solver requires at least two frequencies");
-    case FusedScopeFailure::IrregularReceivers:
+          "Range Reuse solver requires at least two frequencies");
+    case RangeScopeFailure::IrregularReceivers:
       throw ValidationError(
-          "fused ray-reuse solver requires a rectilinear receiver grid");
-    case FusedScopeFailure::TooFewReceiverRanges:
+          "Range Reuse solver requires a rectilinear receiver grid");
+    case RangeScopeFailure::TooFewReceiverRanges:
       throw ValidationError(
-          "fused ray-reuse solver requires at least two receiver ranges");
-    case FusedScopeFailure::UnequallySpacedReceiverRanges:
+          "Range Reuse solver requires at least two receiver ranges");
+    case RangeScopeFailure::UnequallySpacedReceiverRanges:
       throw ValidationError(
-          "fused ray-reuse solver requires equally spaced receiver ranges");
+          "Range Reuse solver requires equally spaced receiver ranges");
   }
 }
 
-void validateFusedSourceCache(const SimulationCase& simulation,
+void validateRangeSourceCache(const SimulationCase& simulation,
                               const RayPathCache& sourceCache,
                               std::size_t sourceIndex) {
   if (!sourceCache.frozen()) {
     throw ValidationError(
-        "fused ray-reuse solver requires a frozen ray cache");
+        "Range Reuse solver requires a frozen ray cache");
   }
   const Source& source = simulation.sources().at(sourceIndex);
   if (sourceCache.size() > 0U && !sourceCache.at(0U).points.empty() &&
@@ -157,12 +157,12 @@ void validateFusedSourceCache(const SimulationCase& simulation,
     // Structural pairing check, same pattern as
     // SingleFrequencySolver::solveFrequencyFromSourceCache.
     throw ValidationError(
-        "fused ray-reuse solver requires a ray cache traced from the "
+        "Range Reuse solver requires a ray cache traced from the "
         "requested source");
   }
 }
 
-void validateFusedArrivalScope(const SimulationCase& simulation,
+void validateRangeArrivalScope(const SimulationCase& simulation,
                                std::size_t sourceIndex) {
   if (simulation.runMode() != SimulationRunMode::AsciiArrivals &&
       simulation.runMode() != SimulationRunMode::BinaryArrivals) {
@@ -209,7 +209,7 @@ void validateFusedArrivalScope(const SimulationCase& simulation,
 }  // namespace
 
 bool supportsReuseRangePara(const SimulationCase& simulation) {
-  return fusedScopeFailure(simulation) == FusedScopeFailure::None;
+  return rangeScopeFailure(simulation) == RangeScopeFailure::None;
 }
 
 // Unified fused executor (design §3.1-§3.2), migrated in A02 from the former
@@ -231,14 +231,14 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
     ReuseRangeParaExecutionSettings executionSettings,
     std::size_t sourceIndex) {
   if constexpr (std::is_same_v<Sink, ArrivalFusedSink>) {
-    validateFusedArrivalScope(simulation, sourceIndex);
+    validateRangeArrivalScope(simulation, sourceIndex);
   } else {
-    validateFusedScope(simulation);
+    validateRangeScope(simulation);
   }
-  validateFusedSourceCache(simulation, sourceCache, sourceIndex);
+  validateRangeSourceCache(simulation, sourceCache, sourceIndex);
   if (executionSettings.requestedRangeWorkers == 0U) {
     throw ValidationError(
-        "fused ray-reuse requested range worker count must be positive");
+        "Range Reuse requested range worker count must be positive");
   }
 
   const Source& source = simulation.sources().at(sourceIndex);
@@ -447,7 +447,7 @@ ReuseRangeParaSolver::accumulateFrequenciesIntensity(
   // check states the same law where it is observable.
   if (simulation.beamFamily() == BeamFamily::SimpleGaussian) {
     throw ValidationError(
-        "fused ray-reuse solver requires a run mode that is legal for the "
+        "Range Reuse solver requires a run mode that is legal for the "
         "beam family");
   }
   // A02b/A03/A04/A05 sink dispatch (design §3.3/§6.2): the intensity sink
@@ -501,9 +501,9 @@ ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
     ReuseRangeParaExecutionSettings executionSettings) {
   if (!consumer) {
-    throw ValidationError("fused arrival source consumer must be callable");
+    throw ValidationError("Range Reuse arrival source consumer must be callable");
   }
-  validateFusedArrivalScope(simulation, 0U);
+  validateRangeArrivalScope(simulation, 0U);
 
   ArrivalSolverStatistics statistics;
   statistics.frequencyCount = simulation.frequencies().size();
@@ -562,7 +562,7 @@ ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
       statistics.sourceCacheFingerprintsAfter.push_back(fingerprintAfter);
       if (fingerprintAfter != fingerprintBefore) {
         throw ValidationError(
-            "fused arrival projection modified the frozen ray cache");
+            "Range Reuse arrival projection modified the frozen ray cache");
       }
     }
   }
@@ -583,9 +583,9 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
     ReuseRangeParaExecutionSettings executionSettings) {
   if (!consumer) {
     throw ValidationError(
-        "fused ray-reuse frequency consumer must be callable");
+        "Range Reuse frequency consumer must be callable");
   }
-  validateFusedScope(simulation);
+  validateRangeScope(simulation);
 
   ReuseRangeParaStatistics statistics;
   const Clock::time_point wallBegin = Clock::now();
@@ -763,7 +763,7 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
         statistics.sourceCacheFingerprintsAfter.front();
     if (statistics.sourceCacheFingerprintsAfter !=
         statistics.sourceCacheFingerprintsBefore) {
-      throw ValidationError("fused ray-reuse modified the frozen ray cache");
+      throw ValidationError("Range Reuse modified the frozen ray cache");
     }
   }
   statistics.wallSeconds = elapsedSeconds(wallBegin, Clock::now());

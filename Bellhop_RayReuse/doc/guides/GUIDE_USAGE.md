@@ -132,7 +132,7 @@ uv run python test/standard_cases/codes/standard_cases.py test \
   --version rayreuse \
   --case eigenray_geometric_hat_ray_centered \
   --profile broadband_smoke \
-  --rayreuse-execution-mode reuse-frequency \
+  --execution-mode reuse --reuse-mode frequency \
   --executable Bellhop_RayReuse/build/release/bellhop_broadband
 ```
 

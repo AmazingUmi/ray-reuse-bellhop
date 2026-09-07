@@ -31,43 +31,31 @@ from eigenray_io import parse_eigenray
 
 VERSIONS = ("origin", "f2cpp", "rayreuse")
 STAGES = ("generate", "run", "validate", "test")
-# Two-layer execution model (BB-1 A03): the runner names complete routes;
-# each route maps to the executable's explicit argument tail and to the PRT
-# marker lines it must produce. `reuse-serial`/`reuse-frequency`/`reuse-range`
-# replace the legacy reuse/parallel/fused single-layer values.
-RAYREUSE_EXECUTION_MODES = (
-    "nonreuse",
-    "reuse-serial",
-    "reuse-frequency",
-    "reuse-range",
-)
-RAYREUSE_EXECUTION_ARGUMENTS = {
-    "nonreuse": ("--execution-mode", "nonreuse"),
-    "reuse-serial": (
-        "--execution-mode", "reuse", "--reuse-mode", "serial",
-    ),
-    "reuse-frequency": (
-        "--execution-mode", "reuse", "--reuse-mode", "frequency",
-    ),
-    "reuse-range": (
-        "--execution-mode", "reuse", "--reuse-mode", "range",
-    ),
-}
-RAYREUSE_EXECUTION_PRT_MARKERS = {
-    "nonreuse": ("execution mode = broadband nonreuse",),
-    "reuse-serial": (
-        "execution mode = broadband reuse",
-        "reuse mode = serial",
-    ),
-    "reuse-frequency": (
-        "execution mode = broadband reuse",
-        "reuse mode = frequency",
-    ),
-    "reuse-range": (
-        "execution mode = broadband reuse",
-        "reuse mode = range",
-    ),
-}
+# Execution and reuse mode are independent fields throughout the runner.
+RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse")
+RAYREUSE_REUSE_MODES = ("serial", "frequency", "range")
+
+
+def rayreuse_execution_arguments(
+    execution_mode: str, reuse_mode: str | None = None,
+) -> tuple[str, ...]:
+    require_rayreuse_execution_mode(execution_mode, reuse_mode)
+    arguments = ("--execution-mode", execution_mode)
+    if reuse_mode is not None:
+        arguments += ("--reuse-mode", reuse_mode)
+    return arguments
+
+
+def rayreuse_prt_markers(
+    execution_mode: str, reuse_mode: str | None = None,
+) -> tuple[str, ...]:
+    require_rayreuse_execution_mode(execution_mode, reuse_mode)
+    markers = (f"execution mode = broadband {execution_mode}",)
+    if reuse_mode is not None:
+        markers += (f"reuse mode = {reuse_mode}",)
+    return markers
+
+
 DECLARABLE_BEAM_FAMILY_MARKERS = (
     "Ray centered beams",
     "Geometric hat beams in Cartesian coordinates",
@@ -109,16 +97,17 @@ class VersionAdapter:
         file_root: str,
         frequencies_hz: Sequence[float],
         execution_mode: str,
+        reuse_mode: str | None = None,
     ) -> None:
         self.require_available()
-        require_rayreuse_execution_mode(execution_mode)
+        require_rayreuse_execution_mode(execution_mode, reuse_mode)
         subprocess.run(
             [
                 str(self.executable),
                 file_root,
                 "--frequencies-hz",
                 format_frequency_csv(frequencies_hz),
-                *RAYREUSE_EXECUTION_ARGUMENTS[execution_mode],
+                *rayreuse_execution_arguments(execution_mode, reuse_mode),
             ],
             cwd=working_directory,
             check=True,
@@ -252,11 +241,17 @@ def format_frequency_csv(frequencies_hz: Sequence[float]) -> str:
     return ",".join(format(value, ".17g") for value in frequencies)
 
 
-def require_rayreuse_execution_mode(execution_mode: str) -> None:
+def require_rayreuse_execution_mode(
+    execution_mode: str, reuse_mode: str | None = None,
+) -> None:
     if execution_mode not in RAYREUSE_EXECUTION_MODES:
         raise ValueError(
             f"unknown RayReuse execution mode: {execution_mode}"
         )
+    if execution_mode == "nonreuse" and reuse_mode is not None:
+        raise ValueError("nonreuse execution does not accept a reuse mode")
+    if execution_mode == "reuse" and reuse_mode not in RAYREUSE_REUSE_MODES:
+        raise ValueError("reuse execution requires serial, frequency or range reuse mode")
 
 
 def declared_beam_family_marker(definition: CaseDefinition) -> str:
@@ -419,15 +414,16 @@ def validate_broadband_output(
     execution_mode: str,
     print_path: Path,
     shade_path: Path,
+    reuse_mode: str | None = None,
 ) -> None:
     frequencies = tuple(float(value) for value in frequencies_hz)
-    require_rayreuse_execution_mode(execution_mode)
+    require_rayreuse_execution_mode(execution_mode, reuse_mode)
     validate_print_output(definition, print_path, "rayreuse")
     print_contents = print_path.read_text(errors="replace")
     print_lines = {
         line.strip() for line in print_contents.splitlines()
     }
-    expected_mode_markers = RAYREUSE_EXECUTION_PRT_MARKERS[execution_mode]
+    expected_mode_markers = rayreuse_prt_markers(execution_mode, reuse_mode)
     # Frozen multi-source statistics (FP-2F worklist §1.5):
     # non-reuse traces once per (frequency, source); every reuse route
     # traces each source fan exactly once.
@@ -476,14 +472,15 @@ def validate_broadband_product_outputs(
     execution_mode: str,
     print_path: Path,
     product_paths: Sequence[Path],
+    reuse_mode: str | None = None,
 ) -> None:
     """Validate independent per-frequency ARR/E products from one run."""
-    require_rayreuse_execution_mode(execution_mode)
+    require_rayreuse_execution_mode(execution_mode, reuse_mode)
     validate_print_output(definition, print_path, "rayreuse")
     print_lines = {
         line.strip() for line in print_path.read_text(errors="replace").splitlines()
     }
-    expected_mode_markers = RAYREUSE_EXECUTION_PRT_MARKERS[execution_mode]
+    expected_mode_markers = rayreuse_prt_markers(execution_mode, reuse_mode)
     # Frozen multi-source statistics (FP-2F worklist §1.5): see
     # validate_broadband_output.
     expected_trace_passes = (
@@ -560,6 +557,7 @@ def process_rayreuse_broadband(
     frequencies: tuple[float, ...],
     launch_angle_counts: dict[str, int],
     execution_mode: str,
+    reuse_mode: str | None = None,
 ) -> Path:
     if definition.output_kind == "ray":
         raise ValueError(
@@ -576,7 +574,7 @@ def process_rayreuse_broadband(
             f"{definition.case_id}: unsupported RayReuse broadband output kind "
             f"{definition.output_kind!r}"
         )
-    require_rayreuse_execution_mode(execution_mode)
+    require_rayreuse_execution_mode(execution_mode, reuse_mode)
     if len(frequencies) < 2:
         raise ValueError(
             f"{definition.case_id}/{profile_name}: broadband profile must "
@@ -645,6 +643,7 @@ def process_rayreuse_broadband(
             file_root,
             frequencies,
             execution_mode,
+            reuse_mode,
         )
         status = "completed"
 
@@ -656,6 +655,7 @@ def process_rayreuse_broadband(
                 execution_mode,
                 print_path,
                 shade_path,
+                reuse_mode=reuse_mode,
             )
         else:
             validate_broadband_product_outputs(
@@ -664,6 +664,7 @@ def process_rayreuse_broadband(
                 execution_mode,
                 print_path,
                 product_paths,
+                reuse_mode=reuse_mode,
             )
         status = "passed"
 
@@ -737,13 +738,13 @@ def process_rayreuse_broadband(
         ],
         "execution_model": "single_broadband_invocation",
         "execution_mode": execution_mode,
+        "reuse_mode": reuse_mode,
         "broadband_run": {
             "working_directory": "broadband",
             "file_root": file_root,
             "frequencies_argument": frequency_csv,
-            "execution_mode_argument": " ".join(
-                RAYREUSE_EXECUTION_ARGUMENTS[execution_mode]
-            ),
+            "execution_mode_argument": execution_mode,
+            "reuse_mode_argument": reuse_mode,
             "expected_solver_invocations": 1,
             "frequency_slices_share_output": definition.output_kind == "shd",
             "frequency_products_independent": definition.output_kind != "shd",
@@ -770,6 +771,7 @@ def process_case(
     stage: str,
     results_root: Path,
     rayreuse_execution_mode: str = "nonreuse",
+    rayreuse_reuse_mode: str | None = None,
 ) -> Path:
     if adapter.name not in VERSIONS:
         adapter.require_available()
@@ -787,6 +789,7 @@ def process_case(
             frequencies,
             launch_angle_counts,
             rayreuse_execution_mode,
+            rayreuse_reuse_mode,
         )
 
     launch_angle_count = launch_angle_counts["final"]
@@ -946,6 +949,7 @@ def run_selection(
     executable: Path | None,
     results_root: Path,
     rayreuse_execution_mode: str = "nonreuse",
+    rayreuse_reuse_mode: str | None = None,
     requested_test_sets: list[str] | None = None,
 ) -> int:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
@@ -999,6 +1003,7 @@ def run_selection(
             stage,
             results_root,
             rayreuse_execution_mode,
+            rayreuse_reuse_mode,
         )
         completed += 1
     if completed == 0:
@@ -1028,7 +1033,12 @@ def add_selection_arguments(parser: argparse.ArgumentParser) -> None:
         default=STANDARD_CASES_ROOT / "results",
     )
     parser.add_argument(
-        "--rayreuse-execution-mode",
+        "--reuse-mode",
+        choices=RAYREUSE_REUSE_MODES,
+        help="required with reuse execution; omitted with nonreuse",
+    )
+    parser.add_argument(
+        "--execution-mode",
         choices=RAYREUSE_EXECUTION_MODES,
         default="nonreuse",
         help=(
@@ -1078,7 +1088,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=STANDARD_CASES_ROOT / "results",
     )
     batch_parser.add_argument(
-        "--rayreuse-execution-mode",
+        "--reuse-mode",
+        choices=RAYREUSE_REUSE_MODES,
+        help="required with reuse execution; omitted with nonreuse",
+    )
+    batch_parser.add_argument(
+        "--execution-mode",
         choices=RAYREUSE_EXECUTION_MODES,
         default="nonreuse",
         help=(
@@ -1206,7 +1221,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 requested_test_sets=args.test_sets,
                 executable=args.executable,
                 results_root=args.results_root.resolve(),
-                rayreuse_execution_mode=args.rayreuse_execution_mode,
+                rayreuse_execution_mode=args.execution_mode,
+                rayreuse_reuse_mode=args.reuse_mode,
             )
             return 0
 
@@ -1256,7 +1272,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         requested_cases=None,
                         executable=args.executable,
                         results_root=args.results_root.resolve(),
-                        rayreuse_execution_mode=args.rayreuse_execution_mode,
+                        rayreuse_execution_mode=args.execution_mode,
+                        rayreuse_reuse_mode=args.reuse_mode,
                     )
             print(
                 f"BATCH PASSED: {completed} version/case/profile combinations"

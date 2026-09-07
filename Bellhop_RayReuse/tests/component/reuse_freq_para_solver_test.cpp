@@ -126,17 +126,17 @@ std::vector<double> makeFrequencies(std::size_t count) {
   return frequencies;
 }
 
-struct StreamedParallelRun {
+struct StreamedFrequencyRun {
   std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>
       workspaces;
   std::vector<std::size_t> callbackCounts;
   ReuseFreqParaStatistics statistics;
 };
 
-StreamedParallelRun runParallel(const SimulationCase& simulation,
+StreamedFrequencyRun runFrequency(const SimulationCase& simulation,
                                 ReuseFreqParaSettings settings,
                                 bool verifyCacheFingerprint = false) {
-  StreamedParallelRun run{
+  StreamedFrequencyRun run{
       .workspaces =
           std::vector<std::optional<std::vector<rayreuse::FrequencyWorkspace>>>(
               simulation.frequencies().size()),
@@ -176,60 +176,60 @@ void testFrequencyCounts(Context& context) {
         NonReuseSolver::solve(simulation, 1.0, 50.0);
     const ReuseSerialResult serial =
         ReuseSerialSolver::solve(simulation, 1.0, 50.0);
-    const StreamedParallelRun parallel =
-        runParallel(simulation,
+    const StreamedFrequencyRun frequency =
+        runFrequency(simulation,
                     ReuseFreqParaSettings{.workerCount = 4U,
                                              .outputQueueCapacity = 2U,
                                              .memoryBudgetBytes = 0U},
                     frequencyCount == 2U);
 
-    context.check(parallel.statistics.tracePassCount == 1U &&
+    context.check(frequency.statistics.tracePassCount == 1U &&
                       serial.statistics.tracePassCount == 1U &&
                       nonReuse.statistics.tracePassCount == frequencyCount,
-                  "parallel and serial reuse trace once for "
+                  "frequency and serial reuse trace once for "
                   "1/2/16 frequencies");
-    context.check(parallel.statistics.activeFrequencyLimit ==
+    context.check(frequency.statistics.activeFrequencyLimit ==
                           std::min<std::size_t>(4U, frequencyCount) &&
-                      parallel.statistics.peakQueuedResults <=
-                          parallel.statistics.outputQueueCapacity &&
-                      parallel.statistics.outputQueueCapacity ==
+                      frequency.statistics.peakQueuedResults <=
+                          frequency.statistics.outputQueueCapacity &&
+                      frequency.statistics.outputQueueCapacity ==
                           std::min<std::size_t>(2U, frequencyCount),
-                  "parallel workers and completed queue stay "
+                  "frequency workers and completed queue stay "
                   "within configured bounds");
     context.check(
-        parallel.callbackCounts == std::vector<std::size_t>(frequencyCount, 1U),
-        "parallel callback consumes every frequency "
+        frequency.callbackCounts == std::vector<std::size_t>(frequencyCount, 1U),
+        "frequency callback consumes every frequency "
         "exactly once");
     context.check(
-        parallel.statistics.frequencyTimings.size() == frequencyCount &&
-            parallel.statistics.rayCount == serial.statistics.rayCount &&
-            parallel.statistics.rayCacheBytes ==
+        frequency.statistics.frequencyTimings.size() == frequencyCount &&
+            frequency.statistics.rayCount == serial.statistics.rayCount &&
+            frequency.statistics.rayCacheBytes ==
                 serial.statistics.rayCacheBytes &&
-            parallel.statistics.estimatedWorkspaceBytes ==
+            frequency.statistics.estimatedWorkspaceBytes ==
                 3U * 3U * sizeof(std::complex<double>) &&
-            parallel.statistics.estimatedPeakMemoryBytes >=
-                parallel.statistics.rayCacheBytes,
-        "parallel statistics expose cache, workspace, "
+            frequency.statistics.estimatedPeakMemoryBytes >=
+                frequency.statistics.rayCacheBytes,
+        "frequency statistics expose cache, workspace, "
         "and per-frequency timing metrics");
     if (frequencyCount == 2U) {
-      context.check(parallel.statistics.cacheFingerprintVerified &&
-                        parallel.statistics.cacheFingerprintBefore ==
-                            parallel.statistics.cacheFingerprintAfter,
-                    "parallel frequency projection leaves the "
+      context.check(frequency.statistics.cacheFingerprintVerified &&
+                        frequency.statistics.cacheFingerprintBefore ==
+                            frequency.statistics.cacheFingerprintAfter,
+                    "frequency frequency projection leaves the "
                     "frozen cache unchanged");
     }
 
     for (std::size_t index = 0U; index < frequencyCount; ++index) {
-      context.check(parallel.workspaces[index].has_value(),
-                    "parallel run returns every indexed workspace");
-      if (parallel.workspaces[index]) {
-        checkWorkspaceEqual(context, parallel.workspaces[index]->front(),
+      context.check(frequency.workspaces[index].has_value(),
+                    "frequency run returns every indexed workspace");
+      if (frequency.workspaces[index]) {
+        checkWorkspaceEqual(context, frequency.workspaces[index]->front(),
                             serial.frequencyResults[index].workspaces.front(),
-                            "parallel pressure is bitwise equal to "
+                            "frequency pressure is bitwise equal to "
                             "serial reuse");
-        checkWorkspaceEqual(context, parallel.workspaces[index]->front(),
+        checkWorkspaceEqual(context, frequency.workspaces[index]->front(),
                             nonReuse.frequencyResults[index].workspace,
-                            "parallel pressure is bitwise equal to "
+                            "frequency pressure is bitwise equal to "
                             "non-reuse");
       }
     }
@@ -240,18 +240,18 @@ void testRepeatedRunIsDeterministic(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
   const ReuseFreqParaSettings settings{
       .workerCount = 4U, .outputQueueCapacity = 1U, .memoryBudgetBytes = 0U};
-  const StreamedParallelRun first = runParallel(simulation, settings);
-  const StreamedParallelRun second = runParallel(simulation, settings);
+  const StreamedFrequencyRun first = runFrequency(simulation, settings);
+  const StreamedFrequencyRun second = runFrequency(simulation, settings);
 
   for (std::size_t index = 0U; index < first.workspaces.size(); ++index) {
     context.check(first.workspaces[index].has_value() &&
                       second.workspaces[index].has_value(),
-                  "repeated parallel runs return every workspace");
+                  "repeated frequency runs return every workspace");
     if (first.workspaces[index] && second.workspaces[index]) {
       checkWorkspaceEqual(
           context, first.workspaces[index]->front(),
           second.workspaces[index]->front(),
-          "repeated parallel pressure is bitwise deterministic");
+          "repeated frequency pressure is bitwise deterministic");
     }
   }
 }
@@ -270,9 +270,9 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
         NonReuseSolver::solve(simulation, 1.0, 50.0);
     const ReuseSerialResult serial =
         ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
-    const StreamedParallelRun first = runParallel(simulation, settings, true);
-    const StreamedParallelRun repeated =
-        runParallel(simulation, settings, true);
+    const StreamedFrequencyRun first = runFrequency(simulation, settings, true);
+    const StreamedFrequencyRun repeated =
+        runFrequency(simulation, settings, true);
 
     context.check(
         serial.statistics.cacheFingerprintVerified &&
@@ -286,14 +286,14 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
                 repeated.statistics.cacheFingerprintAfter &&
             first.statistics.cacheFingerprintBefore ==
                 repeated.statistics.cacheFingerprintBefore,
-        "Thorp/FG/biological serial and repeated parallel projection preserve "
+        "Thorp/FG/biological serial and repeated frequency projection preserve "
         "the frozen cache fingerprint");
 
     for (std::size_t index = 0U; index < simulation.frequencies().size();
          ++index) {
       context.check(first.workspaces[index].has_value() &&
                         repeated.workspaces[index].has_value(),
-                    "attenuated parallel runs publish every frequency");
+                    "attenuated frequency runs publish every frequency");
       if (!first.workspaces[index] || !repeated.workspaces[index]) continue;
       checkWorkspaceEqual(
           context, serial.frequencyResults[index].workspaces.front(),
@@ -302,11 +302,11 @@ void testVolumeAttenuationExecutionInvariants(Context& context) {
       checkWorkspaceEqual(
           context, first.workspaces[index]->front(),
           nonReuse.frequencyResults[index].workspace,
-          "attenuated parallel reuse pressure equals non-reuse bitwise");
+          "attenuated Frequency Reuse pressure equals non-reuse bitwise");
       checkWorkspaceEqual(
           context, repeated.workspaces[index]->front(),
           first.workspaces[index]->front(),
-          "repeated attenuated parallel pressure is bitwise deterministic");
+          "repeated attenuated frequency pressure is bitwise deterministic");
     }
   }
 
@@ -366,8 +366,8 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
           NonReuseSolver::solve(simulation, 1.0, 50.0);
       const ReuseSerialResult reuse =
           ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
-      const StreamedParallelRun parallel =
-          runParallel(simulation,
+      const StreamedFrequencyRun frequency =
+          runFrequency(simulation,
                       ReuseFreqParaSettings{.workerCount = 2U,
                                                .outputQueueCapacity = 1U,
                                                .memoryBudgetBytes = 0U},
@@ -376,16 +376,16 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
           reuse.statistics.cacheFingerprintVerified &&
               reuse.statistics.cacheFingerprintBefore ==
                   reuse.statistics.cacheFingerprintAfter &&
-              parallel.statistics.cacheFingerprintVerified &&
-              parallel.statistics.cacheFingerprintBefore ==
-                  parallel.statistics.cacheFingerprintAfter,
+              frequency.statistics.cacheFingerprintVerified &&
+              frequency.statistics.cacheFingerprintBefore ==
+                  frequency.statistics.cacheFingerprintAfter,
           "C/I/S Cerveny, GeoHat, and GeoGaussian reuse paths preserve the "
           "frozen cache "
           "fingerprint");
       for (std::size_t index = 0U; index < 2U; ++index) {
-        context.check(parallel.workspaces[index].has_value(),
-                      "parallel C/I/S returns every frequency workspace");
-        if (!parallel.workspaces[index].has_value()) {
+        context.check(frequency.workspaces[index].has_value(),
+                      "frequency C/I/S returns every frequency workspace");
+        if (!frequency.workspaces[index].has_value()) {
           continue;
         }
         checkWorkspaceEqual(context,
@@ -393,9 +393,9 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
                             nonReuse.frequencyResults[index].workspace,
                             "serial reuse C/I/S is bitwise equal to non-reuse");
         checkWorkspaceEqual(
-            context, parallel.workspaces[index]->front(),
+            context, frequency.workspaces[index]->front(),
             nonReuse.frequencyResults[index].workspace,
-            "parallel reuse C/I/S is bitwise equal to non-reuse");
+            "Frequency Reuse C/I/S is bitwise equal to non-reuse");
       }
     }
   }
@@ -408,8 +408,8 @@ void testSimpleGaussianMatchesAcrossExecution(Context& context) {
       NonReuseSolver::solve(simulation, 1.0, 50.0);
   const ReuseSerialResult reuse =
       ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
-  const StreamedParallelRun parallel =
-      runParallel(simulation,
+  const StreamedFrequencyRun frequency =
+      runFrequency(simulation,
                   ReuseFreqParaSettings{.workerCount = 2U,
                                            .outputQueueCapacity = 1U,
                                            .memoryBudgetBytes = 0U},
@@ -418,14 +418,14 @@ void testSimpleGaussianMatchesAcrossExecution(Context& context) {
       reuse.statistics.cacheFingerprintVerified &&
           reuse.statistics.cacheFingerprintBefore ==
               reuse.statistics.cacheFingerprintAfter &&
-          parallel.statistics.cacheFingerprintVerified &&
-          parallel.statistics.cacheFingerprintBefore ==
-              parallel.statistics.cacheFingerprintAfter,
+          frequency.statistics.cacheFingerprintVerified &&
+          frequency.statistics.cacheFingerprintBefore ==
+              frequency.statistics.cacheFingerprintAfter,
       "Simple Gaussian reuse paths preserve the frozen cache fingerprint");
   for (std::size_t index = 0U; index < 2U; ++index) {
-    context.check(parallel.workspaces[index].has_value(),
-                  "parallel Simple Gaussian returns every frequency");
-    if (!parallel.workspaces[index].has_value()) {
+    context.check(frequency.workspaces[index].has_value(),
+                  "frequency Simple Gaussian returns every frequency");
+    if (!frequency.workspaces[index].has_value()) {
       continue;
     }
     checkWorkspaceEqual(
@@ -433,9 +433,9 @@ void testSimpleGaussianMatchesAcrossExecution(Context& context) {
         nonReuse.frequencyResults[index].workspace,
         "serial reuse Simple Gaussian is bitwise equal to non-reuse");
     checkWorkspaceEqual(
-        context, parallel.workspaces[index]->front(),
+        context, frequency.workspaces[index]->front(),
         nonReuse.frequencyResults[index].workspace,
-        "parallel reuse Simple Gaussian is bitwise equal to non-reuse");
+        "Frequency Reuse Simple Gaussian is bitwise equal to non-reuse");
   }
 }
 
@@ -460,8 +460,8 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
               NonReuseSolver::solve(simulation, 1.0, 50.0);
           const ReuseSerialResult reuse =
               ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
-          const StreamedParallelRun parallel =
-              runParallel(simulation,
+          const StreamedFrequencyRun frequency =
+              runFrequency(simulation,
                           ReuseFreqParaSettings{.workerCount = 2U,
                                                    .outputQueueCapacity = 1U,
                                                    .memoryBudgetBytes = 0U},
@@ -470,16 +470,16 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
               reuse.statistics.cacheFingerprintVerified &&
                   reuse.statistics.cacheFingerprintBefore ==
                       reuse.statistics.cacheFingerprintAfter &&
-                  parallel.statistics.cacheFingerprintVerified &&
-                  parallel.statistics.cacheFingerprintBefore ==
-                      parallel.statistics.cacheFingerprintAfter,
+                  frequency.statistics.cacheFingerprintVerified &&
+                  frequency.statistics.cacheFingerprintBefore ==
+                      frequency.statistics.cacheFingerprintAfter,
               "Cartesian Cerveny C/I/S x F/M/W x D/S/Z x P/V/H preserves "
               "frozen cache");
           for (std::size_t index = 0U; index < 2U; ++index) {
             context.check(
-                parallel.workspaces[index].has_value(),
-                "parallel Cartesian width/curvature returns every frequency");
-            if (!parallel.workspaces[index].has_value()) {
+                frequency.workspaces[index].has_value(),
+                "frequency Cartesian width/curvature returns every frequency");
+            if (!frequency.workspaces[index].has_value()) {
               continue;
             }
             checkWorkspaceEqual(
@@ -488,9 +488,9 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
                 "Cartesian width/curvature serial reuse equals non-reuse "
                 "bitwise");
             checkWorkspaceEqual(
-                context, parallel.workspaces[index]->front(),
+                context, frequency.workspaces[index]->front(),
                 nonReuse.frequencyResults[index].workspace,
-                "Cartesian width/curvature parallel reuse equals non-reuse "
+                "Cartesian width/curvature Frequency Reuse equals non-reuse "
                 "bitwise");
             if (pressure.has_value()) {
               checkWorkspaceEqual(
@@ -528,8 +528,8 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
               NonReuseSolver::solve(simulation, 1.0, 50.0);
           const ReuseSerialResult reuse =
               ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
-          const StreamedParallelRun parallel =
-              runParallel(simulation,
+          const StreamedFrequencyRun frequency =
+              runFrequency(simulation,
                           ReuseFreqParaSettings{.workerCount = 2U,
                                                    .outputQueueCapacity = 1U,
                                                    .memoryBudgetBytes = 0U},
@@ -537,16 +537,16 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
           context.check(reuse.statistics.cacheFingerprintVerified &&
                             reuse.statistics.cacheFingerprintBefore ==
                                 reuse.statistics.cacheFingerprintAfter &&
-                            parallel.statistics.cacheFingerprintVerified &&
-                            parallel.statistics.cacheFingerprintBefore ==
-                                parallel.statistics.cacheFingerprintAfter,
+                            frequency.statistics.cacheFingerprintVerified &&
+                            frequency.statistics.cacheFingerprintBefore ==
+                                frequency.statistics.cacheFingerprintAfter,
                         "ray-centered C/I/S x F/M/W x D/S/Z x P/V/H preserves "
                         "the frozen cache");
           for (std::size_t index = 0U; index < 2U; ++index) {
             context.check(
-                parallel.workspaces[index].has_value(),
-                "parallel ray-centered matrix returns every frequency");
-            if (!parallel.workspaces[index].has_value()) {
+                frequency.workspaces[index].has_value(),
+                "frequency ray-centered matrix returns every frequency");
+            if (!frequency.workspaces[index].has_value()) {
               continue;
             }
             checkWorkspaceEqual(
@@ -554,9 +554,9 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
                 nonReuse.frequencyResults[index].workspace,
                 "ray-centered serial reuse equals non-reuse bitwise");
             checkWorkspaceEqual(
-                context, parallel.workspaces[index]->front(),
+                context, frequency.workspaces[index]->front(),
                 nonReuse.frequencyResults[index].workspace,
-                "ray-centered parallel reuse equals non-reuse bitwise");
+                "ray-centered Frequency Reuse equals non-reuse bitwise");
           }
         }
       }
@@ -576,8 +576,8 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
         NonReuseSolver::solve(simulation, 1.0, 50.0);
     const ReuseSerialResult reuse =
         ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
-    const StreamedParallelRun parallel =
-        runParallel(simulation,
+    const StreamedFrequencyRun frequency =
+        runFrequency(simulation,
                     ReuseFreqParaSettings{.workerCount = 2U,
                                              .outputQueueCapacity = 1U,
                                              .memoryBudgetBytes = 0U},
@@ -586,29 +586,29 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
         reuse.statistics.cacheFingerprintVerified &&
             reuse.statistics.cacheFingerprintBefore ==
                 reuse.statistics.cacheFingerprintAfter &&
-            parallel.statistics.cacheFingerprintVerified &&
-            parallel.statistics.cacheFingerprintBefore ==
-                parallel.statistics.cacheFingerprintAfter,
+            frequency.statistics.cacheFingerprintVerified &&
+            frequency.statistics.cacheFingerprintBefore ==
+                frequency.statistics.cacheFingerprintAfter,
         "ray-centered GeoHat C/I/S preserves the frozen cache fingerprint");
     for (std::size_t index = 0U; index < 2U; ++index) {
-      context.check(parallel.workspaces[index].has_value(),
-                    "parallel ray-centered GeoHat returns every frequency");
-      if (!parallel.workspaces[index].has_value()) continue;
+      context.check(frequency.workspaces[index].has_value(),
+                    "frequency ray-centered GeoHat returns every frequency");
+      if (!frequency.workspaces[index].has_value()) continue;
       checkWorkspaceEqual(context,
                           reuse.frequencyResults[index].workspaces.front(),
                           nonReuse.frequencyResults[index].workspace,
                           "ray-centered GeoHat reuse equals non-reuse bitwise");
       checkWorkspaceEqual(
-          context, parallel.workspaces[index]->front(),
+          context, frequency.workspaces[index]->front(),
           nonReuse.frequencyResults[index].workspace,
-          "ray-centered GeoHat parallel equals non-reuse bitwise");
+          "ray-centered GeoHat frequency equals non-reuse bitwise");
     }
   }
 }
 
 void testMemoryBudget(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
-  const StreamedParallelRun unrestricted = runParallel(
+  const StreamedFrequencyRun unrestricted = runFrequency(
       simulation, ReuseFreqParaSettings{.workerCount = 4U,
                                            .outputQueueCapacity = 1U,
                                            .memoryBudgetBytes = 0U});
@@ -617,7 +617,7 @@ void testMemoryBudget(Context& context) {
       unrestricted.statistics.estimatedWorkspaceBytes;
   const std::size_t twoWorkerBudget = cacheBytes + 4U * workspaceBytes;
 
-  const StreamedParallelRun constrained = runParallel(
+  const StreamedFrequencyRun constrained = runFrequency(
       simulation,
       ReuseFreqParaSettings{.workerCount = 4U,
                                .outputQueueCapacity = 1U,
@@ -629,7 +629,7 @@ void testMemoryBudget(Context& context) {
 
   context.expectThrows<ValidationError>(
       [&]() {
-        static_cast<void>(runParallel(
+        static_cast<void>(runFrequency(
             simulation,
             ReuseFreqParaSettings{
                 .workerCount = 4U,
@@ -653,7 +653,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
                                      .outputQueueCapacity = 1U,
                                      .memoryBudgetBytes = 0U}));
       },
-      "parallel solver rejects zero workers");
+      "frequency solver rejects zero workers");
   context.expectThrows<ValidationError>(
       [&]() {
         static_cast<void>(ReuseFreqParaSolver::solveStreaming(
@@ -664,7 +664,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
                                      .outputQueueCapacity = 0U,
                                      .memoryBudgetBytes = 0U}));
       },
-      "parallel solver rejects an empty output queue");
+      "frequency solver rejects an empty output queue");
   context.expectThrows<ValidationError>(
       [&]() {
         static_cast<void>(ReuseFreqParaSolver::solveStreaming(
@@ -675,7 +675,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
                                      .outputQueueCapacity = 3U,
                                      .memoryBudgetBytes = 0U}));
       },
-      "parallel solver rejects output queue capacity above two");
+      "frequency solver rejects output queue capacity above two");
   context.expectThrows<std::runtime_error>(
       [&]() {
         static_cast<void>(ReuseFreqParaSolver::solveStreaming(
@@ -688,7 +688,7 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
                                      .outputQueueCapacity = 1U,
                                      .memoryBudgetBytes = 0U}));
       },
-      "parallel solver stops workers and propagates "
+      "frequency solver stops workers and propagates "
       "consumer failures");
 }
 
@@ -709,9 +709,9 @@ int main() {
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " parallel-ray-reuse-solver assertion(s) failed\n";
+              << " reuse-freq-para-solver assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse parallel-ray-reuse-solver tests passed\n";
+  std::cout << "All Bellhop RayReuse reuse-freq-para-solver tests passed\n";
   return 0;
 }

@@ -300,7 +300,7 @@ void checkDivergentPrefixes(Context& context,
       ++truncatedRays;
     }
   }
-  std::cout << "fused-hat-parity " << label
+  std::cout << "range-hat-parity " << label
             << ": rays=" << cache.size() << " divergent-prefix rays="
             << divergentRays << " cutoff-truncated rays=" << truncatedRays
             << '\n';
@@ -514,7 +514,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
   context.check(
       callbackOrder.size() == frequencies.size() &&
           std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
-      std::string(label) + " Level C fused consumer visits every frequency "
+      std::string(label) + " Level C Range Reuse consumer visits every frequency "
                            "in index order");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
@@ -542,7 +542,7 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
               fusedStatistics.cacheFingerprintAfter &&
           fusedStatistics.cacheFingerprintBefore ==
               serial.statistics.cacheFingerprintBefore,
-      std::string(label) + " Level A fused cache fingerprint is stable and "
+      std::string(label) + " Level A Range Reuse cache fingerprint is stable and "
                            "matches serial reuse");
 }
 
@@ -605,7 +605,7 @@ int main() {
   Context context;
 
   // Scope acceptance is gated per family x mode x coordinate in
-  // rayreuse.component.fused_solver; one assertion here keeps the parity
+  // rayreuse.reuse.range.solver; one assertion here keeps the parity
   // test honest about the domain it exercises.
   context.check(
       supportsReuseRangePara(makeMunkHatCase(SimulationRunMode::Coherent,
@@ -626,9 +626,9 @@ int main() {
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()
-              << " fused-hat-parity assertion(s) failed\n";
+              << " range-hat-parity assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop RayReuse fused-hat-parity tests passed\n";
+  std::cout << "All Bellhop RayReuse range-hat-parity tests passed\n";
   return 0;
 }

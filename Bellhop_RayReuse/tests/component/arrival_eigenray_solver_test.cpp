@@ -118,7 +118,7 @@ void testArrivalModes(Context& context) {
         nonreuseUnchanged[index] = before == nonreuseFingerprint[index];
       },
       true);
-  const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveParallel(
+  const ArrivalSolverStatistics parallelStats = ArrivalSolver::solveFrequency(
       simulation,
       [&](std::size_t index, const std::vector<RayPathCache>& caches,
           const std::vector<ArrivalWorkspace>& workspaces) {
@@ -255,7 +255,7 @@ void testEigenrayModes(Context& context) {
         nonreuseUnchanged[f] = before == nonreuseFingerprint[f];
       },
       true);
-  const EigenraySolverStatistics parallelStats = EigenraySolver::solveParallel(
+  const EigenraySolverStatistics parallelStats = EigenraySolver::solveFrequency(
       simulation,
       [&](std::size_t f, const std::vector<RayPathCache>& caches,
           const std::vector<EigenraySourceHits>& sourceHits) {
@@ -330,7 +330,7 @@ void testRayCenteredProductModes(Context& context) {
       ArrivalSolver::solveNonReuse(arrivals, arrivalConsumer(nonreuseArrivals),
                                    true);
   const ArrivalSolverStatistics parallelArrivalStats =
-      ArrivalSolver::solveParallel(arrivals, arrivalConsumer(parallelArrivals),
+      ArrivalSolver::solveFrequency(arrivals, arrivalConsumer(parallelArrivals),
                                    2U, true);
   context.check(!reuseArrivals[0U].empty() &&
                     reuseArrivals == nonreuseArrivals &&
@@ -367,7 +367,7 @@ void testRayCenteredProductModes(Context& context) {
   const EigenraySolverStatistics nonreuseEigenrayStats =
       EigenraySolver::solveNonReuse(eigenrays, hitConsumer(nonreuseHits), true);
   const EigenraySolverStatistics parallelEigenrayStats =
-      EigenraySolver::solveParallel(eigenrays, hitConsumer(parallelHits), 2U,
+      EigenraySolver::solveFrequency(eigenrays, hitConsumer(parallelHits), 2U,
                                     true);
   context.check(!reuseHits[0U].empty() && reuseHits == nonreuseHits &&
                     reuseHits == parallelHits,

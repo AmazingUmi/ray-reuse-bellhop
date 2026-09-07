@@ -29,7 +29,7 @@ struct EigenraySolverStatistics {
   double consumeSeconds{};
   bool cacheFingerprintVerified{};
   // Trace-worker statistics of the shared seam (Worklist PERF-TRACE-PAR-1
-  // A01): one per-source group for reuse/parallel runs, Nfreq appended
+  // A01): one per-source group for Serial/Frequency Reuse runs, Nfreq appended
   // groups for non-reuse runs that re-trace per frequency.
   std::size_t requestedTraceWorkerCount{1U};
   std::size_t effectiveTraceWorkerCount{1U};
@@ -65,7 +65,7 @@ class EigenraySolver {
       const SimulationCase& simulation,
       const FrozenFrequencyEigenrayConsumer& consumer,
       bool verifyCache = false, RayFanTraceSettings traceSettings = {});
-  [[nodiscard]] static EigenraySolverStatistics solveParallel(
+  [[nodiscard]] static EigenraySolverStatistics solveFrequency(
       const SimulationCase& simulation,
       const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount,
       bool verifyCache = false, RayFanTraceSettings traceSettings = {});

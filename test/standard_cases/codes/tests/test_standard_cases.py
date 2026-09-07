@@ -19,7 +19,8 @@ sys.path.insert(0, str(PLOTREAD_TESTS_ROOT))
 
 from case_model import discover_cases
 from standard_cases import (
-    RAYREUSE_EXECUTION_ARGUMENTS,
+    rayreuse_execution_arguments,
+    require_rayreuse_execution_mode,
     VersionAdapter,
     build_parser,
     default_adapters,
@@ -144,15 +145,15 @@ class StandardCasesAdapterTests(unittest.TestCase):
             ]
         )
         self.assertEqual(
-            default_args.rayreuse_execution_mode,
+            default_args.execution_mode,
             "nonreuse",
         )
 
-        for execution_mode in (
-            "nonreuse",
-            "reuse-serial",
-            "reuse-frequency",
-            "reuse-range",
+        for execution_mode, reuse_mode in (
+            ("nonreuse", None),
+            ("reuse", "serial"),
+            ("reuse", "frequency"),
+            ("reuse", "range"),
         ):
             with self.subTest(execution_mode=execution_mode):
                 args = parser.parse_args(
@@ -162,19 +163,20 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         "rayreuse",
                         "--profile",
                         "broadband_smoke",
-                        "--rayreuse-execution-mode",
+                        "--execution-mode",
                         execution_mode,
+                        *(["--reuse-mode", reuse_mode] if reuse_mode else []),
                     ]
                 )
                 self.assertEqual(
-                    args.rayreuse_execution_mode,
+                    args.execution_mode,
                     execution_mode,
                 )
 
     def test_rayreuse_broadband_cli_passes_explicit_execution_modes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             working_directory = Path(temporary_directory)
-            executable = working_directory / "bellhop_rayreuse"
+            executable = working_directory / "bellhop_broadband"
             executable.touch()
             adapter = VersionAdapter(
                 name="rayreuse",
@@ -182,11 +184,11 @@ class StandardCasesAdapterTests(unittest.TestCase):
                 enabled=True,
             )
 
-            for execution_mode in (
-                "nonreuse",
-                "reuse-serial",
-                "reuse-frequency",
-                "reuse-range",
+            for execution_mode, reuse_mode in (
+                ("nonreuse", None),
+                ("reuse", "serial"),
+                ("reuse", "frequency"),
+                ("reuse", "range"),
             ):
                 with self.subTest(execution_mode=execution_mode):
                     with patch("standard_cases.subprocess.run") as run:
@@ -195,6 +197,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                             "direct_broadband",
                             (50.0, 250.0),
                             execution_mode,
+                            reuse_mode,
                         )
 
                     run.assert_called_once_with(
@@ -203,7 +206,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                             "direct_broadband",
                             "--frequencies-hz",
                             "50,250",
-                            *RAYREUSE_EXECUTION_ARGUMENTS[execution_mode],
+                            *rayreuse_execution_arguments(execution_mode, reuse_mode),
                         ],
                         cwd=working_directory,
                         check=True,
@@ -224,11 +227,11 @@ class StandardCasesAdapterTests(unittest.TestCase):
         frequencies = self.definition.frequencies("broadband_smoke")
         launch_count = self.definition.shared_launch_angle_count(frequencies)
 
-        for execution_mode in (
-            "nonreuse",
-            "reuse-serial",
-            "reuse-frequency",
-            "reuse-range",
+        for execution_mode, reuse_mode in (
+            ("nonreuse", None),
+            ("reuse", "serial"),
+            ("reuse", "frequency"),
+            ("reuse", "range"),
         ):
             with self.subTest(execution_mode=execution_mode):
                 with tempfile.TemporaryDirectory() as temporary_directory:
@@ -240,6 +243,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         "generate",
                         results_root,
                         execution_mode,
+                        reuse_mode,
                     )
 
                     profile_root = (
@@ -268,6 +272,8 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         manifest["execution_model"],
                         "single_broadband_invocation",
                     )
+                    self.assertEqual(manifest["reuse_mode"], reuse_mode)
+                    self.assertEqual(manifest["broadband_run"]["reuse_mode_argument"], reuse_mode)
                     self.assertEqual(
                         manifest["execution_mode"],
                         execution_mode,
@@ -276,9 +282,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         manifest["broadband_run"][
                             "execution_mode_argument"
                         ],
-                        " ".join(
-                            RAYREUSE_EXECUTION_ARGUMENTS[execution_mode]
-                        ),
+                        execution_mode,
                     )
                     self.assertEqual(
                         manifest["broadband_run"][
@@ -539,10 +543,10 @@ class StandardCasesAdapterTests(unittest.TestCase):
             self.definition,
             expected_dimensions=(1, 1, 1, 1, 1, 2, 3),
         )
-        for execution_mode, mode_markers, trace_passes in (
-            ("nonreuse", ("execution mode = broadband nonreuse",), 2),
+        for execution_mode, reuse_mode, mode_markers, trace_passes in (
+            ("nonreuse", None, ("execution mode = broadband nonreuse",), 2),
             (
-                "reuse-serial",
+                "reuse", "serial",
                 (
                     "execution mode = broadband reuse",
                     "reuse mode = serial",
@@ -550,7 +554,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                 1,
             ),
             (
-                "reuse-frequency",
+                "reuse", "frequency",
                 (
                     "execution mode = broadband reuse",
                     "reuse mode = frequency",
@@ -558,7 +562,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                 1,
             ),
             (
-                "reuse-range",
+                "reuse", "range",
                 (
                     "execution mode = broadband reuse",
                     "reuse mode = range",
@@ -594,6 +598,8 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         execution_mode,
                         print_path,
                         shade_path,
+
+                        reuse_mode=reuse_mode,
                     )
 
     def test_broadband_validation_applies_multi_source_trace_statistics(
@@ -617,10 +623,10 @@ class StandardCasesAdapterTests(unittest.TestCase):
                 *definition.prt_markers,
             )
             write_little_endian_rectilinear_file(shade_path, frequencies)
-            for execution_mode, mode_markers, trace_passes in (
-                ("nonreuse", ("execution mode = broadband nonreuse",), 4),
+            for execution_mode, reuse_mode, mode_markers, trace_passes in (
+                ("nonreuse", None, ("execution mode = broadband nonreuse",), 4),
                 (
-                    "reuse-serial",
+                    "reuse", "serial",
                     (
                         "execution mode = broadband reuse",
                         "reuse mode = serial",
@@ -628,7 +634,7 @@ class StandardCasesAdapterTests(unittest.TestCase):
                     2,
                 ),
                 (
-                    "reuse-frequency",
+                    "reuse", "frequency",
                     (
                         "execution mode = broadband reuse",
                         "reuse mode = frequency",
@@ -653,16 +659,18 @@ class StandardCasesAdapterTests(unittest.TestCase):
                         execution_mode,
                         print_path,
                         shade_path,
+
+                        reuse_mode=reuse_mode,
                     )
             # Single-source statistics must now be rejected for NSz = 2.
-            for execution_mode, mode_markers, wrong_trace_passes in (
+            for execution_mode, reuse_mode, mode_markers, wrong_trace_passes in (
                 (
-                    "nonreuse",
+                    "nonreuse", None,
                     ("execution mode = broadband nonreuse",),
                     "2",
                 ),
                 (
-                    "reuse-serial",
+                    "reuse", "serial",
                     (
                         "execution mode = broadband reuse",
                         "reuse mode = serial",
@@ -694,6 +702,8 @@ class StandardCasesAdapterTests(unittest.TestCase):
                             execution_mode,
                             print_path,
                             shade_path,
+
+                            reuse_mode=reuse_mode,
                         )
 
     def test_broadband_validation_rejects_wrong_mode_statistics(self) -> None:
