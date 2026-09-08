@@ -26,7 +26,7 @@ PROFILES = {
     "single": (5000.0,),
     "broadband_smoke": (4000.0, 5000.0),
 }
-VERSIONS = ("origin", "f2cpp", "rayreuse")
+VERSIONS = ("origin", "f2cpp", "broadband")
 
 
 def sha256(path: Path) -> str:
@@ -87,11 +87,11 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     supplied = {"origin": origin_executable, "f2cpp": f2cpp_executable}
-    if rayreuse_executable is not None:
-        supplied["rayreuse"] = rayreuse_executable
+    if broadband_executable is not None:
+        supplied["broadband"] = broadband_executable
     executables = {name: path.resolve() for name, path in supplied.items()}
     if len(set(executables.values())) != len(executables):
         raise ValueError("implementation executable paths must be distinct")
@@ -131,18 +131,18 @@ def validate(
     # Validate rendered input environments consistency across implementations
     for suffix in UNIT_SUFFIXES:
         case_id = f"attenuation_unit_{suffix}"
-        # Single profile: Origin, F2CPP, and RayReuse must have identical rendered ENV bytes
+        # Single profile: Origin, F2CPP, and Broadband must have identical rendered ENV bytes
         origin_single_env = paths["origin"][case_id]["single"][0][0].read_bytes()
         f2cpp_single_env = paths["f2cpp"][case_id]["single"][0][0].read_bytes()
         if origin_single_env != f2cpp_single_env:
             raise ValueError(
                 f"{case_id}/single: origin and f2cpp rendered env bytes differ"
             )
-        if "rayreuse" in executables:
-            rayreuse_single_env = paths["rayreuse"][case_id]["single"][0][0].read_bytes()
-            if rayreuse_single_env != origin_single_env:
+        if "broadband" in executables:
+            broadband_single_env = paths["broadband"][case_id]["single"][0][0].read_bytes()
+            if broadband_single_env != origin_single_env:
                 raise ValueError(
-                    f"{case_id}/single: rayreuse rendered env bytes differ from origin"
+                    f"{case_id}/single: broadband rendered env bytes differ from origin"
                 )
 
         # Broadband profile: Origin and F2CPP per-frequency rendered ENVs must match
@@ -167,29 +167,29 @@ def validate(
         for profile, frequencies in PROFILES.items():
             fmax = max(frequencies)
             for index, frequency in enumerate(frequencies):
-                # Origin/F2CPP products are one file per run; RayReuse is one
+                # Origin/F2CPP products are one file per run; Broadband is one
                 # broadband SHD, hence its frequency slice is selected below.
                 version_shades = {}
                 for version in executables:
                     loaded = paths[version][case_id][profile]
                     shade = (
                         loaded[0][1]
-                        if version == "rayreuse"
+                        if version == "broadband"
                         else loaded[index][1]
                     )
                     version_shades[version] = shade
                 for left, right in itertools.combinations(versions, 2):
                     is_gating = (
-                        (left, right) == ("origin", "rayreuse")
-                        or (right, left) == ("origin", "rayreuse")
+                        (left, right) == ("origin", "broadband")
+                        or (right, left) == ("origin", "broadband")
                         or frequency == fmax
                         or profile == "single"
                     )
                     passed, metrics = compare_files(
                         version_shades[left],
                         version_shades[right],
-                        0 if left != "rayreuse" else index,
-                        0 if right != "rayreuse" else index,
+                        0 if left != "broadband" else index,
+                        0 if right != "broadband" else index,
                         tolerance_path,
                     )
                     if is_gating:
@@ -225,11 +225,11 @@ def validate(
                 loaded = paths[version][case_id][profile]
                 shade = (
                     loaded[0][1]
-                    if version == "rayreuse"
+                    if version == "broadband"
                     else loaded[index][1]
                 )
                 pressure = ShdReader(shade).read(
-                    frequency_index=index if version == "rayreuse" else 0
+                    frequency_index=index if version == "broadband" else 0
                 ).pressure
                 if reference is None:
                     reference = pressure
@@ -248,7 +248,7 @@ def validate(
                     p4k = ShdReader(
                         paths[version][case_id][profile][0][1]
                     ).read(
-                        frequency_index=0 if version == "rayreuse" else 0
+                        frequency_index=0 if version == "broadband" else 0
                     ).pressure
                     if ref_linear is None:
                         ref_linear = p4k
@@ -262,7 +262,7 @@ def validate(
                     p4k = ShdReader(
                         paths[version][case_id][profile][0][1]
                     ).read(
-                        frequency_index=0 if version == "rayreuse" else 0
+                        frequency_index=0 if version == "broadband" else 0
                     ).pressure
                     if ref_const is None:
                         ref_const = p4k
@@ -273,11 +273,11 @@ def validate(
                 # W at 4 kHz must differ from W at 5 kHz
                 p5k_shade = (
                     paths[version]["attenuation_unit_w"][profile][0][1]
-                    if version == "rayreuse"
+                    if version == "broadband"
                     else paths[version]["attenuation_unit_w"][profile][1][1]
                 )
                 p5k = ShdReader(p5k_shade).read(
-                    frequency_index=1 if version == "rayreuse" else 0
+                    frequency_index=1 if version == "broadband" else 0
                 ).pressure
                 if np.array_equal(ref_linear, p5k):
                     raise ValueError(
@@ -294,7 +294,7 @@ def validate(
                 ] = True
 
     return {
-        "schema": "bellhop.rayreuse.i4_attenuation_unit_validation",
+        "schema": "bellhop.broadband.i4_attenuation_unit_validation",
         "schema_version": 2,
         "status": "passed",
         "profiles": PROFILES,
@@ -329,7 +329,7 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     rendered = (
@@ -338,7 +338,7 @@ def main() -> None:
                 args.results_root,
                 args.origin_executable,
                 args.f2cpp_executable,
-                args.rayreuse_executable,
+                args.broadband_executable,
             ),
             indent=2,
             sort_keys=True,

@@ -3,8 +3,9 @@
 ## 职责与范围
 
 本阶段将原版 Bellhop Fortran 定义为场结果的主要数值 oracle，
-`Bellhop_F2CPP` 用作单频 C++ 派生一致性参考，`Bellhop_RayReuse` 是覆盖
-single、nonreuse、reuse 和 parallel 的被验收对象。快照只冻结共享标准算例
+`Bellhop_F2CPP` 用作单频 C++ 派生一致性参考，`Bellhop_Broadband`（Bellhop
+Broadband 产品实现）是覆盖 single、nonreuse 与 reuse 三路线
+（serial/frequency/range）的被验收对象。快照只冻结共享标准算例
 的代表性数值，不代替完整 SHD 逐场比较。
 
 首批参考限定为六个算例的 `single` profile。每个频率切片保存：

@@ -84,20 +84,20 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     executables = {
         "origin": origin_executable.resolve(),
         "f2cpp": f2cpp_executable.resolve(),
     }
-    if rayreuse_executable is not None:
-        executables["rayreuse"] = rayreuse_executable.resolve()
+    if broadband_executable is not None:
+        executables["broadband"] = broadband_executable.resolve()
 
     if executables["origin"] == executables["f2cpp"]:
         raise ValueError("Origin and F2CPP executables must be distinct")
-    if "rayreuse" in executables:
-        if executables["rayreuse"] == executables["origin"] or executables["rayreuse"] == executables["f2cpp"]:
-            raise ValueError("RayReuse executable must be distinct from Origin and F2CPP")
+    if "broadband" in executables:
+        if executables["broadband"] == executables["origin"] or executables["broadband"] == executables["f2cpp"]:
+            raise ValueError("Broadband executable must be distinct from Origin and F2CPP")
     if not all(path.is_file() for path in executables.values()):
         raise ValueError("an expected executable does not exist")
     executable_hashes = {
@@ -108,7 +108,7 @@ def validate(
             "Origin and F2CPP executables must have distinct content hashes"
         )
 
-    versions = ("origin", "f2cpp", "rayreuse") if "rayreuse" in executables else ("origin", "f2cpp")
+    versions = ("origin", "f2cpp", "broadband") if "broadband" in executables else ("origin", "f2cpp")
     loaded: dict[str, dict[str, dict[str, list[tuple[Path, Path]]]]] = {
         v: {} for v in versions
     }
@@ -135,8 +135,8 @@ def validate(
         raise ValueError("Origin and F2CPP rendered ENV inputs differ")
 
     comparisons: dict[str, dict[str, float | bool]] = {}
-    origin_rayreuse_comparisons: dict[str, dict[str, float | bool]] = {}
-    f2cpp_rayreuse_comparisons: dict[str, dict[str, float | bool]] = {}
+    origin_broadband_comparisons: dict[str, dict[str, float | bool]] = {}
+    f2cpp_broadband_comparisons: dict[str, dict[str, float | bool]] = {}
     tolerance_path = STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
     for case_id in (ELASTIC_CASE, CONTROL_CASE):
         for profile, frequencies in PROFILES.items():
@@ -156,30 +156,30 @@ def validate(
                     **metrics,
                 }
 
-                if "rayreuse" in versions:
-                    rayreuse_shade = loaded["rayreuse"][case_id][profile][index][1]
+                if "broadband" in versions:
+                    broadband_shade = loaded["broadband"][case_id][profile][index][1]
                     rr_passed_origin, rr_metrics_origin = compare_files(
-                        origin_shade, rayreuse_shade, 0, index, tolerance_path
+                        origin_shade, broadband_shade, 0, index, tolerance_path
                     )
                     if not rr_passed_origin:
                         raise ValueError(
-                            f"{case_id}/{profile}/{frequency:g}Hz origin↔rayreuse field mismatch: "
+                            f"{case_id}/{profile}/{frequency:g}Hz origin↔broadband field mismatch: "
                             f"{rr_metrics_origin}"
                         )
-                    origin_rayreuse_comparisons[f"{case_id}/{profile}/{frequency:g}Hz"] = {
+                    origin_broadband_comparisons[f"{case_id}/{profile}/{frequency:g}Hz"] = {
                         "passed": True,
                         **rr_metrics_origin,
                     }
 
                     rr_passed_f2cpp, rr_metrics_f2cpp = compare_files(
-                        f2cpp_shade, rayreuse_shade, 0, index, tolerance_path
+                        f2cpp_shade, broadband_shade, 0, index, tolerance_path
                     )
                     if not rr_passed_f2cpp:
                         raise ValueError(
-                            f"{case_id}/{profile}/{frequency:g}Hz f2cpp↔rayreuse field mismatch: "
+                            f"{case_id}/{profile}/{frequency:g}Hz f2cpp↔broadband field mismatch: "
                             f"{rr_metrics_f2cpp}"
                         )
-                    f2cpp_rayreuse_comparisons[f"{case_id}/{profile}/{frequency:g}Hz"] = {
+                    f2cpp_broadband_comparisons[f"{case_id}/{profile}/{frequency:g}Hz"] = {
                         "passed": True,
                         **rr_metrics_f2cpp,
                     }
@@ -188,7 +188,7 @@ def validate(
     for version in versions:
         for profile, frequencies in PROFILES.items():
             for index, frequency in enumerate(frequencies):
-                freq_idx = index if version == "rayreuse" else 0
+                freq_idx = index if version == "broadband" else 0
                 elastic_pressure = ShdReader(
                     loaded[version][ELASTIC_CASE][profile][index][1]
                 ).read(frequency_index=freq_idx).pressure
@@ -214,7 +214,7 @@ def validate(
 
     result_payload: dict[str, object] = {
         "schema": "bellhop.f2cpp.i4_elastic_halfspace_validation",
-        "schema_version": 2 if "rayreuse" in versions else 1,
+        "schema_version": 2 if "broadband" in versions else 1,
         "status": "passed",
         "cases": {
             "elastic": ELASTIC_CASE,
@@ -233,13 +233,13 @@ def validate(
             "elastic_long_format_remains_explicitly_rejected": True,
         },
         "generation": {
-            "case_command": "python3 test/standard_cases/codes/standard_cases.py test --version <origin|f2cpp|rayreuse> --case <elastic_halfspace_flat|elastic_halfspace_fluid_control> --profile <single|broadband_smoke> --executable <matching-executable> --results-root <results-root>",
+            "case_command": "python3 test/standard_cases/codes/standard_cases.py test --version <origin|f2cpp|broadband> --case <elastic_halfspace_flat|elastic_halfspace_fluid_control> --profile <single|broadband_smoke> --executable <matching-executable> --results-root <results-root>",
             "validator_command": (
                 "python3 test/standard_cases/codes/validate_i4_elastic_halfspace.py "
                 "--results-root <results-root> "
                 "--origin-executable Bellhop_origin/bin/bellhop "
                 "--f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
-                + (" --rayreuse-executable Bellhop_RayReuse/build/release/bellhop_rayreuse" if "rayreuse" in versions else "")
+                + (" --broadband-executable Bellhop_Broadband/build/release/bellhop_broadband" if "broadband" in versions else "")
             ),
         },
         "sha256": {
@@ -251,11 +251,11 @@ def validate(
         },
     }
 
-    if "rayreuse" in versions:
-        result_payload["origin_rayreuse_field_comparisons"] = origin_rayreuse_comparisons
-        result_payload["f2cpp_rayreuse_field_comparisons"] = f2cpp_rayreuse_comparisons
-        result_payload["sha256"]["rayreuse_executable"] = executable_hashes["rayreuse"]
-        result_payload["sha256"]["rayreuse_field_aggregate"] = aggregate_sha256(field_paths["rayreuse"])
+    if "broadband" in versions:
+        result_payload["origin_broadband_field_comparisons"] = origin_broadband_comparisons
+        result_payload["f2cpp_broadband_field_comparisons"] = f2cpp_broadband_comparisons
+        result_payload["sha256"]["broadband_executable"] = executable_hashes["broadband"]
+        result_payload["sha256"]["broadband_field_aggregate"] = aggregate_sha256(field_paths["broadband"])
 
     return result_payload
 
@@ -265,14 +265,14 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
         args.results_root,
         args.origin_executable,
         args.f2cpp_executable,
-        rayreuse_executable=args.rayreuse_executable,
+        broadband_executable=args.broadband_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

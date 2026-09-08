@@ -15,7 +15,7 @@ OUTPUT_KINDS = {
     "arrivals_binary",
     "eigenray",
 }
-KNOWN_VERSIONS = ("origin", "f2cpp", "rayreuse")
+KNOWN_VERSIONS = ("origin", "f2cpp", "broadband")
 
 
 @dataclass(frozen=True)
@@ -206,7 +206,7 @@ def load_case(case_directory: Path) -> CaseDefinition:
         )
     supported_versions = tuple(
         raw.get("compatibility", {}).get(
-            "versions", ("origin", "f2cpp", "rayreuse")
+            "versions", ("origin", "f2cpp", "broadband")
         )
     )
     if not supported_versions or len(set(supported_versions)) != len(

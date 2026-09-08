@@ -111,7 +111,7 @@ class CaseModelTests(unittest.TestCase):
             with self.subTest(unit=suffix):
                 self.assertEqual(
                     self.cases[f"attenuation_unit_{suffix}"].supported_versions,
-                    ("origin", "f2cpp", "rayreuse"),
+                    ("origin", "f2cpp", "broadband"),
                 )
         for case_id in (
             "cerveny_width_space_filling",
@@ -133,7 +133,7 @@ class CaseModelTests(unittest.TestCase):
             with self.subTest(case=case_id):
                 self.assertEqual(
                     self.cases[case_id].supported_versions,
-                    ("origin", "f2cpp", "rayreuse"),
+                    ("origin", "f2cpp", "broadband"),
                 )
         for case_id in (
             "elastic_halfspace_flat",
@@ -179,7 +179,7 @@ class CaseModelTests(unittest.TestCase):
             with self.subTest(case=case_id):
                 self.assertEqual(
                     self.cases[case_id].supported_versions,
-                    ("origin", "f2cpp", "rayreuse"),
+                    ("origin", "f2cpp", "broadband"),
                 )
 
     def test_i7_geometric_hat_fixtures_only_change_coordinate_family(self) -> None:
@@ -235,7 +235,7 @@ class CaseModelTests(unittest.TestCase):
         )
         self.assertEqual(
             definition.supported_versions,
-            ("origin", "f2cpp", "rayreuse"),
+            ("origin", "f2cpp", "broadband"),
         )
 
     def test_i7_ray_centered_fixtures_only_change_family_and_component(self) -> None:
@@ -446,7 +446,7 @@ class CaseModelTests(unittest.TestCase):
                 self.assertEqual(frequencies, (100.0,))
                 self.assertEqual(
                     definition.supported_versions,
-                    ("origin", "f2cpp", "rayreuse"),
+                    ("origin", "f2cpp", "broadband"),
                 )
                 rendered = definition.render_origin_environment(
                     frequencies[0],
@@ -481,7 +481,7 @@ class CaseModelTests(unittest.TestCase):
                 self.assertEqual(frequencies, (100.0,))
                 self.assertEqual(
                     definition.supported_versions,
-                    ("origin", "f2cpp", "rayreuse"),
+                    ("origin", "f2cpp", "broadband"),
                 )
                 rendered = definition.render_origin_environment(
                     frequencies[0],
@@ -535,7 +535,7 @@ class CaseModelTests(unittest.TestCase):
         self.assertIsNone(ray_case.expected_dimensions)
         self.assertEqual(
             ray_case.supported_versions,
-            ("origin", "f2cpp", "rayreuse"),
+            ("origin", "f2cpp", "broadband"),
         )
         self.assertEqual(
             ray_case.shared_launch_angle_count(ray_case.frequencies("single")),
@@ -577,7 +577,7 @@ class CaseModelTests(unittest.TestCase):
             ):
                 load_case(target)
 
-    def test_rayreuse_product_cases_are_in_shared_manifest(self) -> None:
+    def test_broadband_product_cases_are_in_shared_manifest(self) -> None:
         expected = {
             "ray_trace_directional_tabulated": "ray",
             "arrival_geometric_hat_ascii": "arrivals_ascii",
@@ -598,7 +598,7 @@ class CaseModelTests(unittest.TestCase):
             with self.subTest(case=case_id):
                 definition = self.cases[case_id]
                 self.assertEqual(definition.output_kind, output_kind)
-                self.assertIn("rayreuse", definition.supported_versions)
+                self.assertIn("broadband", definition.supported_versions)
                 self.assertEqual(definition.frequencies("single"), (1000.0,))
 
     def test_shd_output_remains_the_default(self) -> None:
@@ -631,14 +631,14 @@ class CaseModelTests(unittest.TestCase):
     def test_pchip_case_is_scoped_to_implemented_versions(self) -> None:
         self.assertEqual(
             self.cases["munk_pchip"].supported_versions,
-            ("origin", "f2cpp", "rayreuse"),
+            ("origin", "f2cpp", "broadband"),
         )
 
     def test_n2_case_is_scoped_to_implemented_versions(self) -> None:
         definition = self.cases["munk_n2"]
         self.assertEqual(
             definition.supported_versions,
-            ("origin", "f2cpp", "rayreuse"),
+            ("origin", "f2cpp", "broadband"),
         )
         self.assertEqual(
             definition.frequencies("broadband_smoke"),
@@ -649,7 +649,7 @@ class CaseModelTests(unittest.TestCase):
         definition = self.cases["munk_spline"]
         self.assertEqual(
             definition.supported_versions,
-            ("origin", "f2cpp", "rayreuse"),
+            ("origin", "f2cpp", "broadband"),
         )
         self.assertEqual(
             definition.frequencies("broadband_smoke"),

@@ -92,13 +92,13 @@ class AttenuationUnitsValidatorTests(unittest.TestCase):
             bin_root.mkdir(parents=True)
             origin_exe = bin_root / "bellhop_origin"
             f2cpp_exe = bin_root / "bellhop_f2cpp"
-            rayreuse_exe = bin_root / "bellhop_rayreuse"
+            broadband_exe = bin_root / "bellhop_broadband"
             origin_exe.write_text("origin_binary")
             f2cpp_exe.write_text("f2cpp_binary")
-            rayreuse_exe.write_text("rayreuse_binary")
+            broadband_exe.write_text("broadband_binary")
 
             # Create synthetic products
-            for version, exe in [("origin", origin_exe), ("f2cpp", f2cpp_exe), ("rayreuse", rayreuse_exe)]:
+            for version, exe in [("origin", origin_exe), ("f2cpp", f2cpp_exe), ("broadband", broadband_exe)]:
                 for suffix in UNIT_SUFFIXES:
                     case_id = f"attenuation_unit_{suffix}"
                     # Single profile
@@ -127,7 +127,7 @@ class AttenuationUnitsValidatorTests(unittest.TestCase):
                     # Broadband smoke profile
                     smoke_dir = results_root / version / case_id / "broadband_smoke"
                     p_4k = 0.8 if suffix in ("f", "w", "q", "l") else 1.0
-                    if version == "rayreuse":
+                    if version == "broadband":
                         b_run_dir = smoke_dir / "broadband"
                         b_run_dir.mkdir(parents=True)
                         b_env = b_run_dir / f"{case_id}_broadband_smoke_broadband.env"
@@ -188,7 +188,7 @@ class AttenuationUnitsValidatorTests(unittest.TestCase):
                         }
                         (smoke_dir / "run_manifest.json").write_text(json.dumps(manifest))
 
-            res = validate(results_root, origin_exe, f2cpp_exe, rayreuse_exe)
+            res = validate(results_root, origin_exe, f2cpp_exe, broadband_exe)
             self.assertEqual(res["status"], "passed")
             self.assertEqual(res["total_pairwise_comparisons"], 54)
             self.assertEqual(res["gating_passed_comparisons"], 42)
@@ -202,12 +202,12 @@ class AttenuationUnitsValidatorTests(unittest.TestCase):
             bin_root.mkdir(parents=True)
             origin_exe = bin_root / "bellhop_origin"
             f2cpp_exe = bin_root / "bellhop_f2cpp"
-            rayreuse_exe = bin_root / "bellhop_rayreuse"
+            broadband_exe = bin_root / "bellhop_broadband"
             origin_exe.write_text("origin_binary")
             f2cpp_exe.write_text("f2cpp_binary")
-            rayreuse_exe.write_text("rayreuse_binary")
+            broadband_exe.write_text("broadband_binary")
 
-            for version, exe in [("origin", origin_exe), ("f2cpp", f2cpp_exe), ("rayreuse", rayreuse_exe)]:
+            for version, exe in [("origin", origin_exe), ("f2cpp", f2cpp_exe), ("broadband", broadband_exe)]:
                 for suffix in UNIT_SUFFIXES:
                     case_id = f"attenuation_unit_{suffix}"
                     single_dir = results_root / version / case_id / "single"
@@ -227,7 +227,7 @@ class AttenuationUnitsValidatorTests(unittest.TestCase):
                     }))
                     # Minimal smoke setup
                     smoke_dir = results_root / version / case_id / "broadband_smoke"
-                    if version == "rayreuse":
+                    if version == "broadband":
                         b_run_dir = smoke_dir / "broadband"
                         b_run_dir.mkdir(parents=True)
                         (b_run_dir / f"{case_id}_broadband_smoke_broadband.env").write_text("broadband_env")
@@ -255,7 +255,7 @@ class AttenuationUnitsValidatorTests(unittest.TestCase):
                         }))
 
             with self.assertRaisesRegex(ValueError, "rendered env bytes differ"):
-                validate(results_root, origin_exe, f2cpp_exe, rayreuse_exe)
+                validate(results_root, origin_exe, f2cpp_exe, broadband_exe)
 
 
 if __name__ == "__main__":

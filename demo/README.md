@@ -13,7 +13,7 @@ demo/
 │   ├── rayreuse_multifrequency.py    # 多频运行和选频绘图
 │   └── tests/                        # 展示代码单元测试
 ├── results/
-│   ├── reliability/                 # origin/F2CPP/RayReuse 单频结果
+│   ├── reliability/                 # origin/F2CPP/Broadband 单频结果
 │   └── rayreuse_multifrequency/      # 一个包含全部频率的 SHD
 ├── figures/
 │   ├── reliability/                 # 一致性图和差值图
@@ -29,7 +29,7 @@ demo/
 基础环境：
 [`cases/reliability/munk_cerveny_cc.env`](./cases/reliability/munk_cerveny_cc.env)
 
-同一个 50 Hz Munk `.env` 分别交给原版 Bellhop、F2CPP 和 RayReuse，确认三者
+同一个 50 Hz Munk `.env` 分别交给原版 Bellhop、F2CPP 和 Bellhop Broadband，确认三者
 都可直接生成 `.prt/.shd`，再对传播损失和复压力误差进行横向比较。
 
 ```bash
@@ -42,11 +42,11 @@ uv run make -C demo all
 # 单独计算并展示某个版本
 uv run make -C demo origin
 uv run make -C demo f2cpp
-uv run make -C demo rayreuse
+uv run make -C demo broadband
 
 # 将计算与绘图拆开
-uv run make -C demo run VERSIONS=origin,f2cpp,rayreuse
-uv run make -C demo plot VERSIONS=origin,f2cpp,rayreuse
+uv run make -C demo run VERSIONS=origin,f2cpp,broadband
+uv run make -C demo plot VERSIONS=origin,f2cpp,broadband
 ```
 
 默认可执行文件：
@@ -54,7 +54,7 @@ uv run make -C demo plot VERSIONS=origin,f2cpp,rayreuse
 ```text
 Bellhop_origin/bin/bellhop
 Bellhop_F2CPP/build/release/bellhop_f2cpp
-Bellhop_RayReuse/build/release/bellhop_rayreuse
+Bellhop_Broadband/build/release/bellhop_broadband
 ```
 
 以 F2CPP 为例，展示脚本对应的原生调用是：
@@ -73,7 +73,7 @@ cd demo/results/reliability/f2cpp
 demo/results/reliability/
 ├── origin/munk_cerveny_cc.env|prt|shd
 ├── f2cpp/munk_cerveny_cc.env|prt|shd
-├── rayreuse/munk_cerveny_cc.env|prt|shd
+├── broadband/munk_cerveny_cc.env|prt|shd
 └── run_summary.json
 
 demo/figures/reliability/
@@ -115,8 +115,8 @@ mkdir -p demo/results/rayreuse_multifrequency
 cp demo/cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env \
   demo/results/rayreuse_multifrequency/
 cd demo/results/rayreuse_multifrequency
-../../../Bellhop_RayReuse/build/release/bellhop_rayreuse \
-  munk_rayreuse_multifrequency --execution-mode reuse
+../../../Bellhop_Broadband/build/release/bellhop_broadband \
+  munk_rayreuse_multifrequency --execution-mode reuse --reuse-mode serial
 ```
 
 输出分类：

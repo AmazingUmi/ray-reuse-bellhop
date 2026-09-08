@@ -90,11 +90,11 @@ def validate(
     root: Path,
     origin: Path,
     f2cpp: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     executables = {"origin": origin.resolve(), "f2cpp": f2cpp.resolve()}
-    if rayreuse_executable is not None:
-        executables["rayreuse"] = rayreuse_executable.resolve()
+    if broadband_executable is not None:
+        executables["broadband"] = broadband_executable.resolve()
     if executables["origin"] == executables["f2cpp"]:
         raise ValueError("executable paths must differ")
     if not all(path.is_file() for path in executables.values()):
@@ -102,12 +102,12 @@ def validate(
     executable_hashes = {key: sha256(path) for key, path in executables.items()}
     if executable_hashes["origin"] == executable_hashes["f2cpp"]:
         raise ValueError("executable hashes must differ")
-    if "rayreuse" in executables and (
+    if "broadband" in executables and (
         len(set(executables.values())) != len(executables)
         or len(set(executable_hashes.values())) != len(executable_hashes)
     ):
         raise ValueError(
-            "Origin, F2CPP, and RayReuse executables must be distinct"
+            "Origin, F2CPP, and Broadband executables must be distinct"
         )
 
     loaded: dict[str, dict[str, list[tuple[Path, Path]]]] = {
@@ -128,23 +128,23 @@ def validate(
     if input_hashes["origin"] != input_hashes["f2cpp"]:
         raise ValueError("Origin and F2CPP rendered ENV inputs differ")
 
-    # Optional RayReuse leg. RayReuse broadband runs share one SHD across the
+    # Optional Broadband leg. Broadband runs share one SHD across the
     # frequency slices, so candidate fields are always read at the run's
     # frequency index instead of slice 0.
-    loaded_rayreuse: dict[str, list[tuple[Path, Path]]] = {}
-    if "rayreuse" in executables:
+    loaded_broadband: dict[str, list[tuple[Path, Path]]] = {}
+    if "broadband" in executables:
         for profile, frequencies in PROFILES.items():
-            loaded_rayreuse[profile] = load_profile(
-                root, "rayreuse", profile, frequencies,
-                executables["rayreuse"],
+            loaded_broadband[profile] = load_profile(
+                root, "broadband", profile, frequencies,
+                executables["broadband"],
             )
-        field_paths["rayreuse"] = [
-            shade for runs in loaded_rayreuse.values()
+        field_paths["broadband"] = [
+            shade for runs in loaded_broadband.values()
             for _, shade in runs
         ]
 
     comparisons: dict[str, dict[str, float | bool]] = {}
-    rayreuse_comparisons: dict[str, dict[str, float | bool]] = {}
+    broadband_comparisons: dict[str, dict[str, float | bool]] = {}
     payload_exact: dict[str, dict[str, object]] = {}
     layout_guards: dict[str, dict[str, float | bool]] = {}
     tolerances = STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
@@ -164,41 +164,41 @@ def validate(
             comparisons[f"{profile}/{frequency:g}Hz"] = {
                 "passed": True, **metrics
             }
-            if loaded_rayreuse:
-                rayreuse_shade = loaded_rayreuse[profile][index][1]
+            if loaded_broadband:
+                broadband_shade = loaded_broadband[profile][index][1]
                 passed, metrics = compare_files(
-                    shades["origin"], rayreuse_shade, 0, index, tolerances
+                    shades["origin"], broadband_shade, 0, index, tolerances
                 )
                 if not passed:
                     raise ValueError(
-                        f"rayreuse/{profile}/{frequency:g}Hz mismatch: "
+                        f"broadband/{profile}/{frequency:g}Hz mismatch: "
                         f"{metrics}"
                     )
-                rayreuse_comparisons[f"{profile}/{frequency:g}Hz"] = {
+                broadband_comparisons[f"{profile}/{frequency:g}Hz"] = {
                     "passed": True, **metrics
                 }
                 f2cpp_payload = decoded_complex64_payload(
                     shades["f2cpp"], 0
                 )
-                rayreuse_payload = decoded_complex64_payload(
-                    rayreuse_shade, index
+                broadband_payload = decoded_complex64_payload(
+                    broadband_shade, index
                 )
                 payload_exact[f"{profile}/{frequency:g}Hz"] = {
-                    "passed": f2cpp_payload == rayreuse_payload,
+                    "passed": f2cpp_payload == broadband_payload,
                     "f2cpp_bytes": len(f2cpp_payload),
-                    "rayreuse_bytes": len(rayreuse_payload),
+                    "broadband_bytes": len(broadband_payload),
                 }
-                if f2cpp_payload != rayreuse_payload:
+                if f2cpp_payload != broadband_payload:
                     raise ValueError(
-                        f"rayreuse/{profile}/{frequency:g}Hz F2CPP payload "
+                        f"broadband/{profile}/{frequency:g}Hz F2CPP payload "
                         "difference (expected zero difference)"
                     )
             for version, shade, slice_index in (
                 ("origin", shades["origin"], 0),
                 ("f2cpp", shades["f2cpp"], 0),
                 *(
-                    (("rayreuse", loaded_rayreuse[profile][index][1], index),)
-                    if loaded_rayreuse
+                    (("broadband", loaded_broadband[profile][index][1], index),)
+                    if loaded_broadband
                     else ()
                 ),
             ):
@@ -234,24 +234,24 @@ def validate(
         ).read().pressure
         if not np.array_equal(single, repeat):
             raise ValueError(f"{version}: repeated 1000Hz slice differs")
-    if loaded_rayreuse:
-        single = ShdReader(loaded_rayreuse["single"][0][1]).read().pressure
+    if loaded_broadband:
+        single = ShdReader(loaded_broadband["single"][0][1]).read().pressure
         repeat = ShdReader(
-            loaded_rayreuse["broadband_smoke"][0][1]
+            loaded_broadband["broadband_smoke"][0][1]
         ).read(frequency_index=0).pressure
         if not np.array_equal(single, repeat):
-            raise ValueError("rayreuse: repeated 1000Hz slice differs")
+            raise ValueError("broadband: repeated 1000Hz slice differs")
 
     executables_for_commands = {
         "origin": "Bellhop_origin/bin/bellhop",
         "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
     }
     command_versions = ("origin", "f2cpp")
-    if rayreuse_executable is not None:
-        executables_for_commands["rayreuse"] = (
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+    if broadband_executable is not None:
+        executables_for_commands["broadband"] = (
+            "Bellhop_Broadband/build/release/bellhop_broadband"
         )
-        command_versions = ("origin", "f2cpp", "rayreuse")
+        command_versions = ("origin", "f2cpp", "broadband")
     commands = [
         "python3 test/standard_cases/codes/standard_cases.py test "
         f"--version {version} --case {CASE_ID} --profile {profile} "
@@ -266,10 +266,10 @@ def validate(
         "--origin-executable Bellhop_origin/bin/bellhop "
         "--f2cpp-executable Bellhop_F2CPP/build/release/bellhop_f2cpp"
     )
-    if rayreuse_executable is not None:
+    if broadband_executable is not None:
         validator_command += (
-            " --rayreuse-executable "
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+            " --broadband-executable "
+            "Bellhop_Broadband/build/release/bellhop_broadband"
         )
     result: dict[str, object] = {
         "schema": "bellhop.f2cpp.i6_irregular_receiver_validation",
@@ -317,13 +317,13 @@ def validate(
         result["sha256"][f"{version}_field_aggregate"] = aggregate_sha256(
             field_paths[version]
         )
-    if loaded_rayreuse:
-        result["origin_rayreuse_field_comparisons"] = rayreuse_comparisons
-        result["f2cpp_rayreuse_payload_exact"] = payload_exact
-        result["sha256"]["rayreuse_field_aggregate"] = aggregate_sha256(
-            field_paths["rayreuse"]
+    if loaded_broadband:
+        result["origin_broadband_field_comparisons"] = broadband_comparisons
+        result["f2cpp_broadband_payload_exact"] = payload_exact
+        result["sha256"]["broadband_field_aggregate"] = aggregate_sha256(
+            field_paths["broadband"]
         )
-        result["provenance_guards"]["f2cpp_rayreuse_payload_zero_difference"] = (
+        result["provenance_guards"]["f2cpp_broadband_payload_zero_difference"] = (
             all(entry["passed"] for entry in payload_exact.values())
         )
     return result
@@ -334,14 +334,14 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
         args.results_root,
         args.origin_executable,
         args.f2cpp_executable,
-        args.rayreuse_executable,
+        args.broadband_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

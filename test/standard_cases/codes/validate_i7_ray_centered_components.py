@@ -337,14 +337,14 @@ def load_run(
     }
 
 
-def generation_commands(include_rayreuse: bool) -> list[str]:
+def generation_commands(include_broadband: bool) -> list[str]:
     executables = {
         "origin": "Bellhop_origin/bin/bellhop",
         "f2cpp": "Bellhop_F2CPP/build/release/bellhop_f2cpp",
     }
-    if include_rayreuse:
-        executables["rayreuse"] = (
-            "Bellhop_RayReuse/build/release/bellhop_rayreuse"
+    if include_broadband:
+        executables["broadband"] = (
+            "Bellhop_Broadband/build/release/bellhop_broadband"
         )
     return [
         "python3 test/standard_cases/codes/standard_cases.py test "
@@ -360,7 +360,7 @@ def validate(
     results_root: Path,
     origin_executable: Path,
     f2cpp_executable: Path,
-    rayreuse_executable: Path | None = None,
+    broadband_executable: Path | None = None,
 ) -> dict[str, object]:
     source_contract = validate_origin_source_contract()
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
@@ -368,8 +368,8 @@ def validate(
         "origin": origin_executable.resolve(),
         "f2cpp": f2cpp_executable.resolve(),
     }
-    if rayreuse_executable is not None:
-        executables["rayreuse"] = rayreuse_executable.resolve()
+    if broadband_executable is not None:
+        executables["broadband"] = broadband_executable.resolve()
     if len(set(executables.values())) != len(executables):
         raise ValueError("implementation executable paths must differ")
     if not all(path.is_file() for path in executables.values()):
@@ -424,9 +424,9 @@ def validate(
     tolerance_path = STANDARD_CASES_ROOT / "codes" / "tolerances.toml"
     comparisons: dict[str, dict[str, object]] = {}
     comparison_pairs = [("origin", "f2cpp")]
-    if "rayreuse" in executables:
+    if "broadband" in executables:
         comparison_pairs.extend(
-            [("origin", "rayreuse"), ("f2cpp", "rayreuse")]
+            [("origin", "broadband"), ("f2cpp", "broadband")]
         )
     for left_version, right_version in comparison_pairs:
         for key, (case_id, _, _) in CASES.items():
@@ -524,7 +524,7 @@ def validate(
         },
         "generation": {
             "case_commands": generation_commands(
-                include_rayreuse="rayreuse" in executables
+                include_broadband="broadband" in executables
             ),
             "validator_command": (
                 "python3 test/standard_cases/codes/"
@@ -534,9 +534,9 @@ def validate(
                 "--f2cpp-executable "
                 "Bellhop_F2CPP/build/release/bellhop_f2cpp "
                 + (
-                    "--rayreuse-executable "
-                    "Bellhop_RayReuse/build/release/bellhop_rayreuse "
-                    if "rayreuse" in executables
+                    "--broadband-executable "
+                    "Bellhop_Broadband/build/release/bellhop_broadband "
+                    if "broadband" in executables
                     else ""
                 )
                 + "--output Bellhop_F2CPP/doc/reports/validation/"
@@ -550,11 +550,11 @@ def validate(
             "f2cpp_field_aggregate": aggregate_sha256(field_paths["f2cpp"]),
             **(
                 {
-                    "rayreuse_field_aggregate": aggregate_sha256(
-                        field_paths["rayreuse"]
+                    "broadband_field_aggregate": aggregate_sha256(
+                        field_paths["broadband"]
                     )
                 }
-                if "rayreuse" in field_paths
+                if "broadband" in field_paths
                 else {}
             ),
             "origin_prt": {
@@ -567,12 +567,12 @@ def validate(
             },
             **(
                 {
-                    "rayreuse_prt": {
-                        key: sha256(loaded["rayreuse"][key]["print"])
+                    "broadband_prt": {
+                        key: sha256(loaded["broadband"][key]["print"])
                         for key in CASES
                     }
                 }
-                if "rayreuse" in loaded
+                if "broadband" in loaded
                 else {}
             ),
         },
@@ -584,14 +584,14 @@ def main() -> None:
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = validate(
         args.results_root,
         args.origin_executable,
         args.f2cpp_executable,
-        args.rayreuse_executable,
+        args.broadband_executable,
     )
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

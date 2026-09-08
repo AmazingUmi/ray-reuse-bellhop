@@ -16,7 +16,7 @@ from rayreuse_multifrequency import parse_indexes
 class ShowcaseTests(unittest.TestCase):
     def test_parse_versions_preserves_requested_order(self) -> None:
         self.assertEqual(
-            parse_versions("rayreuse,origin"), ("rayreuse", "origin")
+            parse_versions("broadband,origin"), ("broadband", "origin")
         )
         with self.assertRaisesRegex(ValueError, "duplicates"):
             parse_versions("origin,origin")

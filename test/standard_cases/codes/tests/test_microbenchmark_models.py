@@ -48,7 +48,7 @@ class MicrobenchmarkModelsTests(unittest.TestCase):
             path = Path(directory) / "case.prt"
             path.write_text("Trace seconds = 1\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Project seconds"):
-                parse_stage_timings(path, "rayreuse")
+                parse_stage_timings(path, "broadband")
 
     def test_summarizes_each_field_by_median(self) -> None:
         summary = summarize_samples(

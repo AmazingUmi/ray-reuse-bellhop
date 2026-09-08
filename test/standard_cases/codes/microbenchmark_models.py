@@ -297,7 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--origin-executable", type=Path, required=True)
     parser.add_argument("--f2cpp-executable", type=Path, required=True)
-    parser.add_argument("--rayreuse-executable", type=Path, required=True)
+    parser.add_argument("--broadband-executable", type=Path, required=True)
     parser.add_argument("--case", action="append", dest="cases")
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repetitions", type=int, default=3)
@@ -315,7 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     executables = {
         "origin": args.origin_executable.resolve(),
         "f2cpp": args.f2cpp_executable.resolve(),
-        "rayreuse": args.rayreuse_executable.resolve(),
+        "broadband": args.broadband_executable.resolve(),
     }
     missing = [str(path) for path in executables.values() if not path.is_file()]
     if missing:

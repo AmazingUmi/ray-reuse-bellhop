@@ -3,10 +3,55 @@
 > 文档状态：架构基线，2026-08-25 完成现状复核。本文保留首版范围、里程碑和
 > go/no-go 决策的形成过程；它们不是当前待办或功能支持表。当前能力以
 > [`F2CPP 支持矩阵`](../../Bellhop_F2CPP/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
-> 和 [`RayReuse 支持矩阵`](../../Bellhop_RayReuse/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
+> 和 [`RayReuse 支持矩阵`](../../Bellhop_Broadband/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)
 > 为准，当前工作只从 [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md) 进入。
 
 > 具体变量名、坐标方向、内部单位、数值类型、索引和初始容差以 [基础变量、单位与数值规范](../reference/REFERENCE_NUMERICAL_CONVENTIONS.md) 为准；本文件侧重算法和架构。
+
+## 当前实现与 IGR-3 封板架构
+
+本文后续章节保留早期分析、首版范围和历史演进依据。IGR-3A 与 IGR-3B 已于
+2026-09-04 完成独立验收并提交（`dda1c2c`、`0050f59`）。当前 production
+使用一个 unified Cross-Frequency Fused executor，并可显式启用静态连续
+range parallelism：
+
+```text
+Frozen RayPathCache
+        |
+Frequency Projection
+        |
+Cross-Frequency Influence Execution
+  + Static Range Parallelism
+        |
+Beam-family kernel
+        |
+        +-------------------+
+        |                   |
+    TL Field             Arrival
+      Sink                 Sink
+ pressure/intensity   ArrivalCandidate
+                       -> AddArr lane
+```
+
+这里固定的是 execution architecture，而不是某一个 beam-family formula 或
+contribution sink：
+
+```text
+Execution architecture != Beam-family physics kernel != Contribution/output sink
+```
+
+Cartesian Cerveny TL 仍是 accepted reference implementation。IGR-3A 已将其余
+合法 TL kernels 接入同一 executor；IGR-3B 已将规则网格上的 `G/g/B × A/a`
+接入 Arrival sink。TL pressure/intensity 与 Arrival lanes 均采用逻辑
+`[range][depth][frequency]` 布局，worker 独占连续 range block。Arrival 通过
+`GeometricHatInfluence` / `GeometricGaussianInfluence` 产生
+`ArrivalCandidate`，由共享 AddArr primitive 写入 ordered variable-length lane；
+writer 按 source 流式消费 frequency view，不物化 `Nf` 个 legacy workspace。
+
+`R` 是独立 ray product，不进入 IGR-3 fused Influence accumulation；`E` 未进入
+IGR-3 execution，但共享 geometric helper/traversal，因此是 regression
+boundary。IGR-3 不改变 `R/E` 当前产品行为。权威 handoff 见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../../Bellhop_Broadband/doc/worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
 
 ## 1. 文档目标与分析范围
 
@@ -18,7 +63,7 @@
 4. 当前真正参与构建的二维代码与仓库中的三维扩展代码有何区别；
 5. 后续进行 ray-reuse 重构时，应如何划分模块边界。
 
-分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 的优化单频实现和 `Bellhop_RayReuse/` 的宽带轨迹复用实现均已完成本地数值验收；RayReuse 从已验证的 F2CPP 代码派生后独立构建和运行。当前实施状态见 [`Bellhop_RayReuse/doc/README.md`](../../Bellhop_RayReuse/doc/README.md)。
+分析结论以当前工作区源码为准。项目代码基线只认定 `Bellhop_origin/` 中的原始 Bellhop 模型；此前多频尝试拷入的测试文件和代码痕迹属于实验材料，不作为原模型已经支持宽带的依据。当前 `Bellhop_origin/Makefile` 只编译二维程序 `Bellhop/Bellhop.f90` 及其依赖；`Bellhop3D.f90`、`Step2DMod.f90`、`Step3DMod.f90`、`Reflect2DMod.f90`、`Reflect3DMod.f90`、`influence3D.f90` 等三维相关文件存在于仓库，但不属于当前二维可执行文件的构建链。`Bellhop_F2CPP/` 的优化单频实现和 `Bellhop_Broadband/` 的宽带轨迹复用实现均已完成本地数值验收；RayReuse 从已验证的 F2CPP 代码派生后独立构建和运行。当前实施状态见 [`Bellhop_Broadband/doc/README.md`](../../Bellhop_Broadband/doc/README.md)。
 
 ## 2. 总体功能分层
 
@@ -903,7 +948,7 @@ influence.accumulate(
 正式实施顺序确定为：
 
 1. **`Bellhop_F2CPP` 单频复刻**：只实现目标范围内的 2D Cartesian Cerveny coherent pressure 路径，逐组件和端到端对照可重现 Fortran 单频 oracle；
-2. **派生 `Bellhop_RayReuse` 单频/宽带非复用基线**：复制 F2CPP 已验收的必要代码形成独立工程，先确认派生后的单频结果未发生漂移，再让每个频率完整追踪一次，验证频率循环、多频记录号和输出；
+2. **派生 `Bellhop_Broadband` 单频/宽带非复用基线**：复制 F2CPP 已验收的必要代码形成独立工程，先确认派生后的单频结果未发生漂移，再让每个频率完整追踪一次，验证频率循环、多频记录号和输出；
 3. **串行 Ray-Reuse**：启用既有 `RayPathCache` 的全频共享遍历和重复 `FrequencyProjector` 调用，比较复用结果与宽带非复用结果；
 4. **有界频率并行**：在串行结果稳定后加入频率所有权、内存预算和单 writer 输出；
 5. **性能与大规模 I/O 优化**：最后评估 receiver tile、磁盘轨迹缓存和 HDF5。
@@ -1125,9 +1170,9 @@ Bellhop_F2CPP/
     regression/
     golden/
 
-Bellhop_RayReuse/
+Bellhop_Broadband/
   CMakeLists.txt
-  include/rayreuse/
+  include/broadband/
     model/          Environment, SSP, Boundary, Grid
     numerics/       Vec2, interpolation, intersection
     ray/            GeometryTracer, RayPath, ReflectionEvent
@@ -1138,14 +1183,14 @@ Bellhop_RayReuse/
     field/          FrequencyWorkspace, broadband orchestration
     io/             MultiFrequencyWriter
   src/
-  app/              bellhop_rayreuse 宽带程序
+  app/              bellhop_broadband 宽带程序（Bellhop Broadband 产品）
   tests/
     broadband/
     reuse/
     performance/
 ```
 
-`Bellhop_RayReuse` 初始代码由已验收的 `Bellhop_F2CPP` 复制/派生，这是有意保留的源码演进关系。派生后，两者各自产出独立可执行程序并维护自己的源码副本；不通过 `add_subdirectory`、静态/动态库或跨目录头文件/源码包含建立持续依赖。共同变量规范、相同标准算例、中间状态导出和复压力/TL 对比用于防止后续改造产生数值漂移。两者首版都只有一个明确计算模式，不设计庞大的运行模式继承树。
+`Bellhop_Broadband` 初始代码由已验收的 `Bellhop_F2CPP` 复制/派生，这是有意保留的源码演进关系。派生后，两者各自产出独立可执行程序并维护自己的源码副本；不通过 `add_subdirectory`、静态/动态库或跨目录头文件/源码包含建立持续依赖。共同变量规范、相同标准算例、中间状态导出和复压力/TL 对比用于防止后续改造产生数值漂移。两者首版都只有一个明确计算模式，不设计庞大的运行模式继承树。
 
 ### 21.3 性能 go/no-go 门槛
 
@@ -1222,7 +1267,7 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
 
 - `Bellhop_origin/Makefile` 在当前 macOS 工具链上可重现构建二维
   `Bellhop_origin/bin/bellhop`；目录中的 `.exe` 只作为旧平台制品保留；
-- `Bellhop_F2CPP/` 已完成二维单频复刻并封板，`Bellhop_RayReuse/` 已完成
+- `Bellhop_F2CPP/` 已完成二维单频复刻并封板，`Bellhop_Broadband/` 已完成
   独立宽带 nonreuse、串行 reuse、有界频率并行，并已完成 RR-B1～RR-B4、
   FP-1A～FP-2I 全部 production Feature Parity；
 - Fortran oracle 的权威基线仍是原始二维单频 Bellhop，不把实验文件解释为
@@ -1233,9 +1278,17 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
 - accepted production HEAD 为 `0721fb3`，正式结论为
   `Production Feature Parity: COMPLETE`、`Remaining F2CPP parity GAP: 0`；
   repository-level 证据见
-  [`REPORT_FEATURE_PARITY_FINAL.md`](../../Bellhop_RayReuse/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)；
-- 当前没有获批的新数值实施阶段；研究候选和外部发布决策见
-  [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md)。
+  [`REPORT_FEATURE_PARITY_FINAL.md`](../../Bellhop_Broadband/doc/reports/REPORT_FEATURE_PARITY_FINAL.md)；
+- IGR-3A 与 IGR-3B 均已 `ACCEPTED / CLOSED`；统一 fused executor 已覆盖当前
+  support matrix 中的 TL 与 Arrival 支持域，详见
+  [`PLAN_CURRENT_WORK.md`](../plans/PLAN_CURRENT_WORK.md) 与
+  [`REFERENCE_FEATURE_SUPPORT_MATRIX.md`](../../Bellhop_Broadband/doc/reference/REFERENCE_FEATURE_SUPPORT_MATRIX.md)；
+- BB-1 已完成 Bellhop Broadband 命名与两层 CLI 重构（2026-09-06 验收）：
+  executable `bellhop_broadband`、`--execution-mode <nonreuse|reuse>` +
+  `--reuse-mode <serial|frequency|range>`、`--trace-workers`/
+  `--reuse-workers`（默认 1），旧 `parallel`/`fused` 模式值与
+  `--range-parallel`/`--workers` 删除；科学算法与输出语义不变，详见
+  [`BB-1_WORKLIST.md`](../../Bellhop_Broadband/doc/worklists/BB-1_WORKLIST.md)。
 
 以下是已经落实的架构基线和首版范围决策；封板后的新增能力仍以组件支持矩阵
 为准：
@@ -1248,7 +1301,7 @@ M1～M5 均已关闭；下表保留当时的依赖顺序和验收职责，不再
 - 上述 RayReuse 数据模型和“追踪缓存 → 单频投影 → 声场累加”边界必须在 F2CPP 阶段完成，不得推迟到宽带工程；
 - 最终发射角数目 `Nalpha_final` 由输入最高频率、原 Bellhop 自动估算经验式和数量充分性检查共同确定；
 - 先实现唯一的二维 Cartesian Cerveny coherent pressure 路径；
-- 先在 `Bellhop_F2CPP/` 完成优化版 C++ 单频实现并通过验收，再复制/派生代码形成 `Bellhop_RayReuse/`，在独立副本中实现宽带非复用和轨迹复用；两工程互不链接；
+- 先在 `Bellhop_F2CPP/` 完成优化版 C++ 单频实现并通过验收，再复制/派生代码形成 `Bellhop_Broadband/`，在独立副本中实现宽带非复用和轨迹复用；两工程互不链接；
 - 本次修改完全不考虑 beam shift；
 - 先完成串行正确性；复用版先缓存完整只读 `RayPathCache`，再进行有界频率切片独占并行；
 - 压力缓冲区只为活动频率分配，通过单 writer 和有界队列写出；

@@ -1,0 +1,171 @@
+# Bellhop RayReuse 功能支持矩阵
+
+> 封板日期：2026-08-20；FP-1A～FP-2I 最终封板：2026-08-29；最终分类措辞统一：2026-08-30；IGR-3A fused TL 与 IGR-3B fused Arrival 支持域封板：2026-09-04；BB-1 Broadband 命名/CLI 术语对齐：2026-09-06
+> 适用范围：当前二维、点声源与线声源（含多 source depths）、规则网格与 Cartesian 配对不规则接收网格的 RayReuse 生产实现。
+> 输入和命令以 [`GUIDE_USAGE.md`](../guides/GUIDE_USAGE.md) 为准。
+> Feature Parity accepted production HEAD：`0721fb3`；final acceptance
+> documentation commit：`88ba8b7`；IGR-2 productionization commit：`e7f2705`；
+> IGR-3A/IGR-3B commits：`dda1c2c` / `0050f59`。
+> Production Feature Parity：**COMPLETE**；Remaining F2CPP parity GAP：**0**。
+
+> **Current support:** IGR-3A/IGR-3B 已 `ACCEPTED / CLOSED`；BB-1 已将执行
+> 模型重组为 `--execution-mode <nonreuse|reuse>` + `--reuse-mode
+> <serial|frequency|range>`（旧 `reuse`/`parallel`/`fused` 模式值已删除）。
+> 当前 reuse 的 range 路线（Range Reuse，内部仍为 fused executor）覆盖下述
+> TL 与 Arrival 支持域，并可经 `--reuse-workers` 选用静态
+> receiver-range parallelism（默认 1）。
+
+## Range Reuse（`--reuse-mode range`）支持域
+
+TL range 路线 gate：TL run mode、该 run mode 对所选 beam family 合法、恰好 1 个
+source、≥2 个频率、规则 receiver grid、≥2 个等间距 receiver ranges。
+family × run mode 覆盖：
+
+| beam family | run type | range 路线 run modes |
+|---|---|---|
+| Cerveny Gaussian（Cartesian / ray-centered） | `CC/IC/SC`、`CR/IR/SR` | coherent / incoherent / semi-coherent |
+| Geometric hat（Cartesian / ray-centered） | `CG/IG/SG`、`Cg/Ig/Sg` | coherent / incoherent / semi-coherent |
+| Geometric Gaussian（Cartesian） | `CB/IB/SB` | coherent / incoherent / semi-coherent |
+| Simple Gaussian | `CS` | coherent（该 family 唯一合法产品模式） |
+
+Arrival range 路线 gate：ASCII/binary Arrival run mode、Geometric Hat
+Cartesian/ray-centered 或 Geometric Gaussian、≥2 个频率、规则 receiver grid、
+≥2 个等间距 receiver ranges；允许 multisource。覆盖：
+
+| beam family | run type | range 路线 product |
+|---|---|---|
+| Geometric Hat（Cartesian） | `AG/aG` | ASCII / binary ARR |
+| Geometric Hat（ray-centered） | `Ag/ag` | ASCII / binary ARR |
+| Geometric Gaussian（Cartesian） | `AB/aB` | ASCII / binary ARR |
+
+range 路线 eligibility 始终是各 beam family 合法 beam×run-mode support matrix 的
+子集，不扩大科学支持矩阵：range 路线只支持规则 receiver grid（Cartesian GeoHat
+与 Cartesian GeoGaussian 的其他路线支持 paired irregular receivers，range
+路线不提供）；simple Gaussian 非 coherent 组合在产品层本身拒绝（合法矩阵约束，
+非 range 路线限制）；range 路线 Arrival 同样不支持 paired irregular
+receivers；`R` 产品不接受 reuse，`E` 的 range 路线被拒绝；单频 TL 拒绝显式
+reuse。nonreuse 与 reuse 的 serial/frequency 路线行为不受影响。
+
+### range 路线 PRT 模式报告与 Influence 统计 envelope（IGR-3A A08）
+
+- **PRT run-mode 行：** range 路线运行逐 family × run mode 复现 serial
+  reuse 的 run-mode 行（`Coherent TL calculation` / `Incoherent TL
+  calculation` / `Semi-coherent TL calculation`）。serial 与 range 路线的
+  PRT 差异只有 range 执行器自身的块：`execution mode = broadband reuse` +
+  `reuse mode = range` 路线标记、`requested/effective reuse worker count`
+  与 wall-seconds 标签；除该块和计时数值外，两次运行的 PRT（环境摘要、
+  run-mode 行、beam family 行、Trace passes、ray 计数、cache fingerprint
+  before/after）逐字节一致（IGR-3A A08 冻结结论；BB-1 后路线/worker 行名
+  以新 PRT 标记表述）。
+- **`--profile-influence` 适用面：** 该选项只支持 TL 产品，且在 TL 上只对
+  Cerveny Gaussian 的 Cartesian 坐标系定义（与执行路线无关；其余 family 与
+  坐标系组合在 CLI 层直接报错
+  `--profile-influence is currently defined only for Cartesian Cerveny TL`）。
+- **range 路线统计 envelope（`CartesianCervenyStatistics`，PRT `Influence ...`
+  行）：**
+  - Cerveny Gaussian（Cartesian，`--profile-influence` 可用）：coherent 与
+    I/S 运行填充同一 envelope——ray/active/segment/eligible/range/depth/
+    image/window/taper/nonzero 计数、IGR-1 geometry/frequency 拆分计数与
+    validation/precompute/hot-loop seconds。唯二恒为 0 的是
+    `validated ray points` 与 `validated workspace values`（二者属于
+    serial/frequency 逐频入口的 per-ray 校验计数，range 路径不产生）。
+  - Cerveny Gaussian（ray-centered）、geometric hat（两坐标系）、geometric
+    Gaussian、simple Gaussian：range 路线的 fused kernel 接受 statistics
+    指针但不产生任何计数（对应非 range 路线 kernel 本就没有 influence
+    计数），全部计数保持 0/absent；且 `--profile-influence` 对这些 family
+    在 CLI 层被拒绝，range 路线运行不会传入计数指针。
+
+## 状态定义
+
+- **Fully supported / PARITY**：F2CPP production-supported，且 RayReuse 已有
+  parser → model → runtime → product → regression/oracle 的完整证据链。
+- **F2CPP_OUT_OF_SCOPE**：F2CPP 本身没有正式 production support；不计入
+  RayReuse 的 F2CPP parity GAP。
+- **RAYREUSE_EXTENSION / DEFERRED**：RayReuse-only 能力或未来研究候选；已支持
+  extension 与未批准 deferred 项必须分别明确标注，二者都不构成 F2CPP parity GAP。
+- **Intentional divergence**：为安全或多频生命周期有意采用不同外部行为，
+  不改变声明范围内的产品数值语义。
+
+## Fully supported / PARITY
+
+> **组合范围说明：** 下表按功能轴汇总支持面，不表示所有列出的声源、接收网格、
+> SSP、beam family 与产品都做了 Cartesian-product 组合验收。尤其
+> quadrilateral `Q` / `.ssp` 的 accepted FP-2E slice 仅为二维、single point
+> source、single source depth、rectilinear receivers；TL Cartesian Cerveny
+> `CC`、单频 R，以及 Cartesian GeoHat `G` 的 A/a/E。`Q` 与 line source、
+> multisource、irregular receiver、ray-centered family 或其他 beam/product
+> 的机制可达组合未建立独立 oracle，本矩阵不声明这些组合为已验证 parity。
+
+| 能力 | 当前范围 |
+|---|---|
+| TL | point 与 line source、single/multisource source depth、rectilinear 与 Cartesian paired-irregular 接收网格、C-linear、PCHIP、N²-linear、cubic-spline 或 quadrilateral SSP 下的 Cartesian Cerveny `CC/IC/SC + {F,M,W}{D,S,Z} + P/V/H`、ray-centered Cerveny `CR/IR/SR + {F,M,W}{D,S,Z} + P/V/H`、Cartesian GeoHat `CG/IG/SG`（含 `^`/blank alias）、ray-centered GeoHat `Cg/Ig/Sg`、Cartesian GeoGaussian `CB/IB/SB` 与 coherent Cartesian Simple Gaussian `CS`；两个 ray-centered family 都要求至少两个等间距 receiver ranges。Cartesian Cerveny 的 P/V/H 是数值相同的 legacy selector；ray-centered Cerveny V/H 按 Origin 的 normal/along derivative 公式计算，并保留 persistent image-normal flip、逐 image I/S power、receiver-level KMAH 与 Hermite-once 语义。ray-centered GeoHat 则沿实际反射轨迹按 `c*slowness` normal 做 depth projection/range crossing，没有 image loop、persistent flip、epsilon、gamma、KMAH 或 Hermite window；`q` 与 complex delay 线性插值，sound speed/amplitude 取右端点、reflection phase 取左端点，q crossing 增加 `π/2`。D/S/Z 在 frequency-independent reflection 时对完整 dynamic-ray `RN` jump 分别倍增、保留、清零；F/M/W epsilon 按每个目标频率、每条 ray 及 F2CPP/Origin evaluation order 计算，W 使用 real epsilon 与 real-q KMAH crossing，F/M 使用 positive-imaginary epsilon 与 complex-q branch crossing；非 Cerveny family 只允许 P 与 standard curvature，且不能接收 Cerveny width/curvature tail；C 使用 complex-pressure workspace，Cerveny/G/B 的 I/S 使用逐频 intensity workspace，`IS/SS` 明确拒绝；GeoHat I/S 按 attenuated real constant 平方后单次乘 linear hat weight，GeoGaussian I/S 按 `sqrt(2π) × power × GaussianWeight` 且权重只乘一次；G/B/S 均使用 geometric point normalization；GeoGaussian width/membership 与 Simple Gaussian contribution 均逐频精确计算；directional `.sbp` 与适用的 S Lloyd factor 在逐 ray Project 前共用 source-amplitude 路径；线声源（RunType 4th `'X'`）使用 ratio=1.0 及 `-4.0*sqrt(pi)*beamScale` 全距离柱面扩散因子；单频 SHD，以及多频 nonreuse 与 reuse 三路线（serial/frequency/range）SHD |
+| R | 单频 `R/RG/RGO`、directional `.sbp`、显式 `Nalpha=1`、逐频 active/terminal prefix、Origin-compatible `.ray`；多 source depths 时 per-source ray blocks 与 header `1 1 NSz`（source depth 升序），仍为单频产品（多频 R 明确拒绝；run type `R...I` irregular 拒绝） |
+| Arrivals | ASCII `A`、binary `a`；Cartesian geometric hat/Gaussian `G/B` 与 ray-centered GeoHat `g`；nonreuse/serial/frequency 路线的 frequency-local `ArrivalWorkspace` 与共享 AddArr 语义；range 路线使用 source-local `[range][depth][frequency]` ordered variable-length lanes、static range ownership 与 zero-copy frequency view；点声源（`1/sqrt(range)`）与线声源（`4.0*sqrt(pi)`）幅值缩放；多 source depths 时 per-source 块与 header source depths（ASCII 行/binary count record，source depth 升序）；Cartesian `G/B` 的 nonreuse/serial/frequency 路径支持 paired irregular receivers，range 路线 Arrival 仅支持规则网格 |
+| Eigenray | `E` 的 Cartesian `G/B` 与 ray-centered GeoHat `g` traversal；receiver hit 对应的冻结 ray prefix 与 `.ray`；多 source depths 时 per-source 段落与 header `1 1 NSz`（source 升序）；Cartesian `G/B` 支持 paired irregular receivers（ray-centered `g` 保持 single-source/rectilinear 范围） |
+| 声源几何（Source Geometry） | 支持点声源（Point Source，RunType 4th 为 blank 或 `'R'`）与线声源（Line Source，RunType 4th 为 `'X'`）。线声源在 Cartesian/Ray-centered Cerveny、Geometric Hat 与 Geometric Gaussian 中使用 line ratio，在 PressureScaling 中应用 `-4.0*sqrt(pi)*beamScale` 扩散因子（包含 0 距离），在 ArrivalWriter 中应用 `4.0*sqrt(pi)` 到达幅值因子；Simple Gaussian 严格要求点声源并拒绝线声源；`source_geometry_line` 与 `arrival_line_directional_multisource` 标准算例通过三方 oracle 验证 |
+| 多源（multisource / NSz ≥ 1） | point/line source、source depth 数 `≥1`（输入乱序时按 depth 升序 `stable_sort`）；同一 launch fan 对每个 source depth 独立 trace，每 source 一个独立 frozen `RayPathCache`（cache schema 与 `contentFingerprint()` 算法不变，`NSz==1` 逐字节复现既有行为与 fingerprint 值）；TL（各已支持 beam family）、R（保持单频）、A/a、E 的 per-source 产品 sequencing/header 与 F2CPP/Origin 一致；nonreuse 与 reuse 各路线逐频产品一致，trace passes 冻结语义为 nonreuse `Nfreq×NSz`、三条 reuse 路线均为 `NSz`，reuse per-source cache fingerprint 前后一致；range 路线 Arrival 允许 multisource，并严格按 source 顺序一次持有一个 frozen cache 与一个 broadband workspace |
+| Cartesian irregular receiver | run type 第 5 位 `I`，paired 语义 = `NRz == NRr`、`receiversPerRange() == 1`、`depthAt(depthIndex, rangeIndex) == depths[rangeIndex]`。TL 适用面：Cartesian Cerveny `CC/IC/SC`（注意：irregular 下按 Origin/F2CPP legacy 语义恒取首深度 `Rz(1)`，而非 paired `Rz(ir)`——RayReuse 与 reference 逐字节同构）、Cartesian GeoHat `CG/IG/SG` 与 Cartesian GeoGaussian `CB/IB/SB` 按 paired 寻址；产品适用面：Cartesian `G/B` 的 A/a/E paired traversal/writer；SHD `PlotType` 写 `irregular `。ray-centered family 与 Simple Gaussian `CS` 拒绝 irregular |
+| SSP | 当前 production-supported SSP 为 C-linear、PCHIP `P`、N²-linear `N`、cubic spline `S` 与 quadrilateral `Q`。PCHIP 计算 F2CPP/Origin 兼容的 Hermite 系数、单调性限制器、连续一阶导数与二阶导数 `d²c/dz²`，并精确进入 dynamic ray 与逐频投影。N²-linear 按逐段线性 N² 插值（`c = 1/sqrt(N²)`）进入 real geometry：节点梯度不连续，沿用与 C-linear 相同的 reduced-step node jump；段内 N² 曲率产生非零二阶导数（nonzero Hessian）并进入 dynamic ray；逐频投影使用 frequency-local complex N² evaluator（节点声速先按目标频率转为复数再形成复 N² 系数），幅相、复走时与反射结果保持逐频临时状态，不写回 frozen `RayPathCache`。N²-linear 覆盖当前 TL/R/A/a/E 合法产品范围，多频 nonreuse 与 reuse 各路线结果一致。Cubic spline `S` 使用逐行迁移 F2CPP production 的 exact not-a-knot 系数构造（含 2/3/4+ node 分支与 legacy binary32 `1.0F/6.0F` 舍入）：real geometry 提供 value/一阶/二阶导数，spline 梯度在节点连续（`ContinuousAtNodes`，不执行 C/N² 的 node jump），非零 Hessian 进入 dynamic ray，profile 外使用首/末段 cubic polynomial extrapolation；逐频投影先按目标频率转换节点 attenuation、再每频独立构造复系数并复用同一 kernel，spline interior imaginary 只做 finite 校验，幅相、复走时与反射结果保持逐频临时状态，不写回 frozen `RayPathCache`。Cubic spline 覆盖当前 TL/R/A/a/E 合法产品范围，多频 nonreuse 与 reuse 各路线 SHD 逐字节一致，trace passes 为 nonreuse 2、reuse 各路线 1，reuse frozen cache fingerprint 前后不变。Quadrilateral `Q` 通过同根 `.ssp` 文件提供二维 range-dependent 声速矩阵（range count ≥2、ranges 严格递增、维度匹配与有限值/正实声速校验，km→m 转换；`.ssp` 缺失或维度不匹配显式失败，禁止 fallback）：real geometry 按 F2CPP/Origin `Quad` 语义在 cell 内 bilinear 插值并提供 `cr/cz/crz`（`crr=czz=0`）与 density depth 插值，深度与距离梯度在 cell 边界不连续；tracer 对越界 trial step 分别把步长缩减到 depth/range grid line（depth 优先的 corner crossing 只执行单次 jump），保留 F2CPP `minimumStep = 1e-3 × nominalStepLength` 下限；range 越出 `.ssp` 网格显式失败，不做外推或 clamp。逐频投影中 real `c(r,z)` 只在 geometry trace 阶段决定冻结轨迹，imaginary attenuation 由 `.env` reference depth profile 逐节点按目标频率转换后仅沿 depth 插值，不从 `.ssp` 生成二维衰减；transient `rangeSegmentIndex` 只存在于 sample/step/limit 与 tracer 局部状态，不进入 `RayPath`/`RayPathCache` |
+| 衰减（Attenuation） | PARITY 范围覆盖 ATT-01～ATT-05：基础衰减单位 `N`（Nepers/m）、`F`（dB/m-kHz，以当前频率折算）、`M`（dB/m）、`W`（dB/wavelength，以当前频率与当前换算实声速折算）、`Q`（品质因数）及 `L`（损耗参数）；体积衰减模型支持 None、Thorp `T`、Francois–Garrison `F`（含 20°C 粘滞项分支与 FMA 算式，以参数 mean depth 换算）及 Biological `B`（0–200 层，支持重叠与端点闭区间，以评估深度换算，逐层折算后累加）；产品级标准算例 oracle 覆盖 C-linear 直达成场（N/F/M/W/Q/L 单位与 T/FG/Biological 体积衰减）；五大频域 SSP 后端（C/N/P/S/Q，Q 衰减使用参考节点实声速）及边界声学（普通声学半空间、弹性半空间纵横波衰减与 `1.0e20` legacy 深度；粒度边界隔离体积衰减）均接入衰减并通过完整组件测试闭环证明；环境级衰减参数由 `Environment` 不可变拥有，不污染冻结 `RayPathCache`，所有宽带 profile 在 nonreuse 与 reuse 各路线下输出逐字节一致且 `--verify-cache` before==after 严格守恒 |
+| 边界 | top/bottom `V/R/A/G/F`、`.trc/.brc`、piecewise-linear `.ati/.bty`（`LS`/`LL`）、canonical curvilinear short format `C` `.ati/.bty`（仅限 V/R 材料 short format，`CS`/`CL` 显式拒绝）、flat ordinary elastic halfspace P/S、acoustic/elastic `LL` |
+| 输出生命周期 | PRT、SHD、RAY、ARR；原子单文件发布；range 路线 broadband ARR 先完成所有 per-frequency `.tmp` 再协调发布整组文件，失败时恢复已有 finals 并清理本次 partial finals/temp/backup；模式切换清理后不留下部分正式产品 |
+| 状态所有权 | geometry/trajectory 与 raw reflection event 位于 frozen `RayPathCache`（multisource 下每 source 一个独立 frozen fan cache，source depth 为频率无关属性）；幅相、复走时、active prefix、反射结果、Arrival/Eigenray 产品均为逐频临时状态 |
+| 并行 | worker 数运行时配置；`--trace-workers` 服务全部产品与全部路线的 trace 阶段（默认 1）；reuse+frequency 路线下 A/a/E 与 TL 支持外层 frequency parallelism（`--reuse-workers`，默认 1，effective 值 clamp 到频率数，TL 另受 memory budget 约束），frequency worker 只读共享 per-source cache vector，consumer 按频率索引串行发布 per-source workspace 序列，不共享可变 writer；reuse+range 路线的 TL 与 Arrival 支持显式 static contiguous range parallelism，各 worker 独占 range block，`--reuse-workers` 默认 1（effective clamp 到 receiver range 数） |
+
+## Supported RAYREUSE_EXTENSION
+
+多频 A/a/E 不跨频 merge。每频独立文件使用：
+
+```text
+<root>_f000_<frequency-token>Hz.arr
+<root>_f001_<frequency-token>Hz.ray
+```
+
+`frequency-token` 使用 12 位有效数字，并把小数点替换为 `p`。frequency index、
+header frequency 和文件名一一对应；nonreuse 与 reuse 各路线以及上文支持域内的
+range 路线 Arrival 每频产品逐字节一致。Origin 没有明确的多频 R 产品，因此多频
+R 明确拒绝。
+
+## IGR-3 closed architecture status
+
+IGR-3 已将 Cross-Frequency Fused + Static Range Parallelism 封板为统一
+Influence execution architecture。IGR-3A 把 TL beam families 适配进上文
+Range Reuse 支持域；IGR-3B 把 `A/a` 的 `G/g/B` geometric contribution
+paths 与 broadband Arrival layout 接入同一 executor。Arrival source workspace
+使用 `[R][D][F]` lanes，并由 one-writer-per-frequency 生命周期按 source 顺序
+直接消费 frequency view；AddArr 与其余路线共享同一 semantic primitive。
+
+`R` ray product 不进入该 fused Influence accumulation path；`E` 也不进入
+IGR-3 execution，但因共享 geometric helper/traversal 而属于 regression
+boundary。IGR-3 未改变 `R/E` 产品行为。权威 closure 见
+[`IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md`](../worklists/IGR-3_SCOPE_AND_ARCHITECTURE_DECISION.md)。
+
+## Intentional divergence
+
+| 项目 | RayReuse 行为 |
+|---|---|
+| 多频产品 | SHD 保持一个多频文件；A/a/E 使用逐频独立文件，不伪造 Origin 未定义的跨频容器 |
+| 发布安全 | writer 先写 `.tmp` 再发布；一次多频运行任一 solve/publish 失败会清理本次产品 |
+| 解析失败 | 在新产品生命周期开始前失败时保留旧有效产品，避免破坏最后一次成功结果；PRT 写入非零失败诊断 |
+| 输入校验 | 对未知 run type、beam family、sidecar、非有限值和未支持组合提前报错 |
+| 并行所有权 | reuse+frequency 选择 frequency worker；reuse+range（Range Reuse）TL/Arrival 可选 static range worker。两者都不把 frequency/source/receiver 任一层冻结为永久 owner，也不设置 4T/8T 程序级上限 |
+
+## Non-parity boundaries
+
+### F2CPP_OUT_OF_SCOPE（超出 F2CPP 生产支持范围）
+
+- 3D / Bellhop3D / N×2D；
+- Beam shift；
+- Ray-centered geometric Gaussian；
+- 解析式连续 SSP 公式（非离散网格）。
+
+### RAYREUSE_EXTENSION / DEFERRED（RayReuse 远期扩展候选）
+
+- HDF5 容器格式；
+- 多频 R 合并容器；
+- SIMD 向量化加速；
+- frequency interpolation；
+- BARR 到达结构算法。
+
+这些候选不是 active task，也不是 silent fallback 的许可。未来若进入 scope，
+必须作为新的独立工作重新定义输入、逐频状态边界和验收证据。

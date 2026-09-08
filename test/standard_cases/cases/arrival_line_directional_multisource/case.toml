@@ -6,7 +6,7 @@ companion_files = ["origin.sbp"]
 source_references = ["Bellhop_origin/Bellhop/influence.f90 Ratio1 line-source scaling", "Bellhop_origin/misc/beampattern.f90 ReadPat", "Bellhop_origin/Bellhop/ArrMod.f90 AddArr"]
 
 [compatibility]
-versions = ["origin", "f2cpp", "rayreuse"]
+versions = ["origin", "f2cpp", "broadband"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0
@@ -19,7 +19,7 @@ policy = "shared_fmax"
 [validation]
 source_depth_count = 2
 prt_markers = ["VACUUM", "Perfectly RIGID", "Using source beam pattern file", "Line source", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
-version_prt_markers = { f2cpp = ["source depths = 2"], rayreuse = ["source depths = 2"] }
+version_prt_markers = { f2cpp = ["source depths = 2"], broadband = ["source depths = 2"] }
 prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
 
 [profiles.single]

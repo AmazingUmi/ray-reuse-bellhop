@@ -5,7 +5,7 @@ origin_template = "origin.env.in"
 source_references = ["Bellhop_origin/Bellhop/influence.f90 InfluenceGeoHatCart ApplyContribution/AddArr", "Bellhop_origin/Bellhop/ArrMod.f90 WriteArrivalsASCII"]
 
 [compatibility]
-versions = ["origin", "f2cpp", "rayreuse"]
+versions = ["origin", "f2cpp", "broadband"]
 
 [launch]
 sound_speed_at_source_mps = 1500.0
@@ -20,7 +20,7 @@ source_depth_count = 2
 prt_markers = ["VACUUM", "Perfectly RIGID", "Geometric hat beams in Cartesian coordinates", "Geometric hat beams"]
 # Origin echoes multi-source depths as "Number of Source z-coordinates, Sz";
 # F2CPP and RayReuse summarize them as "source depths = N" instead.
-version_prt_markers = { f2cpp = ["source depths = 2"], rayreuse = ["source depths = 2"] }
+version_prt_markers = { f2cpp = ["source depths = 2"], broadband = ["source depths = 2"] }
 prt_forbidden_markers = ["THORP volume attenuation added", "Ray centered beams"]
 
 [profiles.single]

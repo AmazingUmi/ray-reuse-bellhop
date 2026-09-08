@@ -46,7 +46,7 @@ test/PlotRead/
 ## 3. 与仓库其他部分的关系
 
 ```text
-Bellhop_origin / Bellhop_F2CPP / Bellhop_RayReuse
+Bellhop_origin / Bellhop_F2CPP / Bellhop_Broadband
                        │ 生成 .shd
                        ▼
              test/standard_cases/

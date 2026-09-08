@@ -29,9 +29,33 @@ from coverage_manifest import load_coverage_manifest
 from eigenray_io import parse_eigenray
 
 
-VERSIONS = ("origin", "f2cpp", "rayreuse")
+VERSIONS = ("origin", "f2cpp", "broadband")
 STAGES = ("generate", "run", "validate", "test")
-RAYREUSE_EXECUTION_MODES = ("nonreuse", "reuse", "parallel")
+# Execution and reuse mode are independent fields throughout the runner.
+BROADBAND_EXECUTION_MODES = ("nonreuse", "reuse")
+BROADBAND_REUSE_MODES = ("serial", "frequency", "range")
+
+
+def broadband_execution_arguments(
+    execution_mode: str, reuse_mode: str | None = None,
+) -> tuple[str, ...]:
+    require_broadband_execution_mode(execution_mode, reuse_mode)
+    arguments = ("--execution-mode", execution_mode)
+    if reuse_mode is not None:
+        arguments += ("--reuse-mode", reuse_mode)
+    return arguments
+
+
+def broadband_prt_markers(
+    execution_mode: str, reuse_mode: str | None = None,
+) -> tuple[str, ...]:
+    require_broadband_execution_mode(execution_mode, reuse_mode)
+    markers = (f"execution mode = broadband {execution_mode}",)
+    if reuse_mode is not None:
+        markers += (f"reuse mode = {reuse_mode}",)
+    return markers
+
+
 DECLARABLE_BEAM_FAMILY_MARKERS = (
     "Ray centered beams",
     "Geometric hat beams in Cartesian coordinates",
@@ -73,17 +97,17 @@ class VersionAdapter:
         file_root: str,
         frequencies_hz: Sequence[float],
         execution_mode: str,
+        reuse_mode: str | None = None,
     ) -> None:
         self.require_available()
-        require_rayreuse_execution_mode(execution_mode)
+        require_broadband_execution_mode(execution_mode, reuse_mode)
         subprocess.run(
             [
                 str(self.executable),
                 file_root,
                 "--frequencies-hz",
                 format_frequency_csv(frequencies_hz),
-                "--execution-mode",
-                execution_mode,
+                *broadband_execution_arguments(execution_mode, reuse_mode),
             ],
             cwd=working_directory,
             check=True,
@@ -169,14 +193,14 @@ def default_adapters(executable_override: Path | None) -> dict[str, VersionAdapt
             ),
             enabled=True,
         ),
-        "rayreuse": VersionAdapter(
-            name="rayreuse",
+        "broadband": VersionAdapter(
+            name="broadband",
             executable=(
                 PROJECT_ROOT
-                / "Bellhop_RayReuse"
+                / "Bellhop_Broadband"
                 / "build"
                 / "release"
-                / "bellhop_rayreuse"
+                / "bellhop_broadband"
             ),
             enabled=True,
         ),
@@ -217,11 +241,17 @@ def format_frequency_csv(frequencies_hz: Sequence[float]) -> str:
     return ",".join(format(value, ".17g") for value in frequencies)
 
 
-def require_rayreuse_execution_mode(execution_mode: str) -> None:
-    if execution_mode not in RAYREUSE_EXECUTION_MODES:
+def require_broadband_execution_mode(
+    execution_mode: str, reuse_mode: str | None = None,
+) -> None:
+    if execution_mode not in BROADBAND_EXECUTION_MODES:
         raise ValueError(
-            f"unknown RayReuse execution mode: {execution_mode}"
+            f"unknown broadband execution mode: {execution_mode}"
         )
+    if execution_mode == "nonreuse" and reuse_mode is not None:
+        raise ValueError("nonreuse execution does not accept a reuse mode")
+    if execution_mode == "reuse" and reuse_mode not in BROADBAND_REUSE_MODES:
+        raise ValueError("reuse execution requires serial, frequency or range reuse mode")
 
 
 def declared_beam_family_marker(definition: CaseDefinition) -> str:
@@ -384,29 +414,26 @@ def validate_broadband_output(
     execution_mode: str,
     print_path: Path,
     shade_path: Path,
+    reuse_mode: str | None = None,
 ) -> None:
     frequencies = tuple(float(value) for value in frequencies_hz)
-    require_rayreuse_execution_mode(execution_mode)
-    validate_print_output(definition, print_path, "rayreuse")
+    require_broadband_execution_mode(execution_mode, reuse_mode)
+    validate_print_output(definition, print_path, "broadband")
     print_contents = print_path.read_text(errors="replace")
     print_lines = {
         line.strip() for line in print_contents.splitlines()
     }
-    expected_mode_marker = {
-        "nonreuse": "execution mode = broadband non-reuse",
-        "reuse": "execution mode = broadband reuse",
-        "parallel": "execution mode = broadband parallel reuse",
-    }[execution_mode]
+    expected_mode_markers = broadband_prt_markers(execution_mode, reuse_mode)
     # Frozen multi-source statistics (FP-2F worklist §1.5):
-    # non-reuse traces once per (frequency, source); reuse/parallel trace
-    # each source fan exactly once.
+    # non-reuse traces once per (frequency, source); every reuse route
+    # traces each source fan exactly once.
     expected_trace_passes = (
         len(frequencies) * definition.source_depth_count
         if execution_mode == "nonreuse"
         else definition.source_depth_count
     )
     for marker in (
-        expected_mode_marker,
+        *expected_mode_markers,
         f"Trace passes = {expected_trace_passes}",
     ):
         if marker not in print_lines:
@@ -445,18 +472,15 @@ def validate_broadband_product_outputs(
     execution_mode: str,
     print_path: Path,
     product_paths: Sequence[Path],
+    reuse_mode: str | None = None,
 ) -> None:
     """Validate independent per-frequency ARR/E products from one run."""
-    require_rayreuse_execution_mode(execution_mode)
-    validate_print_output(definition, print_path, "rayreuse")
+    require_broadband_execution_mode(execution_mode, reuse_mode)
+    validate_print_output(definition, print_path, "broadband")
     print_lines = {
         line.strip() for line in print_path.read_text(errors="replace").splitlines()
     }
-    expected_mode_marker = {
-        "nonreuse": "execution mode = broadband non-reuse",
-        "reuse": "execution mode = broadband reuse",
-        "parallel": "execution mode = broadband parallel reuse",
-    }[execution_mode]
+    expected_mode_markers = broadband_prt_markers(execution_mode, reuse_mode)
     # Frozen multi-source statistics (FP-2F worklist §1.5): see
     # validate_broadband_output.
     expected_trace_passes = (
@@ -465,7 +489,7 @@ def validate_broadband_product_outputs(
         else definition.source_depth_count
     )
     for marker in (
-        expected_mode_marker,
+        *expected_mode_markers,
         f"Trace passes = {expected_trace_passes}",
     ):
         if marker not in print_lines:
@@ -524,7 +548,7 @@ def validate_broadband_product_outputs(
         )
 
 
-def process_rayreuse_broadband(
+def process_broadband(
     definition: CaseDefinition,
     profile_name: str,
     adapter: VersionAdapter,
@@ -533,6 +557,7 @@ def process_rayreuse_broadband(
     frequencies: tuple[float, ...],
     launch_angle_counts: dict[str, int],
     execution_mode: str,
+    reuse_mode: str | None = None,
 ) -> Path:
     if definition.output_kind == "ray":
         raise ValueError(
@@ -546,10 +571,10 @@ def process_rayreuse_broadband(
         "eigenray",
     }:
         raise ValueError(
-            f"{definition.case_id}: unsupported RayReuse broadband output kind "
+            f"{definition.case_id}: unsupported broadband output kind "
             f"{definition.output_kind!r}"
         )
-    require_rayreuse_execution_mode(execution_mode)
+    require_broadband_execution_mode(execution_mode, reuse_mode)
     if len(frequencies) < 2:
         raise ValueError(
             f"{definition.case_id}/{profile_name}: broadband profile must "
@@ -618,6 +643,7 @@ def process_rayreuse_broadband(
             file_root,
             frequencies,
             execution_mode,
+            reuse_mode,
         )
         status = "completed"
 
@@ -629,6 +655,7 @@ def process_rayreuse_broadband(
                 execution_mode,
                 print_path,
                 shade_path,
+                reuse_mode=reuse_mode,
             )
         else:
             validate_broadband_product_outputs(
@@ -637,6 +664,7 @@ def process_rayreuse_broadband(
                 execution_mode,
                 print_path,
                 product_paths,
+                reuse_mode=reuse_mode,
             )
         status = "passed"
 
@@ -710,11 +738,13 @@ def process_rayreuse_broadband(
         ],
         "execution_model": "single_broadband_invocation",
         "execution_mode": execution_mode,
+        "reuse_mode": reuse_mode,
         "broadband_run": {
             "working_directory": "broadband",
             "file_root": file_root,
             "frequencies_argument": frequency_csv,
             "execution_mode_argument": execution_mode,
+            "reuse_mode_argument": reuse_mode,
             "expected_solver_invocations": 1,
             "frequency_slices_share_output": definition.output_kind == "shd",
             "frequency_products_independent": definition.output_kind != "shd",
@@ -740,7 +770,8 @@ def process_case(
     adapter: VersionAdapter,
     stage: str,
     results_root: Path,
-    rayreuse_execution_mode: str = "nonreuse",
+    broadband_execution_mode: str = "nonreuse",
+    broadband_reuse_mode: str | None = None,
 ) -> Path:
     if adapter.name not in VERSIONS:
         adapter.require_available()
@@ -748,8 +779,8 @@ def process_case(
 
     frequencies = definition.frequencies(profile_name)
     launch_angle_counts = definition.launch_angle_counts(frequencies)
-    if adapter.name == "rayreuse" and profile_name != "single":
-        return process_rayreuse_broadband(
+    if adapter.name == "broadband" and profile_name != "single":
+        return process_broadband(
             definition,
             profile_name,
             adapter,
@@ -757,7 +788,8 @@ def process_case(
             results_root,
             frequencies,
             launch_angle_counts,
-            rayreuse_execution_mode,
+            broadband_execution_mode,
+            broadband_reuse_mode,
         )
 
     launch_angle_count = launch_angle_counts["final"]
@@ -916,7 +948,8 @@ def run_selection(
     requested_cases: list[str] | None,
     executable: Path | None,
     results_root: Path,
-    rayreuse_execution_mode: str = "nonreuse",
+    broadband_execution_mode: str = "nonreuse",
+    broadband_reuse_mode: str | None = None,
     requested_test_sets: list[str] | None = None,
 ) -> int:
     definitions = discover_cases(STANDARD_CASES_ROOT / "cases")
@@ -969,7 +1002,8 @@ def run_selection(
             adapter,
             stage,
             results_root,
-            rayreuse_execution_mode,
+            broadband_execution_mode,
+            broadband_reuse_mode,
         )
         completed += 1
     if completed == 0:
@@ -999,11 +1033,16 @@ def add_selection_arguments(parser: argparse.ArgumentParser) -> None:
         default=STANDARD_CASES_ROOT / "results",
     )
     parser.add_argument(
-        "--rayreuse-execution-mode",
-        choices=RAYREUSE_EXECUTION_MODES,
+        "--reuse-mode",
+        choices=BROADBAND_REUSE_MODES,
+        help="required with reuse execution; omitted with nonreuse",
+    )
+    parser.add_argument(
+        "--execution-mode",
+        choices=BROADBAND_EXECUTION_MODES,
         default="nonreuse",
         help=(
-            "execution mode passed only to RayReuse multi-frequency runs "
+            "execution mode passed only to Broadband multi-frequency runs "
             "(default: nonreuse)"
         ),
     )
@@ -1049,11 +1088,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=STANDARD_CASES_ROOT / "results",
     )
     batch_parser.add_argument(
-        "--rayreuse-execution-mode",
-        choices=RAYREUSE_EXECUTION_MODES,
+        "--reuse-mode",
+        choices=BROADBAND_REUSE_MODES,
+        help="required with reuse execution; omitted with nonreuse",
+    )
+    batch_parser.add_argument(
+        "--execution-mode",
+        choices=BROADBAND_EXECUTION_MODES,
         default="nonreuse",
         help=(
-            "execution mode passed only to RayReuse multi-frequency runs "
+            "execution mode passed only to Broadband multi-frequency runs "
             "(default: nonreuse)"
         ),
     )
@@ -1177,7 +1221,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 requested_test_sets=args.test_sets,
                 executable=args.executable,
                 results_root=args.results_root.resolve(),
-                rayreuse_execution_mode=args.rayreuse_execution_mode,
+                broadband_execution_mode=args.execution_mode,
+                broadband_reuse_mode=args.reuse_mode,
             )
             return 0
 
@@ -1227,7 +1272,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         requested_cases=None,
                         executable=args.executable,
                         results_root=args.results_root.resolve(),
-                        rayreuse_execution_mode=args.rayreuse_execution_mode,
+                        broadband_execution_mode=args.execution_mode,
+                        broadband_reuse_mode=args.reuse_mode,
                     )
             print(
                 f"BATCH PASSED: {completed} version/case/profile combinations"

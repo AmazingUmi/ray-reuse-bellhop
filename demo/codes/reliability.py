@@ -29,11 +29,11 @@ from bellhop_io_py.shd import PressureField, ShdReader
 from compare_fields import compare_files
 
 
-VERSIONS = ("origin", "f2cpp", "rayreuse")
+VERSIONS = ("origin", "f2cpp", "broadband")
 VERSION_LABELS = {
     "origin": "Original Bellhop",
     "f2cpp": "Bellhop F2CPP",
-    "rayreuse": "Bellhop RayReuse",
+    "broadband": "Bellhop Broadband",
 }
 DEFAULT_EXECUTABLES = {
     "origin": PROJECT_ROOT / "Bellhop_origin" / "bin" / "bellhop",
@@ -44,12 +44,12 @@ DEFAULT_EXECUTABLES = {
         / "release"
         / "bellhop_f2cpp"
     ),
-    "rayreuse": (
+    "broadband": (
         PROJECT_ROOT
-        / "Bellhop_RayReuse"
+        / "Bellhop_Broadband"
         / "build"
         / "release"
-        / "bellhop_rayreuse"
+        / "bellhop_broadband"
     ),
 }
 
@@ -79,7 +79,7 @@ def executable_paths(arguments: argparse.Namespace) -> dict[str, Path]:
     overrides = {
         "origin": arguments.origin_executable,
         "f2cpp": arguments.f2cpp_executable,
-        "rayreuse": arguments.rayreuse_executable,
+        "broadband": arguments.broadband_executable,
     }
     return {
         version: (
@@ -434,7 +434,7 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--origin-executable", type=Path)
     parser.add_argument("--f2cpp-executable", type=Path)
-    parser.add_argument("--rayreuse-executable", type=Path)
+    parser.add_argument("--broadband-executable", type=Path)
 
 
 def build_parser() -> argparse.ArgumentParser:
