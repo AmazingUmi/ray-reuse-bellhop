@@ -11,6 +11,13 @@ sys.path.insert(0, str(DEMO_ROOT / "codes"))
 
 from reliability import output_paths, parse_versions
 from rayreuse_multifrequency import parse_indexes
+from execution_modes import (
+    parse_routes,
+    parse_timings,
+    parse_workers,
+    route_arguments,
+    route_directory,
+)
 
 
 class ShowcaseTests(unittest.TestCase):
@@ -39,6 +46,67 @@ class ShowcaseTests(unittest.TestCase):
             parse_indexes("0,2,2", 5)
         with self.assertRaisesRegex(ValueError, "out of range"):
             parse_indexes("0,5", 5)
+
+    def test_execution_routes_keep_nonreuse_first_as_reference(self) -> None:
+        self.assertEqual(
+            parse_routes("nonreuse,serial"), ("nonreuse", "serial")
+        )
+        with self.assertRaisesRegex(ValueError, "unknown routes"):
+            parse_routes("nonreuse,unknown")
+        with self.assertRaisesRegex(ValueError, "duplicates"):
+            parse_routes("nonreuse,serial,serial")
+        with self.assertRaisesRegex(ValueError, "first route"):
+            parse_routes("serial,nonreuse")
+
+    def test_execution_route_arguments_match_the_cli_contract(self) -> None:
+        self.assertEqual(
+            route_arguments("nonreuse", 2), ["--execution-mode", "nonreuse"]
+        )
+        self.assertEqual(
+            route_arguments("serial", 2),
+            ["--execution-mode", "reuse", "--reuse-mode", "serial"],
+        )
+        self.assertEqual(
+            route_arguments("frequency", 3),
+            [
+                "--execution-mode",
+                "reuse",
+                "--reuse-mode",
+                "frequency",
+                "--reuse-workers",
+                "3",
+            ],
+        )
+        self.assertEqual(
+            route_arguments("range", 2)[-2:],
+            ["--reuse-workers", "2"],
+        )
+
+    def test_parallel_route_directories_encode_the_worker_count(self) -> None:
+        self.assertEqual(route_directory("nonreuse", 2), "nonreuse")
+        self.assertEqual(route_directory("serial", 2), "reuse_serial")
+        self.assertEqual(route_directory("frequency", 4), "reuse_frequency_w4")
+        self.assertEqual(route_directory("range", 2), "reuse_range_w2")
+        with self.assertRaisesRegex(ValueError, "positive"):
+            parse_workers(0)
+
+    def test_prt_timing_lines_are_parsed_by_label(self) -> None:
+        timings = parse_timings(
+            "\n".join(
+                [
+                    "Trace seconds = 0.30167245799999998",
+                    "Influence seconds = 17.837544677999986",
+                    "parallel reuse wall seconds = 1.0",
+                    "Total solver and product seconds = 18.281487250000001",
+                    "phase criterion angles = 5000",
+                    "",
+                ]
+            )
+        )
+        self.assertAlmostEqual(timings["Trace"], 0.30167245799999998)
+        self.assertAlmostEqual(timings["Influence"], 17.837544677999986)
+        self.assertAlmostEqual(timings["Total solver and product"], 18.28148725)
+        self.assertNotIn("phase criterion angles", timings)
 
 
 if __name__ == "__main__":

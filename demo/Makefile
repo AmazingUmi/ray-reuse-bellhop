@@ -6,14 +6,20 @@ MULTI_ENV ?= cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env
 MULTI_EXECUTION_MODE ?= reuse
 MULTI_REUSE_MODE ?= serial
 MULTI_INDEXES ?= 0,2,4
+EXECUTION_ENV ?= $(MULTI_ENV)
+EXECUTION_ROUTES ?= nonreuse,serial,frequency,range
+EXECUTION_WORKERS ?= 2
+EXECUTION_INDEXES ?= 2
 
 CLI := $(PYTHON) codes/reliability.py
 MULTI_CLI := $(PYTHON) codes/rayreuse_multifrequency.py
+EXECUTION_CLI := $(PYTHON) codes/execution_modes.py
 PLOT_ENV := MPLCONFIGDIR=/tmp/bellhop-showcase-matplotlib XDG_CACHE_HOME=/tmp/bellhop-showcase-cache
 COMMON_ARGS := --environment "$(ENV)"
 
 .PHONY: help check run plot show origin f2cpp broadband all \
-	rayreuse-multifrequency multifrequency-run multifrequency-plot test
+	rayreuse-multifrequency multifrequency-run multifrequency-plot \
+	execution-modes execution-modes-run execution-modes-plot test
 
 help:
 	@echo "Bellhop reliability and multi-frequency showcases"
@@ -23,6 +29,7 @@ help:
 	@echo "  make broadband   Directly run and plot Bellhop Broadband"
 	@echo "  make all        Run the same ENV with all three and compare"
 	@echo "  make rayreuse-multifrequency  Run one multi-frequency ENV and plot slices"
+	@echo "  make execution-modes          Run the four execution-mode routes and compare"
 	@echo "  make run        Calculate selected VERSIONS only"
 	@echo "  make plot       Plot existing selected VERSIONS results"
 	@echo "  make test       Run showcase unit tests"
@@ -58,6 +65,23 @@ multifrequency-run:
 multifrequency-plot:
 	$(PLOT_ENV) $(MULTI_CLI) plot \
 		--environment "$(MULTI_ENV)" --plot-indexes "$(MULTI_INDEXES)" \
+		--dpi "$(DPI)"
+
+execution-modes:
+	$(PLOT_ENV) $(EXECUTION_CLI) show \
+		--environment "$(EXECUTION_ENV)" --routes "$(EXECUTION_ROUTES)" \
+		--workers "$(EXECUTION_WORKERS)" --plot-indexes "$(EXECUTION_INDEXES)" \
+		--dpi "$(DPI)"
+
+execution-modes-run:
+	$(EXECUTION_CLI) run \
+		--environment "$(EXECUTION_ENV)" --routes "$(EXECUTION_ROUTES)" \
+		--workers "$(EXECUTION_WORKERS)"
+
+execution-modes-plot:
+	$(PLOT_ENV) $(EXECUTION_CLI) plot \
+		--environment "$(EXECUTION_ENV)" --routes "$(EXECUTION_ROUTES)" \
+		--workers "$(EXECUTION_WORKERS)" --plot-indexes "$(EXECUTION_INDEXES)" \
 		--dpi "$(DPI)"
 
 test:
