@@ -42,7 +42,11 @@ python_command=("${python_executable}")
   cd "${project_root}"
   cmake --preset debug
   cmake --build --preset debug "${parallel_arguments[@]}"
-  ctest --preset debug "${ctest_parallelism[@]}" --output-on-failure
+  # The broadband.reuse.range.*_parity tests dominate sanitizer run time
+  # (>98%, ~4994s of ~5084s locally); the full parity matrix still runs in
+  # the Release fast gate and in the isolated Release CTest below.
+  ctest --preset debug "${ctest_parallelism[@]}" --output-on-failure \
+    --exclude-regex 'broadband\.reuse\.range\..*parity'
 
   cmake --preset static-analysis
   "${python_command[@]}" "${script_directory}/run_static_analysis.py" \
