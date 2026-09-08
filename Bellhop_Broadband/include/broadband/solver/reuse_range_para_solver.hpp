@@ -5,14 +5,14 @@
 #include <functional>
 #include <vector>
 
-#include "broadband/field/cartesian_cerveny_influence.hpp"
 #include "broadband/field/broadband_arrival_workspace.hpp"
+#include "broadband/field/cartesian_cerveny_influence.hpp"
 #include "broadband/field/frequency_workspace.hpp"
 #include "broadband/field/fused_intensity_workspace.hpp"
 #include "broadband/field/fused_pressure_workspace.hpp"
 #include "broadband/model/simulation_case.hpp"
-#include "broadband/solver/ray_reuse_frequency_consumer.hpp"
 #include "broadband/solver/arrival_solver.hpp"
+#include "broadband/solver/ray_reuse_frequency_consumer.hpp"
 #include "broadband/solver/single_frequency_solver.hpp"
 
 namespace broadband {
@@ -21,8 +21,7 @@ namespace broadband {
 // scientific and receiver-grid support boundary. Tests use this same
 // predicate so they cannot advertise the range route for a case the
 // solver will reject.
-[[nodiscard]] bool supportsReuseRangePara(
-    const SimulationCase& simulation);
+[[nodiscard]] bool supportsReuseRangePara(const SimulationCase& simulation);
 
 struct ReuseRangeParaExecutionSettings {
   std::size_t requestedRangeWorkers{1U};
@@ -117,9 +116,9 @@ class ReuseRangeParaSolver {
       ReuseRangeParaExecutionSettings executionSettings = {});
 
   // IGR-3A A02b (design §3.3/§6.2): intensity twin of accumulateFrequencies
-  // for the incoherent/semi-coherent fused sink. The Range Reuse scope gate covers
-  // every TL run mode of Cartesian Cerveny; callers select the sink to match
-  // the run mode (solveStreaming does), and the raw payload is the
+  // for the incoherent/semi-coherent fused sink. The Range Reuse scope gate
+  // covers every TL run mode of Cartesian Cerveny; callers select the sink to
+  // match the run mode (solveStreaming does), and the raw payload is the
   // double-lane FusedIntensityWorkspace of the returned result.
   [[nodiscard]] static FusedIntensityAccumulationResult
   accumulateFrequenciesIntensity(
@@ -134,8 +133,7 @@ class ReuseRangeParaSolver {
   [[nodiscard]] static FusedArrivalAccumulationResult
   accumulateArrivalFrequencies(
       const SimulationCase& simulation, const RayPathCache& sourceCache,
-      std::size_t sourceIndex,
-      CartesianCervenySettings influenceSettings = {},
+      std::size_t sourceIndex, CartesianCervenySettings influenceSettings = {},
       ReuseRangeParaExecutionSettings executionSettings = {});
 
   // Trace one source, accumulate all frequencies into one broadband

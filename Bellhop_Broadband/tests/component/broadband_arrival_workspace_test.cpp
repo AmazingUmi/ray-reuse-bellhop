@@ -1,5 +1,4 @@
 #include "broadband/field/broadband_arrival_workspace.hpp"
-#include "broadband/field/arrival_workspace.hpp"
 
 #include <array>
 #include <cstring>
@@ -7,6 +6,7 @@
 #include <limits>
 
 #include "broadband/error.hpp"
+#include "broadband/field/arrival_workspace.hpp"
 #include "broadband/model/simulation_case.hpp"
 #include "support/test_harness.hpp"
 
@@ -21,8 +21,9 @@ using broadband::ValidationError;
 using broadband::test::Context;
 
 Arrival taggedArrival(float tag) {
-  return Arrival{tag, tag + 0.25F, {tag + 0.5F, tag + 0.75F}, tag + 1.0F,
-                 tag + 1.25F, 1, 2};
+  return Arrival{tag,        tag + 0.25F, {tag + 0.5F, tag + 0.75F},
+                 tag + 1.0F, tag + 1.25F, 1,
+                 2};
 }
 
 void testLayoutAndFrequencyView(Context& context) {
@@ -30,8 +31,7 @@ void testLayoutAndFrequencyView(Context& context) {
   BroadbandArrivalWorkspace workspace(
       frequencies, ReceiverGrid({10.0, 20.0}, {100.0, 200.0}), 4U);
 
-  context.check(workspace.rangeCount() == 2U &&
-                    workspace.depthCount() == 2U &&
+  context.check(workspace.rangeCount() == 2U && workspace.depthCount() == 2U &&
                     workspace.frequencyCount() == 3U &&
                     workspace.receiverCellCount() == 4U &&
                     workspace.laneCount() == 12U,
@@ -49,32 +49,31 @@ void testLayoutAndFrequencyView(Context& context) {
 
   const auto view = workspace.frequencyView(1U);
   context.check(view.frequency() == 100.0 && view.depthCount() == 2U &&
-                    view.rangeCount() == 2U &&
-                    view.receiverCellCount() == 4U &&
+                    view.rangeCount() == 2U && view.receiverCellCount() == 4U &&
                     view.capacity().arrivalsPerCell == 4U,
                 "frequency view exposes legacy-compatible metadata");
-  context.check(view.cellAt(0U).front().amplitude == 1.0F &&
-                    view.cellAt(1U).front().amplitude == 2.0F &&
-                    view.cellAt(2U).front().amplitude == 3.0F &&
-                    view.cellAt(3U).front().amplitude == 4.0F &&
-                    view.arrivalCountAt(1U, 1U) == 2U,
-                "frequency view maps legacy depth-major cell traversal onto [R][D][F]");
-  context.check(view.arrivalsAt(1U, 1U).data() ==
-                    workspace.laneAt(1U, 1U, 1U).data(),
-                "frequency view aliases the fused lane without Arrival copies");
+  context.check(
+      view.cellAt(0U).front().amplitude == 1.0F &&
+          view.cellAt(1U).front().amplitude == 2.0F &&
+          view.cellAt(2U).front().amplitude == 3.0F &&
+          view.cellAt(3U).front().amplitude == 4.0F &&
+          view.arrivalCountAt(1U, 1U) == 2U,
+      "frequency view maps legacy depth-major cell traversal onto [R][D][F]");
+  context.check(
+      view.arrivalsAt(1U, 1U).data() == workspace.laneAt(1U, 1U, 1U).data(),
+      "frequency view aliases the fused lane without Arrival copies");
 
   const auto storage = workspace.storageStatistics();
-  context.check(storage.laneCount == 12U &&
-                    storage.nonEmptyLaneCount == 4U &&
-                    storage.storedArrivalCount == 5U &&
-                    storage.allocatedArrivalSlots >= 5U &&
-                    storage.logicalArrivalSlots == 48U &&
-                    storage.laneHeaderBytes >=
-                        12U * sizeof(std::vector<Arrival>) &&
-                    storage.allocatedArrivalBytes >= 5U * sizeof(Arrival) &&
-                    storage.memoryFootprintBytes >=
-                        storage.laneHeaderBytes + storage.allocatedArrivalBytes,
-                "source-local storage accounting covers lanes and payloads");
+  context.check(
+      storage.laneCount == 12U && storage.nonEmptyLaneCount == 4U &&
+          storage.storedArrivalCount == 5U &&
+          storage.allocatedArrivalSlots >= 5U &&
+          storage.logicalArrivalSlots == 48U &&
+          storage.laneHeaderBytes >= 12U * sizeof(std::vector<Arrival>) &&
+          storage.allocatedArrivalBytes >= 5U * sizeof(Arrival) &&
+          storage.memoryFootprintBytes >=
+              storage.laneHeaderBytes + storage.allocatedArrivalBytes,
+      "source-local storage accounting covers lanes and payloads");
 }
 
 void testValidation(Context& context) {
@@ -89,7 +88,9 @@ void testValidation(Context& context) {
       [&workspace] { static_cast<void>(workspace.laneAt(1U, 0U, 0U)); },
       "out-of-range fused lane is rejected");
   context.expectThrows<std::out_of_range>(
-      [&workspace] { static_cast<void>(workspace.frequencyView(0U).cellAt(1U)); },
+      [&workspace] {
+        static_cast<void>(workspace.frequencyView(0U).cellAt(1U));
+      },
       "out-of-range legacy cell is rejected");
 
   const std::span<const double> empty;
@@ -98,8 +99,7 @@ void testValidation(Context& context) {
         static_cast<void>(BroadbandArrivalWorkspace(empty, receivers));
       },
       "empty frequency dimension is rejected");
-  const std::array invalidFrequency{
-      std::numeric_limits<double>::infinity()};
+  const std::array invalidFrequency{std::numeric_limits<double>::infinity()};
   context.expectThrows<ValidationError>(
       [&receivers, &invalidFrequency] {
         static_cast<void>(
@@ -156,6 +156,7 @@ int main() {
               << " broadband-arrival-workspace assertion(s) failed\n";
     return 1;
   }
-  std::cout << "All Bellhop Broadband broadband-arrival-workspace tests passed\n";
+  std::cout
+      << "All Bellhop Broadband broadband-arrival-workspace tests passed\n";
   return 0;
 }

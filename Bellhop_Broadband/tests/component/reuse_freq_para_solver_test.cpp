@@ -24,8 +24,6 @@ using broadband::BeamWidthMode;
 using broadband::BiologicalAttenuationLayers;
 using broadband::BoundaryCurvatureMode;
 using broadband::BoundaryModel;
-using broadband::NonReuseResult;
-using broadband::NonReuseSolver;
 using broadband::CervenyCoordinateSystem;
 using broadband::Environment;
 using broadband::FieldComponent;
@@ -33,10 +31,12 @@ using broadband::FrancoisGarrisonParameters;
 using broadband::FrequencyGrid;
 using broadband::IntegratorSettings;
 using broadband::LaunchFan;
+using broadband::NonReuseResult;
+using broadband::NonReuseSolver;
+using broadband::ReceiverGrid;
 using broadband::ReuseFreqParaSettings;
 using broadband::ReuseFreqParaSolver;
 using broadband::ReuseFreqParaStatistics;
-using broadband::ReceiverGrid;
 using broadband::ReuseSerialResult;
 using broadband::ReuseSerialSolver;
 using broadband::SimulationCase;
@@ -134,12 +134,12 @@ struct StreamedFrequencyRun {
 };
 
 StreamedFrequencyRun runFrequency(const SimulationCase& simulation,
-                                ReuseFreqParaSettings settings,
-                                bool verifyCacheFingerprint = false) {
+                                  ReuseFreqParaSettings settings,
+                                  bool verifyCacheFingerprint = false) {
   StreamedFrequencyRun run{
-      .workspaces =
-          std::vector<std::optional<std::vector<broadband::FrequencyWorkspace>>>(
-              simulation.frequencies().size()),
+      .workspaces = std::vector<
+          std::optional<std::vector<broadband::FrequencyWorkspace>>>(
+          simulation.frequencies().size()),
       .callbackCounts =
           std::vector<std::size_t>(simulation.frequencies().size(), 0U),
       .statistics = {}};
@@ -178,10 +178,10 @@ void testFrequencyCounts(Context& context) {
         ReuseSerialSolver::solve(simulation, 1.0, 50.0);
     const StreamedFrequencyRun frequency =
         runFrequency(simulation,
-                    ReuseFreqParaSettings{.workerCount = 4U,
-                                             .outputQueueCapacity = 2U,
-                                             .memoryBudgetBytes = 0U},
-                    frequencyCount == 2U);
+                     ReuseFreqParaSettings{.workerCount = 4U,
+                                           .outputQueueCapacity = 2U,
+                                           .memoryBudgetBytes = 0U},
+                     frequencyCount == 2U);
 
     context.check(frequency.statistics.tracePassCount == 1U &&
                       serial.statistics.tracePassCount == 1U &&
@@ -196,10 +196,10 @@ void testFrequencyCounts(Context& context) {
                           std::min<std::size_t>(2U, frequencyCount),
                   "frequency workers and completed queue stay "
                   "within configured bounds");
-    context.check(
-        frequency.callbackCounts == std::vector<std::size_t>(frequencyCount, 1U),
-        "frequency callback consumes every frequency "
-        "exactly once");
+    context.check(frequency.callbackCounts ==
+                      std::vector<std::size_t>(frequencyCount, 1U),
+                  "frequency callback consumes every frequency "
+                  "exactly once");
     context.check(
         frequency.statistics.frequencyTimings.size() == frequencyCount &&
             frequency.statistics.rayCount == serial.statistics.rayCount &&
@@ -368,10 +368,10 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
           ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
       const StreamedFrequencyRun frequency =
           runFrequency(simulation,
-                      ReuseFreqParaSettings{.workerCount = 2U,
-                                               .outputQueueCapacity = 1U,
-                                               .memoryBudgetBytes = 0U},
-                      true);
+                       ReuseFreqParaSettings{.workerCount = 2U,
+                                             .outputQueueCapacity = 1U,
+                                             .memoryBudgetBytes = 0U},
+                       true);
       context.check(
           reuse.statistics.cacheFingerprintVerified &&
               reuse.statistics.cacheFingerprintBefore ==
@@ -404,16 +404,15 @@ void testCoherenceModesMatchAcrossExecution(Context& context) {
 void testSimpleGaussianMatchesAcrossExecution(Context& context) {
   const SimulationCase simulation = makeSimulation(
       {50.0, 100.0}, SimulationRunMode::Coherent, BeamFamily::SimpleGaussian);
-  const NonReuseResult nonReuse =
-      NonReuseSolver::solve(simulation, 1.0, 50.0);
+  const NonReuseResult nonReuse = NonReuseSolver::solve(simulation, 1.0, 50.0);
   const ReuseSerialResult reuse =
       ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
   const StreamedFrequencyRun frequency =
       runFrequency(simulation,
-                  ReuseFreqParaSettings{.workerCount = 2U,
-                                           .outputQueueCapacity = 1U,
-                                           .memoryBudgetBytes = 0U},
-                  true);
+                   ReuseFreqParaSettings{.workerCount = 2U,
+                                         .outputQueueCapacity = 1U,
+                                         .memoryBudgetBytes = 0U},
+                   true);
   context.check(
       reuse.statistics.cacheFingerprintVerified &&
           reuse.statistics.cacheFingerprintBefore ==
@@ -462,10 +461,10 @@ void testCartesianComponentsMatchAcrossExecution(Context& context) {
               ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
           const StreamedFrequencyRun frequency =
               runFrequency(simulation,
-                          ReuseFreqParaSettings{.workerCount = 2U,
-                                                   .outputQueueCapacity = 1U,
-                                                   .memoryBudgetBytes = 0U},
-                          true);
+                           ReuseFreqParaSettings{.workerCount = 2U,
+                                                 .outputQueueCapacity = 1U,
+                                                 .memoryBudgetBytes = 0U},
+                           true);
           context.check(
               reuse.statistics.cacheFingerprintVerified &&
                   reuse.statistics.cacheFingerprintBefore ==
@@ -530,10 +529,10 @@ void testRayCenteredMatrixMatchesAcrossExecution(Context& context) {
               ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
           const StreamedFrequencyRun frequency =
               runFrequency(simulation,
-                          ReuseFreqParaSettings{.workerCount = 2U,
-                                                   .outputQueueCapacity = 1U,
-                                                   .memoryBudgetBytes = 0U},
-                          true);
+                           ReuseFreqParaSettings{.workerCount = 2U,
+                                                 .outputQueueCapacity = 1U,
+                                                 .memoryBudgetBytes = 0U},
+                           true);
           context.check(reuse.statistics.cacheFingerprintVerified &&
                             reuse.statistics.cacheFingerprintBefore ==
                                 reuse.statistics.cacheFingerprintAfter &&
@@ -578,10 +577,10 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
         ReuseSerialSolver::solve(simulation, 1.0, 50.0, {}, true);
     const StreamedFrequencyRun frequency =
         runFrequency(simulation,
-                    ReuseFreqParaSettings{.workerCount = 2U,
-                                             .outputQueueCapacity = 1U,
-                                             .memoryBudgetBytes = 0U},
-                    true);
+                     ReuseFreqParaSettings{.workerCount = 2U,
+                                           .outputQueueCapacity = 1U,
+                                           .memoryBudgetBytes = 0U},
+                     true);
     context.check(
         reuse.statistics.cacheFingerprintVerified &&
             reuse.statistics.cacheFingerprintBefore ==
@@ -608,20 +607,19 @@ void testRayCenteredGeometricHatMatchesAcrossExecution(Context& context) {
 
 void testMemoryBudget(Context& context) {
   const SimulationCase simulation = makeSimulation(makeFrequencies(16U));
-  const StreamedFrequencyRun unrestricted = runFrequency(
-      simulation, ReuseFreqParaSettings{.workerCount = 4U,
-                                           .outputQueueCapacity = 1U,
-                                           .memoryBudgetBytes = 0U});
+  const StreamedFrequencyRun unrestricted =
+      runFrequency(simulation, ReuseFreqParaSettings{.workerCount = 4U,
+                                                     .outputQueueCapacity = 1U,
+                                                     .memoryBudgetBytes = 0U});
   const std::size_t cacheBytes = unrestricted.statistics.rayCacheBytes;
   const std::size_t workspaceBytes =
       unrestricted.statistics.estimatedWorkspaceBytes;
   const std::size_t twoWorkerBudget = cacheBytes + 4U * workspaceBytes;
 
   const StreamedFrequencyRun constrained = runFrequency(
-      simulation,
-      ReuseFreqParaSettings{.workerCount = 4U,
-                               .outputQueueCapacity = 1U,
-                               .memoryBudgetBytes = twoWorkerBudget});
+      simulation, ReuseFreqParaSettings{.workerCount = 4U,
+                                        .outputQueueCapacity = 1U,
+                                        .memoryBudgetBytes = twoWorkerBudget});
   context.check(
       constrained.statistics.activeFrequencyLimit == 2U &&
           constrained.statistics.estimatedPeakMemoryBytes <= twoWorkerBudget,
@@ -650,8 +648,8 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
             [](std::size_t, std::vector<broadband::FrequencyWorkspace>&&,
                const broadband::SingleFrequencyTimings&) {},
             ReuseFreqParaSettings{.workerCount = 0U,
-                                     .outputQueueCapacity = 1U,
-                                     .memoryBudgetBytes = 0U}));
+                                  .outputQueueCapacity = 1U,
+                                  .memoryBudgetBytes = 0U}));
       },
       "frequency solver rejects zero workers");
   context.expectThrows<ValidationError>(
@@ -661,8 +659,8 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
             [](std::size_t, std::vector<broadband::FrequencyWorkspace>&&,
                const broadband::SingleFrequencyTimings&) {},
             ReuseFreqParaSettings{.workerCount = 1U,
-                                     .outputQueueCapacity = 0U,
-                                     .memoryBudgetBytes = 0U}));
+                                  .outputQueueCapacity = 0U,
+                                  .memoryBudgetBytes = 0U}));
       },
       "frequency solver rejects an empty output queue");
   context.expectThrows<ValidationError>(
@@ -672,8 +670,8 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
             [](std::size_t, std::vector<broadband::FrequencyWorkspace>&&,
                const broadband::SingleFrequencyTimings&) {},
             ReuseFreqParaSettings{.workerCount = 1U,
-                                     .outputQueueCapacity = 3U,
-                                     .memoryBudgetBytes = 0U}));
+                                  .outputQueueCapacity = 3U,
+                                  .memoryBudgetBytes = 0U}));
       },
       "frequency solver rejects output queue capacity above two");
   context.expectThrows<std::runtime_error>(
@@ -685,8 +683,8 @@ void testInvalidSettingsAndConsumerFailure(Context& context) {
               throw std::runtime_error("consumer failure");
             },
             ReuseFreqParaSettings{.workerCount = 2U,
-                                     .outputQueueCapacity = 1U,
-                                     .memoryBudgetBytes = 0U}));
+                                  .outputQueueCapacity = 1U,
+                                  .memoryBudgetBytes = 0U}));
       },
       "frequency solver stops workers and propagates "
       "consumer failures");

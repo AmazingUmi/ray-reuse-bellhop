@@ -69,9 +69,8 @@ class SimpleGaussianInfluence {
   // prefix, monotone range cursor, shared depth rows (rectilinear semantics;
   // no irregular support added).
   [[nodiscard]] bool accumulateFusedPrevalidated(
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 

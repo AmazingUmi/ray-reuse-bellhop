@@ -78,10 +78,8 @@ EigenrayTraceBatch traceAllSourceCaches(const SimulationCase& simulation,
 void recordTraceWorkerStatistics(EigenraySolverStatistics& stats,
                                  const EigenrayTraceBatch& batch) {
   if (stats.traceWorkerSecondsBySource.empty()) {
-    stats.requestedTraceWorkerCount =
-        batch.traces.front().requestedWorkerCount;
-    stats.effectiveTraceWorkerCount =
-        batch.traces.front().effectiveWorkerCount;
+    stats.requestedTraceWorkerCount = batch.traces.front().requestedWorkerCount;
+    stats.effectiveTraceWorkerCount = batch.traces.front().effectiveWorkerCount;
   }
   for (const RayFanTraceResult& trace : batch.traces) {
     stats.traceWorkerSecondsBySource.push_back(trace.workerSeconds);

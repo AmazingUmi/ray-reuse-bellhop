@@ -790,8 +790,8 @@ class TempDirectory {
     path_ =
         std::filesystem::temp_directory_path() /
         ("broadband_q_ssp_test_" + std::to_string(static_cast<long long>(
-                                      std::chrono::system_clock::to_time_t(
-                                          std::chrono::system_clock::now()))));
+                                       std::chrono::system_clock::to_time_t(
+                                           std::chrono::system_clock::now()))));
     std::filesystem::create_directories(path_);
   }
   ~TempDirectory() {

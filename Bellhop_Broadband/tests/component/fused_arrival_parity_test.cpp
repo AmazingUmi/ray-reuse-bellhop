@@ -1,5 +1,3 @@
-#include "broadband/solver/reuse_range_para_solver.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -15,6 +13,7 @@
 #include "broadband/field/geometric_gaussian_influence.hpp"
 #include "broadband/field/geometric_hat_influence.hpp"
 #include "broadband/model/simulation_case.hpp"
+#include "broadband/solver/reuse_range_para_solver.hpp"
 #include "broadband/solver/single_frequency_solver.hpp"
 #include "support/test_harness.hpp"
 
@@ -41,9 +40,9 @@ using broadband::Source;
 using broadband::SourceBeamPattern;
 using broadband::test::Context;
 
-[[nodiscard]] SimulationCase makeCase(
-    BeamFamily family, CervenyCoordinateSystem coordinates,
-    SimulationRunMode runMode) {
+[[nodiscard]] SimulationCase makeCase(BeamFamily family,
+                                      CervenyCoordinateSystem coordinates,
+                                      SimulationRunMode runMode) {
   constexpr double kRadiansPerDegree = std::numbers::pi / 180.0;
   return SimulationCase(
       Environment(
@@ -73,8 +72,7 @@ using broadband::test::Context;
 [[nodiscard]] broadband::ArrivalWorkspace legacyArrivals(
     const SimulationCase& simulation, const broadband::RayPathCache& cache,
     std::size_t sourceIndex, std::size_t frequencyIndex) {
-  const double frequency =
-      simulation.frequencies().values().at(frequencyIndex);
+  const double frequency = simulation.frequencies().values().at(frequencyIndex);
   const Source& source = simulation.sources().at(sourceIndex);
   broadband::ArrivalWorkspace workspace(frequency, simulation.receivers());
   const FrequencyProjector projector(simulation.environment());
@@ -91,9 +89,8 @@ using broadband::test::Context;
     const broadband::RayFrequencyState state =
         projector.project(path, frequency, amplitude);
     if (simulation.beamFamily() == BeamFamily::GeometricGaussian) {
-      gaussian.accumulateArrivals(
-          workspace, path, state,
-          simulation.launchFanPlan().launchAngleStep);
+      gaussian.accumulateArrivals(workspace, path, state,
+                                  simulation.launchFanPlan().launchAngleStep);
     } else {
       hat.accumulateArrivals(workspace, path, state,
                              simulation.launchFanPlan().launchAngleStep);
@@ -127,8 +124,7 @@ void checkParity(Context& context, const SimulationCase& simulation,
           simulation, trace.cache, sourceIndex, {},
           {.requestedRangeWorkers = 4U});
 
-  const auto checkResult = [&](
-                               const broadband::FusedArrivalAccumulationResult&
+  const auto checkResult = [&](const broadband::FusedArrivalAccumulationResult&
                                    fused,
                                std::size_t requestedWorkers) {
     std::size_t storedArrivals = 0U;
@@ -149,19 +145,18 @@ void checkParity(Context& context, const SimulationCase& simulation,
               one.arrivalsAt(depthIndex, rangeIndex);
           const bool legacyEqual =
               expected.size() == observed.size() &&
-              (expected.empty() ||
-               std::memcmp(expected.data(), observed.data(),
-                           expected.size_bytes()) == 0);
+              (expected.empty() || std::memcmp(expected.data(), observed.data(),
+                                               expected.size_bytes()) == 0);
           const bool workerEqual =
               serialFused.size() == observed.size() &&
               (serialFused.empty() ||
                std::memcmp(serialFused.data(), observed.data(),
                            serialFused.size_bytes()) == 0);
           const std::string cell =
-              label + " w" + std::to_string(requestedWorkers) +
-              " frequency " + std::to_string(frequencyIndex) + " cell (" +
-              std::to_string(depthIndex) + "," +
-              std::to_string(rangeIndex) + ")";
+              label + " w" + std::to_string(requestedWorkers) + " frequency " +
+              std::to_string(frequencyIndex) + " cell (" +
+              std::to_string(depthIndex) + "," + std::to_string(rangeIndex) +
+              ")";
           context.check(legacyEqual,
                         cell + " preserves legacy count and ordered bytes");
           context.check(workerEqual,
@@ -172,19 +167,16 @@ void checkParity(Context& context, const SimulationCase& simulation,
     }
     context.check(storedArrivals > 0U,
                   label + " exercises at least one stored arrival");
-    context.check(
-        fused.arrivalStatistics.candidateCount == legacyCandidates,
-        label + " w" + std::to_string(requestedWorkers) +
-            " preserves candidate statistics");
+    context.check(fused.arrivalStatistics.candidateCount == legacyCandidates,
+                  label + " w" + std::to_string(requestedWorkers) +
+                      " preserves candidate statistics");
     context.check(
         fused.requestedRangeWorkers == requestedWorkers &&
             fused.effectiveRangeWorkers ==
-                std::min(requestedWorkers,
-                         simulation.receivers().rangeCount()),
+                std::min(requestedWorkers, simulation.receivers().rangeCount()),
         label + " reports requested/effective static range workers");
     context.check(fused.rayCount == trace.cache.size() &&
-                      fused.rayCacheBytes ==
-                          trace.cache.memoryFootprintBytes(),
+                      fused.rayCacheBytes == trace.cache.memoryFootprintBytes(),
                   label + " reports the frozen cache metrics");
     context.check(fused.timings.traceSeconds == 0.0 &&
                       fused.timings.scaleSeconds == 0.0 &&
@@ -198,22 +190,21 @@ void checkParity(Context& context, const SimulationCase& simulation,
 
   checkResult(fusedOne, 1U);
   checkResult(fusedFour, 4U);
-  context.check(
-      fusedOne.arrivalStatistics.candidateCount ==
-              fusedFour.arrivalStatistics.candidateCount &&
-          fusedOne.arrivalStatistics.appendCount ==
-              fusedFour.arrivalStatistics.appendCount &&
-          fusedOne.arrivalStatistics.mergeCount ==
-              fusedFour.arrivalStatistics.mergeCount &&
-          fusedOne.arrivalStatistics.cuspGuardCount ==
-              fusedFour.arrivalStatistics.cuspGuardCount &&
-          fusedOne.arrivalStatistics.weakestReplacementCount ==
-              fusedFour.arrivalStatistics.weakestReplacementCount &&
-          fusedOne.arrivalStatistics.capacityDiscardCount ==
-              fusedFour.arrivalStatistics.capacityDiscardCount &&
-          fusedOne.arrivalStatistics.saturatedCellCount ==
-              fusedFour.arrivalStatistics.saturatedCellCount,
-      label + " w1/w4 worker-local statistics merge identically");
+  context.check(fusedOne.arrivalStatistics.candidateCount ==
+                        fusedFour.arrivalStatistics.candidateCount &&
+                    fusedOne.arrivalStatistics.appendCount ==
+                        fusedFour.arrivalStatistics.appendCount &&
+                    fusedOne.arrivalStatistics.mergeCount ==
+                        fusedFour.arrivalStatistics.mergeCount &&
+                    fusedOne.arrivalStatistics.cuspGuardCount ==
+                        fusedFour.arrivalStatistics.cuspGuardCount &&
+                    fusedOne.arrivalStatistics.weakestReplacementCount ==
+                        fusedFour.arrivalStatistics.weakestReplacementCount &&
+                    fusedOne.arrivalStatistics.capacityDiscardCount ==
+                        fusedFour.arrivalStatistics.capacityDiscardCount &&
+                    fusedOne.arrivalStatistics.saturatedCellCount ==
+                        fusedFour.arrivalStatistics.saturatedCellCount,
+                label + " w1/w4 worker-local statistics merge identically");
   context.check(trace.cache.contentFingerprint() == fingerprint,
                 label + " w1/w4 leave the frozen source cache unchanged");
 }
@@ -222,16 +213,16 @@ void checkParity(Context& context, const SimulationCase& simulation,
 
 int main() {
   Context context;
-  checkParity(context,
-              makeCase(BeamFamily::GeometricHat,
-                       CervenyCoordinateSystem::Cartesian,
-                       SimulationRunMode::AsciiArrivals),
-              0U, "G/A source0");
-  checkParity(context,
-              makeCase(BeamFamily::GeometricHat,
-                       CervenyCoordinateSystem::RayCentered,
-                       SimulationRunMode::BinaryArrivals),
-              1U, "g/a source1");
+  checkParity(
+      context,
+      makeCase(BeamFamily::GeometricHat, CervenyCoordinateSystem::Cartesian,
+               SimulationRunMode::AsciiArrivals),
+      0U, "G/A source0");
+  checkParity(
+      context,
+      makeCase(BeamFamily::GeometricHat, CervenyCoordinateSystem::RayCentered,
+               SimulationRunMode::BinaryArrivals),
+      1U, "g/a source1");
   checkParity(context,
               makeCase(BeamFamily::GeometricGaussian,
                        CervenyCoordinateSystem::Cartesian,

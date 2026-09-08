@@ -161,8 +161,9 @@ int main(int argc, char* argv[]) {
                     ? broadband::SspInterpolationKind::Pchip
                     : (useSpline
                            ? broadband::SspInterpolationKind::CubicSpline
-                           : (useN2 ? broadband::SspInterpolationKind::N2Linear
-                                    : broadband::SspInterpolationKind::CLinear)))
+                           : (useN2
+                                  ? broadband::SspInterpolationKind::N2Linear
+                                  : broadband::SspInterpolationKind::CLinear)))
           : (useI5Quadrilateral
                  ? makeI5QuadrilateralEnvironment()
                  : (useCurvilinear
@@ -205,9 +206,9 @@ int main(int argc, char* argv[]) {
   const broadband::GeometryTracer tracer(
       environment,
       broadband::IntegratorSettings{.stepLength = stepLength,
-                                   .rangeLimit = rangeLimit,
-                                   .depthLimit = depthLimit,
-                                   .maximumRayPoints = maximumRayPoints});
+                                    .rangeLimit = rangeLimit,
+                                    .depthLimit = depthLimit,
+                                    .maximumRayPoints = maximumRayPoints});
   const broadband::RayPath path =
       tracer.trace(broadband::Source{.depth = sourceDepth}, launchAngle);
 

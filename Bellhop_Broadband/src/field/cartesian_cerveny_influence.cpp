@@ -345,8 +345,7 @@ void validateFusedPrevalidatedInput(const FusedWorkspace& workspace,
     throw ValidationError("fused Cartesian Cerveny epsilon must be finite");
   }
   if (widthMode == BeamWidthMode::Wkb && epsilon.imag() != 0.0) {
-    throw ValidationError(
-        "fused Cartesian Cerveny WKB epsilon must be real");
+    throw ValidationError("fused Cartesian Cerveny WKB epsilon must be real");
   }
   if (widthMode != BeamWidthMode::Wkb &&
       (epsilon.real() != 0.0 || epsilon.imag() <= 0.0)) {
@@ -1135,39 +1134,34 @@ CartesianCervenyInfluence::accumulateIntensityPrevalidated(
 }
 
 bool CartesianCervenyInfluence::accumulateFusedPrevalidated(
-    FusedPressureWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   if (statistics != nullptr) {
     if (settings_.imageCount == 1U) {
       return accumulateFusedImpl<true, 1U>(workspace, frequencies, path,
                                            frequencyStates, epsilons,
-                                           rangeBegin, rangeEnd,
-                                           statistics);
+                                           rangeBegin, rangeEnd, statistics);
     }
     if (settings_.imageCount == 2U) {
       return accumulateFusedImpl<true, 2U>(workspace, frequencies, path,
                                            frequencyStates, epsilons,
-                                           rangeBegin, rangeEnd,
-                                           statistics);
+                                           rangeBegin, rangeEnd, statistics);
     }
     return accumulateFusedImpl<true, 3U>(workspace, frequencies, path,
-                                         frequencyStates, epsilons,
-                                         rangeBegin, rangeEnd,
-                                         statistics);
+                                         frequencyStates, epsilons, rangeBegin,
+                                         rangeEnd, statistics);
   }
   if (settings_.imageCount == 1U) {
     return accumulateFusedImpl<false, 1U>(workspace, frequencies, path,
-                                          frequencyStates, epsilons,
-                                          rangeBegin, rangeEnd, nullptr);
+                                          frequencyStates, epsilons, rangeBegin,
+                                          rangeEnd, nullptr);
   }
   if (settings_.imageCount == 2U) {
     return accumulateFusedImpl<false, 2U>(workspace, frequencies, path,
-                                          frequencyStates, epsilons,
-                                          rangeBegin, rangeEnd, nullptr);
+                                          frequencyStates, epsilons, rangeBegin,
+                                          rangeEnd, nullptr);
   }
   return accumulateFusedImpl<false, 3U>(workspace, frequencies, path,
                                         frequencyStates, epsilons, rangeBegin,
@@ -1175,12 +1169,10 @@ bool CartesianCervenyInfluence::accumulateFusedPrevalidated(
 }
 
 bool CartesianCervenyInfluence::accumulateFusedIntensityPrevalidated(
-    FusedIntensityWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   if (statistics != nullptr) {
     if (settings_.imageCount == 1U) {
       return accumulateFusedIntensityImpl<true, 1U>(
@@ -1206,9 +1198,9 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityPrevalidated(
         workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
         rangeEnd, nullptr);
   }
-  return accumulateFusedIntensityImpl<false, 3U>(
-      workspace, frequencies, path, frequencyStates, epsilons, rangeBegin,
-      rangeEnd, nullptr);
+  return accumulateFusedIntensityImpl<false, 3U>(workspace, frequencies, path,
+                                                 frequencyStates, epsilons,
+                                                 rangeBegin, rangeEnd, nullptr);
 }
 
 // Production fused RayReuse kernel. Per fixed frequency
@@ -1221,12 +1213,10 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityPrevalidated(
 // (Obligations P1-P3, P6).  Returns false on the shared early range exit.
 template <bool CollectStatistics, std::size_t ImageCount>
 bool CartesianCervenyInfluence::accumulateFusedImpl(
-    FusedPressureWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   static_assert(ImageCount >= 1U && ImageCount <= 3U);
   const std::size_t frequencyCount = frequencyStates.size();
   if (frequencyCount == 0U) {
@@ -1247,8 +1237,7 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
         "match");
   }
   if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
-    throw ValidationError(
-        "fused Cartesian Cerveny range partition is invalid");
+    throw ValidationError("fused Cartesian Cerveny range partition is invalid");
   }
   if constexpr (CollectStatistics) {
     // One fused ray call covers Nf per-(ray, frequency) accumulations.
@@ -1261,8 +1250,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     }
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
          ++frequencyIndex) {
-      validateFusedPrevalidatedInput(workspace, frequencies[frequencyIndex], path,
-                                     frequencyStates[frequencyIndex],
+      validateFusedPrevalidatedInput(workspace, frequencies[frequencyIndex],
+                                     path, frequencyStates[frequencyIndex],
                                      epsilons[frequencyIndex], receivers_,
                                      widthMode_);
     }
@@ -1300,12 +1289,10 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     }
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
-    radiusMax[frequencyIndex] =
-        30.0 * path.points.front().soundSpeed /
-        frequencyStates[frequencyIndex].frequency;
+    radiusMax[frequencyIndex] = 30.0 * path.points.front().soundSpeed /
+                                frequencyStates[frequencyIndex].frequency;
   }
-  const std::size_t fusedValueCount =
-      maximumPrefixPointCount * frequencyCount;
+  const std::size_t fusedValueCount = maximumPrefixPointCount * frequencyCount;
   FusedPrecomputedRayValues ray{
       .frequencyCount = frequencyCount,
       .p = std::vector<std::complex<double>>(fusedValueCount),
@@ -1318,10 +1305,10 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     // Preserve the existing ascending-frequency, ascending-point evaluation
     // sequence and each frequency's own prefix. Rectangular inactive tails
     // are storage only and are never read by the fused hot-loop gates.
-    precomputeFusedRayValuesForFrequency(
-        path, soundSpeedProfile_, epsilons[frequencyIndex],
-        activePrefixPointCount[frequencyIndex], widthMode_, frequencyIndex,
-        ray);
+    precomputeFusedRayValuesForFrequency(path, soundSpeedProfile_,
+                                         epsilons[frequencyIndex],
+                                         activePrefixPointCount[frequencyIndex],
+                                         widthMode_, frequencyIndex, ray);
   }
   if constexpr (CollectStatistics) {
     statistics->precomputeSeconds +=
@@ -1414,8 +1401,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
     const std::size_t firstRange =
         std::max(firstUpper + 1U, firstPartitionRange);
     const std::size_t lastRange = std::min(secondUpper, lastPartitionRange);
-    for (std::size_t oneBasedRange = firstRange;
-         oneBasedRange <= lastRange; ++oneBasedRange) {
+    for (std::size_t oneBasedRange = firstRange; oneBasedRange <= lastRange;
+         ++oneBasedRange) {
       if constexpr (CollectStatistics) {
         ++statistics->receiverRangeEvaluations;
         ++statistics->geometryRangeEvaluations;
@@ -1444,24 +1431,23 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
           // frequencies the gamma guard below then rejects.
           ++statistics->frequencyRangeKernelEvaluations;
         }
-        const std::size_t leftFlatIndex =
-            leftFlatOffset + frequencyIndex;
-        const std::size_t rightFlatIndex =
-            rightFlatOffset + frequencyIndex;
+        const std::size_t leftFlatIndex = leftFlatOffset + frequencyIndex;
+        const std::size_t rightFlatIndex = rightFlatOffset + frequencyIndex;
         q[frequencyIndex] =
             ray.q[leftFlatIndex] +
             weight * (ray.q[rightFlatIndex] - ray.q[leftFlatIndex]);
-        tau[frequencyIndex] =
-            frequencyStates[frequencyIndex].points[leftIndex]
-                .complexTravelTime +
-            weight * (frequencyStates[frequencyIndex].points[rightIndex]
-                          .complexTravelTime -
-                      frequencyStates[frequencyIndex].points[leftIndex]
-                          .complexTravelTime);
+        tau[frequencyIndex] = frequencyStates[frequencyIndex]
+                                  .points[leftIndex]
+                                  .complexTravelTime +
+                              weight * (frequencyStates[frequencyIndex]
+                                            .points[rightIndex]
+                                            .complexTravelTime -
+                                        frequencyStates[frequencyIndex]
+                                            .points[leftIndex]
+                                            .complexTravelTime);
         gamma[frequencyIndex] =
             ray.gamma[leftFlatIndex] +
-            weight *
-                (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
+            weight * (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
         if (gamma[frequencyIndex].imag() > 0.0) {
           rangeEligible[frequencyIndex] = false;
           continue;
@@ -1473,9 +1459,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
         int finalKmah = ray.kmah[leftFlatIndex];
         finalKmah = updateCervenyKmah(ray.q[leftFlatIndex], q[frequencyIndex],
                                       finalKmah, widthMode_);
-        corrected[frequencyIndex] = finalKmah < 0
-                                        ? -principal[frequencyIndex]
-                                        : principal[frequencyIndex];
+        corrected[frequencyIndex] = finalKmah < 0 ? -principal[frequencyIndex]
+                                                  : principal[frequencyIndex];
         requireFiniteComplex(principal[frequencyIndex],
                              "Cartesian Cerveny principal constant");
         requireFiniteComplex(corrected[frequencyIndex],
@@ -1519,8 +1504,8 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
             ++statistics->geometryImageGeometryEvaluations;
           }
           const double deltaSquared = deltaDepth * deltaDepth;
-          for (std::size_t frequencyIndex = 0U;
-               frequencyIndex < frequencyCount; ++frequencyIndex) {
+          for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+               ++frequencyIndex) {
             if (!rangeEligible[frequencyIndex]) {
               continue;
             }
@@ -1528,9 +1513,9 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
               ++statistics->imageEvaluations;
               ++statistics->frequencyImageKernelEvaluations;
             }
-            const double windowMetric =
-                -angularFrequency[frequencyIndex] *
-                gamma[frequencyIndex].imag() * deltaSquared;
+            const double windowMetric = -angularFrequency[frequencyIndex] *
+                                        gamma[frequencyIndex].imag() *
+                                        deltaSquared;
 #ifndef NDEBUG
             requireFinite(windowMetric, "Cartesian Cerveny window metric");
 #endif
@@ -1555,8 +1540,7 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
             }
             const std::complex<double> phaseArgument =
                 angularFrequency[frequencyIndex] *
-                    (tau[frequencyIndex] +
-                     slowness.depth * deltaDepth +
+                    (tau[frequencyIndex] + slowness.depth * deltaDepth +
                      gamma[frequencyIndex] * deltaSquared) -
                 frequencyStates[frequencyIndex]
                     .points[rightIndex]
@@ -1624,12 +1608,10 @@ bool CartesianCervenyInfluence::accumulateFusedImpl(
 // (cell, frequency lane) is identical to legacy reuse (design §8).
 template <bool CollectStatistics, std::size_t ImageCount>
 bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
-    FusedIntensityWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   static_assert(ImageCount >= 1U && ImageCount <= 3U);
   const std::size_t frequencyCount = frequencyStates.size();
   if (frequencyCount == 0U) {
@@ -1650,8 +1632,7 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
         "match");
   }
   if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
-    throw ValidationError(
-        "fused Cartesian Cerveny range partition is invalid");
+    throw ValidationError("fused Cartesian Cerveny range partition is invalid");
   }
   if constexpr (CollectStatistics) {
     // One fused ray call covers Nf per-(ray, frequency) accumulations.
@@ -1664,8 +1645,8 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
     }
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
          ++frequencyIndex) {
-      validateFusedPrevalidatedInput(workspace, frequencies[frequencyIndex], path,
-                                     frequencyStates[frequencyIndex],
+      validateFusedPrevalidatedInput(workspace, frequencies[frequencyIndex],
+                                     path, frequencyStates[frequencyIndex],
                                      epsilons[frequencyIndex], receivers_,
                                      widthMode_);
     }
@@ -1703,12 +1684,10 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
     }
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
-    radiusMax[frequencyIndex] =
-        30.0 * path.points.front().soundSpeed /
-        frequencyStates[frequencyIndex].frequency;
+    radiusMax[frequencyIndex] = 30.0 * path.points.front().soundSpeed /
+                                frequencyStates[frequencyIndex].frequency;
   }
-  const std::size_t fusedValueCount =
-      maximumPrefixPointCount * frequencyCount;
+  const std::size_t fusedValueCount = maximumPrefixPointCount * frequencyCount;
   FusedPrecomputedRayValues ray{
       .frequencyCount = frequencyCount,
       .p = std::vector<std::complex<double>>(fusedValueCount),
@@ -1721,10 +1700,10 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
     // Preserve the existing ascending-frequency, ascending-point evaluation
     // sequence and each frequency's own prefix. Rectangular inactive tails
     // are storage only and are never read by the fused hot-loop gates.
-    precomputeFusedRayValuesForFrequency(
-        path, soundSpeedProfile_, epsilons[frequencyIndex],
-        activePrefixPointCount[frequencyIndex], widthMode_, frequencyIndex,
-        ray);
+    precomputeFusedRayValuesForFrequency(path, soundSpeedProfile_,
+                                         epsilons[frequencyIndex],
+                                         activePrefixPointCount[frequencyIndex],
+                                         widthMode_, frequencyIndex, ray);
   }
   if constexpr (CollectStatistics) {
     statistics->precomputeSeconds +=
@@ -1817,8 +1796,8 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
     const std::size_t firstRange =
         std::max(firstUpper + 1U, firstPartitionRange);
     const std::size_t lastRange = std::min(secondUpper, lastPartitionRange);
-    for (std::size_t oneBasedRange = firstRange;
-         oneBasedRange <= lastRange; ++oneBasedRange) {
+    for (std::size_t oneBasedRange = firstRange; oneBasedRange <= lastRange;
+         ++oneBasedRange) {
       if constexpr (CollectStatistics) {
         ++statistics->receiverRangeEvaluations;
         ++statistics->geometryRangeEvaluations;
@@ -1847,24 +1826,23 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
           // frequencies the gamma guard below then rejects.
           ++statistics->frequencyRangeKernelEvaluations;
         }
-        const std::size_t leftFlatIndex =
-            leftFlatOffset + frequencyIndex;
-        const std::size_t rightFlatIndex =
-            rightFlatOffset + frequencyIndex;
+        const std::size_t leftFlatIndex = leftFlatOffset + frequencyIndex;
+        const std::size_t rightFlatIndex = rightFlatOffset + frequencyIndex;
         q[frequencyIndex] =
             ray.q[leftFlatIndex] +
             weight * (ray.q[rightFlatIndex] - ray.q[leftFlatIndex]);
-        tau[frequencyIndex] =
-            frequencyStates[frequencyIndex].points[leftIndex]
-                .complexTravelTime +
-            weight * (frequencyStates[frequencyIndex].points[rightIndex]
-                          .complexTravelTime -
-                      frequencyStates[frequencyIndex].points[leftIndex]
-                          .complexTravelTime);
+        tau[frequencyIndex] = frequencyStates[frequencyIndex]
+                                  .points[leftIndex]
+                                  .complexTravelTime +
+                              weight * (frequencyStates[frequencyIndex]
+                                            .points[rightIndex]
+                                            .complexTravelTime -
+                                        frequencyStates[frequencyIndex]
+                                            .points[leftIndex]
+                                            .complexTravelTime);
         gamma[frequencyIndex] =
             ray.gamma[leftFlatIndex] +
-            weight *
-                (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
+            weight * (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
         if (gamma[frequencyIndex].imag() > 0.0) {
           rangeEligible[frequencyIndex] = false;
           continue;
@@ -1876,9 +1854,8 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
         int finalKmah = ray.kmah[leftFlatIndex];
         finalKmah = updateCervenyKmah(ray.q[leftFlatIndex], q[frequencyIndex],
                                       finalKmah, widthMode_);
-        corrected[frequencyIndex] = finalKmah < 0
-                                        ? -principal[frequencyIndex]
-                                        : principal[frequencyIndex];
+        corrected[frequencyIndex] = finalKmah < 0 ? -principal[frequencyIndex]
+                                                  : principal[frequencyIndex];
         requireFiniteComplex(principal[frequencyIndex],
                              "Cartesian Cerveny principal constant");
         requireFiniteComplex(corrected[frequencyIndex],
@@ -1898,7 +1875,8 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
         const double receiverDepth = irregularReceivers
                                          ? irregularReceiverDepth
                                          : receiverDepths[depthIndex];
-        std::span<double> intensityCell = workspace.cell(rangeIndex, depthIndex);
+        std::span<double> intensityCell =
+            workspace.cell(rangeIndex, depthIndex);
         for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
              ++frequencyIndex) {
           imageSum[frequencyIndex] = std::complex<double>{};
@@ -1921,8 +1899,8 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
             ++statistics->geometryImageGeometryEvaluations;
           }
           const double deltaSquared = deltaDepth * deltaDepth;
-          for (std::size_t frequencyIndex = 0U;
-               frequencyIndex < frequencyCount; ++frequencyIndex) {
+          for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+               ++frequencyIndex) {
             if (!rangeEligible[frequencyIndex]) {
               continue;
             }
@@ -1930,9 +1908,9 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
               ++statistics->imageEvaluations;
               ++statistics->frequencyImageKernelEvaluations;
             }
-            const double windowMetric =
-                -angularFrequency[frequencyIndex] *
-                gamma[frequencyIndex].imag() * deltaSquared;
+            const double windowMetric = -angularFrequency[frequencyIndex] *
+                                        gamma[frequencyIndex].imag() *
+                                        deltaSquared;
 #ifndef NDEBUG
             requireFinite(windowMetric, "Cartesian Cerveny window metric");
 #endif
@@ -1957,8 +1935,7 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
             }
             const std::complex<double> phaseArgument =
                 angularFrequency[frequencyIndex] *
-                    (tau[frequencyIndex] +
-                     slowness.depth * deltaDepth +
+                    (tau[frequencyIndex] + slowness.depth * deltaDepth +
                      gamma[frequencyIndex] * deltaSquared) -
                 frequencyStates[frequencyIndex]
                     .points[rightIndex]
@@ -2007,8 +1984,7 @@ bool CartesianCervenyInfluence::accumulateFusedIntensityImpl(
                 "non-negative");
           }
           double& intensityValue = intensityCell[frequencyIndex];
-          const double updatedIntensity =
-              intensityValue + intensityIncrement;
+          const double updatedIntensity = intensityValue + intensityIncrement;
           if (!std::isfinite(updatedIntensity)) {
             throw ValidationError("accumulated intensity must remain finite");
           }

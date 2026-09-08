@@ -11,8 +11,7 @@
 namespace broadband {
 namespace {
 
-[[nodiscard]] std::size_t checkedMultiply(std::size_t left,
-                                          std::size_t right,
+[[nodiscard]] std::size_t checkedMultiply(std::size_t left, std::size_t right,
                                           const char* label) {
   if (left != 0U && right > std::numeric_limits<std::size_t>::max() / left) {
     throw ValidationError(std::string(label) + " exceeds size_t capacity");
@@ -43,7 +42,8 @@ BroadbandArrivalWorkspace::BroadbandArrivalWorkspace(
   for (const double value : frequencies_) {
     if (!std::isfinite(value) || value <= 0.0) {
       throw ValidationError(
-          "broadband arrival-workspace frequencies must be positive and finite");
+          "broadband arrival-workspace frequencies must be positive and "
+          "finite");
     }
   }
 
@@ -79,13 +79,12 @@ std::size_t BroadbandArrivalWorkspace::laneCount() const noexcept {
   return lanes_.size();
 }
 
-double BroadbandArrivalWorkspace::frequency(
-    std::size_t frequencyIndex) const {
+double BroadbandArrivalWorkspace::frequency(std::size_t frequencyIndex) const {
   return frequencies_.at(frequencyIndex);
 }
 
-const ArrivalCapacityPlan& BroadbandArrivalWorkspace::capacity() const
-    noexcept {
+const ArrivalCapacityPlan& BroadbandArrivalWorkspace::capacity()
+    const noexcept {
   return capacity_;
 }
 
@@ -95,10 +94,9 @@ void BroadbandArrivalWorkspace::addCandidate(
     ArrivalAccumulationStatistics& localStatistics) {
   const double candidateFrequency = frequency(frequencyIndex);
   validateArrivalCandidate(candidate);
-  addArrivalCandidate(laneAt(rangeIndex, depthIndex, frequencyIndex),
-                      capacity_.arrivalsPerCell,
-                      2.0 * std::numbers::pi * candidateFrequency, candidate,
-                      localStatistics);
+  addArrivalCandidate(
+      laneAt(rangeIndex, depthIndex, frequencyIndex), capacity_.arrivalsPerCell,
+      2.0 * std::numbers::pi * candidateFrequency, candidate, localStatistics);
 }
 
 std::vector<Arrival>& BroadbandArrivalWorkspace::laneAt(
@@ -122,30 +120,31 @@ BroadbandArrivalWorkspace::frequencyView(std::size_t frequencyIndex) const {
   return FrequencyView(*this, frequencyIndex);
 }
 
-BroadbandArrivalStorageStatistics
-BroadbandArrivalWorkspace::storageStatistics() const {
+BroadbandArrivalStorageStatistics BroadbandArrivalWorkspace::storageStatistics()
+    const {
   BroadbandArrivalStorageStatistics result{
       .laneCount = lanes_.size(),
       .logicalArrivalSlots = logicalArrivalSlots_,
-      .laneHeaderBytes = checkedMultiply(lanes_.capacity(),
-                                         sizeof(std::vector<Arrival>),
-                                         "broadband ARR lane-header bytes")};
+      .laneHeaderBytes =
+          checkedMultiply(lanes_.capacity(), sizeof(std::vector<Arrival>),
+                          "broadband ARR lane-header bytes")};
   for (const std::vector<Arrival>& lane : lanes_) {
     if (!lane.empty()) ++result.nonEmptyLaneCount;
-    result.storedArrivalCount = checkedAdd(
-        result.storedArrivalCount, lane.size(), "broadband ARR stored arrivals");
-    result.allocatedArrivalSlots = checkedAdd(
-        result.allocatedArrivalSlots, lane.capacity(),
-        "broadband ARR allocated arrival slots");
+    result.storedArrivalCount =
+        checkedAdd(result.storedArrivalCount, lane.size(),
+                   "broadband ARR stored arrivals");
+    result.allocatedArrivalSlots =
+        checkedAdd(result.allocatedArrivalSlots, lane.capacity(),
+                   "broadband ARR allocated arrival slots");
   }
   result.allocatedArrivalBytes =
       checkedMultiply(result.allocatedArrivalSlots, sizeof(Arrival),
                       "broadband ARR allocated arrival bytes");
-  result.memoryFootprintBytes = checkedAdd(
-      sizeof(BroadbandArrivalWorkspace),
-      checkedMultiply(frequencies_.capacity(), sizeof(double),
-                      "broadband ARR frequency bytes"),
-      "broadband ARR memory footprint");
+  result.memoryFootprintBytes =
+      checkedAdd(sizeof(BroadbandArrivalWorkspace),
+                 checkedMultiply(frequencies_.capacity(), sizeof(double),
+                                 "broadband ARR frequency bytes"),
+                 "broadband ARR memory footprint");
   result.memoryFootprintBytes =
       checkedAdd(result.memoryFootprintBytes, result.laneHeaderBytes,
                  "broadband ARR memory footprint");
@@ -176,23 +175,23 @@ double BroadbandArrivalWorkspace::FrequencyView::frequency() const noexcept {
   return workspace_->frequencies_[frequencyIndex_];
 }
 
-std::size_t BroadbandArrivalWorkspace::FrequencyView::depthCount() const
-    noexcept {
+std::size_t BroadbandArrivalWorkspace::FrequencyView::depthCount()
+    const noexcept {
   return workspace_->depthCount_;
 }
 
-std::size_t BroadbandArrivalWorkspace::FrequencyView::rangeCount() const
-    noexcept {
+std::size_t BroadbandArrivalWorkspace::FrequencyView::rangeCount()
+    const noexcept {
   return workspace_->rangeCount_;
 }
 
-std::size_t BroadbandArrivalWorkspace::FrequencyView::receiverCellCount() const
-    noexcept {
+std::size_t BroadbandArrivalWorkspace::FrequencyView::receiverCellCount()
+    const noexcept {
   return workspace_->capacity_.receiverCellCount;
 }
 
-const ArrivalCapacityPlan&
-BroadbandArrivalWorkspace::FrequencyView::capacity() const noexcept {
+const ArrivalCapacityPlan& BroadbandArrivalWorkspace::FrequencyView::capacity()
+    const noexcept {
   return workspace_->capacity_;
 }
 
@@ -205,8 +204,7 @@ std::size_t BroadbandArrivalWorkspace::FrequencyView::flatIndex(
   return depthIndex * rangeCount() + rangeIndex;
 }
 
-std::span<const Arrival>
-BroadbandArrivalWorkspace::FrequencyView::cellAt(
+std::span<const Arrival> BroadbandArrivalWorkspace::FrequencyView::cellAt(
     std::size_t cellIndex) const {
   if (cellIndex >= receiverCellCount()) {
     throw std::out_of_range(
@@ -217,8 +215,7 @@ BroadbandArrivalWorkspace::FrequencyView::cellAt(
   return workspace_->laneAt(rangeIndex, depthIndex, frequencyIndex_);
 }
 
-std::span<const Arrival>
-BroadbandArrivalWorkspace::FrequencyView::arrivalsAt(
+std::span<const Arrival> BroadbandArrivalWorkspace::FrequencyView::arrivalsAt(
     std::size_t depthIndex, std::size_t rangeIndex) const {
   return cellAt(flatIndex(depthIndex, rangeIndex));
 }

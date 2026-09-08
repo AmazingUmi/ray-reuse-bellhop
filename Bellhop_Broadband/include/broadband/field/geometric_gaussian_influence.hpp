@@ -102,23 +102,20 @@ class GeometricGaussianInfluence {
   // branch at the store, mirroring the legacy single-traversal
   // accumulateField.
   [[nodiscard]] bool accumulateFusedPrevalidated(
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   [[nodiscard]] bool accumulateFusedIntensityPrevalidated(
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   [[nodiscard]] bool accumulateFusedArrivalsPrevalidated(
-      BroadbandArrivalWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      BroadbandArrivalWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       ArrivalAccumulationStatistics& statistics) const;
 

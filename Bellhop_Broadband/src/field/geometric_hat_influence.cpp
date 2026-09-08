@@ -424,8 +424,7 @@ void validateFusedHatInput(const FusedWorkspace& workspace,
     bool inactiveSeen = false;
     for (const RayFrequencyPoint& point : state.points) {
       if (inactiveSeen && point.active) {
-        throw ValidationError(
-            "geometric hat active prefix must be contiguous");
+        throw ValidationError("geometric hat active prefix must be contiguous");
       }
       inactiveSeen = inactiveSeen || !point.active;
       if (!std::isfinite(point.amplitude) || point.amplitude < 0.0 ||
@@ -871,9 +870,8 @@ void GeometricHatInfluence::setFusedLaunchAngleStep(double launchAngleStep) {
 }
 
 bool GeometricHatInfluence::accumulateFusedPrevalidated(
-    FusedPressureWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   // The legacy Hat kernels produce no influence counters; the pointer is
@@ -885,9 +883,8 @@ bool GeometricHatInfluence::accumulateFusedPrevalidated(
 }
 
 bool GeometricHatInfluence::accumulateFusedIntensityPrevalidated(
-    FusedIntensityWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   static_cast<void>(statistics);
@@ -896,14 +893,13 @@ bool GeometricHatInfluence::accumulateFusedIntensityPrevalidated(
 }
 
 bool GeometricHatInfluence::accumulateFusedArrivalsPrevalidated(
-    BroadbandArrivalWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    BroadbandArrivalWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     ArrivalAccumulationStatistics& statistics) const {
-  return accumulateFusedImpl<false, true>(
-      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
-      &statistics);
+  return accumulateFusedImpl<false, true>(workspace, frequencies, path,
+                                          frequencyStates, rangeBegin, rangeEnd,
+                                          &statistics);
 }
 
 // IGR-3A A04 fused kernel (design §5/§8): entry validation plus the
@@ -949,8 +945,8 @@ bool GeometricHatInfluence::accumulateFusedImpl(
 template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
 bool GeometricHatInfluence::accumulateFusedCartesian(
     Workspace& workspace, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::size_t rangeBegin, std::size_t rangeEnd,
+    std::span<const RayFrequencyState> frequencyStates, std::size_t rangeBegin,
+    std::size_t rangeEnd,
     ArrivalAccumulationStatistics* arrivalStatistics) const {
   const std::size_t frequencyCount = frequencyStates.size();
   std::vector<std::size_t> activePrefixPointCount(frequencyCount);
@@ -962,8 +958,7 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
     // first inactive point is retained).
     activePrefixPointCount[frequencyIndex] =
         activeCount(frequencyStates[frequencyIndex]);
-    unionPrefix =
-        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    unionPrefix = std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
   }
@@ -974,9 +969,9 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
-  const PrefixBounceCounts bounces =
-      ArrivalPayload ? prefixBounceCounts(path, unionPrefix)
-                     : PrefixBounceCounts{};
+  const PrefixBounceCounts bounces = ArrivalPayload
+                                         ? prefixBounceCounts(path, unionPrefix)
+                                         : PrefixBounceCounts{};
 
   const std::vector<double>& ranges = receivers_.ranges();
   const auto firstReceiver = std::find_if(
@@ -1050,14 +1045,13 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
           const bool receiverCausticCross = crosses(previousQ, q);
           requireFinite(q, "geometric hat interpolated q");
           requireFinite(hatWeight, "geometric hat weight");
-          for (std::size_t frequencyIndex = 0U;
-               frequencyIndex < frequencyCount; ++frequencyIndex) {
+          for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+               ++frequencyIndex) {
             // That frequency's own legacy loop bound.
             if (rightIndex >= activePrefixPointCount[frequencyIndex]) {
               continue;
             }
-            const RayFrequencyState& state =
-                frequencyStates[frequencyIndex];
+            const RayFrequencyState& state = frequencyStates[frequencyIndex];
             const std::complex<double> delay =
                 state.points[leftIndex].complexTravelTime +
                 interpolationWeight *
@@ -1095,8 +1089,7 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
               // not Cerveny image ABS-squared (design §8).
               const double attenuatedConstant =
                   amplitudeConstant *
-                  std::exp(
-                      (angularFrequency[frequencyIndex] * delay).imag());
+                  std::exp((angularFrequency[frequencyIndex] * delay).imag());
               const double power = attenuatedConstant * attenuatedConstant;
               const double intensityIncrement = power * hatWeight;
               if (!std::isfinite(intensityIncrement) ||
@@ -1174,8 +1167,8 @@ bool GeometricHatInfluence::accumulateFusedCartesian(
 template <bool IntensityPayload, bool ArrivalPayload, typename Workspace>
 bool GeometricHatInfluence::accumulateFusedRayCentered(
     Workspace& workspace, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::size_t rangeBegin, std::size_t rangeEnd,
+    std::span<const RayFrequencyState> frequencyStates, std::size_t rangeBegin,
+    std::size_t rangeEnd,
     ArrivalAccumulationStatistics* arrivalStatistics) const {
   const std::size_t frequencyCount = frequencyStates.size();
   std::vector<std::size_t> activePrefixPointCount(frequencyCount);
@@ -1185,8 +1178,7 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
        ++frequencyIndex) {
     activePrefixPointCount[frequencyIndex] =
         activeCount(frequencyStates[frequencyIndex]);
-    unionPrefix =
-        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    unionPrefix = std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
   }
@@ -1197,9 +1189,9 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
           : std::sqrt(std::abs(std::cos(path.launchAngle)));
   requireFinite(q0, "geometric hat q0");
   requireFinite(sourceRatio, "geometric hat source ratio");
-  const PrefixBounceCounts bounces =
-      ArrivalPayload ? prefixBounceCounts(path, unionPrefix)
-                     : PrefixBounceCounts{};
+  const PrefixBounceCounts bounces = ArrivalPayload
+                                         ? prefixBounceCounts(path, unionPrefix)
+                                         : PrefixBounceCounts{};
 
   // Normals and the amplitude base prefix depend only on the ray path and
   // are computed once over the UNION prefix, never per lane.
@@ -1280,20 +1272,18 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
         if (interpolatedNormal >= beamRadius) {
           return;
         }
-        const double hatWeight =
-            (beamRadius - interpolatedNormal) / beamRadius;
+        const double hatWeight = (beamRadius - interpolatedNormal) / beamRadius;
         const double sqrtAbsQ = std::sqrt(std::abs(q));
         const bool receiverCausticCross = crosses(previousQ, q);
         requireFinite(q, "geometric hat interpolated q");
         requireFinite(hatWeight, "geometric hat weight");
-        for (std::size_t frequencyIndex = 0U;
-             frequencyIndex < frequencyCount; ++frequencyIndex) {
+        for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+             ++frequencyIndex) {
           // That frequency's own legacy loop bound.
           if (rightIndex >= activePrefixPointCount[frequencyIndex]) {
             continue;
           }
-          const RayFrequencyState& state =
-              frequencyStates[frequencyIndex];
+          const RayFrequencyState& state = frequencyStates[frequencyIndex];
           const std::complex<double> delay =
               state.points[rightIndex - 1U].complexTravelTime +
               interpolationWeight *
@@ -1302,16 +1292,14 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
           // (sourceRatio * sqrt(c)) * amplitude, then divided by
           // sqrt(|q|) — the legacy scaledAmplitudes association.
           const double amplitudeConstant =
-              (scaledBase[rightIndex] *
-               state.points[rightIndex].amplitude) /
+              (scaledBase[rightIndex] * state.points[rightIndex].amplitude) /
               sqrtAbsQ;
           double phaseAtReceiver =
               state.points[rightIndex - 1U].reflectionPhase + phase;
           if (receiverCausticCross) {
             phaseAtReceiver += std::numbers::pi / 2.0;
           }
-          requireFinite(amplitudeConstant,
-                        "geometric hat amplitude constant");
+          requireFinite(amplitudeConstant, "geometric hat amplitude constant");
           requireFinite(phaseAtReceiver, "geometric hat caustic phase");
           requireFiniteComplex(delay, "geometric hat delay");
           if constexpr (ArrivalPayload) {
@@ -1333,8 +1321,7 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
           } else if constexpr (IntensityPayload) {
             const double attenuatedConstant =
                 amplitudeConstant *
-                std::exp(
-                    (angularFrequency[frequencyIndex] * delay).imag());
+                std::exp((angularFrequency[frequencyIndex] * delay).imag());
             const double power = attenuatedConstant * attenuatedConstant;
             const double intensityIncrement = power * hatWeight;
             if (!std::isfinite(intensityIncrement) ||
@@ -1345,11 +1332,9 @@ bool GeometricHatInfluence::accumulateFusedRayCentered(
             }
             double& intensityValue =
                 workspace.cell(rangeIndex, depthIndex)[frequencyIndex];
-            const double updatedIntensity =
-                intensityValue + intensityIncrement;
+            const double updatedIntensity = intensityValue + intensityIncrement;
             if (!std::isfinite(updatedIntensity)) {
-              throw ValidationError(
-                  "accumulated intensity must remain finite");
+              throw ValidationError("accumulated intensity must remain finite");
             }
             intensityValue = updatedIntensity;
           } else {

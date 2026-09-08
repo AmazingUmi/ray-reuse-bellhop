@@ -163,13 +163,10 @@ void validateField(const ReceiverGrid& receivers,
 // contract). Templated over the fused workspace kind (both payloads expose
 // the same dimension checks).
 template <typename FusedWorkspace>
-void validateFusedGaussianInput(const FusedWorkspace& workspace,
-                                std::span<const double> frequencies,
-                                const RayPath& path,
-                                std::span<const RayFrequencyState>
-                                    frequencyStates,
-                                const ReceiverGrid& receivers,
-                                double launchSpacing) {
+void validateFusedGaussianInput(
+    const FusedWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    const ReceiverGrid& receivers, double launchSpacing) {
   const std::size_t frequencyCount = frequencyStates.size();
   if (frequencyCount == 0U) {
     throw ValidationError(
@@ -747,9 +744,8 @@ void GeometricGaussianInfluence::setFusedLaunchAngleStep(
 }
 
 bool GeometricGaussianInfluence::accumulateFusedPrevalidated(
-    FusedPressureWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   // The legacy Gaussian kernel produces no influence counters; the pointer is
@@ -761,9 +757,8 @@ bool GeometricGaussianInfluence::accumulateFusedPrevalidated(
 }
 
 bool GeometricGaussianInfluence::accumulateFusedIntensityPrevalidated(
-    FusedIntensityWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   static_cast<void>(statistics);
@@ -772,14 +767,13 @@ bool GeometricGaussianInfluence::accumulateFusedIntensityPrevalidated(
 }
 
 bool GeometricGaussianInfluence::accumulateFusedArrivalsPrevalidated(
-    BroadbandArrivalWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    BroadbandArrivalWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     ArrivalAccumulationStatistics& statistics) const {
-  return accumulateFusedImpl<false, true>(
-      workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
-      &statistics);
+  return accumulateFusedImpl<false, true>(workspace, frequencies, path,
+                                          frequencyStates, rangeBegin, rangeEnd,
+                                          &statistics);
 }
 
 // IGR-3A A05 fused kernel (design §5/§8): entry validation, then the single
@@ -795,7 +789,8 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
   validateFusedGaussianInput(workspace, frequencies, path, frequencyStates,
                              receivers_, fusedLaunchAngleStep_);
   if (rangeBegin >= rangeEnd || rangeEnd > workspace.rangeCount()) {
-    throw ValidationError("fused geometric Gaussian range partition is invalid");
+    throw ValidationError(
+        "fused geometric Gaussian range partition is invalid");
   }
 
   const std::size_t frequencyCount = frequencyStates.size();
@@ -808,8 +803,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
     // first inactive point is retained).
     activePrefixPointCount[frequencyIndex] =
         activeCount(frequencyStates[frequencyIndex]);
-    unionPrefix =
-        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    unionPrefix = std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
   }
@@ -836,7 +830,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
       }
       if (reflected >= unionPrefix) continue;
       ++(event.boundary == ReflectionBoundary::SeaSurface ? top[reflected]
-                                                           : bottom[reflected]);
+                                                          : bottom[reflected]);
     }
     for (std::size_t index = 1U; index < unionPrefix; ++index) {
       top[index] += top[index - 1U];
@@ -919,13 +913,11 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
       nearFieldSigma[frequencyIndex] =
           kNearFieldFactor * state.frequency *
           state.points[rightIndex].complexTravelTime.real();
-      broadeningSigma[frequencyIndex] =
-          std::min(nearFieldSigma[frequencyIndex],
-                   wavelengthSigma[frequencyIndex]);
+      broadeningSigma[frequencyIndex] = std::min(
+          nearFieldSigma[frequencyIndex], wavelengthSigma[frequencyIndex]);
       segmentSigma[frequencyIndex] =
           std::max(segmentQTerm, broadeningSigma[frequencyIndex]);
-      const double segmentRadius =
-          kBeamWindow * segmentSigma[frequencyIndex];
+      const double segmentRadius = kBeamWindow * segmentSigma[frequencyIndex];
       minimumDepth[frequencyIndex] =
           depthWindowed ? segmentMinimumDepth - segmentRadius
                         : -std::numeric_limits<double>::infinity();
@@ -946,8 +938,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
              depthIndex < receivers_.receiversPerRange(); ++depthIndex) {
           const double receiverDepth =
               receivers_.depthAt(depthIndex, receiverIndex);
-          const Vec2 receiver{
-              .range = receiverRange, .depth = receiverDepth};
+          const Vec2 receiver{.range = receiverRange, .depth = receiverDepth};
           const Vec2 offset = receiver - path.points[leftIndex].position;
           const double interpolationWeight =
               fortranDotProduct2D(offset, tangent) / segmentLength;
@@ -958,8 +949,8 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
                           (path.points[rightIndex].dynamicQ[0U] - leftQ);
           const double geometricSigma = std::abs(qInterpolated / q0);
           const bool receiverCausticCross = crosses(previousQ, qInterpolated);
-          for (std::size_t frequencyIndex = 0U;
-               frequencyIndex < frequencyCount; ++frequencyIndex) {
+          for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+               ++frequencyIndex) {
             // That frequency's own legacy loop bound.
             if (rightIndex >= activePrefixPointCount[frequencyIndex]) {
               continue;
@@ -976,8 +967,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
             if (normalOffset >= kBeamWindow * sigma1) {
               continue;
             }
-            const RayFrequencyState& state =
-                frequencyStates[frequencyIndex];
+            const RayFrequencyState& state = frequencyStates[frequencyIndex];
             const std::complex<double> delay =
                 state.points[leftIndex].complexTravelTime +
                 interpolationWeight *
@@ -985,8 +975,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
                      state.points[leftIndex].complexTravelTime);
             const double amplitudeConstant =
                 sourceRatio *
-                std::sqrt(path.points[rightIndex].soundSpeed /
-                          (q0 * sigma1)) *
+                std::sqrt(path.points[rightIndex].soundSpeed / (q0 * sigma1)) *
                 state.points[rightIndex].amplitude;
             const double normalizedOffset = normalOffset / sigma1;
             const double gaussianWeight =
@@ -998,8 +987,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
               phaseAtReceiver += std::numbers::pi / 2.0;
             }
 
-            requireFinite(qInterpolated,
-                          "geometric Gaussian interpolated q");
+            requireFinite(qInterpolated, "geometric Gaussian interpolated q");
             requireFinite(geometricSigma, "geometric Gaussian geometric sigma");
             requireFinite(nearFieldSigma[frequencyIndex],
                           "geometric Gaussian near-field sigma");
@@ -1035,8 +1023,7 @@ bool GeometricGaussianInfluence::accumulateFusedImpl(
               // the legacy message verbatim).
               const double attenuatedConstant =
                   amplitudeConstant *
-                  std::exp(
-                      (angularFrequency[frequencyIndex] * delay).imag());
+                  std::exp((angularFrequency[frequencyIndex] * delay).imag());
               const double power = attenuatedConstant * attenuatedConstant;
               const double intensityIncrement =
                   std::sqrt(2.0 * std::numbers::pi) * power * gaussianWeight;

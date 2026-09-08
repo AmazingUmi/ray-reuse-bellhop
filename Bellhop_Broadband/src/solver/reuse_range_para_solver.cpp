@@ -12,10 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "fused_influence_adapters.hpp"
 #include "broadband/error.hpp"
 #include "broadband/field/frequency_projector.hpp"
 #include "broadband/model/sound_speed_evaluator.hpp"
+#include "fused_influence_adapters.hpp"
 
 namespace broadband {
 namespace {
@@ -127,8 +127,7 @@ void validateRangeScope(const SimulationCase& simulation) {
           "Range Reuse solver requires the Cerveny Gaussian, geometric "
           "hat, geometric Gaussian, or simple Gaussian beam family");
     case RangeScopeFailure::NotSingleSource:
-      throw ValidationError(
-          "Range Reuse solver requires exactly one source");
+      throw ValidationError("Range Reuse solver requires exactly one source");
     case RangeScopeFailure::TooFewFrequencies:
       throw ValidationError(
           "Range Reuse solver requires at least two frequencies");
@@ -148,8 +147,7 @@ void validateRangeSourceCache(const SimulationCase& simulation,
                               const RayPathCache& sourceCache,
                               std::size_t sourceIndex) {
   if (!sourceCache.frozen()) {
-    throw ValidationError(
-        "Range Reuse solver requires a frozen ray cache");
+    throw ValidationError("Range Reuse solver requires a frozen ray cache");
   }
   const Source& source = simulation.sources().at(sourceIndex);
   if (sourceCache.size() > 0U && !sourceCache.at(0U).points.empty() &&
@@ -249,15 +247,14 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
   // SingleFrequencySolver::solveFrequencyFromSourceCache computes it.
   const GeometrySspEvaluator soundSpeedProfile(
       simulation.environment().soundSpeedProfile());
-  const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
-      Vec2{.range = 0.0, .depth = source.depth}, 0U);
+  const SoundSpeedSample sourceSample =
+      soundSpeedProfile.evaluate(Vec2{.range = 0.0, .depth = source.depth}, 0U);
   const double sourceSoundSpeed = sourceSample.soundSpeed;
   // One long-lived [range][depth][frequency] allocation per run, selected by
   // the sink policy. Ordinary per-frequency workspaces are materialized only
   // after accumulation.
-  typename Sink::Workspace workspace =
-      Sink::makeWorkspace(simulation.receivers(),
-                          std::span<const double>(frequencies));
+  typename Sink::Workspace workspace = Sink::makeWorkspace(
+      simulation.receivers(), std::span<const double>(frequencies));
 
   const std::size_t rangeCount = simulation.receivers().rangeCount();
   const std::size_t activeWorkerCount =
@@ -267,9 +264,12 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
 
   // Loop-invariant input set of the per-ray family prep hook (design §4).
   const typename Adapter::PerRayContext context{
-      simulation.beamWidthMode(), sourceSoundSpeed,
+      simulation.beamWidthMode(),
+      sourceSoundSpeed,
       sourceSample.soundSpeedGradient.depth,
-      launchFan.launchAngleStep, loopRange, epsilonMultiplier};
+      launchFan.launchAngleStep,
+      loopRange,
+      epsilonMultiplier};
 
   const auto runWorker = [&](std::size_t workerIndex) {
     try {
@@ -292,8 +292,8 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
             simulation.sourceBeamPattern().amplitudeForLaunchAngle(
                 path.launchAngle);
         const double baseSourceAmplitude = source.amplitude * patternAmplitude;
-        for (std::size_t frequencyIndex = 0U;
-             frequencyIndex < frequencyCount; ++frequencyIndex) {
+        for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+             ++frequencyIndex) {
           const double projectedSourceAmplitude =
               usesLloydMirror(simulation.runMode())
                   ? semiCoherentProjectedSourceAmplitude(
@@ -316,9 +316,8 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
             kernel, scratch, workspace, std::span<const double>(frequencies),
             path, std::span<const RayFrequencyState>(frequencyStates),
             rangeBegin, rangeEnd,
-            influenceSettings.collectStatistics
-                ? &result.influenceStatistics
-                : nullptr,
+            influenceSettings.collectStatistics ? &result.influenceStatistics
+                                                : nullptr,
             &result.arrivalStatistics));
         const Clock::time_point influenceEnd = Clock::now();
         result.projectSeconds += elapsedSeconds(projectBegin, projectEnd);
@@ -356,8 +355,8 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
     projectSeconds = std::max(projectSeconds, workerResult.projectSeconds);
     influenceSeconds =
         std::max(influenceSeconds, workerResult.influenceSeconds);
-    accumulateCartesianCervenyStatistics(
-        influenceStatistics, workerResult.influenceStatistics);
+    accumulateCartesianCervenyStatistics(influenceStatistics,
+                                         workerResult.influenceStatistics);
     mergeArrivalAccumulationStatistics(arrivalStatistics,
                                        workerResult.arrivalStatistics);
   }
@@ -368,12 +367,11 @@ typename Sink::Result ReuseRangeParaSolver::accumulateFrequenciesImpl(
 
   return Sink::makeResult(
       std::move(workspace),
-      SingleFrequencyTimings{
-          .traceSeconds = 0.0,
-          .projectSeconds = projectSeconds,
-          .influenceSeconds = influenceSeconds,
-          .scaleSeconds = 0.0,
-          .influenceStatistics = influenceStatistics},
+      SingleFrequencyTimings{.traceSeconds = 0.0,
+                             .projectSeconds = projectSeconds,
+                             .influenceSeconds = influenceSeconds,
+                             .scaleSeconds = 0.0,
+                             .influenceStatistics = influenceStatistics},
       sourceCache.size(), totalRayPointCount,
       sourceCache.memoryFootprintBytes(),
       executionSettings.requestedRangeWorkers, activeWorkerCount,
@@ -486,13 +484,13 @@ ReuseRangeParaSolver::accumulateArrivalFrequencies(
   if (simulation.beamFamily() == BeamFamily::GeometricHat) {
     return accumulateFrequenciesImpl<GeometricHatFusedAdapter,
                                      ArrivalFusedSink>(
-        simulation, sourceCache, 1.0, 0.0, influenceSettings,
-        executionSettings, sourceIndex);
+        simulation, sourceCache, 1.0, 0.0, influenceSettings, executionSettings,
+        sourceIndex);
   }
   return accumulateFrequenciesImpl<GeometricGaussianFusedAdapter,
                                    ArrivalFusedSink>(
-      simulation, sourceCache, 1.0, 0.0, influenceSettings,
-      executionSettings, sourceIndex);
+      simulation, sourceCache, 1.0, 0.0, influenceSettings, executionSettings,
+      sourceIndex);
 }
 
 ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
@@ -501,7 +499,8 @@ ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
     ReuseRangeParaExecutionSettings executionSettings) {
   if (!consumer) {
-    throw ValidationError("Range Reuse arrival source consumer must be callable");
+    throw ValidationError(
+        "Range Reuse arrival source consumer must be callable");
   }
   validateRangeArrivalScope(simulation, 0U);
 
@@ -513,8 +512,8 @@ ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
     statistics.sourceCacheFingerprintsAfter.reserve(simulation.sourceCount());
   }
 
-  for (std::size_t sourceIndex = 0U;
-       sourceIndex < simulation.sourceCount(); ++sourceIndex) {
+  for (std::size_t sourceIndex = 0U; sourceIndex < simulation.sourceCount();
+       ++sourceIndex) {
     // Deliberately source-local: neither frozen caches nor all-frequency
     // arrival lanes accumulate across sources.
     const RayFanTraceResult trace = SingleFrequencySolver::traceSourceFan(
@@ -523,9 +522,8 @@ ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
     statistics.traceSeconds += trace.traceSeconds;
     statistics.rayCount += trace.cache.size();
     statistics.totalRayPointCount += trace.totalRayPointCount;
-    statistics.peakRayCacheBytes =
-        std::max(statistics.peakRayCacheBytes,
-                 trace.cache.memoryFootprintBytes());
+    statistics.peakRayCacheBytes = std::max(statistics.peakRayCacheBytes,
+                                            trace.cache.memoryFootprintBytes());
     statistics.requestedTraceWorkerCount = trace.requestedWorkerCount;
     statistics.effectiveTraceWorkerCount = trace.effectiveWorkerCount;
     statistics.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
@@ -543,22 +541,19 @@ ArrivalSolverStatistics ReuseRangeParaSolver::solveArrivalStreaming(
     statistics.influenceSeconds += accumulated.timings.influenceSeconds;
     statistics.projectedRayCount +=
         accumulated.rayCount * simulation.frequencies().size();
-    statistics.candidateCount +=
-        accumulated.arrivalStatistics.candidateCount;
+    statistics.candidateCount += accumulated.arrivalStatistics.candidateCount;
     statistics.saturatedCellCount +=
         accumulated.arrivalStatistics.saturatedCellCount;
-    statistics.peakArrivalWorkspaceBytes =
-        std::max(statistics.peakArrivalWorkspaceBytes,
-                 accumulated.rawWorkspace.storageStatistics()
-                     .memoryFootprintBytes);
+    statistics.peakArrivalWorkspaceBytes = std::max(
+        statistics.peakArrivalWorkspaceBytes,
+        accumulated.rawWorkspace.storageStatistics().memoryFootprintBytes);
 
     const Clock::time_point consumeBegin = Clock::now();
     consumer(sourceIndex, accumulated.rawWorkspace);
     statistics.consumeSeconds += elapsedSeconds(consumeBegin, Clock::now());
 
     if (verifyCacheFingerprint) {
-      const std::uint64_t fingerprintAfter =
-          trace.cache.contentFingerprint();
+      const std::uint64_t fingerprintAfter = trace.cache.contentFingerprint();
       statistics.sourceCacheFingerprintsAfter.push_back(fingerprintAfter);
       if (fingerprintAfter != fingerprintBefore) {
         throw ValidationError(
@@ -582,8 +577,7 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
     ReuseRangeParaExecutionSettings executionSettings) {
   if (!consumer) {
-    throw ValidationError(
-        "Range Reuse frequency consumer must be callable");
+    throw ValidationError("Range Reuse frequency consumer must be callable");
   }
   validateRangeScope(simulation);
 
@@ -622,9 +616,9 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
   std::optional<FusedAccumulationResult> accumulated;
   std::optional<FusedIntensityAccumulationResult> accumulatedIntensity;
   if (coherentRunMode) {
-    accumulated = accumulateFrequencies(
-        simulation, trace.cache, epsilonMultiplier, loopRange,
-        influenceSettings, executionSettings);
+    accumulated =
+        accumulateFrequencies(simulation, trace.cache, epsilonMultiplier,
+                              loopRange, influenceSettings, executionSettings);
   } else {
     accumulatedIntensity = accumulateFrequenciesIntensity(
         simulation, trace.cache, epsilonMultiplier, loopRange,
@@ -650,8 +644,8 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
   const Source& source = simulation.sources().front();
   const GeometrySspEvaluator soundSpeedProfile(
       simulation.environment().soundSpeedProfile());
-  const SoundSpeedSample sourceSample = soundSpeedProfile.evaluate(
-      Vec2{.range = 0.0, .depth = source.depth}, 0U);
+  const SoundSpeedSample sourceSample =
+      soundSpeedProfile.evaluate(Vec2{.range = 0.0, .depth = source.depth}, 0U);
   const double sourceSoundSpeed = sourceSample.soundSpeed;
   const LaunchFanPlan& launchFan = simulation.launchFanPlan();
   const std::size_t frequencyCount = simulation.frequencies().size();
@@ -666,9 +660,8 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
           simulation.beamFamily() == BeamFamily::GeometricGaussian;
       const bool simpleGaussianFamily =
           simulation.beamFamily() == BeamFamily::SimpleGaussian;
-      const bool rayCenteredRun =
-          simulation.cervenyCoordinateSystem() ==
-          CervenyCoordinateSystem::RayCentered;
+      const bool rayCenteredRun = simulation.cervenyCoordinateSystem() ==
+                                  CervenyCoordinateSystem::RayCentered;
       if (coherentRunMode) {
         FrequencyWorkspace coherentWorkspace =
             accumulated->rawWorkspace.materializeFrequency(
@@ -716,9 +709,9 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
       // Geometric Gaussian.
       const IntensityWorkspace intensityWorkspace =
           accumulatedIntensity->rawIntensityWorkspace
-              .materializeIntensityFrequency(
-                  frequencyIndex, frequencies[frequencyIndex],
-                  simulation.receivers());
+              .materializeIntensityFrequency(frequencyIndex,
+                                             frequencies[frequencyIndex],
+                                             simulation.receivers());
       if (hatFamily) {
         return GeometricHatFusedAdapter::scaleIntensityFrequency(
             intensityWorkspace, simulation.receivers(),
@@ -738,9 +731,8 @@ ReuseRangeParaStatistics ReuseRangeParaSolver::solveStreaming(
             simulation.sourceGeometry());
       }
       return CartesianCervenyFusedAdapter::scaleIntensityFrequency(
-          intensityWorkspace, simulation.receivers(),
-          launchFan.launchAngleStep, sourceSoundSpeed,
-          simulation.sourceGeometry());
+          intensityWorkspace, simulation.receivers(), launchFan.launchAngleStep,
+          sourceSoundSpeed, simulation.sourceGeometry());
     }();
     const double scaleSeconds = elapsedSeconds(scaleBegin, Clock::now());
     statistics.phaseTotals.scaleSeconds += scaleSeconds;

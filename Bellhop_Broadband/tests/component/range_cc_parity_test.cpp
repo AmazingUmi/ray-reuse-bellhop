@@ -1,5 +1,3 @@
-#include "broadband/solver/reuse_range_para_solver.hpp"
-
 #include <algorithm>
 #include <complex>
 #include <cstddef>
@@ -15,6 +13,7 @@
 #include "broadband/field/frequency_projector.hpp"
 #include "broadband/field/frequency_workspace.hpp"
 #include "broadband/model/simulation_case.hpp"
+#include "broadband/solver/reuse_range_para_solver.hpp"
 #include "broadband/solver/reuse_serial_solver.hpp"
 #include "broadband/solver/single_frequency_solver.hpp"
 #include "support/munk_case_fixture.hpp"
@@ -43,11 +42,11 @@ using broadband::Environment;
 using broadband::FrequencyGrid;
 using broadband::FrequencyProjector;
 using broadband::FrequencyWorkspace;
-using broadband::ReuseRangeParaSolver;
-using broadband::ReuseRangeParaStatistics;
 using broadband::IntegratorSettings;
 using broadband::LaunchFan;
 using broadband::ReceiverGrid;
+using broadband::ReuseRangeParaSolver;
+using broadband::ReuseRangeParaStatistics;
 using broadband::ReuseSerialResult;
 using broadband::ReuseSerialSolver;
 using broadband::SimulationCase;
@@ -94,8 +93,7 @@ struct WorkspaceByteComparison {
                       std::to_string(expected.size()) + " vs " +
                       std::to_string(actual.size()) + ")"};
   }
-  if (std::memcmp(expected.data(), actual.data(), expected.size_bytes()) ==
-      0) {
+  if (std::memcmp(expected.data(), actual.data(), expected.size_bytes()) == 0) {
     return {.equal = true, .detail = prefix};
   }
   for (std::size_t index = 0U; index < expected.size(); ++index) {
@@ -125,8 +123,8 @@ struct WorkspaceByteComparison {
           broadband::SspInterpolationKind::CLinear),
       Source{.depth = 1000.0, .amplitude = 1.0},
       ReceiverGrid({0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0},
-                   {0.0, 1250.0, 2500.0, 3750.0, 5000.0, 6250.0, 7500.0,
-                    8750.0, 10000.0}),
+                   {0.0, 1250.0, 2500.0, 3750.0, 5000.0, 6250.0, 7500.0, 8750.0,
+                    10000.0}),
       frequencies,
       LaunchFan{.minimumAngle = -12.0 * kRadiansPerDegree,
                 .maximumAngle = 12.0 * kRadiansPerDegree,
@@ -136,9 +134,11 @@ struct WorkspaceByteComparison {
                          .depthLimit = 5500.0,
                          .maximumRayPoints = 2000U},
       broadband::SourceBeamPattern::omnidirectional(),
-      broadband::SimulationRunMode::Coherent, broadband::BeamFamily::CervenyGaussian,
-      broadband::FieldComponent::Pressure, broadband::BoundaryCurvatureMode::Standard,
-      widthMode, broadband::CervenyCoordinateSystem::Cartesian);
+      broadband::SimulationRunMode::Coherent,
+      broadband::BeamFamily::CervenyGaussian,
+      broadband::FieldComponent::Pressure,
+      broadband::BoundaryCurvatureMode::Standard, widthMode,
+      broadband::CervenyCoordinateSystem::Cartesian);
 }
 
 // Fixture B (worklist R05 D5 / design §13 risk 3): constant-speed water with
@@ -159,20 +159,20 @@ struct WorkspaceByteComparison {
                    .depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}}),
           BoundaryModel::vacuum(0.0),
           BoundaryModel::acousticHalfSpace(
-              100.0, AcousticMaterial{
-                         .compressionalSoundSpeed = 1700.0,
-                         .shearSoundSpeed = 0.0,
-                         .density = 1800.0,
-                         .compressionalAttenuation = {
-                             .value = 10.0,
-                             .unit = AttenuationUnit::DecibelsPerMeterPowerLaw,
-                             .referenceFrequency = 1000.0,
-                             .powerLawExponent = 2.0,
-                             .transitionFrequency = 1.0e9}})),
+              100.0,
+              AcousticMaterial{
+                  .compressionalSoundSpeed = 1700.0,
+                  .shearSoundSpeed = 0.0,
+                  .density = 1800.0,
+                  .compressionalAttenuation =
+                      {.value = 10.0,
+                       .unit = AttenuationUnit::DecibelsPerMeterPowerLaw,
+                       .referenceFrequency = 1000.0,
+                       .powerLawExponent = 2.0,
+                       .transitionFrequency = 1.0e9}})),
       Source{.depth = 50.0, .amplitude = 1.0},
       ReceiverGrid({10.0, 55.0, 100.0},
-                   {10.0, 21.25, 32.5, 43.75, 55.0, 66.25, 77.5, 88.75,
-                    100.0}),
+                   {10.0, 21.25, 32.5, 43.75, 55.0, 66.25, 77.5, 88.75, 100.0}),
       FrequencyGrid({100.0, 1000.0}),
       LaunchFan{.minimumAngle = -60.0 * kRadiansPerDegree,
                 .maximumAngle = 60.0 * kRadiansPerDegree,
@@ -227,13 +227,12 @@ void checkDivergentPrefixes(Context& context,
     }
     ++rayIndex;
   }
-  std::cout << "range-cc-parity " << label
-            << ": rays=" << cache.size() << " divergent-prefix rays="
-            << divergentRays << " cutoff-truncated rays=" << truncatedRays
-            << " example ray " << exampleRay << " prefix(f="
-            << frequencies.front() << ")=" << exampleLowPrefix
-            << " prefix(f=" << frequencies.back() << ")=" << exampleHighPrefix
-            << '\n';
+  std::cout << "range-cc-parity " << label << ": rays=" << cache.size()
+            << " divergent-prefix rays=" << divergentRays
+            << " cutoff-truncated rays=" << truncatedRays << " example ray "
+            << exampleRay << " prefix(f=" << frequencies.front()
+            << ")=" << exampleLowPrefix << " prefix(f=" << frequencies.back()
+            << ")=" << exampleHighPrefix << '\n';
   context.check(divergentRays > 0U && truncatedRays > 0U,
                 std::string(label) +
                     " Fixture B prefixes genuinely diverge across frequencies "
@@ -266,39 +265,40 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
   // Level B fused side.
   const broadband::FusedAccumulationResult fused =
       ReuseRangeParaSolver::accumulateFrequencies(
-          simulation, trace.cache, 1.0,
-          50.0, settings,
-          broadband::ReuseRangeParaExecutionSettings{
-              .requestedRangeWorkers = workerCount});
-  context.check(fused.rawWorkspace.frequencyCount() == frequencies.size() &&
-                    fused.rayCount == trace.cache.size() &&
-                    fused.rayCacheBytes == trace.cache.memoryFootprintBytes() &&
-                    fused.requestedRangeWorkers == workerCount &&
-                    fused.effectiveRangeWorkers ==
-                        std::min(workerCount,
-                                 simulation.receivers().rangeCount()),
-                std::string(label) + " Level B result carries every frequency "
-                                     "and the shared cache metrics");
+          simulation, trace.cache, 1.0, 50.0, settings,
+          broadband::ReuseRangeParaExecutionSettings{.requestedRangeWorkers =
+                                                         workerCount});
+  context.check(
+      fused.rawWorkspace.frequencyCount() == frequencies.size() &&
+          fused.rayCount == trace.cache.size() &&
+          fused.rayCacheBytes == trace.cache.memoryFootprintBytes() &&
+          fused.requestedRangeWorkers == workerCount &&
+          fused.effectiveRangeWorkers ==
+              std::min(workerCount, simulation.receivers().rangeCount()),
+      std::string(label) +
+          " Level B result carries every frequency "
+          "and the shared cache metrics");
   // Timing fields exist and follow the frozen seam contract; no timing values
   // are asserted (they are wall-clock dependent).
   context.check(fused.timings.traceSeconds == 0.0 &&
                     fused.timings.scaleSeconds == 0.0 &&
                     fused.timings.projectSeconds >= 0.0 &&
                     fused.timings.influenceSeconds >= 0.0,
-                std::string(label) + " Level B timings follow the raw seam "
-                                     "contract (no scale time, block phases)");
+                std::string(label) +
+                    " Level B timings follow the raw seam "
+                    "contract (no scale time, block phases)");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
     const FrequencyWorkspace fusedWorkspace =
-        fused.rawWorkspace.materializeFrequency(
-            frequencyIndex, frequencies[frequencyIndex],
-            simulation.receivers());
+        fused.rawWorkspace.materializeFrequency(frequencyIndex,
+                                                frequencies[frequencyIndex],
+                                                simulation.receivers());
     const WorkspaceByteComparison levelB = memcmpPressureSpan(
         rawReuse[frequencyIndex], fusedWorkspace, frequencyIndex);
-    context.check(levelB.equal,
-                  std::string(label) + " Level B raw workspace bitwise "
-                                      "parity: " +
-                                      levelB.detail);
+    context.check(levelB.equal, std::string(label) +
+                                    " Level B raw workspace bitwise "
+                                    "parity: " +
+                                    levelB.detail);
   }
 
   // Level C: production paths on the same SimulationCase.
@@ -319,8 +319,8 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
             streamed.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
           },
           settings, true,
-          broadband::ReuseRangeParaExecutionSettings{
-              .requestedRangeWorkers = workerCount});
+          broadband::ReuseRangeParaExecutionSettings{.requestedRangeWorkers =
+                                                         workerCount});
 
   context.check(
       fusedStatistics.requestedRangeWorkers == workerCount &&
@@ -329,39 +329,39 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
       std::string(label) +
           " Level C reports requested/effective range workers");
 
-  context.check(
-      callbackOrder.size() == frequencies.size() &&
-          std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
-      std::string(label) + " Level C Range Reuse consumer visits every frequency "
-                           "in index order");
+  context.check(callbackOrder.size() == frequencies.size() &&
+                    std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
+                std::string(label) +
+                    " Level C Range Reuse consumer visits every frequency "
+                    "in index order");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
-    context.check(
-        streamed[frequencyIndex].has_value() &&
-            streamed[frequencyIndex]->size() == 1U &&
-            streamedScaleSeconds[frequencyIndex] >= 0.0,
-        std::string(label) + " Level C captured scaled fused workspace and "
-                             "scale timing for frequency index " +
-            std::to_string(frequencyIndex));
+    context.check(streamed[frequencyIndex].has_value() &&
+                      streamed[frequencyIndex]->size() == 1U &&
+                      streamedScaleSeconds[frequencyIndex] >= 0.0,
+                  std::string(label) +
+                      " Level C captured scaled fused workspace and "
+                      "scale timing for frequency index " +
+                      std::to_string(frequencyIndex));
     const WorkspaceByteComparison levelC = memcmpPressureSpan(
         serial.frequencyResults[frequencyIndex].workspaces.front(),
         streamed[frequencyIndex]->front(), frequencyIndex);
-    context.check(levelC.equal,
-                  std::string(label) + " Level C scaled workspace bitwise "
-                                      "parity: " +
-                                      levelC.detail);
+    context.check(levelC.equal, std::string(label) +
+                                    " Level C scaled workspace bitwise "
+                                    "parity: " +
+                                    levelC.detail);
   }
 
   // Level A: no throw happened implicitly (solveStreaming returned); the
   // fused fingerprint is stable and equals the serial reuse fingerprint.
-  context.check(
-      fusedStatistics.cacheFingerprintVerified &&
-          fusedStatistics.cacheFingerprintBefore ==
-              fusedStatistics.cacheFingerprintAfter &&
-          fusedStatistics.cacheFingerprintBefore ==
-              serial.statistics.cacheFingerprintBefore,
-      std::string(label) + " Level A Range Reuse cache fingerprint is stable and "
-                           "matches serial reuse");
+  context.check(fusedStatistics.cacheFingerprintVerified &&
+                    fusedStatistics.cacheFingerprintBefore ==
+                        fusedStatistics.cacheFingerprintAfter &&
+                    fusedStatistics.cacheFingerprintBefore ==
+                        serial.statistics.cacheFingerprintBefore,
+                std::string(label) +
+                    " Level A Range Reuse cache fingerprint is stable and "
+                    "matches serial reuse");
 }
 
 }  // namespace
@@ -376,14 +376,13 @@ int main() {
   // every requested worker count used by the performance screen.
   {
     const SimulationCase parallelSimulation = makeMunkSmallCase(FrequencyGrid(
-        {50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0,
-         500.0, 550.0, 600.0, 650.0, 700.0, 750.0, 800.0}));
+        {50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0, 500.0,
+         550.0, 600.0, 650.0, 700.0, 750.0, 800.0}));
     for (const std::size_t workerCount : {1U, 2U, 4U, 8U}) {
-      const std::string label =
-          "fixture A parallel (16F, " + std::to_string(workerCount) +
-          " workers)";
-      testParityLevels(context, parallelSimulation,
-                       CartesianCervenySettings{}, label.c_str(), workerCount);
+      const std::string label = "fixture A parallel (16F, " +
+                                std::to_string(workerCount) + " workers)";
+      testParityLevels(context, parallelSimulation, CartesianCervenySettings{},
+                       label.c_str(), workerCount);
     }
   }
   // Fixture A2: kernel dispatch coverage for imageCount = 2.
@@ -404,10 +403,10 @@ int main() {
   }
   // Fixture C: WKB beam width variant on the Fixture A geometry (epsilon
   // real; alternate KMAH branch rule inside updateCervenyKmah).
-  testParityLevels(context,
-                   makeMunkSmallCase(FrequencyGrid({50.0, 250.0}),
-                                     BeamWidthMode::Wkb),
-                   CartesianCervenySettings{}, "fixture C (munk CC, WKB)");
+  testParityLevels(
+      context,
+      makeMunkSmallCase(FrequencyGrid({50.0, 250.0}), BeamWidthMode::Wkb),
+      CartesianCervenySettings{}, "fixture C (munk CC, WKB)");
 
   if (context.failureCount() != 0) {
     std::cerr << context.failureCount()

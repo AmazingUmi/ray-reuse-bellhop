@@ -82,7 +82,7 @@ void testNormalCurvatureFormula(Context& context) {
       3.0 * 0.25 - 2.0 * -2.0 * 0.25 * -0.5 + 5.0 * 0.0625;
   constexpr double actual =
       broadband::soundSpeedNormalSecondDerivativeOverSquaredSpeed(hessian,
-                                                                 slowness);
+                                                                  slowness);
   static_assert(actual == expected);
   context.checkNear(actual, expected, 0.0,
                     "c_nn/c^2 follows the Step.f90 component formula");

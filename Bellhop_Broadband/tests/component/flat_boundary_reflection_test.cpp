@@ -164,8 +164,8 @@ void testSurfaceSignAndCurvatureModes(Context& context) {
   const Vec2 reflectedRayNormal{reflectedUnit.depth, -reflectedUnit.range};
   const double topCnJump = broadband::dot(
       geometry.soundSpeedGradient, reflectedRayNormal - incidentRayNormal);
-  const double csJump =
-      -broadband::dot(geometry.soundSpeedGradient, reflectedUnit - incidentUnit);
+  const double csJump = -broadband::dot(geometry.soundSpeedGradient,
+                                        reflectedUnit - incidentUnit);
   const double tangent = broadband::dot(incident.slowness, geometry.tangent);
   const double normal =
       broadband::dot(incident.slowness, geometry.outwardNormal);
@@ -210,10 +210,10 @@ void testLegacyCurvilinearFrame(Context& context) {
       BoundaryCurvatureMode::Standard);
   const FlatBoundaryReflection doubled =
       broadband::reflectAtBoundary(incident, ReflectionBoundary::Seabed,
-                                  geometry, 8U, BoundaryCurvatureMode::Double);
+                                   geometry, 8U, BoundaryCurvatureMode::Double);
   const FlatBoundaryReflection zeroed =
       broadband::reflectAtBoundary(incident, ReflectionBoundary::Seabed,
-                                  geometry, 8U, BoundaryCurvatureMode::Zero);
+                                   geometry, 8U, BoundaryCurvatureMode::Zero);
 
   const double normalSlowness =
       broadband::fortranDotProduct2D(incident.slowness, reflectionNormal);
@@ -262,8 +262,8 @@ void testLegacyCurvilinearFrame(Context& context) {
   const FlatBoundaryReflection drifted = broadband::reflectAtBoundary(
       driftedIncident, ReflectionBoundary::Seabed, geometry, 8U,
       BoundaryCurvatureMode::Standard);
-  const double driftedNormalSlowness =
-      broadband::fortranDotProduct2D(driftedIncident.slowness, reflectionNormal);
+  const double driftedNormalSlowness = broadband::fortranDotProduct2D(
+      driftedIncident.slowness, reflectionNormal);
   checkVectorNear(
       context, drifted.reflectedState.slowness,
       Vec2{.range =

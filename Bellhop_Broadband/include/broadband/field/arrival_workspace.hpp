@@ -5,8 +5,8 @@
 #include <span>
 #include <vector>
 
-#include "broadband/field/arrival_accumulator.hpp"
 #include "broadband/field/arrival.hpp"
+#include "broadband/field/arrival_accumulator.hpp"
 #include "broadband/model/simulation_case.hpp"
 
 namespace broadband {

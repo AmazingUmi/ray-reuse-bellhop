@@ -15,10 +15,10 @@
 
 #include "broadband/model/simulation_case.hpp"
 #include "broadband/solver/arrival_solver.hpp"
-#include "broadband/solver/nonreuse_solver.hpp"
 #include "broadband/solver/eigenray_solver.hpp"
-#include "broadband/solver/reuse_freq_para_solver.hpp"
+#include "broadband/solver/nonreuse_solver.hpp"
 #include "broadband/solver/ray_trace_product.hpp"
+#include "broadband/solver/reuse_freq_para_solver.hpp"
 #include "broadband/solver/reuse_serial_solver.hpp"
 #include "support/test_harness.hpp"
 
@@ -29,8 +29,6 @@ using broadband::ArrivalSolverStatistics;
 using broadband::BeamFamily;
 using broadband::BoundaryCurvatureMode;
 using broadband::BoundaryModel;
-using broadband::NonReuseResult;
-using broadband::NonReuseSolver;
 using broadband::CervenyCoordinateSystem;
 using broadband::EigenrayHit;
 using broadband::EigenraySolver;
@@ -42,12 +40,14 @@ using broadband::FrequencyGrid;
 using broadband::FrequencyWorkspace;
 using broadband::IntegratorSettings;
 using broadband::LaunchFan;
-using broadband::ReuseFreqParaSettings;
-using broadband::ReuseFreqParaSolver;
-using broadband::ReuseFreqParaStatistics;
+using broadband::NonReuseResult;
+using broadband::NonReuseSolver;
 using broadband::RayFanTraceResult;
 using broadband::RayPathCache;
 using broadband::ReceiverGrid;
+using broadband::ReuseFreqParaSettings;
+using broadband::ReuseFreqParaSolver;
+using broadband::ReuseFreqParaStatistics;
 using broadband::ReuseSerialResult;
 using broadband::ReuseSerialSolver;
 using broadband::ReuseSerialStatistics;
@@ -168,8 +168,8 @@ ParallelRun runParallel(const SimulationCase& simulation) {
         run.workspaces.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
       },
       ReuseFreqParaSettings{.workerCount = 2U,
-                               .outputQueueCapacity = 1U,
-                               .memoryBudgetBytes = 0U},
+                            .outputQueueCapacity = 1U,
+                            .memoryBudgetBytes = 0U},
       {}, true);
   return run;
 }
@@ -187,8 +187,7 @@ void testDualSourceTlThreeModes(Context& context) {
                     dual.sources()[1U].depth == 70.0,
                 "dual-source TL fixture is depth sorted");
 
-  const NonReuseResult nonReuse =
-      NonReuseSolver::solve(dual, 1.0, 50.0);
+  const NonReuseResult nonReuse = NonReuseSolver::solve(dual, 1.0, 50.0);
   const ReuseSerialResult reuse =
       ReuseSerialSolver::solve(dual, 1.0, 50.0, {}, true);
   const ParallelRun parallel = runParallel(dual);
@@ -499,18 +498,16 @@ void testDualSourceRayProduct(Context& context) {
       makeCase(dualSources(), SimulationRunMode::RayTrace,
                BeamFamily::GeometricHat, {50.0}, false, 3U);
   const std::vector<RayFanTraceResult> traces = traceRayProducts(dual);
-  context.check(
-      traces.size() == 2U && traces[0U].cache.frozen() &&
-          traces[1U].cache.frozen(),
-      "R product traces one frozen fan per source");
+  context.check(traces.size() == 2U && traces[0U].cache.frozen() &&
+                    traces[1U].cache.frozen(),
+                "R product traces one frozen fan per source");
   context.check(
       traces[0U].cache.at(0U).points.front().position.depth == 30.0 &&
           traces[1U].cache.at(0U).points.front().position.depth == 70.0,
       "R per-source caches start at their own source depth");
   context.check(
       traces[0U].cache.size() == dual.launchFanPlan().launchAngleCount &&
-          traces[1U].cache.size() ==
-              dual.launchFanPlan().launchAngleCount,
+          traces[1U].cache.size() == dual.launchFanPlan().launchAngleCount,
       "R per-source caches carry the full shared fan");
 
   for (std::size_t sourceIndex = 0U; sourceIndex < 2U; ++sourceIndex) {

@@ -16,12 +16,12 @@
 namespace {
 
 using broadband::BoundaryModel;
-using broadband::NonReuseResult;
-using broadband::NonReuseSolver;
 using broadband::Environment;
 using broadband::FrequencyGrid;
 using broadband::IntegratorSettings;
 using broadband::LaunchFan;
+using broadband::NonReuseResult;
+using broadband::NonReuseSolver;
 using broadband::ReceiverGrid;
 using broadband::SimulationCase;
 using broadband::SingleFrequencyResult;
@@ -68,8 +68,7 @@ void checkPressureEqual(Context& context, const SingleFrequencyResult& actual,
 
 void testTwoFrequencyNonReuseSolve(Context& context) {
   const SimulationCase simulation = makeSimulation();
-  const NonReuseResult broadband =
-      NonReuseSolver::solve(simulation, 1.0, 50.0);
+  const NonReuseResult broadband = NonReuseSolver::solve(simulation, 1.0, 50.0);
 
   context.check(
       broadband.frequencyResults.size() == 2U &&

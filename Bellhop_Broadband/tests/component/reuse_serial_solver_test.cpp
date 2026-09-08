@@ -20,14 +20,14 @@ namespace {
 
 using broadband::BiologicalAttenuationLayers;
 using broadband::BoundaryModel;
-using broadband::NonReuseResult;
-using broadband::NonReuseSolver;
 using broadband::Environment;
 using broadband::FrancoisGarrisonParameters;
 using broadband::FrequencyGrid;
 using broadband::IntegratorSettings;
 using broadband::LaunchAngleDegreeBounds;
 using broadband::LaunchFan;
+using broadband::NonReuseResult;
+using broadband::NonReuseSolver;
 using broadband::ReceiverGrid;
 using broadband::ReuseSerialFrequencyResult;
 using broadband::ReuseSerialResult;
@@ -107,8 +107,7 @@ void checkPressureEqual(Context& context,
 
 void testTwoFrequencySerialReuse(Context& context) {
   const SimulationCase simulation = makeSimulation();
-  const NonReuseResult nonReuse =
-      NonReuseSolver::solve(simulation, 1.0, 50.0);
+  const NonReuseResult nonReuse = NonReuseSolver::solve(simulation, 1.0, 50.0);
   const ReuseSerialResult reuse = ReuseSerialSolver::solve(
       simulation, 1.0, 50.0,
       broadband::CartesianCervenySettings{.collectStatistics = true}, true);

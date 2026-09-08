@@ -58,10 +58,11 @@ void accumulateFrequencyTimings(SingleFrequencyTimings& total,
 // A01): the shared seam traces every product identically, so only this
 // diagnostic selects on the product. TransmissionLoss carries the angle and
 // reason; Arrival/Eigenray/RayTrace keep their established index-only texts.
-[[nodiscard]] std::string terminationDiagnostic(
-    RayFanTraceProduct product, std::size_t sourceIndex,
-    std::size_t launchIndex, double launchAngle,
-    RayTerminationReason reason) {
+[[nodiscard]] std::string terminationDiagnostic(RayFanTraceProduct product,
+                                                std::size_t sourceIndex,
+                                                std::size_t launchIndex,
+                                                double launchAngle,
+                                                RayTerminationReason reason) {
   switch (product) {
     case RayFanTraceProduct::TransmissionLoss:
       return "single-frequency solve encountered a ray that did not "
@@ -169,9 +170,9 @@ RayFanTraceResult SingleFrequencySolver::traceSourceFan(
       const double launchAngle = launchFan.launchAngles[launchIndex];
       RayPath path = tracer.trace(source, launchAngle);
       if (path.terminationReason != RayTerminationReason::ExitedDomain) {
-        throw ValidationError(terminationDiagnostic(
-            product, sourceIndex, launchIndex, launchAngle,
-            path.terminationReason));
+        throw ValidationError(terminationDiagnostic(product, sourceIndex,
+                                                    launchIndex, launchAngle,
+                                                    path.terminationReason));
       }
       pointCount += path.points.size();
       paths.push_back(std::move(path));
@@ -191,9 +192,9 @@ RayFanTraceResult SingleFrequencySolver::traceSourceFan(
       const double launchAngle = launchFan.launchAngles[launchIndex];
       RayPath path = tracer.trace(source, launchAngle);
       if (path.terminationReason != RayTerminationReason::ExitedDomain) {
-        throw ValidationError(terminationDiagnostic(
-            product, sourceIndex, launchIndex, launchAngle,
-            path.terminationReason));
+        throw ValidationError(terminationDiagnostic(product, sourceIndex,
+                                                    launchIndex, launchAngle,
+                                                    path.terminationReason));
       }
       pointCount += path.points.size();
       cache.append(std::move(path));
@@ -225,8 +226,7 @@ RayFanTraceResult SingleFrequencySolver::traceSourceFan(
   workers.reserve(workerCount);
   const std::size_t quotient = launchCount / workerCount;
   const std::size_t remainder = launchCount % workerCount;
-  for (std::size_t workerIndex = 0U; workerIndex < workerCount;
-       ++workerIndex) {
+  for (std::size_t workerIndex = 0U; workerIndex < workerCount; ++workerIndex) {
     const std::size_t begin =
         workerIndex * quotient + std::min(workerIndex, remainder);
     const std::size_t count = quotient + (workerIndex < remainder ? 1U : 0U);
@@ -298,8 +298,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
     const SimulationCase& simulation, double frequency,
     const RayPathCache& rayCache, std::size_t sourceIndex,
     double epsilonMultiplier, double loopRange,
-    CartesianCervenySettings influenceSettings,
-    WorkspaceDelivery delivery) {
+    CartesianCervenySettings influenceSettings, WorkspaceDelivery delivery) {
   requireSimulationFrequency(simulation, frequency);
   if (!isTransmissionLossMode(simulation.runMode())) {
     throw ValidationError(
@@ -483,8 +482,7 @@ SingleFrequencyResult SingleFrequencySolver::solveFrequencyFromSourceCache(
                 *intensityWorkspace, simulation.receivers(),
                 launchFan.launchAngleStep, sourceSoundSpeed,
                 simulation.sourceGeometry());
-  if (coherentWorkspace.has_value() &&
-      delivery == WorkspaceDelivery::Scaled) {
+  if (coherentWorkspace.has_value() && delivery == WorkspaceDelivery::Scaled) {
     if (geometricNormalization) {
       scaleCoherentGeometricPressure(
           workspace, simulation.receivers(), launchFan.launchAngleStep,
@@ -566,10 +564,8 @@ SingleFrequencyResult SingleFrequencySolver::solveAtFrequency(
       .totalRayPointCount = totalRayPointCount,
       .rayCacheBytes = peakRayCacheBytes,
       .timings = totalTimings,
-      .requestedTraceWorkerCount =
-          sourceTraces.front().requestedWorkerCount,
-      .effectiveTraceWorkerCount =
-          sourceTraces.front().effectiveWorkerCount,
+      .requestedTraceWorkerCount = sourceTraces.front().requestedWorkerCount,
+      .effectiveTraceWorkerCount = sourceTraces.front().effectiveWorkerCount,
       .traceWorkerSecondsBySource = std::move(traceWorkerSecondsBySource)};
 }
 

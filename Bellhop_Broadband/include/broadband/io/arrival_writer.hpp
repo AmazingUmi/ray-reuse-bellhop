@@ -38,11 +38,9 @@ class ArrivalWriter {
 
   // Append exactly one source block. Both overloads write the same ARR
   // records; FrequencyView is the zero-copy fused path.
+  void appendSource(std::size_t sourceIndex, const ArrivalWorkspace& workspace);
   void appendSource(std::size_t sourceIndex,
-                    const ArrivalWorkspace& workspace);
-  void appendSource(
-      std::size_t sourceIndex,
-      BroadbandArrivalWorkspace::FrequencyView frequencyView);
+                    BroadbandArrivalWorkspace::FrequencyView frequencyView);
 
   // Direct-writer convenience. BroadbandArrivalWriterSet uses the split
   // complete/publish lifecycle so every frequency temp is complete before
@@ -89,11 +87,10 @@ class ArrivalWriter {
 // as one coordinated set and rolls back partial publication on failure.
 class BroadbandArrivalWriterSet {
  public:
-  BroadbandArrivalWriterSet(
-      std::span<const std::filesystem::path> outputPaths, std::string title,
-      const SimulationCase& simulation,
-      ArrivalEncoding encoding = ArrivalEncoding::Ascii,
-      ArrivalWriterTestHooks testHooks = {});
+  BroadbandArrivalWriterSet(std::span<const std::filesystem::path> outputPaths,
+                            std::string title, const SimulationCase& simulation,
+                            ArrivalEncoding encoding = ArrivalEncoding::Ascii,
+                            ArrivalWriterTestHooks testHooks = {});
   BroadbandArrivalWriterSet(const BroadbandArrivalWriterSet&) = delete;
   BroadbandArrivalWriterSet& operator=(const BroadbandArrivalWriterSet&) =
       delete;

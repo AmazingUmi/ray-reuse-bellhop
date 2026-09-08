@@ -59,12 +59,12 @@ class EigenraySolver {
  public:
   [[nodiscard]] static EigenraySolverStatistics solve(
       const SimulationCase& simulation,
-      const FrozenFrequencyEigenrayConsumer& consumer,
-      bool verifyCache = false, RayFanTraceSettings traceSettings = {});
+      const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache = false,
+      RayFanTraceSettings traceSettings = {});
   [[nodiscard]] static EigenraySolverStatistics solveNonReuse(
       const SimulationCase& simulation,
-      const FrozenFrequencyEigenrayConsumer& consumer,
-      bool verifyCache = false, RayFanTraceSettings traceSettings = {});
+      const FrozenFrequencyEigenrayConsumer& consumer, bool verifyCache = false,
+      RayFanTraceSettings traceSettings = {});
   [[nodiscard]] static EigenraySolverStatistics solveFrequency(
       const SimulationCase& simulation,
       const FrozenFrequencyEigenrayConsumer& consumer, std::size_t workerCount,

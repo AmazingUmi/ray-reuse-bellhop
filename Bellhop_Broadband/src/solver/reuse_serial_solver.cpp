@@ -32,8 +32,7 @@ ReuseSerialStatistics ReuseSerialSolver::solveStreaming(
     CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint,
     RayFanTraceSettings traceSettings) {
   if (!consumer) {
-    throw ValidationError(
-        "Serial Reuse frequency consumer must be callable");
+    throw ValidationError("Serial Reuse frequency consumer must be callable");
   }
 
   ReuseSerialStatistics statistics;

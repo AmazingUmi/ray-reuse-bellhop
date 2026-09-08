@@ -165,21 +165,18 @@ class CartesianCervenyInfluence {
   // prevalidated checks run at entry; shared segment/range/image geometry is
   // computed once per ray and consumed by every frequency.
   [[nodiscard]] bool accumulateFusedPrevalidated(
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
   [[nodiscard]] bool accumulateFusedImpl(
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
-      CartesianCervenyStatistics* statistics) const;
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const;
 
   // IGR-3A A02b fused intensity twin (design §5/§6.2/§8): identical
   // traversal, union active prefix, per-frequency masks, and encounter order
@@ -188,21 +185,18 @@ class CartesianCervenyInfluence {
   // (abs-then-multiply; std::norm is forbidden) into the real lane,
   // reproducing the legacy per-frequency intensity branch.
   [[nodiscard]] bool accumulateFusedIntensityPrevalidated(
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   template <bool CollectStatistics, std::size_t ImageCount>
   [[nodiscard]] bool accumulateFusedIntensityImpl(
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
-      CartesianCervenyStatistics* statistics) const;
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const;
 
   template <bool CollectStatistics>
   [[nodiscard]] std::optional<CartesianCervenyDiagnostic>

@@ -92,10 +92,8 @@ ArrivalTraceBatch traceAllSourceCaches(const SimulationCase& simulation,
 void recordTraceWorkerStatistics(ArrivalSolverStatistics& stats,
                                  const ArrivalTraceBatch& batch) {
   if (stats.traceWorkerSecondsBySource.empty()) {
-    stats.requestedTraceWorkerCount =
-        batch.traces.front().requestedWorkerCount;
-    stats.effectiveTraceWorkerCount =
-        batch.traces.front().effectiveWorkerCount;
+    stats.requestedTraceWorkerCount = batch.traces.front().requestedWorkerCount;
+    stats.effectiveTraceWorkerCount = batch.traces.front().effectiveWorkerCount;
   }
   for (const RayFanTraceResult& trace : batch.traces) {
     stats.traceWorkerSecondsBySource.push_back(trace.workerSeconds);
@@ -281,8 +279,7 @@ ArrivalSolverStatistics ArrivalSolver::solveNonReuse(
     // Non-reuse: every frequency re-traces every source's fan
     // (Worklist FP-2F §1.5: Nfreq x NSz trace passes).
     const auto traceBegin = Clock::now();
-    ArrivalTraceBatch batch =
-        traceAllSourceCaches(simulation, traceSettings);
+    ArrivalTraceBatch batch = traceAllSourceCaches(simulation, traceSettings);
     recordTraceWorkerStatistics(stats, batch);
     const std::vector<RayPathCache>& caches = batch.caches;
     std::vector<std::uint64_t> fingerprintsBefore;
@@ -424,9 +421,10 @@ ArrivalSolverStatistics ArrivalSolver::solveFrequency(
     stats.consumeSeconds += elapsed(consumeBegin, Clock::now());
   }
   if (verifyCache) {
-    verifySourceFingerprints(caches, fingerprintsBefore,
-                             "Frequency Reuse arrival projection modified the frozen "
-                             "ray cache");
+    verifySourceFingerprints(
+        caches, fingerprintsBefore,
+        "Frequency Reuse arrival projection modified the frozen "
+        "ray cache");
     stats.sourceCacheFingerprintsAfter = fingerprintsBefore;
     stats.cacheFingerprintAfter = fingerprintsBefore.front();
   }

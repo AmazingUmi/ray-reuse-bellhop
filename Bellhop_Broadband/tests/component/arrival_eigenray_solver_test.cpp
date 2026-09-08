@@ -331,7 +331,7 @@ void testRayCenteredProductModes(Context& context) {
                                    true);
   const ArrivalSolverStatistics parallelArrivalStats =
       ArrivalSolver::solveFrequency(arrivals, arrivalConsumer(parallelArrivals),
-                                   2U, true);
+                                    2U, true);
   context.check(!reuseArrivals[0U].empty() &&
                     reuseArrivals == nonreuseArrivals &&
                     reuseArrivals == parallelArrivals,
@@ -368,7 +368,7 @@ void testRayCenteredProductModes(Context& context) {
       EigenraySolver::solveNonReuse(eigenrays, hitConsumer(nonreuseHits), true);
   const EigenraySolverStatistics parallelEigenrayStats =
       EigenraySolver::solveFrequency(eigenrays, hitConsumer(parallelHits), 2U,
-                                    true);
+                                     true);
   context.check(!reuseHits[0U].empty() && reuseHits == nonreuseHits &&
                     reuseHits == parallelHits,
                 "Eg hit identities and prefixes agree across reuse modes");

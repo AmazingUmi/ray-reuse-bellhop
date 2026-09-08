@@ -145,8 +145,7 @@ void validateFusedSimpleGaussianInput(
   }
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
        ++frequencyIndex) {
-    const RayFrequencyState& frequencyState =
-        frequencyStates[frequencyIndex];
+    const RayFrequencyState& frequencyState = frequencyStates[frequencyIndex];
     if (frequencies[frequencyIndex] != frequencyState.frequency) {
       throw ValidationError(
           "fused simple Gaussian workspace and ray frequencies must match");
@@ -372,8 +371,7 @@ std::optional<SimpleGaussianDiagnostic> SimpleGaussianInfluence::accumulate(
   return diagnostic;
 }
 
-void SimpleGaussianInfluence::setFusedLaunchAngleStep(
-    double launchAngleStep) {
+void SimpleGaussianInfluence::setFusedLaunchAngleStep(double launchAngleStep) {
   fusedLaunchAngleStep_ = launchAngleStep;
 }
 
@@ -392,9 +390,8 @@ void SimpleGaussianInfluence::setFusedLaunchAngleStep(
 // active-prefix loop bound, tau/delay, right amplitude, reflection phase,
 // angular frequency, and the pressure increment.
 bool SimpleGaussianInfluence::accumulateFusedPrevalidated(
-    FusedPressureWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
+    FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
     std::size_t rangeBegin, std::size_t rangeEnd,
     CartesianCervenyStatistics* statistics) const {
   // The legacy simple-Gaussian kernel produces no influence counters; the
@@ -419,8 +416,7 @@ bool SimpleGaussianInfluence::accumulateFusedPrevalidated(
   constexpr float kLegacyBetaLiteral = 0.98F;
   const double beta = static_cast<double>(kLegacyBetaLiteral);
   const double gaussianA =
-      -4.0 * std::log(beta) /
-      (fusedLaunchAngleStep_ * fusedLaunchAngleStep_);
+      -4.0 * std::log(beta) / (fusedLaunchAngleStep_ * fusedLaunchAngleStep_);
   const double normalization =
       fusedLaunchAngleStep_ * std::sqrt(gaussianA / std::numbers::pi);
   requireFinite(sourceRatio, "simple Gaussian source ratio");
@@ -437,8 +433,7 @@ bool SimpleGaussianInfluence::accumulateFusedPrevalidated(
     // first inactive point is retained).
     activePrefixPointCount[frequencyIndex] =
         activePointCount(frequencyStates[frequencyIndex]);
-    unionPrefix =
-        std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
+    unionPrefix = std::max(unionPrefix, activePrefixPointCount[frequencyIndex]);
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
     requireFinite(angularFrequency[frequencyIndex],
@@ -489,12 +484,10 @@ bool SimpleGaussianInfluence::accumulateFusedPrevalidated(
 
       if (rangeIndex >= rangeBegin && rangeIndex < rangeEnd) {
         const double segmentRange = rightRange - leftRange;
-        const double segmentDepth =
-            path.points[rightIndex].position.depth -
-            path.points[leftIndex].position.depth;
-        const double segmentLength =
-            std::sqrt(segmentRange * segmentRange +
-                      segmentDepth * segmentDepth);
+        const double segmentDepth = path.points[rightIndex].position.depth -
+                                    path.points[leftIndex].position.depth;
+        const double segmentLength = std::sqrt(segmentRange * segmentRange +
+                                               segmentDepth * segmentDepth);
         if (!std::isfinite(segmentLength) || segmentLength <= 0.0) {
           throw ValidationError(
               "simple Gaussian ray segment length must be positive and "
@@ -540,9 +533,8 @@ bool SimpleGaussianInfluence::accumulateFusedPrevalidated(
                 frequencyStates[frequencyIndex];
             const std::complex<double> tau =
                 frequencyState.points[leftIndex].complexTravelTime +
-                weight *
-                    (frequencyState.points[rightIndex].complexTravelTime -
-                     frequencyState.points[leftIndex].complexTravelTime);
+                weight * (frequencyState.points[rightIndex].complexTravelTime -
+                          frequencyState.points[leftIndex].complexTravelTime);
             const double rightAmplitude =
                 frequencyState.points[rightIndex].amplitude;
             const double rightReflectionPhase =
@@ -562,8 +554,7 @@ bool SimpleGaussianInfluence::accumulateFusedPrevalidated(
                                  "simple Gaussian pressure increment");
             std::complex<double>& pressureValue =
                 workspace.cell(rangeIndex, depthIndex)[frequencyIndex];
-            const std::complex<double> updated =
-                pressureValue + contribution;
+            const std::complex<double> updated = pressureValue + contribution;
             requireFiniteComplex(updated,
                                  "simple Gaussian accumulated pressure");
             pressureValue = updated;

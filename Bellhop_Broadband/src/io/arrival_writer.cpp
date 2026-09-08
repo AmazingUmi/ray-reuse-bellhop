@@ -4,11 +4,11 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <limits>
 #include <numbers>
-#include <exception>
 #include <span>
 #include <string>
 #include <system_error>
@@ -139,14 +139,13 @@ void writeBinarySourceBlock(std::ofstream& output,
       }
     }
 }
-void writeBinaryHeader(std::ofstream& output,
-                       const SimulationCase& simulation, double frequencyHz) {
+void writeBinaryHeader(std::ofstream& output, const SimulationCase& simulation,
+                       double frequencyHz) {
   record(output, {static_cast<std::byte>(0x27), static_cast<std::byte>('2'),
                   static_cast<std::byte>('D'), static_cast<std::byte>(0x27)});
   std::vector<std::byte> frequency(4U);
   store32(frequency, 0U,
-          std::bit_cast<std::uint32_t>(
-              static_cast<float>(frequencyHz)));
+          std::bit_cast<std::uint32_t>(static_cast<float>(frequencyHz)));
   record(output, frequency);
   // F2CPP writeBinaryHeader source record: NSz followed by Sz(1:NSz) as
   // float32 values (one Fortran unformatted record).
@@ -181,8 +180,8 @@ void writeBinaryHeader(std::ofstream& output,
 
 ArrivalWriter::ArrivalWriter(std::filesystem::path outputPath,
                              std::string title,
-                             const SimulationCase& simulation,
-                             double frequency, ArrivalEncoding encoding,
+                             const SimulationCase& simulation, double frequency,
+                             ArrivalEncoding encoding,
                              ArrivalWriterTestHooks testHooks)
     : outputPath_(std::move(outputPath)),
       temporaryPath_(outputPath_.string() + ".tmp"),
@@ -315,8 +314,8 @@ void ArrivalWriter::write(const std::filesystem::path& path,
   }
   ArrivalWriter writer(path, std::string(title), simulation,
                        sourceWorkspaces.front().frequency(), encoding);
-  for (std::size_t sourceIndex = 0U;
-       sourceIndex < sourceWorkspaces.size(); ++sourceIndex) {
+  for (std::size_t sourceIndex = 0U; sourceIndex < sourceWorkspaces.size();
+       ++sourceIndex) {
     writer.appendSource(sourceIndex, sourceWorkspaces[sourceIndex]);
   }
   writer.finalize();
@@ -377,8 +376,8 @@ void BroadbandArrivalWriterSet::finalize() {
       }
       if (!exists) continue;
       std::error_code typeError;
-      const bool regular = std::filesystem::is_regular_file(finalPath,
-                                                            typeError);
+      const bool regular =
+          std::filesystem::is_regular_file(finalPath, typeError);
       if (typeError || !regular) {
         throw BellhopError("ARR output target is not a regular file: " +
                            finalPath.string());

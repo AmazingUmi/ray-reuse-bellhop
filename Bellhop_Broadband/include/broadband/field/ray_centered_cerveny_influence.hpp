@@ -80,28 +80,25 @@ class RayCenteredCervenyInfluence {
   // accumulateImpl. Entry-kind validation matches the public per-frequency
   // entries (coherent requires Coherent, intensity requires I/S).
   [[nodiscard]] bool accumulateFusedPrevalidated(
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   [[nodiscard]] bool accumulateFusedIntensityPrevalidated(
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics = nullptr) const;
 
   template <bool IntensityPayload, typename Workspace>
   [[nodiscard]] bool accumulateFusedImpl(
       Workspace& workspace, std::span<const double> frequencies,
       const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
-      std::span<const std::complex<double>> epsilons,
-      std::size_t rangeBegin, std::size_t rangeEnd,
-      CartesianCervenyStatistics* statistics) const;
+      std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+      std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const;
 
   Environment environment_;
   ReceiverGrid receivers_;

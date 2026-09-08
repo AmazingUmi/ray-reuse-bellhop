@@ -68,9 +68,8 @@ struct CartesianCervenyFusedAdapter {
     double epsilonMultiplier{};
 
     PerRayContext(BeamWidthMode widthModeValue, double sourceSoundSpeedValue,
-                  double sourceDepthGradientValue,
-                  double launchAngleStepValue, double loopRangeValue,
-                  double epsilonMultiplierValue)
+                  double sourceDepthGradientValue, double launchAngleStepValue,
+                  double loopRangeValue, double epsilonMultiplierValue)
         : widthMode(widthModeValue),
           sourceSoundSpeed(sourceSoundSpeedValue),
           sourceDepthGradient(sourceDepthGradientValue),
@@ -95,20 +94,19 @@ struct CartesianCervenyFusedAdapter {
                             std::span<const double> frequencies) {
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
          ++frequencyIndex) {
-      const BeamEpsilon epsilon = pickBeamEpsilon(
-          context.widthMode, frequencies[frequencyIndex],
-          context.sourceSoundSpeed, context.sourceDepthGradient,
-          path.launchAngle, context.launchAngleStep, context.loopRange,
-          context.epsilonMultiplier);
+      const BeamEpsilon epsilon =
+          pickBeamEpsilon(context.widthMode, frequencies[frequencyIndex],
+                          context.sourceSoundSpeed, context.sourceDepthGradient,
+                          path.launchAngle, context.launchAngleStep,
+                          context.loopRange, context.epsilonMultiplier);
       scratch.epsilons[frequencyIndex] = epsilon.value;
     }
   }
 
   [[nodiscard]] static bool accumulateFused(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     return kernel.accumulateFusedPrevalidated(
@@ -127,9 +125,8 @@ struct CartesianCervenyFusedAdapter {
 
   [[nodiscard]] static bool accumulateFusedIntensity(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     return kernel.accumulateFusedIntensityPrevalidated(
@@ -178,9 +175,8 @@ struct RayCenteredCervenyFusedAdapter {
     double epsilonMultiplier{};
 
     PerRayContext(BeamWidthMode widthModeValue, double sourceSoundSpeedValue,
-                  double sourceDepthGradientValue,
-                  double launchAngleStepValue, double loopRangeValue,
-                  double epsilonMultiplierValue)
+                  double sourceDepthGradientValue, double launchAngleStepValue,
+                  double loopRangeValue, double epsilonMultiplierValue)
         : widthMode(widthModeValue),
           sourceSoundSpeed(sourceSoundSpeedValue),
           sourceDepthGradient(sourceDepthGradientValue),
@@ -206,20 +202,19 @@ struct RayCenteredCervenyFusedAdapter {
                             std::span<const double> frequencies) {
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
          ++frequencyIndex) {
-      const BeamEpsilon epsilon = pickBeamEpsilon(
-          context.widthMode, frequencies[frequencyIndex],
-          context.sourceSoundSpeed, context.sourceDepthGradient,
-          path.launchAngle, context.launchAngleStep, context.loopRange,
-          context.epsilonMultiplier);
+      const BeamEpsilon epsilon =
+          pickBeamEpsilon(context.widthMode, frequencies[frequencyIndex],
+                          context.sourceSoundSpeed, context.sourceDepthGradient,
+                          path.launchAngle, context.launchAngleStep,
+                          context.loopRange, context.epsilonMultiplier);
       scratch.epsilons[frequencyIndex] = epsilon.value;
     }
   }
 
   [[nodiscard]] static bool accumulateFused(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     return kernel.accumulateFusedPrevalidated(
@@ -238,9 +233,8 @@ struct RayCenteredCervenyFusedAdapter {
 
   [[nodiscard]] static bool accumulateFusedIntensity(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     return kernel.accumulateFusedIntensityPrevalidated(
@@ -293,9 +287,8 @@ struct GeometricHatFusedAdapter {
     double epsilonMultiplier{};
 
     PerRayContext(BeamWidthMode widthModeValue, double sourceSoundSpeedValue,
-                  double sourceDepthGradientValue,
-                  double launchAngleStepValue, double loopRangeValue,
-                  double epsilonMultiplierValue)
+                  double sourceDepthGradientValue, double launchAngleStepValue,
+                  double loopRangeValue, double epsilonMultiplierValue)
         : widthMode(widthModeValue),
           sourceSoundSpeed(sourceSoundSpeedValue),
           sourceDepthGradient(sourceDepthGradientValue),
@@ -307,11 +300,9 @@ struct GeometricHatFusedAdapter {
   [[nodiscard]] static Kernel makeKernel(const SimulationCase& simulation,
                                          CartesianCervenySettings settings) {
     static_cast<void>(settings);
-    Kernel kernel(simulation.receivers(),
-                  simulation.cervenyCoordinateSystem(),
+    Kernel kernel(simulation.receivers(), simulation.cervenyCoordinateSystem(),
                   simulation.sourceGeometry());
-    kernel.setFusedLaunchAngleStep(
-        simulation.launchFanPlan().launchAngleStep);
+    kernel.setFusedLaunchAngleStep(simulation.launchFanPlan().launchAngleStep);
     return kernel;
   }
 
@@ -332,15 +323,14 @@ struct GeometricHatFusedAdapter {
 
   [[nodiscard]] static bool accumulateFused(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     static_cast<void>(scratch);
-    return kernel.accumulateFusedPrevalidated(
-        workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
-        statistics);
+    return kernel.accumulateFusedPrevalidated(workspace, frequencies, path,
+                                              frequencyStates, rangeBegin,
+                                              rangeEnd, statistics);
   }
 
   static void scaleFrequency(FrequencyWorkspace& workspace,
@@ -353,9 +343,8 @@ struct GeometricHatFusedAdapter {
 
   [[nodiscard]] static bool accumulateFusedIntensity(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     static_cast<void>(scratch);
@@ -375,9 +364,8 @@ struct GeometricHatFusedAdapter {
 
   [[nodiscard]] static bool accumulateFusedArrivals(
       const Kernel& kernel, const PerRayScratch& scratch,
-      BroadbandArrivalWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      BroadbandArrivalWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       ArrivalAccumulationStatistics& statistics) {
     static_cast<void>(scratch);
@@ -419,9 +407,8 @@ struct GeometricGaussianFusedAdapter {
     double epsilonMultiplier{};
 
     PerRayContext(BeamWidthMode widthModeValue, double sourceSoundSpeedValue,
-                  double sourceDepthGradientValue,
-                  double launchAngleStepValue, double loopRangeValue,
-                  double epsilonMultiplierValue)
+                  double sourceDepthGradientValue, double launchAngleStepValue,
+                  double loopRangeValue, double epsilonMultiplierValue)
         : widthMode(widthModeValue),
           sourceSoundSpeed(sourceSoundSpeedValue),
           sourceDepthGradient(sourceDepthGradientValue),
@@ -434,8 +421,7 @@ struct GeometricGaussianFusedAdapter {
                                          CartesianCervenySettings settings) {
     static_cast<void>(settings);
     Kernel kernel(simulation.receivers(), simulation.sourceGeometry());
-    kernel.setFusedLaunchAngleStep(
-        simulation.launchFanPlan().launchAngleStep);
+    kernel.setFusedLaunchAngleStep(simulation.launchFanPlan().launchAngleStep);
     return kernel;
   }
 
@@ -456,15 +442,14 @@ struct GeometricGaussianFusedAdapter {
 
   [[nodiscard]] static bool accumulateFused(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     static_cast<void>(scratch);
-    return kernel.accumulateFusedPrevalidated(
-        workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
-        statistics);
+    return kernel.accumulateFusedPrevalidated(workspace, frequencies, path,
+                                              frequencyStates, rangeBegin,
+                                              rangeEnd, statistics);
   }
 
   static void scaleFrequency(FrequencyWorkspace& workspace,
@@ -477,9 +462,8 @@ struct GeometricGaussianFusedAdapter {
 
   [[nodiscard]] static bool accumulateFusedIntensity(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedIntensityWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     static_cast<void>(scratch);
@@ -499,9 +483,8 @@ struct GeometricGaussianFusedAdapter {
 
   [[nodiscard]] static bool accumulateFusedArrivals(
       const Kernel& kernel, const PerRayScratch& scratch,
-      BroadbandArrivalWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      BroadbandArrivalWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       ArrivalAccumulationStatistics& statistics) {
     static_cast<void>(scratch);
@@ -549,9 +532,8 @@ struct SimpleGaussianFusedAdapter {
     double epsilonMultiplier{};
 
     PerRayContext(BeamWidthMode widthModeValue, double sourceSoundSpeedValue,
-                  double sourceDepthGradientValue,
-                  double launchAngleStepValue, double loopRangeValue,
-                  double epsilonMultiplierValue)
+                  double sourceDepthGradientValue, double launchAngleStepValue,
+                  double loopRangeValue, double epsilonMultiplierValue)
         : widthMode(widthModeValue),
           sourceSoundSpeed(sourceSoundSpeedValue),
           sourceDepthGradient(sourceDepthGradientValue),
@@ -563,11 +545,9 @@ struct SimpleGaussianFusedAdapter {
   [[nodiscard]] static Kernel makeKernel(const SimulationCase& simulation,
                                          CartesianCervenySettings settings) {
     static_cast<void>(settings);
-    Kernel kernel(simulation.receivers(),
-                  simulation.integrator().stepLength,
+    Kernel kernel(simulation.receivers(), simulation.integrator().stepLength,
                   simulation.sourceGeometry());
-    kernel.setFusedLaunchAngleStep(
-        simulation.launchFanPlan().launchAngleStep);
+    kernel.setFusedLaunchAngleStep(simulation.launchFanPlan().launchAngleStep);
     return kernel;
   }
 
@@ -588,15 +568,14 @@ struct SimpleGaussianFusedAdapter {
 
   [[nodiscard]] static bool accumulateFused(
       const Kernel& kernel, const PerRayScratch& scratch,
-      FusedPressureWorkspace& workspace,
-      std::span<const double> frequencies, const RayPath& path,
-      std::span<const RayFrequencyState> frequencyStates,
+      FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+      const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
       std::size_t rangeBegin, std::size_t rangeEnd,
       CartesianCervenyStatistics* statistics) {
     static_cast<void>(scratch);
-    return kernel.accumulateFusedPrevalidated(
-        workspace, frequencies, path, frequencyStates, rangeBegin, rangeEnd,
-        statistics);
+    return kernel.accumulateFusedPrevalidated(workspace, frequencies, path,
+                                              frequencyStates, rangeBegin,
+                                              rangeEnd, statistics);
   }
 
   static void scaleFrequency(FrequencyWorkspace& workspace,
@@ -636,8 +615,8 @@ struct CoherentFusedSink {
       ArrivalAccumulationStatistics* arrivalStatistics) {
     static_cast<void>(arrivalStatistics);
     return Adapter::accumulateFused(kernel, scratch, workspace, frequencies,
-                                    path, frequencyStates, rangeBegin,
-                                    rangeEnd, statistics);
+                                    path, frequencyStates, rangeBegin, rangeEnd,
+                                    statistics);
   }
 
   [[nodiscard]] static Result makeResult(
@@ -647,14 +626,13 @@ struct CoherentFusedSink {
       std::size_t effectiveRangeWorkers,
       const ArrivalAccumulationStatistics& arrivalStatistics) {
     static_cast<void>(arrivalStatistics);
-    return Result{
-        .rawWorkspace = std::move(rawWorkspace),
-        .timings = timings,
-        .rayCount = rayCount,
-        .totalRayPointCount = totalRayPointCount,
-        .rayCacheBytes = rayCacheBytes,
-        .requestedRangeWorkers = requestedRangeWorkers,
-        .effectiveRangeWorkers = effectiveRangeWorkers};
+    return Result{.rawWorkspace = std::move(rawWorkspace),
+                  .timings = timings,
+                  .rayCount = rayCount,
+                  .totalRayPointCount = totalRayPointCount,
+                  .rayCacheBytes = rayCacheBytes,
+                  .requestedRangeWorkers = requestedRangeWorkers,
+                  .effectiveRangeWorkers = effectiveRangeWorkers};
   }
 };
 
@@ -678,9 +656,8 @@ struct IntensityFusedSink {
       ArrivalAccumulationStatistics* arrivalStatistics) {
     static_cast<void>(arrivalStatistics);
     return Adapter::accumulateFusedIntensity(kernel, scratch, workspace,
-                                             frequencies, path,
-                                             frequencyStates, rangeBegin,
-                                             rangeEnd, statistics);
+                                             frequencies, path, frequencyStates,
+                                             rangeBegin, rangeEnd, statistics);
   }
 
   [[nodiscard]] static Result makeResult(
@@ -690,14 +667,13 @@ struct IntensityFusedSink {
       std::size_t effectiveRangeWorkers,
       const ArrivalAccumulationStatistics& arrivalStatistics) {
     static_cast<void>(arrivalStatistics);
-    return Result{
-        .rawIntensityWorkspace = std::move(rawWorkspace),
-        .timings = timings,
-        .rayCount = rayCount,
-        .totalRayPointCount = totalRayPointCount,
-        .rayCacheBytes = rayCacheBytes,
-        .requestedRangeWorkers = requestedRangeWorkers,
-        .effectiveRangeWorkers = effectiveRangeWorkers};
+    return Result{.rawIntensityWorkspace = std::move(rawWorkspace),
+                  .timings = timings,
+                  .rayCount = rayCount,
+                  .totalRayPointCount = totalRayPointCount,
+                  .rayCacheBytes = rayCacheBytes,
+                  .requestedRangeWorkers = requestedRangeWorkers,
+                  .effectiveRangeWorkers = effectiveRangeWorkers};
   }
 };
 

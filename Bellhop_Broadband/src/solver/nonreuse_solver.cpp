@@ -26,20 +26,19 @@ void accumulateTimings(SingleFrequencyTimings& total,
 
 }  // namespace
 
-NonReuseResult NonReuseSolver::solve(
-    const SimulationCase& simulation, double epsilonMultiplier,
-    double loopRange, CartesianCervenySettings influenceSettings,
-    RayFanTraceSettings traceSettings) {
+NonReuseResult NonReuseSolver::solve(const SimulationCase& simulation,
+                                     double epsilonMultiplier, double loopRange,
+                                     CartesianCervenySettings influenceSettings,
+                                     RayFanTraceSettings traceSettings) {
   NonReuseResult result;
   result.frequencyResults.reserve(simulation.frequencies().size());
 
   const Clock::time_point wallBegin = Clock::now();
   for (const double frequency : simulation.frequencies().values()) {
     SingleFrequencyResult frequencyResult =
-        SingleFrequencySolver::solveAtFrequency(simulation, frequency,
-                                                epsilonMultiplier, loopRange,
-                                                influenceSettings,
-                                                traceSettings);
+        SingleFrequencySolver::solveAtFrequency(
+            simulation, frequency, epsilonMultiplier, loopRange,
+            influenceSettings, traceSettings);
 
     // solveAtFrequency traces every source's fan once (Worklist FP-2F §1.5:
     // non-reuse trace passes = Nfreq x NSz).

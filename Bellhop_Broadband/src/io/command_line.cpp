@@ -134,8 +134,7 @@ CommandLineOptions parseCommandLine(
       } else if (value == "reuse") {
         options.executionMode = ExecutionMode::Reuse;
       } else {
-        throw ValidationError(
-            "--execution-mode must be 'nonreuse' or 'reuse'");
+        throw ValidationError("--execution-mode must be 'nonreuse' or 'reuse'");
       }
       executionModeSpecified = true;
       options.executionModeSpecified = true;

@@ -17,6 +17,9 @@ else
   exit 2
 fi
 
+formatter_version="$("${formatter}" --version)"
+echo "format gate formatter: ${formatter} (${formatter_version})"
+
 mapfile_compatible_find() {
   find \
     "${project_root}/app" \

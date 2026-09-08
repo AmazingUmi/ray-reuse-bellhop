@@ -490,8 +490,9 @@ void testTraceWorkerClampAndZero(Context& context) {
   const SimulationCase simulation = makeSimulation(1000U);
   const broadband::RayFanTraceResult legacy =
       SingleFrequencySolver::traceRayFan(simulation);
-  const broadband::RayFanTraceResult clamped = SingleFrequencySolver::traceRayFan(
-      simulation, broadband::RayFanTraceSettings{.workerCount = 1000U});
+  const broadband::RayFanTraceResult clamped =
+      SingleFrequencySolver::traceRayFan(
+          simulation, broadband::RayFanTraceSettings{.workerCount = 1000U});
   context.check(
       clamped.requestedWorkerCount == 1000U &&
           clamped.effectiveWorkerCount == legacy.cache.size() &&
@@ -510,10 +511,10 @@ void testTraceWorkerClampAndZero(Context& context) {
       "zero trace worker count is rejected");
 }
 
-std::string captureTraceDiagnostic(
-    const SimulationCase& simulation, std::size_t sourceIndex,
-    broadband::RayFanTraceSettings settings,
-    broadband::RayFanTraceProduct product) {
+std::string captureTraceDiagnostic(const SimulationCase& simulation,
+                                   std::size_t sourceIndex,
+                                   broadband::RayFanTraceSettings settings,
+                                   broadband::RayFanTraceProduct product) {
   try {
     static_cast<void>(SingleFrequencySolver::traceSourceFan(
         simulation, sourceIndex, settings, product));
@@ -562,23 +563,23 @@ void testPerSourceTraceDiagnostics(Context& context) {
           broadband::RayFanTraceProduct::TransmissionLoss) == diagnostic,
       "four trace workers rethrow the serial lowest-launch-index diagnostic");
   context.check(
-      captureTraceDiagnostic(
-          pointLimited, 1U, broadband::RayFanTraceSettings{.workerCount = 4U},
-          broadband::RayFanTraceProduct::Arrival) ==
+      captureTraceDiagnostic(pointLimited, 1U,
+                             broadband::RayFanTraceSettings{.workerCount = 4U},
+                             broadband::RayFanTraceProduct::Arrival) ==
           "arrival solve encountered an abnormal ray termination at source "
           "1, launch 0",
       "arrival product keeps its established termination text");
   context.check(
-      captureTraceDiagnostic(
-          pointLimited, 1U, broadband::RayFanTraceSettings{.workerCount = 4U},
-          broadband::RayFanTraceProduct::Eigenray) ==
+      captureTraceDiagnostic(pointLimited, 1U,
+                             broadband::RayFanTraceSettings{.workerCount = 4U},
+                             broadband::RayFanTraceProduct::Eigenray) ==
           "eigenray solve encountered an abnormal ray termination at source "
           "1, launch 0",
       "eigenray product keeps its established termination text");
   context.check(
-      captureTraceDiagnostic(
-          pointLimited, 1U, broadband::RayFanTraceSettings{.workerCount = 4U},
-          broadband::RayFanTraceProduct::RayTrace) ==
+      captureTraceDiagnostic(pointLimited, 1U,
+                             broadband::RayFanTraceSettings{.workerCount = 4U},
+                             broadband::RayFanTraceProduct::RayTrace) ==
           "R trace encountered a ray that did not exit the spatial domain "
           "normally (source index 1, launch index 0)",
       "ray-trace product keeps its established termination text");
@@ -900,15 +901,13 @@ void testSixCaseSanitizerSmoke(Context& context) {
       makeConstantSmokeSimulation(
           100.0, 50.0, 250.0, 500.0, -80.0, 80.0, 10.0,
           BoundaryModel::acousticHalfSpace(
-              100.0,
-              AcousticMaterial{
-                  .compressionalSoundSpeed = 1590.0,
-                  .shearSoundSpeed = 0.0,
-                  .density = 1200.0,
-                  .compressionalAttenuation =
-                      {.value = 0.5,
-                       .unit =
-                           broadband::AttenuationUnit::DecibelsPerWavelength}})),
+              100.0, AcousticMaterial{.compressionalSoundSpeed = 1590.0,
+                                      .shearSoundSpeed = 0.0,
+                                      .density = 1200.0,
+                                      .compressionalAttenuation =
+                                          {.value = 0.5,
+                                           .unit = broadband::AttenuationUnit::
+                                               DecibelsPerWavelength}})),
       2.0, 100.0);
   checkSmokeSolve(
       context, "5 kHz lossless smoke",

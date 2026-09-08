@@ -14,10 +14,10 @@ namespace {
 
 using broadband::CommandLineOptions;
 using broadband::ExecutionMode;
-using broadband::ReuseMode;
 using broadband::parseCommandLine;
-using broadband::test::Context;
+using broadband::ReuseMode;
 using broadband::ValidationError;
+using broadband::test::Context;
 
 CommandLineOptions parse(std::initializer_list<std::string_view> arguments) {
   const std::vector<std::string_view> values(arguments);
@@ -81,15 +81,15 @@ void testExecutionMode(Context& context) {
                 "cache fingerprint verification is selected explicitly");
   context.check(options.profileInfluence,
                 "Influence profiling is selected explicitly");
-  const CommandLineOptions nonReuse = parse(
-      {"case/root", "--frequencies-hz", "50,250", "--execution-mode",
-       "nonreuse"});
+  const CommandLineOptions nonReuse =
+      parse({"case/root", "--frequencies-hz", "50,250", "--execution-mode",
+             "nonreuse"});
   context.check(nonReuse.executionMode == ExecutionMode::NonReuse,
                 "nonreuse execution mode is selected explicitly");
   context.check(nonReuse.executionModeSpecified,
                 "explicit nonreuse execution mode is tracked");
-  const CommandLineOptions traceParallel = parse(
-      {"root", "--execution-mode", "reuse", "--trace-workers", "8"});
+  const CommandLineOptions traceParallel =
+      parse({"root", "--execution-mode", "reuse", "--trace-workers", "8"});
   context.check(traceParallel.traceWorkerCountSpecified &&
                     traceParallel.traceWorkerCount == 8U,
                 "reuse trace worker count is parsed");
@@ -106,8 +106,8 @@ void testReuseMode(Context& context) {
       {"frequency", ReuseMode::Frequency},
       {"range", ReuseMode::Range}};
   for (const auto& [value, mode] : legalValues) {
-    const CommandLineOptions options = parse(
-        {"root", "--execution-mode", "reuse", "--reuse-mode", value});
+    const CommandLineOptions options =
+        parse({"root", "--execution-mode", "reuse", "--reuse-mode", value});
     context.check(options.executionMode == ExecutionMode::Reuse &&
                       options.reuseMode == mode && options.reuseModeSpecified,
                   "reuse mode value is parsed under reuse execution");
@@ -129,45 +129,44 @@ void testReuseMode(Context& context) {
       "unknown reuse mode value is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode"}));
       },
       "missing reuse mode value is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                 "--reuse-mode", "serial", "--reuse-mode",
-                                 "serial"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode",
+                   "serial", "--reuse-mode", "serial"}));
       },
       "duplicate reuse mode option is rejected");
 }
 
 void testReuseWorkers(Context& context) {
-  const std::pair<std::string_view, std::size_t> workerCounts[] = {
-      {"1", 1U}, {"2", 2U}};
+  const std::pair<std::string_view, std::size_t> workerCounts[] = {{"1", 1U},
+                                                                   {"2", 2U}};
   for (const std::string_view route : {"frequency", "range"}) {
     for (const auto& workerCount : workerCounts) {
-      const CommandLineOptions options = parse(
-          {"root", "--execution-mode", "reuse", "--reuse-mode", route,
-           "--reuse-workers", workerCount.first});
-      context.check(
-          options.reuseWorkerCountSpecified &&
-              options.reuseWorkerCount == workerCount.second,
-          "reuse worker count is parsed on worker-splitting routes");
+      const CommandLineOptions options =
+          parse({"root", "--execution-mode", "reuse", "--reuse-mode", route,
+                 "--reuse-workers", workerCount.first});
+      context.check(options.reuseWorkerCountSpecified &&
+                        options.reuseWorkerCount == workerCount.second,
+                    "reuse worker count is parsed on worker-splitting routes");
     }
   }
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                 "--reuse-mode", "serial", "--reuse-workers",
-                                 "1"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode",
+                   "serial", "--reuse-workers", "1"}));
       },
       "explicit reuse worker count 1 is rejected on the serial route");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                 "--reuse-mode", "serial", "--reuse-workers",
-                                 "2"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode",
+                   "serial", "--reuse-workers", "2"}));
       },
       "reuse worker count 2 is rejected on the serial route");
   context.expectThrows<ValidationError>(
@@ -177,52 +176,49 @@ void testReuseWorkers(Context& context) {
       },
       "reuse workers under the default serial reuse mode are rejected");
   context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(parse({"root", "--reuse-workers", "2"}));
-      },
+      [] { static_cast<void>(parse({"root", "--reuse-workers", "2"})); },
       "reuse workers under nonreuse execution are rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
-             "--reuse-workers", "0"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode",
+                   "frequency", "--reuse-workers", "0"}));
       },
       "zero reuse worker count is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
-             "--reuse-workers", "-1"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode",
+                   "frequency", "--reuse-workers", "-1"}));
       },
       "negative reuse worker count is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode", "range",
-             "--reuse-workers", "1.5"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode", "range",
+                   "--reuse-workers", "1.5"}));
       },
       "non-integral reuse worker count is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode", "range",
-             "--reuse-workers", "8", "--reuse-workers", "8"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode", "range",
+                   "--reuse-workers", "8", "--reuse-workers", "8"}));
       },
       "duplicate reuse workers option is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode", "range",
-             "--reuse-workers"}));
+        static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                 "--reuse-mode", "range", "--reuse-workers"}));
       },
       "missing reuse workers value is rejected");
 }
 
 void testFrequencyRouteTuning(Context& context) {
-  const CommandLineOptions frequencyRoute = parse(
-      {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
-       "--reuse-workers", "8", "--output-queue-capacity", "2",
-       "--memory-budget-mib", "4096", "--profile-frequency-tasks"});
+  const CommandLineOptions frequencyRoute =
+      parse({"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
+             "--reuse-workers", "8", "--output-queue-capacity", "2",
+             "--memory-budget-mib", "4096", "--profile-frequency-tasks"});
   context.check(frequencyRoute.reuseMode == ReuseMode::Frequency,
                 "frequency route is selected explicitly");
   context.check(frequencyRoute.reuseWorkerCount == 8U,
@@ -239,23 +235,23 @@ void testFrequencyRouteTuning(Context& context) {
   for (const std::string_view route : {"serial", "range"}) {
     context.expectThrows<ValidationError>(
         [&route] {
-          static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                   "--reuse-mode", route,
-                                   "--output-queue-capacity", "2"}));
+          static_cast<void>(
+              parse({"root", "--execution-mode", "reuse", "--reuse-mode", route,
+                     "--output-queue-capacity", "2"}));
         },
         "output queue tuning is rejected outside the frequency route");
     context.expectThrows<ValidationError>(
         [&route] {
-          static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                   "--reuse-mode", route,
-                                   "--memory-budget-mib", "4096"}));
+          static_cast<void>(
+              parse({"root", "--execution-mode", "reuse", "--reuse-mode", route,
+                     "--memory-budget-mib", "4096"}));
         },
         "memory budget tuning is rejected outside the frequency route");
     context.expectThrows<ValidationError>(
         [&route] {
-          static_cast<void>(parse({"root", "--execution-mode", "reuse",
-                                   "--reuse-mode", route,
-                                   "--profile-frequency-tasks"}));
+          static_cast<void>(
+              parse({"root", "--execution-mode", "reuse", "--reuse-mode", route,
+                     "--profile-frequency-tasks"}));
         },
         "frequency-task profiling is rejected outside the frequency route");
   }
@@ -265,9 +261,7 @@ void testFrequencyRouteTuning(Context& context) {
       },
       "output queue tuning without reuse execution is rejected");
   context.expectThrows<ValidationError>(
-      [] {
-        static_cast<void>(parse({"root", "--memory-budget-mib", "4096"}));
-      },
+      [] { static_cast<void>(parse({"root", "--memory-budget-mib", "4096"})); },
       "memory budget tuning without reuse execution is rejected");
   context.expectThrows<ValidationError>(
       [] { static_cast<void>(parse({"root", "--profile-frequency-tasks"})); },
@@ -311,9 +305,8 @@ void testInvalidArguments(Context& context) {
       "missing execution mode value is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--execution-mode",
-             "nonreuse"}));
+        static_cast<void>(parse({"root", "--execution-mode", "reuse",
+                                 "--execution-mode", "nonreuse"}));
       },
       "duplicate execution mode option is rejected");
   context.expectThrows<ValidationError>(
@@ -326,9 +319,9 @@ void testInvalidArguments(Context& context) {
       "negative queue capacity is rejected");
   context.expectThrows<ValidationError>(
       [] {
-        static_cast<void>(parse(
-            {"root", "--execution-mode", "reuse", "--reuse-mode", "frequency",
-             "--output-queue-capacity", "3"}));
+        static_cast<void>(
+            parse({"root", "--execution-mode", "reuse", "--reuse-mode",
+                   "frequency", "--output-queue-capacity", "3"}));
       },
       "queue capacity above the single-writer bound is rejected");
   context.expectThrows<ValidationError>(

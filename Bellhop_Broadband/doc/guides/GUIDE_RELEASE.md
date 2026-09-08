@@ -30,6 +30,11 @@ BROADBAND_BUILD_JOBS=4 uv run bash Bellhop_Broadband/scripts/engineering_gate.sh
 
 本地和 CI 均通过根目录 uv 环境运行 Python 驱动。
 
+format 门使用的 clang-format 由根目录 uv dev 依赖精确固定
+（`clang-format==21.1.8`），`check_format.sh` 会先打印实际 formatter
+路径与版本；脱离 uv 环境运行时回退到系统 formatter，版本漂移会直接
+体现在该输出中。
+
 ## 已验证的内部产物
 
 2026-08-01 在 Apple M4 / Darwin arm64 上以源提交 `b04ccbc` 运行上述工程门

@@ -18,8 +18,8 @@ namespace {
 
 }  // namespace
 
-FusedIntensityWorkspace::FusedIntensityWorkspace(
-    const ReceiverGrid& receivers, std::size_t frequencyCount)
+FusedIntensityWorkspace::FusedIntensityWorkspace(const ReceiverGrid& receivers,
+                                                 std::size_t frequencyCount)
     : rangeCount_(receivers.rangeCount()),
       depthCount_(receivers.receiversPerRange()),
       frequencyCount_(frequencyCount),
@@ -82,8 +82,8 @@ IntensityWorkspace FusedIntensityWorkspace::materializeIntensityFrequency(
   return workspace;
 }
 
-std::size_t FusedIntensityWorkspace::cellOffset(
-    std::size_t rangeIndex, std::size_t depthIndex) const {
+std::size_t FusedIntensityWorkspace::cellOffset(std::size_t rangeIndex,
+                                                std::size_t depthIndex) const {
   if (rangeIndex >= rangeCount_ || depthIndex >= depthCount_) {
     throw std::out_of_range("fused intensity-workspace index is out of range");
   }

@@ -216,9 +216,9 @@ void validateFusedRayCenteredInput(const FusedWorkspace& workspace,
 // lane's own active prefix. The frequency-independent normal is computed
 // separately over the union prefix (see accumulateFusedImpl).
 void precomputeFusedRayCenteredValuesForFrequency(
-    const RayPath& path, std::complex<double> epsilon,
-    std::size_t pointCount, BeamWidthMode widthMode,
-    std::size_t frequencyIndex, FusedRayCenteredRayValues& values) {
+    const RayPath& path, std::complex<double> epsilon, std::size_t pointCount,
+    BeamWidthMode widthMode, std::size_t frequencyIndex,
+    FusedRayCenteredRayValues& values) {
   for (std::size_t pointIndex = 0U; pointIndex < pointCount; ++pointIndex) {
     const RayState& point = path.points[pointIndex];
     const std::complex<double> p =
@@ -616,24 +616,20 @@ RayCenteredCervenyInfluence::accumulateImpl(
 }
 
 bool RayCenteredCervenyInfluence::accumulateFusedPrevalidated(
-    FusedPressureWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    FusedPressureWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   return accumulateFusedImpl<false>(workspace, frequencies, path,
                                     frequencyStates, epsilons, rangeBegin,
                                     rangeEnd, statistics);
 }
 
 bool RayCenteredCervenyInfluence::accumulateFusedIntensityPrevalidated(
-    FusedIntensityWorkspace& workspace,
-    std::span<const double> frequencies, const RayPath& path,
-    std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    FusedIntensityWorkspace& workspace, std::span<const double> frequencies,
+    const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   return accumulateFusedImpl<true>(workspace, frequencies, path,
                                    frequencyStates, epsilons, rangeBegin,
                                    rangeEnd, statistics);
@@ -666,9 +662,8 @@ template <bool IntensityPayload, typename Workspace>
 bool RayCenteredCervenyInfluence::accumulateFusedImpl(
     Workspace& workspace, std::span<const double> frequencies,
     const RayPath& path, std::span<const RayFrequencyState> frequencyStates,
-    std::span<const std::complex<double>> epsilons,
-    std::size_t rangeBegin, std::size_t rangeEnd,
-    CartesianCervenyStatistics* statistics) const {
+    std::span<const std::complex<double>> epsilons, std::size_t rangeBegin,
+    std::size_t rangeEnd, CartesianCervenyStatistics* statistics) const {
   static_cast<void>(statistics);
   // Entry-kind validation mirrors the public per-frequency entries.
   if constexpr (IntensityPayload) {
@@ -734,9 +729,8 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
     unionPrefix = std::max(unionPrefix, prefixPointCount);
     angularFrequency[frequencyIndex] =
         2.0 * std::numbers::pi * frequencyStates[frequencyIndex].frequency;
-    radiusMax[frequencyIndex] =
-        30.0 * path.points.front().soundSpeed /
-        frequencyStates[frequencyIndex].frequency;
+    radiusMax[frequencyIndex] = 30.0 * path.points.front().soundSpeed /
+                                frequencyStates[frequencyIndex].frequency;
   }
   const std::size_t fusedValueCount = unionPrefix * frequencyCount;
   FusedRayCenteredRayValues ray{
@@ -764,9 +758,8 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
     // and each lane's own prefix. Rectangular inactive tails are storage
     // only and are never read by the per-lane prefix gates.
     precomputeFusedRayCenteredValuesForFrequency(
-        path, epsilons[frequencyIndex],
-        activePrefixPointCount[frequencyIndex], widthMode_, frequencyIndex,
-        ray);
+        path, epsilons[frequencyIndex], activePrefixPointCount[frequencyIndex],
+        widthMode_, frequencyIndex, ray);
   }
 
   const double beamWindowSquared = static_cast<double>(settings_.beamWindow) *
@@ -816,8 +809,8 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
         // accepted step; per-lane legacy-exact evolution is bounded by that
         // lane's own active prefix (design §8).
         if (imageIndex != 0U) {
-          for (std::size_t frequencyIndex = 0U;
-               frequencyIndex < frequencyCount; ++frequencyIndex) {
+          for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencyCount;
+               ++frequencyIndex) {
             if (rightIndex < activePrefixPointCount[frequencyIndex]) {
               normalSign[frequencyIndex] = -normalSign[frequencyIndex];
             }
@@ -863,9 +856,9 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
           // Receiver run of this lane, intersected with the worker's
           // partition [rangeBegin, rangeEnd); the run anchors keep their
           // legacy values so later weights are unchanged by the clamp.
-          const std::size_t firstReceiverIndex1Based = std::max(
-              previousReceiverIndex1Based[frequencyIndex] + 1U,
-              rangeBegin + 1U);
+          const std::size_t firstReceiverIndex1Based =
+              std::max(previousReceiverIndex1Based[frequencyIndex] + 1U,
+                       rangeBegin + 1U);
           const std::size_t lastReceiverIndex1Based =
               std::min(upperReceiverIndex1Based, rangeEnd);
           const std::size_t leftFlatIndex =
@@ -885,12 +878,10 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
                 weight * (ray.q[rightFlatIndex] - ray.q[leftFlatIndex]);
             const std::complex<double> gamma =
                 ray.gamma[leftFlatIndex] +
-                weight *
-                    (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
+                weight * (ray.gamma[rightFlatIndex] - ray.gamma[leftFlatIndex]);
             const double normalOffsetInterpolated =
                 previousNormalOffset[frequencyIndex] +
-                weight *
-                    (normalOffset - previousNormalOffset[frequencyIndex]);
+                weight * (normalOffset - previousNormalOffset[frequencyIndex]);
             const double normalSquared =
                 normalOffsetInterpolated * normalOffsetInterpolated;
             requireFinite(weight, "ray-centered interpolation weight");
@@ -898,30 +889,26 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
             requireFiniteComplex(gamma, "ray-centered interpolated gamma");
             requireFinite(normalOffsetInterpolated,
                           "ray-centered normal offset");
-            if (gamma.imag() > 0.0 ||
-                -0.5 * angularFrequency[frequencyIndex] * gamma.imag() *
-                        normalSquared >=
-                    beamWindowSquared) {
+            if (gamma.imag() > 0.0 || -0.5 * angularFrequency[frequencyIndex] *
+                                              gamma.imag() * normalSquared >=
+                                          beamWindowSquared) {
               continue;
             }
-            const double soundSpeed =
-                path.points[rightIndex - 1U].soundSpeed;
+            const double soundSpeed = path.points[rightIndex - 1U].soundSpeed;
             const std::complex<double> tau =
                 frequencyStates[frequencyIndex]
                     .points[rightIndex - 1U]
                     .complexTravelTime +
-                weight *
-                    (frequencyStates[frequencyIndex]
-                         .points[rightIndex]
-                         .complexTravelTime -
-                     frequencyStates[frequencyIndex]
-                         .points[rightIndex - 1U]
-                         .complexTravelTime);
+                weight * (frequencyStates[frequencyIndex]
+                              .points[rightIndex]
+                              .complexTravelTime -
+                          frequencyStates[frequencyIndex]
+                              .points[rightIndex - 1U]
+                              .complexTravelTime);
             std::complex<double> contribution =
                 ratio *
                 frequencyStates[frequencyIndex].points[rightIndex].amplitude *
-                std::sqrt(soundSpeed * std::abs(epsilons[frequencyIndex]) /
-                          q) *
+                std::sqrt(soundSpeed * std::abs(epsilons[frequencyIndex]) / q) *
                 negativeImaginaryExponential(
                     angularFrequency[frequencyIndex] *
                         (tau + 0.5 * gamma * normalSquared) -
@@ -936,22 +923,19 @@ bool RayCenteredCervenyInfluence::accumulateFusedImpl(
                   normalOffsetInterpolated * contribution;
               const std::complex<double> alongDerivative =
                   std::complex<double>{0.0, -1.0} *
-                  angularFrequency[frequencyIndex] / soundSpeed *
-                  contribution;
+                  angularFrequency[frequencyIndex] / soundSpeed * contribution;
               if (fieldComponent_ == FieldComponent::Vertical) {
                 // Fortran DOT_PRODUCT conjugates its first argument when it
                 // is complex. Reflect that asymmetric legacy rule for V; the
                 // H branch below is handwritten and is not conjugated in
                 // Origin.
                 contribution =
-                    soundSpeed *
-                    (std::conj(normalDerivative) * slowness.range +
-                     std::conj(alongDerivative) * slowness.depth);
+                    soundSpeed * (std::conj(normalDerivative) * slowness.range +
+                                  std::conj(alongDerivative) * slowness.depth);
               } else {
                 contribution =
-                    soundSpeed *
-                    (-normalDerivative * slowness.depth +
-                     alongDerivative * slowness.range);
+                    soundSpeed * (-normalDerivative * slowness.depth +
+                                  alongDerivative * slowness.range);
               }
             }
             int kmah = ray.kmah[leftFlatIndex];

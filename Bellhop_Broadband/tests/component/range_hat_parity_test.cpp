@@ -1,5 +1,3 @@
-#include "broadband/solver/reuse_range_para_solver.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -20,6 +18,7 @@
 #include "broadband/field/pressure_scaling.hpp"
 #include "broadband/model/simulation_case.hpp"
 #include "broadband/model/sound_speed_evaluator.hpp"
+#include "broadband/solver/reuse_range_para_solver.hpp"
 #include "broadband/solver/reuse_serial_solver.hpp"
 #include "broadband/solver/single_frequency_solver.hpp"
 #include "support/munk_case_fixture.hpp"
@@ -64,13 +63,13 @@ using broadband::FieldComponent;
 using broadband::FrequencyGrid;
 using broadband::FrequencyProjector;
 using broadband::FrequencyWorkspace;
-using broadband::ReuseRangeParaSolver;
-using broadband::ReuseRangeParaStatistics;
 using broadband::GeometricHatInfluence;
-using broadband::IntensityWorkspace;
 using broadband::IntegratorSettings;
+using broadband::IntensityWorkspace;
 using broadband::LaunchFan;
 using broadband::ReceiverGrid;
+using broadband::ReuseRangeParaSolver;
+using broadband::ReuseRangeParaStatistics;
 using broadband::ReuseSerialResult;
 using broadband::ReuseSerialSolver;
 using broadband::SimulationCase;
@@ -82,8 +81,8 @@ using broadband::SoundSpeedPoint;
 using broadband::SoundSpeedProfile;
 using broadband::Source;
 using broadband::SourceBeamPattern;
-using broadband::WorkspaceDelivery;
 using broadband::supportsReuseRangePara;
+using broadband::WorkspaceDelivery;
 using broadband::test::Context;
 
 struct WorkspaceByteComparison {
@@ -118,8 +117,7 @@ struct WorkspaceByteComparison {
                       std::to_string(expected.size()) + " vs " +
                       std::to_string(actual.size()) + ")"};
   }
-  if (std::memcmp(expected.data(), actual.data(), expected.size_bytes()) ==
-      0) {
+  if (std::memcmp(expected.data(), actual.data(), expected.size_bytes()) == 0) {
     return {.equal = true, .detail = prefix};
   }
   for (std::size_t index = 0U; index < expected.size(); ++index) {
@@ -164,8 +162,7 @@ struct WorkspaceByteComparison {
                       std::to_string(expected.size()) + " vs " +
                       std::to_string(actual.size()) + ")"};
   }
-  if (std::memcmp(expected.data(), actual.data(), expected.size_bytes()) ==
-      0) {
+  if (std::memcmp(expected.data(), actual.data(), expected.size_bytes()) == 0) {
     return {.equal = true, .detail = prefix};
   }
   for (std::size_t index = 0U; index < expected.size(); ++index) {
@@ -180,8 +177,7 @@ struct WorkspaceByteComparison {
   return {.equal = false, .detail = prefix + " memcmp failed"};  // unreachable
 }
 
-[[nodiscard]] const char* coordinateLabel(
-    CervenyCoordinateSystem coordinates) {
+[[nodiscard]] const char* coordinateLabel(CervenyCoordinateSystem coordinates) {
   return coordinates == CervenyCoordinateSystem::RayCentered ? "RC" : "CC";
 }
 
@@ -198,8 +194,8 @@ struct WorkspaceByteComparison {
           broadband::SspInterpolationKind::CLinear),
       Source{.depth = 1000.0, .amplitude = 1.0},
       ReceiverGrid({0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0},
-                   {0.0, 1250.0, 2500.0, 3750.0, 5000.0, 6250.0, 7500.0,
-                    8750.0, 10000.0}),
+                   {0.0, 1250.0, 2500.0, 3750.0, 5000.0, 6250.0, 7500.0, 8750.0,
+                    10000.0}),
       frequencies,
       LaunchFan{.minimumAngle = -12.0 * kRadiansPerDegree,
                 .maximumAngle = 12.0 * kRadiansPerDegree,
@@ -230,20 +226,20 @@ struct WorkspaceByteComparison {
                    .depth = 100.0, .soundSpeed = 1500.0, .density = 1000.0}}),
           broadband::BoundaryModel::vacuum(0.0),
           broadband::BoundaryModel::acousticHalfSpace(
-              100.0, AcousticMaterial{
-                         .compressionalSoundSpeed = 1700.0,
-                         .shearSoundSpeed = 0.0,
-                         .density = 1800.0,
-                         .compressionalAttenuation = {
-                             .value = 10.0,
-                             .unit = AttenuationUnit::DecibelsPerMeterPowerLaw,
-                             .referenceFrequency = 1000.0,
-                             .powerLawExponent = 2.0,
-                             .transitionFrequency = 1.0e9}})),
+              100.0,
+              AcousticMaterial{
+                  .compressionalSoundSpeed = 1700.0,
+                  .shearSoundSpeed = 0.0,
+                  .density = 1800.0,
+                  .compressionalAttenuation =
+                      {.value = 10.0,
+                       .unit = AttenuationUnit::DecibelsPerMeterPowerLaw,
+                       .referenceFrequency = 1000.0,
+                       .powerLawExponent = 2.0,
+                       .transitionFrequency = 1.0e9}})),
       Source{.depth = 50.0, .amplitude = 1.0},
       ReceiverGrid({10.0, 55.0, 100.0},
-                   {10.0, 21.25, 32.5, 43.75, 55.0, 66.25, 77.5, 88.75,
-                    100.0}),
+                   {10.0, 21.25, 32.5, 43.75, 55.0, 66.25, 77.5, 88.75, 100.0}),
       FrequencyGrid({100.0, 1000.0}),
       LaunchFan{.minimumAngle = -60.0 * kRadiansPerDegree,
                 .maximumAngle = 60.0 * kRadiansPerDegree,
@@ -283,8 +279,8 @@ void checkDivergentPrefixes(Context& context,
   std::size_t truncatedRays = 0U;
   for (const broadband::RayPath& path : cache.paths()) {
     std::vector<std::size_t> prefixes(frequencies.size());
-    for (std::size_t frequencyIndex = 0U;
-         frequencyIndex < frequencies.size(); ++frequencyIndex) {
+    for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
+         ++frequencyIndex) {
       prefixes[frequencyIndex] = activePrefixLength(
           projector.project(path, frequencies[frequencyIndex], 1.0));
     }
@@ -300,10 +296,9 @@ void checkDivergentPrefixes(Context& context,
       ++truncatedRays;
     }
   }
-  std::cout << "range-hat-parity " << label
-            << ": rays=" << cache.size() << " divergent-prefix rays="
-            << divergentRays << " cutoff-truncated rays=" << truncatedRays
-            << '\n';
+  std::cout << "range-hat-parity " << label << ": rays=" << cache.size()
+            << " divergent-prefix rays=" << divergentRays
+            << " cutoff-truncated rays=" << truncatedRays << '\n';
   context.check(divergentRays > 0U && truncatedRays > 0U,
                 std::string(label) +
                     " Fixture B prefixes genuinely diverge across frequencies "
@@ -407,8 +402,8 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
     const broadband::FusedAccumulationResult fused =
         ReuseRangeParaSolver::accumulateFrequencies(
             simulation, trace.cache, 1.0, 50.0, settings,
-            broadband::ReuseRangeParaExecutionSettings{
-                .requestedRangeWorkers = workerCount});
+            broadband::ReuseRangeParaExecutionSettings{.requestedRangeWorkers =
+                                                           workerCount});
     context.check(
         fused.rawWorkspace.frequencyCount() == frequencies.size() &&
             fused.rayCount == trace.cache.size() &&
@@ -416,44 +411,46 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
             fused.requestedRangeWorkers == workerCount &&
             fused.effectiveRangeWorkers ==
                 std::min(workerCount, simulation.receivers().rangeCount()),
-        std::string(label) + " Level B result carries every frequency and "
-                             "the shared cache metrics");
+        std::string(label) +
+            " Level B result carries every frequency and "
+            "the shared cache metrics");
     context.check(fused.timings.traceSeconds == 0.0 &&
                       fused.timings.scaleSeconds == 0.0 &&
                       fused.timings.projectSeconds >= 0.0 &&
                       fused.timings.influenceSeconds >= 0.0,
-                  std::string(label) + " Level B timings follow the raw seam "
-                                       "contract (no scale time, block "
-                                       "phases)");
+                  std::string(label) +
+                      " Level B timings follow the raw seam "
+                      "contract (no scale time, block "
+                      "phases)");
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
          ++frequencyIndex) {
       const FrequencyWorkspace fusedWorkspace =
-          fused.rawWorkspace.materializeFrequency(
-              frequencyIndex, frequencies[frequencyIndex],
-              simulation.receivers());
+          fused.rawWorkspace.materializeFrequency(frequencyIndex,
+                                                  frequencies[frequencyIndex],
+                                                  simulation.receivers());
       const WorkspaceByteComparison levelB = memcmpPressureSpan(
           rawReuseConverted[frequencyIndex], fusedWorkspace, frequencyIndex);
-      context.check(levelB.equal,
-                    std::string(label) + " Level B raw pressure bitwise "
-                                        "parity: " +
-                        levelB.detail);
+      context.check(levelB.equal, std::string(label) +
+                                      " Level B raw pressure bitwise "
+                                      "parity: " +
+                                      levelB.detail);
     }
   } else {
     const broadband::FusedIntensityAccumulationResult fused =
         ReuseRangeParaSolver::accumulateFrequenciesIntensity(
             simulation, trace.cache, 1.0, 50.0, settings,
-            broadband::ReuseRangeParaExecutionSettings{
-                .requestedRangeWorkers = workerCount});
+            broadband::ReuseRangeParaExecutionSettings{.requestedRangeWorkers =
+                                                           workerCount});
     context.check(
-        fused.rawIntensityWorkspace.frequencyCount() ==
-                frequencies.size() &&
+        fused.rawIntensityWorkspace.frequencyCount() == frequencies.size() &&
             fused.rayCount == trace.cache.size() &&
             fused.rayCacheBytes == trace.cache.memoryFootprintBytes() &&
             fused.requestedRangeWorkers == workerCount &&
             fused.effectiveRangeWorkers ==
                 std::min(workerCount, simulation.receivers().rangeCount()),
-        std::string(label) + " Level B result carries every frequency and "
-                             "the shared cache metrics");
+        std::string(label) +
+            " Level B result carries every frequency and "
+            "the shared cache metrics");
     for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
          ++frequencyIndex) {
       const IntensityWorkspace fusedWorkspace =
@@ -462,24 +459,24 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
               simulation.receivers());
       const WorkspaceByteComparison levelB = memcmpIntensitySpan(
           rawReuseIntensity[frequencyIndex], fusedWorkspace, frequencyIndex);
-      context.check(levelB.equal,
-                    std::string(label) + " Level B raw intensity bitwise "
-                                        "parity: " +
-                        levelB.detail);
+      context.check(levelB.equal, std::string(label) +
+                                      " Level B raw intensity bitwise "
+                                      "parity: " +
+                                      levelB.detail);
       // Converted seam: the same scaleGeometricIntensityToPressure call the
       // fused sink chain makes (family-based selector — Hat in both
       // coordinate systems) must reproduce the production solver's raw
       // delivery byte for byte.
       const FrequencyWorkspace fusedConverted =
           broadband::scaleGeometricIntensityToPressure(
-              fusedWorkspace, simulation.receivers(),
-              launchFan.launchAngleStep, sourceSoundSpeed,
-              simulation.sourceGeometry());
+              fusedWorkspace, simulation.receivers(), launchFan.launchAngleStep,
+              sourceSoundSpeed, simulation.sourceGeometry());
       const WorkspaceByteComparison levelBConverted = memcmpPressureSpan(
           rawReuseConverted[frequencyIndex], fusedConverted, frequencyIndex);
       context.check(levelBConverted.equal,
-                    std::string(label) + " Level B converted seam bitwise "
-                                        "parity: " +
+                    std::string(label) +
+                        " Level B converted seam bitwise "
+                        "parity: " +
                         levelBConverted.detail);
     }
   }
@@ -502,8 +499,8 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
             streamed.at(frequencyIndex).emplace(std::move(sourceWorkspaces));
           },
           settings, true,
-          broadband::ReuseRangeParaExecutionSettings{
-              .requestedRangeWorkers = workerCount});
+          broadband::ReuseRangeParaExecutionSettings{.requestedRangeWorkers =
+                                                         workerCount});
 
   context.check(
       fusedStatistics.requestedRangeWorkers == workerCount &&
@@ -511,39 +508,39 @@ void testParityLevels(Context& context, const SimulationCase& simulation,
               std::min(workerCount, simulation.receivers().rangeCount()),
       std::string(label) + " Level C reports requested/effective workers");
 
-  context.check(
-      callbackOrder.size() == frequencies.size() &&
-          std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
-      std::string(label) + " Level C Range Reuse consumer visits every frequency "
-                           "in index order");
+  context.check(callbackOrder.size() == frequencies.size() &&
+                    std::is_sorted(callbackOrder.begin(), callbackOrder.end()),
+                std::string(label) +
+                    " Level C Range Reuse consumer visits every frequency "
+                    "in index order");
   for (std::size_t frequencyIndex = 0U; frequencyIndex < frequencies.size();
        ++frequencyIndex) {
-    context.check(
-        streamed[frequencyIndex].has_value() &&
-            streamed[frequencyIndex]->size() == 1U &&
-            streamedScaleSeconds[frequencyIndex] >= 0.0,
-        std::string(label) + " Level C captured converted fused workspace "
-                             "and scale timing for frequency index " +
-            std::to_string(frequencyIndex));
+    context.check(streamed[frequencyIndex].has_value() &&
+                      streamed[frequencyIndex]->size() == 1U &&
+                      streamedScaleSeconds[frequencyIndex] >= 0.0,
+                  std::string(label) +
+                      " Level C captured converted fused workspace "
+                      "and scale timing for frequency index " +
+                      std::to_string(frequencyIndex));
     const WorkspaceByteComparison levelC = memcmpPressureSpan(
         serial.frequencyResults[frequencyIndex].workspaces.front(),
         streamed[frequencyIndex]->front(), frequencyIndex);
-    context.check(levelC.equal,
-                  std::string(label) + " Level C scaled workspace bitwise "
-                                      "parity: " +
-                      levelC.detail);
+    context.check(levelC.equal, std::string(label) +
+                                    " Level C scaled workspace bitwise "
+                                    "parity: " +
+                                    levelC.detail);
   }
 
   // Level A: the fused fingerprint is stable and equals the serial reuse
   // fingerprint.
-  context.check(
-      fusedStatistics.cacheFingerprintVerified &&
-          fusedStatistics.cacheFingerprintBefore ==
-              fusedStatistics.cacheFingerprintAfter &&
-          fusedStatistics.cacheFingerprintBefore ==
-              serial.statistics.cacheFingerprintBefore,
-      std::string(label) + " Level A Range Reuse cache fingerprint is stable and "
-                           "matches serial reuse");
+  context.check(fusedStatistics.cacheFingerprintVerified &&
+                    fusedStatistics.cacheFingerprintBefore ==
+                        fusedStatistics.cacheFingerprintAfter &&
+                    fusedStatistics.cacheFingerprintBefore ==
+                        serial.statistics.cacheFingerprintBefore,
+                std::string(label) +
+                    " Level A Range Reuse cache fingerprint is stable and "
+                    "matches serial reuse");
 }
 
 void testMode(Context& context, SimulationRunMode runMode,
@@ -553,20 +550,19 @@ void testMode(Context& context, SimulationRunMode runMode,
         CervenyCoordinateSystem::RayCentered}) {
     const char* const coordinatesLabel = coordinateLabel(coordinates);
     // Fixture A: Munk hat, both coordinates.
-    testParityLevels(
-        context, makeMunkHatCase(runMode, coordinates),
-        CartesianCervenySettings{},
-        (std::string("fixture A (munk hat ") + coordinatesLabel + ' ' +
-         modeLabel + ')')
-            .c_str());
+    testParityLevels(context, makeMunkHatCase(runMode, coordinates),
+                     CartesianCervenySettings{},
+                     (std::string("fixture A (munk hat ") + coordinatesLabel +
+                      ' ' + modeLabel + ')')
+                         .c_str());
     // Worker-count gate (Level D): 16 frequencies and >= 8 real ranges,
     // every requested worker count gated against the same serial reference.
     {
       const SimulationCase parallelSimulation = makeMunkHatCase(
           runMode, coordinates,
-          FrequencyGrid({50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0,
-                         400.0, 450.0, 500.0, 550.0, 600.0, 650.0, 700.0,
-                         750.0, 800.0}));
+          FrequencyGrid({50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0,
+                         450.0, 500.0, 550.0, 600.0, 650.0, 700.0, 750.0,
+                         800.0}));
       for (const std::size_t workerCount : {1U, 2U, 4U, 8U}) {
         const std::string label =
             "fixture A parallel (16F, " + std::to_string(workerCount) +
@@ -584,11 +580,10 @@ void testMode(Context& context, SimulationRunMode runMode,
           makeDivergentPrefixHatCase(runMode, coordinates);
       const broadband::RayFanTraceResult trace =
           SingleFrequencySolver::traceSourceFan(simulation, 0U);
-      checkDivergentPrefixes(
-          context, trace.cache, simulation,
-          (std::string("fixture B (lossy halfspace, hat ") + coordinatesLabel +
-           ' ' + modeLabel + ')')
-              .c_str());
+      checkDivergentPrefixes(context, trace.cache, simulation,
+                             (std::string("fixture B (lossy halfspace, hat ") +
+                              coordinatesLabel + ' ' + modeLabel + ')')
+                                 .c_str());
       testParityLevels(
           context, simulation, CartesianCervenySettings{},
           (std::string("fixture B parallel (lossy halfspace, 8 workers, hat ") +
@@ -608,12 +603,11 @@ int main() {
   // broadband.reuse.range.solver; one assertion here keeps the parity
   // test honest about the domain it exercises.
   context.check(
-      supportsReuseRangePara(makeMunkHatCase(SimulationRunMode::Coherent,
-                                            CervenyCoordinateSystem::
-                                                Cartesian)) &&
-          supportsReuseRangePara(makeMunkHatCase(
-              SimulationRunMode::SemiCoherent,
-              CervenyCoordinateSystem::RayCentered)),
+      supportsReuseRangePara(makeMunkHatCase(
+          SimulationRunMode::Coherent, CervenyCoordinateSystem::Cartesian)) &&
+          supportsReuseRangePara(
+              makeMunkHatCase(SimulationRunMode::SemiCoherent,
+                              CervenyCoordinateSystem::RayCentered)),
       "the fused-support predicate accepts hat fixtures in both coordinates "
       "and modes");
 

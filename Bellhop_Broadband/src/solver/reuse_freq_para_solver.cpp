@@ -93,11 +93,13 @@ void accumulateProjectionTimings(SingleFrequencyTimings& total,
       frequencyCount,
       checkedAdd(checkedAdd(activeFrequencyLimit, queueCapacity,
                             "Frequency Reuse workspace count overflows size_t"),
-                 1U, "Frequency Reuse consumer workspace count overflows size_t"));
+                 1U,
+                 "Frequency Reuse consumer workspace count overflows size_t"));
   return checkedAdd(
       rayCacheBytes,
-      checkedMultiply(simultaneousWorkspaceCount, workspaceByteCount,
-                      "Frequency Reuse workspace memory estimate overflows size_t"),
+      checkedMultiply(
+          simultaneousWorkspaceCount, workspaceByteCount,
+          "Frequency Reuse workspace memory estimate overflows size_t"),
       "Frequency Reuse peak memory estimate overflows size_t");
 }
 
@@ -139,8 +141,8 @@ void recordFailure(WorkState& state, std::exception_ptr failure) {
 ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
     const SimulationCase& simulation, double epsilonMultiplier,
     double loopRange, const RayReuseFrequencyConsumer& consumer,
-    ReuseFreqParaSettings settings,
-    CartesianCervenySettings influenceSettings, bool verifyCacheFingerprint) {
+    ReuseFreqParaSettings settings, CartesianCervenySettings influenceSettings,
+    bool verifyCacheFingerprint) {
   if (!consumer) {
     throw ValidationError(
         "Frequency Reuse frequency consumer must be callable");
@@ -178,9 +180,9 @@ ReuseFreqParaStatistics ReuseFreqParaSolver::solveStreaming(
   const std::size_t effectiveQueueCapacity =
       std::min(settings.outputQueueCapacity, frequencyCount);
   // One frequency product now spans every source's workspace.
-  const std::size_t frequencyWorkspaceBytes =
-      checkedMultiply(workspaceBytes(simulation), sourceCount,
-                      "Frequency Reuse frequency workspace bytes overflows size_t");
+  const std::size_t frequencyWorkspaceBytes = checkedMultiply(
+      workspaceBytes(simulation), sourceCount,
+      "Frequency Reuse frequency workspace bytes overflows size_t");
   const std::size_t activeFrequencyLimit = selectActiveFrequencyLimit(
       frequencyCount, settings.workerCount, effectiveQueueCapacity,
       totalCacheBytes, frequencyWorkspaceBytes, settings.memoryBudgetBytes);

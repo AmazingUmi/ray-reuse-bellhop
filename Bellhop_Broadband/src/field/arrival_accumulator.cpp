@@ -10,8 +10,7 @@ namespace {
 
 constexpr double kArrivalPhaseTolerance = static_cast<double>(0.05F);
 
-[[nodiscard]] Arrival storedFromCandidate(
-    const ArrivalCandidate& candidate) {
+[[nodiscard]] Arrival storedFromCandidate(const ArrivalCandidate& candidate) {
   return Arrival{static_cast<float>(candidate.amplitude),
                  static_cast<float>(candidate.phaseRadians),
                  static_cast<std::complex<float>>(candidate.delaySeconds),
@@ -46,7 +45,8 @@ void addArrivalCandidate(std::vector<Arrival>& lane,
     throw ValidationError("arrival lane capacity must be positive");
   }
   if (!std::isfinite(omega) || omega <= 0.0) {
-    throw ValidationError("arrival angular frequency must be positive and finite");
+    throw ValidationError(
+        "arrival angular frequency must be positive and finite");
   }
   const std::size_t count = lane.size();
   bool groups = false;

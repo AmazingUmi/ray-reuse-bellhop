@@ -592,8 +592,8 @@ void testStatisticsAreOptInAndCountHotPathWork(Context& context) {
 
   FrequencyWorkspace unprofiledWorkspace(50.0, receivers);
   CartesianCervenyStatistics unprofiledStatistics;
-  static_cast<void>(influence.accumulate(unprofiledWorkspace, path, state,
-                                         {0.0, 100.0}));
+  static_cast<void>(
+      influence.accumulate(unprofiledWorkspace, path, state, {0.0, 100.0}));
   context.check(
       unprofiledStatistics.rayAccumulations == 0U &&
           unprofiledStatistics.segmentCandidates == 0U &&

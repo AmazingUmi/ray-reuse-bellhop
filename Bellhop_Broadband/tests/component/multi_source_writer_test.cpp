@@ -28,23 +28,23 @@
 #include "broadband/io/shd_writer.hpp"
 #include "broadband/model/environment.hpp"
 #include "broadband/model/simulation_case.hpp"
-#include "broadband/solver/reuse_range_para_solver.hpp"
 #include "broadband/solver/ray_trace_product.hpp"
+#include "broadband/solver/reuse_range_para_solver.hpp"
 #include "broadband/solver/single_frequency_solver.hpp"
 #include "support/test_harness.hpp"
 
 namespace {
 
-using broadband::ArrivalEncoding;
 using broadband::ArrivalAccumulationStatistics;
 using broadband::ArrivalCandidate;
+using broadband::ArrivalEncoding;
 using broadband::ArrivalWorkspace;
 using broadband::ArrivalWriter;
-using broadband::BroadbandArrivalWorkspace;
-using broadband::BroadbandArrivalWriterSet;
 using broadband::BeamFamily;
 using broadband::BoundaryCurvatureMode;
 using broadband::BoundaryModel;
+using broadband::BroadbandArrivalWorkspace;
+using broadband::BroadbandArrivalWriterSet;
 using broadband::EigenrayHit;
 using broadband::EigenrayWriter;
 using broadband::Environment;
@@ -492,8 +492,7 @@ ArrivalCandidate writerFixtureCandidate(std::size_t sourceIndex,
       .bottomBounceCount = static_cast<std::int32_t>(encounterIndex)};
 }
 
-void populateWriterFixture(ArrivalWorkspace& workspace,
-                           std::size_t sourceIndex,
+void populateWriterFixture(ArrivalWorkspace& workspace, std::size_t sourceIndex,
                            std::size_t frequencyIndex) {
   for (std::size_t depthIndex = 0U; depthIndex < workspace.depthCount();
        ++depthIndex) {
@@ -518,10 +517,10 @@ BroadbandArrivalWorkspace makeBroadbandWriterFixture(
   ArrivalAccumulationStatistics statistics;
   for (std::size_t frequencyIndex = 0U;
        frequencyIndex < simulation.frequencies().size(); ++frequencyIndex) {
-    for (std::size_t depthIndex = 0U;
-         depthIndex < workspace.depthCount(); ++depthIndex) {
-      for (std::size_t rangeIndex = 0U;
-           rangeIndex < workspace.rangeCount(); ++rangeIndex) {
+    for (std::size_t depthIndex = 0U; depthIndex < workspace.depthCount();
+         ++depthIndex) {
+      for (std::size_t rangeIndex = 0U; rangeIndex < workspace.rangeCount();
+           ++rangeIndex) {
         for (std::size_t encounterIndex = 0U; encounterIndex < 2U;
              ++encounterIndex) {
           workspace.addCandidate(
@@ -540,17 +539,14 @@ void checkBroadbandArrivalWriterByteIdentity(Context& context,
                                              ArrivalEncoding encoding) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers({25.0, 50.0}, {10.0, 55.0, 100.0});
-  const SimulationRunMode mode =
-      encoding == ArrivalEncoding::Ascii
-          ? SimulationRunMode::AsciiArrivals
-          : SimulationRunMode::BinaryArrivals;
-  const SimulationCase simulation =
-      makeCase(dualSources(), receivers, {50.0, 100.0}, mode,
-               BeamFamily::GeometricHat);
+  const SimulationRunMode mode = encoding == ArrivalEncoding::Ascii
+                                     ? SimulationRunMode::AsciiArrivals
+                                     : SimulationRunMode::BinaryArrivals;
+  const SimulationCase simulation = makeCase(
+      dualSources(), receivers, {50.0, 100.0}, mode, BeamFamily::GeometricHat);
 
   std::vector<std::vector<ArrivalWorkspace>> legacyByFrequency(2U);
-  for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U;
-       ++frequencyIndex) {
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U; ++frequencyIndex) {
     for (std::size_t sourceIndex = 0U; sourceIndex < 2U; ++sourceIndex) {
       legacyByFrequency[frequencyIndex].emplace_back(
           simulation.frequencies().values()[frequencyIndex], receivers);
@@ -561,14 +557,12 @@ void checkBroadbandArrivalWriterByteIdentity(Context& context,
 
   std::vector<std::filesystem::path> expectedPaths;
   std::vector<std::filesystem::path> fusedPaths;
-  for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U;
-       ++frequencyIndex) {
-    expectedPaths.push_back(directory.path() /
-                            ("legacy_" + std::to_string(frequencyIndex) +
-                             ".arr"));
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U; ++frequencyIndex) {
+    expectedPaths.push_back(
+        directory.path() /
+        ("legacy_" + std::to_string(frequencyIndex) + ".arr"));
     fusedPaths.push_back(directory.path() /
-                         ("fused_" + std::to_string(frequencyIndex) +
-                          ".arr"));
+                         ("fused_" + std::to_string(frequencyIndex) + ".arr"));
     ArrivalWriter::write(expectedPaths.back(), "Broadband byte identity",
                          simulation, legacyByFrequency[frequencyIndex],
                          encoding);
@@ -583,14 +577,13 @@ void checkBroadbandArrivalWriterByteIdentity(Context& context,
   }
   writers.finalize();
 
-  for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U;
-       ++frequencyIndex) {
+  for (std::size_t frequencyIndex = 0U; frequencyIndex < 2U; ++frequencyIndex) {
     context.check(readBytes(expectedPaths[frequencyIndex]) ==
                       readBytes(fusedPaths[frequencyIndex]),
                   "broadband ARR frequency view is byte-identical to legacy");
-    context.check(!std::filesystem::exists(
-                      fusedPaths[frequencyIndex].string() + ".tmp"),
-                  "broadband ARR finalize removes the temporary product");
+    context.check(
+        !std::filesystem::exists(fusedPaths[frequencyIndex].string() + ".tmp"),
+        "broadband ARR finalize removes the temporary product");
   }
 }
 
@@ -613,16 +606,15 @@ void testBroadbandArrivalWriterRollback(Context& context) {
     output << secondSentinel;
   }
 
-  BroadbandArrivalWriterSet writers(paths, "Rollback", simulation,
-                                    ArrivalEncoding::Ascii,
-                                    {.beforeFrequencyPublish =
-                                         [](std::size_t frequencyIndex) {
-                                           if (frequencyIndex == 1U) {
-                                             throw broadband::BellhopError(
-                                                 "injected publication "
-                                                 "failure");
-                                           }
-                                         }});
+  BroadbandArrivalWriterSet writers(
+      paths, "Rollback", simulation, ArrivalEncoding::Ascii,
+      {.beforeFrequencyPublish = [](std::size_t frequencyIndex) {
+        if (frequencyIndex == 1U) {
+          throw broadband::BellhopError(
+              "injected publication "
+              "failure");
+        }
+      }});
   const BroadbandArrivalWorkspace workspace =
       makeBroadbandWriterFixture(simulation, 0U);
   writers.appendSource(0U, workspace);
@@ -641,28 +633,27 @@ void testBroadbandArrivalWriterRollback(Context& context) {
                 "broadband ARR rollback restores a pre-existing final");
   context.check(restoredSecondText == secondSentinel,
                 "broadband ARR rollback preserves every existing final");
-  context.check(!std::filesystem::exists(paths.front().string() + ".tmp") &&
-                    !std::filesystem::exists(paths.front().string() +
-                                             ".broadband-backup") &&
-                    !std::filesystem::exists(paths[1U].string() + ".tmp") &&
-                    !std::filesystem::exists(paths[1U].string() +
-                                             ".broadband-backup"),
-                "broadband ARR rollback preserves existing targets and leaves "
-                "no temporary or backup artifacts");
+  context.check(
+      !std::filesystem::exists(paths.front().string() + ".tmp") &&
+          !std::filesystem::exists(paths.front().string() +
+                                   ".broadband-backup") &&
+          !std::filesystem::exists(paths[1U].string() + ".tmp") &&
+          !std::filesystem::exists(paths[1U].string() + ".broadband-backup"),
+      "broadband ARR rollback preserves existing targets and leaves "
+      "no temporary or backup artifacts");
 }
 
 void testArrivalWriterConstructorFailureCleansTemporary(Context& context) {
   TemporaryDirectory directory;
   const ReceiverGrid receivers({25.0}, {10.0});
-  const SimulationCase simulation = makeSingleSourceCase(
-      receivers, {50.0}, SimulationRunMode::AsciiArrivals,
-      BeamFamily::GeometricHat);
+  const SimulationCase simulation =
+      makeSingleSourceCase(receivers, {50.0}, SimulationRunMode::AsciiArrivals,
+                           BeamFamily::GeometricHat);
   const std::filesystem::path path = directory.path() / "header.arr";
   context.expectThrows<broadband::BellhopError>(
       [&] {
         ArrivalWriter writer(
-            path, "Header failure", simulation, 50.0,
-            ArrivalEncoding::Ascii,
+            path, "Header failure", simulation, 50.0, ArrivalEncoding::Ascii,
             {.afterTemporaryOpen = [] {
               throw broadband::BellhopError("injected header failure");
             }});
@@ -703,8 +694,8 @@ void testFusedArrivalSourceStreamingContract(Context& context) {
                    depthIndex < workspace.depthCount(); ++depthIndex) {
                 for (std::size_t rangeIndex = 0U;
                      rangeIndex < workspace.rangeCount(); ++rangeIndex) {
-                  const auto lane = workspace.laneAt(
-                      rangeIndex, depthIndex, frequencyIndex);
+                  const auto lane =
+                      workspace.laneAt(rangeIndex, depthIndex, frequencyIndex);
                   const auto projected =
                       view.arrivalsAt(depthIndex, rangeIndex);
                   context.check(

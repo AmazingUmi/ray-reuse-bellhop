@@ -5,8 +5,8 @@
 #include <span>
 #include <vector>
 
-#include "broadband/field/arrival_accumulator.hpp"
 #include "broadband/field/arrival.hpp"
+#include "broadband/field/arrival_accumulator.hpp"
 #include "broadband/model/simulation_case.hpp"
 
 namespace broadband {
@@ -38,12 +38,11 @@ class BroadbandArrivalWorkspace {
     [[nodiscard]] const ArrivalCapacityPlan& capacity() const noexcept;
     [[nodiscard]] std::size_t flatIndex(std::size_t depthIndex,
                                         std::size_t rangeIndex) const;
-    [[nodiscard]] std::span<const Arrival> cellAt(
-        std::size_t cellIndex) const;
+    [[nodiscard]] std::span<const Arrival> cellAt(std::size_t cellIndex) const;
     [[nodiscard]] std::span<const Arrival> arrivalsAt(
         std::size_t depthIndex, std::size_t rangeIndex) const;
-    [[nodiscard]] std::size_t arrivalCountAt(
-        std::size_t depthIndex, std::size_t rangeIndex) const;
+    [[nodiscard]] std::size_t arrivalCountAt(std::size_t depthIndex,
+                                             std::size_t rangeIndex) const;
 
    private:
     friend class BroadbandArrivalWorkspace;
@@ -67,8 +66,8 @@ class BroadbandArrivalWorkspace {
   [[nodiscard]] const ArrivalCapacityPlan& capacity() const noexcept;
 
   void addCandidate(std::size_t frequencyIndex,
-                    const ArrivalCandidate& candidate,
-                    std::size_t depthIndex, std::size_t rangeIndex,
+                    const ArrivalCandidate& candidate, std::size_t depthIndex,
+                    std::size_t rangeIndex,
                     ArrivalAccumulationStatistics& localStatistics);
 
   // Narrow mutable seam for the shared AddArr primitive introduced by B02.
@@ -83,8 +82,7 @@ class BroadbandArrivalWorkspace {
 
   // Read-only, zero-copy projection using the legacy ArrivalWorkspace cell
   // traversal contract (depth-major flat cell indexing).
-  [[nodiscard]] FrequencyView frequencyView(
-      std::size_t frequencyIndex) const;
+  [[nodiscard]] FrequencyView frequencyView(std::size_t frequencyIndex) const;
 
   [[nodiscard]] BroadbandArrivalStorageStatistics storageStatistics() const;
 

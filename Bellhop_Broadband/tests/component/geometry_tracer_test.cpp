@@ -204,9 +204,9 @@ void testSecondOrderStepConvergence(Context& context) {
   const RayPath fine = traceLinearGradient(10.0);
   const RayPath reference = traceLinearGradient(0.3125);
   const double coarseError = broadband::norm(coarse.points.back().position -
-                                            reference.points.back().position);
+                                             reference.points.back().position);
   const double fineError = broadband::norm(fine.points.back().position -
-                                          reference.points.back().position);
+                                           reference.points.back().position);
 
   context.check(
       coarse.terminationReason == RayTerminationReason::PointLimit &&

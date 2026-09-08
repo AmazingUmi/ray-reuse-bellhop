@@ -21,8 +21,8 @@ class FusedPressureWorkspace {
   [[nodiscard]] std::size_t rangeCount() const noexcept;
   [[nodiscard]] std::size_t depthCount() const noexcept;
   [[nodiscard]] std::size_t frequencyCount() const noexcept;
-  [[nodiscard]] std::span<std::complex<double>> cell(
-      std::size_t rangeIndex, std::size_t depthIndex);
+  [[nodiscard]] std::span<std::complex<double>> cell(std::size_t rangeIndex,
+                                                     std::size_t depthIndex);
   [[nodiscard]] std::span<const std::complex<double>> cell(
       std::size_t rangeIndex, std::size_t depthIndex) const;
 

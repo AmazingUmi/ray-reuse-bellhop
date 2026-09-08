@@ -23,11 +23,11 @@
 #include "broadband/io/ray_writer.hpp"
 #include "broadband/io/shd_writer.hpp"
 #include "broadband/solver/arrival_solver.hpp"
-#include "broadband/solver/nonreuse_solver.hpp"
 #include "broadband/solver/eigenray_solver.hpp"
-#include "broadband/solver/reuse_range_para_solver.hpp"
-#include "broadband/solver/reuse_freq_para_solver.hpp"
+#include "broadband/solver/nonreuse_solver.hpp"
 #include "broadband/solver/ray_trace_product.hpp"
+#include "broadband/solver/reuse_freq_para_solver.hpp"
+#include "broadband/solver/reuse_range_para_solver.hpp"
 #include "broadband/solver/reuse_serial_solver.hpp"
 #include "broadband/solver/single_frequency_solver.hpp"
 
@@ -188,7 +188,7 @@ void removeArtifact(const std::filesystem::path& path) {
   const bool removed = std::filesystem::remove(path, error);
   if (error) {
     throw broadband::BellhopError("unable to remove stale product " +
-                                 path.string() + ": " + error.message());
+                                  path.string() + ": " + error.message());
   }
   static_cast<void>(removed);
 }
@@ -241,7 +241,7 @@ void removeProductArtifacts(const std::string& fileRoot) {
   }
   if (iteratorError) {
     throw broadband::BellhopError("unable to scan stale products for " +
-                                 fileRoot + ": " + iteratorError.message());
+                                  fileRoot + ": " + iteratorError.message());
   }
 }
 
@@ -269,7 +269,8 @@ void validateProductOptions(const broadband::ParsedEnvironment& parsed,
     if (options.profileInfluence || options.profileFrequencyTasks ||
         unsupportedFrequencyReuseTuning) {
       throw broadband::ValidationError(
-          "profiling and frequency reuse tuning options are only supported for TL");
+          "profiling and frequency reuse tuning options are only supported for "
+          "TL");
     }
     return;
   }
@@ -324,7 +325,8 @@ void validateProductOptions(const broadband::ParsedEnvironment& parsed,
     if (options.profileInfluence || options.profileFrequencyTasks ||
         unsupportedFrequencyReuseTuning) {
       throw broadband::ValidationError(
-          "Influence profiling and frequency reuse tuning options are not supported "
+          "Influence profiling and frequency reuse tuning options are not "
+          "supported "
           "for arrival/eigenray products");
     }
     if (options.executionMode == broadband::ExecutionMode::Reuse &&
@@ -352,7 +354,8 @@ void validateProductOptions(const broadband::ParsedEnvironment& parsed,
     if (options.profileInfluence || options.profileFrequencyTasks ||
         unsupportedFrequencyReuseTuning) {
       throw broadband::ValidationError(
-          "Influence profiling and frequency reuse tuning options are not supported "
+          "Influence profiling and frequency reuse tuning options are not "
+          "supported "
           "for arrival/eigenray products");
     }
     if (options.executionMode == broadband::ExecutionMode::Reuse &&
@@ -825,7 +828,8 @@ int main(int argumentCount, char* arguments[]) {
         .workerCount = options.traceWorkerCount};
 
     const Clock::time_point solveBegin = Clock::now();
-    const broadband::SimulationRunMode runMode = parsed.simulationCase.runMode();
+    const broadband::SimulationRunMode runMode =
+        parsed.simulationCase.runMode();
     if (runMode == broadband::SimulationRunMode::RayTrace) {
       const double frequency =
           parsed.simulationCase.frequencies().values().front();
@@ -845,7 +849,7 @@ int main(int argumentCount, char* arguments[]) {
       const std::filesystem::path output =
           productPath(fileRoot, 0U, 1U, frequency, ".ray");
       broadband::RayWriter writer(output, parsed.title, parsed.simulationCase,
-                                 frequency);
+                                  frequency);
       // One fan block per source in SimulationCase::sources() order (depth
       // ascending) with the `1 1 NSz` ray-file header (Origin WriteRay).
       for (std::size_t sourceIndex = 0U; sourceIndex < sourceTraces.size();
@@ -876,9 +880,9 @@ int main(int argumentCount, char* arguments[]) {
                                         fingerprintsAfter, "cache fingerprint");
       }
       if (options.traceWorkerCountSpecified) {
-        writeTraceWorkerCounts(
-            printLog, sourceTraces.front().requestedWorkerCount,
-            sourceTraces.front().effectiveWorkerCount);
+        writeTraceWorkerCounts(printLog,
+                               sourceTraces.front().requestedWorkerCount,
+                               sourceTraces.front().effectiveWorkerCount);
         std::vector<std::vector<double>> traceWorkerSeconds;
         traceWorkerSeconds.reserve(sourceTraces.size());
         for (const broadband::RayFanTraceResult& trace : sourceTraces) {
@@ -910,8 +914,8 @@ int main(int argumentCount, char* arguments[]) {
             // One per-source block in depth-ascending order; the ARR header
             // carries the source count and every source depth (Origin ArrMod).
             broadband::ArrivalWriter::write(output, parsed.title,
-                                           parsed.simulationCase, workspaces,
-                                           encoding);
+                                            parsed.simulationCase, workspaces,
+                                            encoding);
             std::vector<std::uint64_t> after;
             after.reserve(caches.size());
             for (const broadband::RayPathCache& cache : caches) {
@@ -941,9 +945,9 @@ int main(int argumentCount, char* arguments[]) {
             parsed.simulationCase, consumer, options.verifyCache,
             traceSettings);
       } else if (options.reuseMode == broadband::ReuseMode::Serial) {
-        statistics = broadband::ArrivalSolver::solve(
-            parsed.simulationCase, consumer, options.verifyCache,
-            traceSettings);
+        statistics =
+            broadband::ArrivalSolver::solve(parsed.simulationCase, consumer,
+                                            options.verifyCache, traceSettings);
       } else if (options.reuseMode == broadband::ReuseMode::Frequency) {
         statistics = broadband::ArrivalSolver::solveFrequency(
             parsed.simulationCase, consumer, options.reuseWorkerCount,
@@ -979,9 +983,9 @@ int main(int argumentCount, char* arguments[]) {
                       .count();
             };
         rangeRequestedWorkers = options.reuseWorkerCount;
-        rangeEffectiveWorkers = std::min(
-            rangeRequestedWorkers,
-            parsed.simulationCase.receivers().rangeCount());
+        rangeEffectiveWorkers =
+            std::min(rangeRequestedWorkers,
+                     parsed.simulationCase.receivers().rangeCount());
         statistics = broadband::ReuseRangeParaSolver::solveArrivalStreaming(
             parsed.simulationCase, fusedConsumer, influenceSettings,
             options.verifyCache,
@@ -991,17 +995,16 @@ int main(int argumentCount, char* arguments[]) {
         const Clock::time_point finalizeBegin = Clock::now();
         writers.finalize();
         rangeWriterSeconds +=
-            std::chrono::duration<double>(Clock::now() - finalizeBegin)
-                .count();
+            std::chrono::duration<double>(Clock::now() - finalizeBegin).count();
 
         for (std::size_t frequencyIndex = 0U;
              frequencyIndex < outputPaths.size(); ++frequencyIndex) {
-          printLog << "frequency product index = " << frequencyIndex
-                   << " frequency Hz = "
-                   << parsed.simulationCase.frequencies().values()
-                          [frequencyIndex]
-                   << '\n'
-                   << "product = " << outputPaths[frequencyIndex] << '\n';
+          printLog
+              << "frequency product index = " << frequencyIndex
+              << " frequency Hz = "
+              << parsed.simulationCase.frequencies().values()[frequencyIndex]
+              << '\n'
+              << "product = " << outputPaths[frequencyIndex] << '\n';
         }
       }
       writeProductExecutionMode(printLog, options.executionMode,
@@ -1015,16 +1018,16 @@ int main(int argumentCount, char* arguments[]) {
                << '\n';
       if (options.executionMode == broadband::ExecutionMode::Reuse &&
           options.reuseMode == broadband::ReuseMode::Range) {
-        printLog << "requested reuse worker count = "
-                 << rangeRequestedWorkers << '\n'
-                 << "effective reuse worker count = "
-                 << rangeEffectiveWorkers << '\n'
+        printLog << "requested reuse worker count = " << rangeRequestedWorkers
+                 << '\n'
+                 << "effective reuse worker count = " << rangeEffectiveWorkers
+                 << '\n'
                  << "Trace seconds = " << statistics.traceSeconds << '\n'
                  << "Project seconds = " << statistics.projectSeconds << '\n'
                  << "Influence seconds = " << statistics.influenceSeconds
                  << '\n'
-                 << "peak ray cache bytes = "
-                 << statistics.peakRayCacheBytes << '\n'
+                 << "peak ray cache bytes = " << statistics.peakRayCacheBytes
+                 << '\n'
                  << "peak arrival workspace bytes = "
                  << statistics.peakArrivalWorkspaceBytes << '\n'
                  << "ARR writer seconds = " << rangeWriterSeconds << '\n';
@@ -1043,8 +1046,7 @@ int main(int argumentCount, char* arguments[]) {
         printLog << "cache fingerprint verification = disabled\n";
       }
       if (options.traceWorkerCountSpecified) {
-        writeTraceWorkerCounts(printLog,
-                               statistics.requestedTraceWorkerCount,
+        writeTraceWorkerCounts(printLog, statistics.requestedTraceWorkerCount,
                                statistics.effectiveTraceWorkerCount);
         writeTraceWorkerSeconds(
             printLog, statistics.traceWorkerSecondsBySource,
@@ -1070,8 +1072,8 @@ int main(int argumentCount, char* arguments[]) {
             // `1 1 NSz` ray-file header (Origin WriteRay / F2CPP
             // EigenrayWriter).
             broadband::EigenrayWriter::write(output, parsed.title,
-                                            parsed.simulationCase, frequency,
-                                            caches, sourceHits);
+                                             parsed.simulationCase, frequency,
+                                             caches, sourceHits);
             std::size_t frequencyHitCount = 0U;
             for (const broadband::EigenraySourceHits& hits : sourceHits) {
               frequencyHitCount += hits.size();
@@ -1138,8 +1140,7 @@ int main(int argumentCount, char* arguments[]) {
         printLog << "cache fingerprint verification = disabled\n";
       }
       if (options.traceWorkerCountSpecified) {
-        writeTraceWorkerCounts(printLog,
-                               statistics.requestedTraceWorkerCount,
+        writeTraceWorkerCounts(printLog, statistics.requestedTraceWorkerCount,
                                statistics.effectiveTraceWorkerCount);
         writeTraceWorkerSeconds(
             printLog, statistics.traceWorkerSecondsBySource,
@@ -1171,14 +1172,13 @@ int main(int argumentCount, char* arguments[]) {
       if (options.traceWorkerCountSpecified) {
         writeTraceWorkerCounts(printLog, result.requestedTraceWorkerCount,
                                result.effectiveTraceWorkerCount);
-        writeTraceWorkerSeconds(printLog,
-                                result.traceWorkerSecondsBySource, 0U, false);
+        writeTraceWorkerSeconds(printLog, result.traceWorkerSecondsBySource, 0U,
+                                false);
       }
     } else if (options.executionMode == broadband::ExecutionMode::NonReuse) {
-      broadband::NonReuseResult result =
-          broadband::NonReuseSolver::solve(
-              parsed.simulationCase, parsed.beam.epsilonMultiplier,
-              parsed.beam.loopRange, influenceSettings, traceSettings);
+      broadband::NonReuseResult result = broadband::NonReuseSolver::solve(
+          parsed.simulationCase, parsed.beam.epsilonMultiplier,
+          parsed.beam.loopRange, influenceSettings, traceSettings);
 
       // One source-major workspace vector per frequency (first source in
       // `workspace`, the rest in `additionalSourceWorkspaces`).
@@ -1199,8 +1199,8 @@ int main(int argumentCount, char* arguments[]) {
 
       const Clock::time_point writeBegin = Clock::now();
       broadband::ShdWriter::writeFrequencies(shadePath, parsed.title,
-                                            parsed.simulationCase,
-                                            sourceWorkspacesPerFrequency);
+                                             parsed.simulationCase,
+                                             sourceWorkspacesPerFrequency);
       const double writeSeconds =
           std::chrono::duration<double>(Clock::now() - writeBegin).count();
 
@@ -1234,8 +1234,7 @@ int main(int argumentCount, char* arguments[]) {
             printLog, result.frequencyResults.front().requestedTraceWorkerCount,
             result.frequencyResults.front().effectiveTraceWorkerCount);
         std::vector<std::vector<double>> traceWorkerSeconds;
-        traceWorkerSeconds.reserve(
-            result.statistics.tracePassCount);
+        traceWorkerSeconds.reserve(result.statistics.tracePassCount);
         for (const broadband::SingleFrequencyResult& frequencyResult :
              result.frequencyResults) {
           for (const std::vector<double>& sourceWorkerSeconds :
@@ -1250,7 +1249,7 @@ int main(int argumentCount, char* arguments[]) {
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       broadband::ShdFrequencyWriter writer(shadePath, parsed.title,
-                                          parsed.simulationCase);
+                                           parsed.simulationCase);
       writeSeconds +=
           std::chrono::duration<double>(Clock::now() - writerSetupBegin)
               .count();
@@ -1288,8 +1287,7 @@ int main(int argumentCount, char* arguments[]) {
                  << "effective trace worker count = "
                  << statistics.effectiveTraceWorkerCount << '\n';
       }
-      printLog
-               << "Trace seconds = " << statistics.phaseTotals.traceSeconds
+      printLog << "Trace seconds = " << statistics.phaseTotals.traceSeconds
                << '\n'
                << "Project seconds = " << statistics.phaseTotals.projectSeconds
                << '\n'
@@ -1305,11 +1303,11 @@ int main(int argumentCount, char* arguments[]) {
              ++sourceIndex) {
           const std::vector<double>& workerSeconds =
               statistics.traceWorkerSecondsBySource[sourceIndex];
-          for (std::size_t workerIndex = 0U;
-               workerIndex < workerSeconds.size(); ++workerIndex) {
+          for (std::size_t workerIndex = 0U; workerIndex < workerSeconds.size();
+               ++workerIndex) {
             printLog << "source " << sourceIndex << " trace worker "
-                     << workerIndex << " seconds = "
-                     << workerSeconds[workerIndex] << '\n';
+                     << workerIndex
+                     << " seconds = " << workerSeconds[workerIndex] << '\n';
           }
         }
       }
@@ -1333,7 +1331,7 @@ int main(int argumentCount, char* arguments[]) {
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       broadband::ShdFrequencyWriter writer(shadePath, parsed.title,
-                                          parsed.simulationCase);
+                                           parsed.simulationCase);
       writeSeconds +=
           std::chrono::duration<double>(Clock::now() - writerSetupBegin)
               .count();
@@ -1360,8 +1358,7 @@ int main(int argumentCount, char* arguments[]) {
       const Clock::time_point finalizeBegin = Clock::now();
       writer.finalize();
       writeSeconds +=
-          std::chrono::duration<double>(Clock::now() - finalizeBegin)
-              .count();
+          std::chrono::duration<double>(Clock::now() - finalizeBegin).count();
 
       printLog << "execution mode = broadband reuse\n"
                << "reuse mode = range\n"
@@ -1375,14 +1372,13 @@ int main(int argumentCount, char* arguments[]) {
                << "ray cache bytes = " << statistics.rayCacheBytes << '\n'
                << "Trace seconds = " << statistics.phaseTotals.traceSeconds
                << '\n'
-               << "Project seconds = "
-               << statistics.phaseTotals.projectSeconds << '\n'
+               << "Project seconds = " << statistics.phaseTotals.projectSeconds
+               << '\n'
                << "Influence seconds = "
                << statistics.phaseTotals.influenceSeconds << '\n'
                << "Scale seconds = " << statistics.phaseTotals.scaleSeconds
                << '\n'
-               << "Solver wall seconds = " << statistics.wallSeconds
-               << '\n'
+               << "Solver wall seconds = " << statistics.wallSeconds << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
       if (statistics.cacheFingerprintVerified) {
         printLog << "cache fingerprint verification = enabled\n"
@@ -1401,19 +1397,17 @@ int main(int argumentCount, char* arguments[]) {
                                  statistics.phaseTotals.influenceStatistics);
       }
       if (options.traceWorkerCountSpecified) {
-        writeTraceWorkerCounts(printLog,
-                               statistics.requestedTraceWorkerCount,
+        writeTraceWorkerCounts(printLog, statistics.requestedTraceWorkerCount,
                                statistics.effectiveTraceWorkerCount);
-        writeTraceWorkerSeconds(printLog,
-                                statistics.traceWorkerSecondsBySource, 0U,
-                                false);
+        writeTraceWorkerSeconds(printLog, statistics.traceWorkerSecondsBySource,
+                                0U, false);
       }
     } else {
       // ReuseMode::Frequency: Frequency Reuse TL.
       double writeSeconds = 0.0;
       const Clock::time_point writerSetupBegin = Clock::now();
       broadband::ShdFrequencyWriter writer(shadePath, parsed.title,
-                                          parsed.simulationCase);
+                                           parsed.simulationCase);
       writeSeconds +=
           std::chrono::duration<double>(Clock::now() - writerSetupBegin)
               .count();
@@ -1452,8 +1446,7 @@ int main(int argumentCount, char* arguments[]) {
                << "ray point count = " << statistics.totalRayPointCount << '\n'
                << "ray cache bytes = " << statistics.rayCacheBytes << '\n'
                << "requested reuse worker count = "
-               << statistics.requestedWorkerCount
-               << '\n'
+               << statistics.requestedWorkerCount << '\n'
                << "active frequency limit = " << statistics.activeFrequencyLimit
                << '\n'
                << "output queue capacity = " << statistics.outputQueueCapacity
@@ -1474,8 +1467,7 @@ int main(int argumentCount, char* arguments[]) {
                << statistics.phaseTotals.influenceSeconds << '\n'
                << "Scale seconds = " << statistics.phaseTotals.scaleSeconds
                << '\n'
-               << "Solver wall seconds = " << statistics.wallSeconds
-               << '\n'
+               << "Solver wall seconds = " << statistics.wallSeconds << '\n'
                << "SHD seconds = " << writeSeconds << '\n';
       if (statistics.cacheFingerprintVerified) {
         printLog << "cache fingerprint verification = enabled\n"
@@ -1498,12 +1490,10 @@ int main(int argumentCount, char* arguments[]) {
                                   statistics.frequencyTimings);
       }
       if (options.traceWorkerCountSpecified) {
-        writeTraceWorkerCounts(printLog,
-                               statistics.requestedTraceWorkerCount,
+        writeTraceWorkerCounts(printLog, statistics.requestedTraceWorkerCount,
                                statistics.effectiveTraceWorkerCount);
-        writeTraceWorkerSeconds(printLog,
-                                statistics.traceWorkerSecondsBySource, 0U,
-                                false);
+        writeTraceWorkerSeconds(printLog, statistics.traceWorkerSecondsBySource,
+                                0U, false);
       }
     }
 
@@ -1514,7 +1504,7 @@ int main(int argumentCount, char* arguments[]) {
     printLog.close();
     if (!printLog) {
       throw broadband::BellhopError("failed to finalize print output: " +
-                                   printPath.string());
+                                    printPath.string());
     }
     return 0;
   } catch (const std::exception& error) {
