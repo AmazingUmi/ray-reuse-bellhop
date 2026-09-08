@@ -10,8 +10,7 @@ DEMO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(DEMO_ROOT / "codes"))
 
 from reliability import output_paths, parse_versions
-from rayreuse_multifrequency import parse_indexes
-from execution_modes import (
+from speed import (
     parse_routes,
     parse_timings,
     parse_workers,
@@ -39,13 +38,6 @@ class ShowcaseTests(unittest.TestCase):
         self.assertEqual(output.environment.suffix, ".env")
         self.assertEqual(output.print_log.suffix, ".prt")
         self.assertEqual(output.shade.suffix, ".shd")
-
-    def test_multifrequency_plot_indexes_are_explicit_and_bounded(self) -> None:
-        self.assertEqual(parse_indexes("0,2,4", 5), (0, 2, 4))
-        with self.assertRaisesRegex(ValueError, "duplicates"):
-            parse_indexes("0,2,2", 5)
-        with self.assertRaisesRegex(ValueError, "out of range"):
-            parse_indexes("0,5", 5)
 
     def test_execution_routes_keep_nonreuse_first_as_reference(self) -> None:
         self.assertEqual(

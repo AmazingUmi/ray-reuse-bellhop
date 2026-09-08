@@ -1,26 +1,21 @@
 # Bellhop 工程展示
 
-展示内容按用途分为两类，同时按 `cases/codes/results/figures` 管理输入、程序、
-数值结果和图片：
+展示内容按 `cases/codes/results/figures` 管理输入、程序、数值结果和图片：
 
 ```text
 demo/
 ├── cases/
-│   ├── reliability/                 # 三版本单频一致性输入
-│   └── rayreuse_multifrequency/      # RayReuse 多频输入
+│   └── reliability/                 # 单频一致性与多频（16 频）执行路线输入
 ├── codes/
-│   ├── reliability.py               # 三版本运行、对比和绘图
-│   ├── rayreuse_multifrequency.py    # 多频运行和选频绘图
-│   ├── execution_modes.py            # 四条执行模式路线运行、对比和计时绘图
+│   ├── reliability.py               # 三版本运行对比；routes 子命令 2×2 路线对比
+│   ├── speed.py                     # 执行模式路线运行与速度对比
 │   └── tests/                        # 展示代码单元测试
 ├── results/
-│   ├── reliability/                 # origin/F2CPP/Broadband 单频结果
-│   ├── rayreuse_multifrequency/      # 一个包含全部频率的 SHD
-│   └── execution_modes/             # 每条路线一个目录的 SHD 与计时
+│   ├── reliability/                 # 三版本单频结果
+│   └── speed/                       # 四条路线的 SHD 与计时（唯一多频结果）
 ├── figures/
-│   ├── reliability/                 # 一致性图和差值图
-│   ├── rayreuse_multifrequency/      # 多频传播损失图
-│   └── execution_modes/             # 路线对比、差值和计时图
+│   ├── reliability/                 # 一致性图与 2×2 路线对比图
+│   └── speed/                       # 速度对比图
 └── Makefile
 ```
 
@@ -85,119 +80,79 @@ demo/figures/reliability/
 └── munk_cerveny_cc_50Hz_summary.json
 ```
 
-## 2. RayReuse 多频效果展示
+## 2. 执行模式路线展示（一致性与速度）
 
 多频环境：
-[`cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env`](./cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env)
+[`cases/reliability/munk_rayreuse_multifrequency.env`](./cases/reliability/munk_rayreuse_multifrequency.env)
 
-其频率记录为：
-
-```text
-50 100 150 200 250 / ! FREQS (Hz), RayReuse extension
-```
-
-这是 RayReuse 向后兼容的 `.env` 扩展；原版 Bellhop 和 F2CPP 仍使用标准单频
-格式。展示命令不另外传频率参数，频率直接由 `.env` 提供。
-
-```bash
-# 一键计算全部频率并绘制 50、150、250 Hz
-uv run make -C demo rayreuse-multifrequency
-
-# 自定义要绘制的频率索引
-uv run make -C demo rayreuse-multifrequency MULTI_INDEXES=0,1,3,4
-
-# 将计算与绘图拆开
-uv run make -C demo multifrequency-run
-uv run make -C demo multifrequency-plot MULTI_INDEXES=0,2,4
-```
-
-对应的原生调用是：
-
-```bash
-mkdir -p demo/results/rayreuse_multifrequency
-cp demo/cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env \
-  demo/results/rayreuse_multifrequency/
-cd demo/results/rayreuse_multifrequency
-../../../Bellhop_Broadband/build/release/bellhop_broadband \
-  munk_rayreuse_multifrequency --execution-mode reuse --reuse-mode serial
-```
-
-输出分类：
+其频率记录为 50–800 Hz 共 16 个频率：
 
 ```text
-demo/results/rayreuse_multifrequency/
-├── munk_rayreuse_multifrequency.env
-├── munk_rayreuse_multifrequency.prt
-├── munk_rayreuse_multifrequency.shd
-└── run_summary.json
-
-demo/figures/rayreuse_multifrequency/
-├── munk_rayreuse_multifrequency_selected_tl.png
-└── munk_rayreuse_multifrequency_summary.json
+50 100 150 200 250 300 350 400 450 500 550 600 650 700 750 800 / ! FREQS (Hz), RayReuse extension
 ```
 
-## 3. 执行模式路线对比展示
-
-复用多频环境：
-[`cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env`](./cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env)
-
-同一个多频 `.env` 分别按四条执行模式路线计算：
+同一个多频 `.env` 分别按四条执行模式路线计算（`speed.py` 负责运行并记录
+计时）：
 
 ```text
 nonreuse   → --execution-mode nonreuse                 （逐频重新追踪）
 serial     → --execution-mode reuse --reuse-mode serial（trace once 逐频投影）
-frequency  → --execution-mode reuse --reuse-mode frequency --reuse-workers 2
-range      → --execution-mode reuse --reuse-mode range      --reuse-workers 2
+frequency  → --execution-mode reuse --reuse-mode frequency --reuse-workers 4
+range      → --execution-mode reuse --reuse-mode range      --reuse-workers 4
 ```
 
-展示三件事：四条路线的传播损失一致性（对 nonreuse 的逐频 max |ΔTL|）、
-reuse 路线 trace-once 与 nonreuse 逐频重追踪的 Trace 相位计时差异，以及并行
-reuse 路线的墙钟收益。计时图只对比墙钟总时长和 Trace 相位这两个在所有路线
-语义一致的量；更细的 `Project/Influence/Scale/SHD` 分相数据在各路线的
-`run_summary.json` 中（注意 frequency 路线的分相行是跨 worker 的 CPU 汇总，
-大于墙钟值属正常）。
+一次运行产出两个视图：
+
+- **数值一致性**（`reliability.py routes`）：2×2 传播损失对比图；summary
+  JSON 记录三条 reuse 路线对 nonreuse 的逐频 `max |ΔTL|` 与
+  `max |Δpressure|`（应为 0）。
+- **运行速度**（`speed.py plot`）：墙钟总时长与 Trace 相位双面板对比——
+  reuse 路线 trace-once 与 nonreuse 逐频重追踪的差异、并行 reuse 路线的
+  墙钟收益。更细的 `Project/Influence/Scale/SHD` 分相数据在
+  `run_summary.json` 中（注意 frequency 路线的分相行是跨 worker 的 CPU
+  汇总，大于墙钟值属正常）。
 
 ```bash
-# 一键计算四条路线并出三张图
-uv run make -C demo execution-modes
+# 一键计算四条路线并出两张图（2×2 一致性 + 速度对比）
+uv run make -C demo speed
 
-# 自定义路线、并行 worker 数与绘图频率索引
-uv run make -C demo execution-modes \
-  EXECUTION_ROUTES=nonreuse,serial,frequency EXECUTION_WORKERS=4 \
-  EXECUTION_INDEXES=0,2,4
+# 自定义路线与并行 worker 数
+uv run make -C demo speed SPEED_ROUTES=nonreuse,serial,frequency SPEED_WORKERS=4
 
 # 将计算与绘图拆开
-uv run make -C demo execution-modes-run
-uv run make -C demo execution-modes-plot EXECUTION_INDEXES=2
+uv run make -C demo speed-run
+uv run make -C demo speed-plot SPEED_FREQUENCY_INDEX=2
 ```
 
 以 frequency 路线为例，展示脚本对应的原生调用是：
 
 ```bash
-mkdir -p demo/results/execution_modes/reuse_frequency_w2
-cp demo/cases/rayreuse_multifrequency/munk_rayreuse_multifrequency.env \
-  demo/results/execution_modes/reuse_frequency_w2/
-cd demo/results/execution_modes/reuse_frequency_w2
+mkdir -p demo/results/speed/reuse_frequency_w4
+cp demo/cases/reliability/munk_rayreuse_multifrequency.env \
+  demo/results/speed/reuse_frequency_w4/
+cd demo/results/speed/reuse_frequency_w4
 ../../../../Bellhop_Broadband/build/release/bellhop_broadband \
   munk_rayreuse_multifrequency --execution-mode reuse \
-  --reuse-mode frequency --reuse-workers 2
+  --reuse-mode frequency --reuse-workers 4
 ```
 
 输出分类：
 
 ```text
-demo/results/execution_modes/
+demo/results/speed/
 ├── nonreuse/munk_rayreuse_multifrequency.env|prt|shd
 ├── reuse_serial/munk_rayreuse_multifrequency.env|prt|shd
-├── reuse_frequency_w2/munk_rayreuse_multifrequency.env|prt|shd
-├── reuse_range_w2/munk_rayreuse_multifrequency.env|prt|shd
+├── reuse_frequency_w4/munk_rayreuse_multifrequency.env|prt|shd
+├── reuse_range_w4/munk_rayreuse_multifrequency.env|prt|shd
 └── run_summary.json          # 每条路线的 CLI 参数、耗时与 PRT 分相计时
 
-demo/figures/execution_modes/
-├── munk_rayreuse_multifrequency_tl_comparison.png   # 选定频率 × 四路线
-├── munk_rayreuse_multifrequency_tl_difference.png   # reuse 路线 − nonreuse
-├── munk_rayreuse_multifrequency_timings.png         # 墙钟总时长 + Trace 相位
-└── munk_rayreuse_multifrequency_summary.json        # 一致性指标与图清单
+demo/figures/speed/
+├── munk_rayreuse_multifrequency_speed_comparison.png   # 墙钟总时长 + Trace 相位
+└── munk_rayreuse_multifrequency_speed_summary.json     # 各路线计时
+
+demo/figures/reliability/
+├── munk_rayreuse_multifrequency_150Hz_routes_comparison.png   # 2×2 TL 一致性
+└── munk_rayreuse_multifrequency_150Hz_routes_summary.json     # 逐频一致性指标
 ```
 
 ## 验证
