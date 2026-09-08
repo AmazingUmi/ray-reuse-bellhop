@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Fast quality gate: Release build + Release CTest + Python suites +
+# independence check. Heavy checks (Debug sanitizer CTest, isolation
+# rebuild, formatting, static analysis, packaging) live in
+# engineering_gate.sh.
+
 set -euo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,14 +27,21 @@ if [[ -n "${BROADBAND_BUILD_JOBS:-}" ]]; then
   build_parallelism=("${BROADBAND_BUILD_JOBS}")
 fi
 
-for preset in debug release; do
-  (
-    cd "${project_root}"
-    cmake --preset "${preset}"
-    cmake --build --preset "${preset}" --parallel "${build_parallelism[@]}"
-    ctest --preset "${preset}" --output-on-failure
-  )
-done
+ctest_parallelism=()
+if [[ -n "${BROADBAND_CTEST_JOBS:-}" ]]; then
+  if [[ ! "${BROADBAND_CTEST_JOBS}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "BROADBAND_CTEST_JOBS must be a positive integer" >&2
+    exit 2
+  fi
+  ctest_parallelism=(--parallel "${BROADBAND_CTEST_JOBS}")
+fi
+
+(
+  cd "${project_root}"
+  cmake --preset release
+  cmake --build --preset release --parallel "${build_parallelism[@]}"
+  ctest --preset release "${ctest_parallelism[@]}" --output-on-failure
+)
 
 (
   cd "${repository_root}"
@@ -57,33 +69,5 @@ done
 )
 
 "${script_directory}/check_independence.sh"
-
-isolation_root="$(
-  mktemp -d "${TMPDIR:-/tmp}/bellhop-broadband-isolated.XXXXXX"
-)"
-cleanup_isolation() {
-  rm -rf -- "${isolation_root}"
-}
-trap cleanup_isolation EXIT
-
-mkdir -p \
-  "${isolation_root}/Bellhop_Broadband" \
-  "${isolation_root}/test/standard_cases/cases"
-rsync -a \
-  --exclude build \
-  --exclude '._*' \
-  "${project_root}/" \
-  "${isolation_root}/Bellhop_Broadband/"
-rsync -a \
-  --exclude '._*' \
-  "${repository_root}/test/standard_cases/cases/" \
-  "${isolation_root}/test/standard_cases/cases/"
-
-(
-  cd "${isolation_root}/Bellhop_Broadband"
-  cmake --preset release
-  cmake --build --preset release --parallel "${build_parallelism[@]}"
-  ctest --preset release --output-on-failure
-)
 
 echo "Bellhop_Broadband quality gate passed"

@@ -39,8 +39,8 @@ defaults:
     shell: bash
 
 jobs:
-  quality-gate:
-    name: Debug, Release, Python and independence
+  fast-quality:
+    name: Fast quality (Release CTest, Python, independence)
     runs-on: macos-26
     timeout-minutes: 45
     steps:
@@ -58,16 +58,38 @@ jobs:
       - name: Sync locked Python environment
         run: uv sync --locked
 
-      - name: Run the shared Bellhop Broadband quality gate
+      - name: Run the fast Bellhop Broadband quality gate
         env:
           BROADBAND_BUILD_JOBS: "3"
+          BROADBAND_CTEST_JOBS: "2"
         run: |
           set -euo pipefail
           uv run bash Bellhop_Broadband/scripts/quality_gate.sh
 
-      - name: Run formatting, static-analysis and package gates
+  engineering:
+    name: Engineering (Debug sanitizer, isolation, format, analysis, package)
+    needs: fast-quality
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.12.5"
+
+      - name: Install project Python
+        run: uv python install "$(cat .python-version)"
+
+      - name: Sync locked Python environment
+        run: uv sync --locked
+
+      - name: Run the Bellhop Broadband engineering gate
         env:
           BROADBAND_BUILD_JOBS: "3"
+          BROADBAND_CTEST_JOBS: "2"
         run: |
           set -euo pipefail
           uv run bash Bellhop_Broadband/scripts/engineering_gate.sh
