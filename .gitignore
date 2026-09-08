@@ -26,3 +26,6 @@ __pycache__/
 
 # Accidental output from invoking Bellhop with an empty file root
 /.prt
+
+# Agent files
+.agents/
